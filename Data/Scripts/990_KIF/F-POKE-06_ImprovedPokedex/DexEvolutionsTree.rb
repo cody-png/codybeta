@@ -85,40 +85,66 @@ module KIF
       return 1 + node[:kids].map { |k| depth(k[0]) }.max
     end
 
+    # Every method is read from the game's own evolution data (PIF 6.8.2
+    # 010_Data/001_Hardcoded data/007_Evolution.rb), never from outside lists.
     WHEN = { "Day" => "day", "Night" => "night", "Morning" => "morning",
-             "Afternoon" => "afternoon", "Evening" => "evening", "Male" => "♂", "Female" => "♀" }
+             "Afternoon" => "afternoon", "Evening" => "evening", "Male" => "♂", "Female" => "♀",
+             "NoWeather" => "no weather", "Sun" => "sun", "Rain" => "rain", "Snow" => "snow",
+             "Sandstorm" => "sandstorm", "Cycling" => "cycling", "Surfing" => "surfing",
+             "Diving" => "diving", "Darkness" => "darkness", "DarkInParty" => "Dark ally" }
 
     def self.when_word(method)
-      WHEN.each { |k, v| return v if method.to_s.end_with?(k) }
+      WHEN.keys.sort_by { |k| -k.length }.each { |k| return WHEN[k] if method.to_s.end_with?(k) }
       return nil
+    end
+
+    def self.type_name(t)
+      return GameData::Type.get(t).name
+    rescue
+      return t.to_s
+    end
+
+    def self.sp_name(sp)
+      return GameData::Species.get(sp).name
+    rescue
+      return sp.to_s
     end
 
     # [[up to 2 short lines], item icon or nil] for an evolution method
     def self.method_label(method, param)
       m = method.to_s
       w = when_word(method)
+      case method
+      when :AttackGreater then return [[_INTL("Lv {1}", param), _INTL("Atk > Def")], :RARECANDY]
+      when :DefenseGreater then return [[_INTL("Lv {1}", param), _INTL("Def > Atk")], :RARECANDY]
+      when :AtkDefEqual then return [[_INTL("Lv {1}", param), _INTL("Atk = Def")], :RARECANDY]
+      when :Silcoon, :Cascoon then return [[_INTL("Lv {1}", param), _INTL("random")], :RARECANDY]
+      when :Ninjask then return [[_INTL("Lv {1}", param)], :RARECANDY]
+      when :Shedinja then return [[_INTL("Lv {1}", param), _INTL("spare slot")], :RARECANDY]
+      when :HappinessMoveType then return [[type_name(param)], :SOOTHEBELL]
+      when :HappinessMove then return [[KIF::DexEvolutions.move_name(param)], :SOOTHEBELL]
+      when :HappinessHoldItem, :ItemHappiness then return [[_INTL("Friendship")], param]
+      when :HoldItemHappiness then return [[_INTL("Hold"), _INTL("Friendship")], param]
+      when :Beauty then return [[_INTL("Beauty {1}", param)], nil]
+      when :HasMove then return [[_INTL("Knows"), KIF::DexEvolutions.move_name(param)], nil]
+      when :HasMoveType then return [[_INTL("{1} move", type_name(param))], nil]
+      when :HasInParty then return [[_INTL("With"), sp_name(param)], nil]
+      when :Location then return [[_INTL("Location")], nil]
+      when :Region then return [[_INTL("Region")], nil]
+      when :TradeItem then return [[_INTL("Trade")], param]
+      when :TradeSpecies then return [[_INTL("Trade for"), sp_name(param)], nil]
+      end
       if m.start_with?("Level")
-        extra = w || ((method == :Level) ? nil : _INTL("special"))
-        return [[_INTL("Lv {1}", param), extra].compact, :RARECANDY]
-      elsif method == :HappinessMoveType
-        type = (GameData::Type.get(param).name rescue param.to_s)
-        return [[type], :SOOTHEBELL]
+        return [[_INTL("Lv {1}", param), w].compact, :RARECANDY]
       elsif m.start_with?("Happiness") || method == :MaxHappiness
         return [[w].compact, :SOOTHEBELL]
-      elsif method == :TradeItem
-        return [[_INTL("Trade")], param]
       elsif m.start_with?("Trade")
         return [[_INTL("Trade"), w].compact, nil]
       elsif m.start_with?("Item")
         return [[w].compact, param]
       elsif m.include?("HoldItem")
         return [[_INTL("Hold"), w].compact, param]
-      elsif method == :HasMove
-        return [[_INTL("Knows"), KIF::DexEvolutions.move_name(param)], nil]
       end
-      # Other methods with a level (Wurmple's Silcoon/Cascoon, ...)
-      level_based = [:Silcoon, :Cascoon, :AttackGreater, :DefenseGreater, :AtkDefEqual, :Ninjask, :Shedinja]
-      return [[_INTL("Lv {1}", param)], :RARECANDY] if level_based.include?(method) && param.is_a?(Integer)
       return [[KIF::DexEvolutions.method_text(method, param)], nil]
     end
 

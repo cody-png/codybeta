@@ -418,7 +418,9 @@ class PokeBattle_Scene
       @kif_win_text = text
       bmp = @kif_win_display.bitmap
       bmp.clear
-      bmp.font.color = Color.new(40, 40, 44)
+      # KIF: lighter text with dark mode on
+      dark = defined?(KIF::BattleUI) ? KIF::BattleUI.dark? : false
+      bmp.font.color = dark ? Color.new(225, 225, 225) : Color.new(40, 40, 44)
       bmp.draw_text(bmp.rect, text, 1)
     elsif @kif_win_display
       @kif_win_display.bitmap.dispose if @kif_win_display.bitmap

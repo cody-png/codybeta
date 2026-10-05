@@ -9,6 +9,8 @@
 # evolution lines; a small "RUN: Evolutions" / "RUN: Credits" hint sits in the
 # title bar.
 # The choice is remembered until the game closes.
+# Option "Dex Evolutions" = Entry Box: the chart in DexEvolutionsTree.rb is
+# used instead (Run cycles the entry box).
 #   Normal species: "Gloom (Lv 21)", several evolutions share the two lines.
 #   Fusions: one line per part, by name: "Oddish > Gloom (Lv 21)" (head) and
 #   "Ivysaur > Venusaur (Lv 32)" (body); shortened when a line is too wide.
@@ -128,7 +130,7 @@ class PokemonPokedexInfo_Scene
     # With evolutions shown, the Sprite:/Entry: credit lines (224,156 and
     # 224,188) are left out while the base page draws, instead of erasing
     # them afterwards (erasing cut into the weight text above).
-    @kif_skip_credits = KIF::DexEvolutions.show && !@brief
+    @kif_skip_credits = KIF::DexEvolutions.show && !@brief && !KIF::DexTree.entry_mode?
     $kif_dex_scene_drawing = self
     begin
       ret = kif_evo_drawPageInfo(*args)
@@ -137,7 +139,7 @@ class PokemonPokedexInfo_Scene
       $kif_dex_scene_drawing = nil
     end
     unless @brief
-      kif_draw_evolutions if KIF::DexEvolutions.show
+      kif_draw_evolutions if KIF::DexEvolutions.show && !KIF::DexTree.entry_mode?
       kif_draw_evo_hint
     end
     return ret
@@ -165,7 +167,21 @@ class PokemonPokedexInfo_Scene
   # controllers/Steam Deck/JoiPlay).
   def kif_draw_evo_hint
     overlay = @sprites["overlay"].bitmap
-    label = KIF::DexEvolutions.show ? _INTL("RUN: Credits") : _INTL("RUN: Evolutions")
+    if KIF::DexTree.entry_mode?
+      # Entry Box mode (DexEvolutionsTree.rb): Run cycles the entry box
+      sd = GameData::Species.get_species_form(@species, @form)
+      fusion = KIF::DexTree.fusion?(sd)
+      label = case KIF::DexTree.state
+              when 0 then fusion ? _INTL("RUN: Head line") : _INTL("RUN: Evolutions")
+              when 1 then fusion ? _INTL("RUN: Body line") : _INTL("RUN: Entry")
+              else _INTL("RUN: Entry")
+              end
+      if KIF::DexTree.showing? && KIF::DexTree.pages > 1
+        label = _INTL("C: Page {1}/{2}  ", KIF::DexTree.page % KIF::DexTree.pages + 1, KIF::DexTree.pages) + label
+      end
+    else
+      label = KIF::DexEvolutions.show ? _INTL("RUN: Credits") : _INTL("RUN: Evolutions")
+    end
     pbSetSmallFont(overlay)
     pbDrawTextPositions(overlay, [[label, 502, 2, 1, Color.new(248, 248, 248), Color.new(160, 40, 48)]])
   rescue => e
@@ -181,7 +197,11 @@ class PokemonPokedexInfo_Scene
   def pbUpdate(*args)
     ret = kif_evo_pbUpdate(*args)
     if @page == 1 && !@brief && Input.trigger?(Input::ACTION)
-      KIF::DexEvolutions.show = !KIF::DexEvolutions.show
+      if KIF::DexTree.entry_mode?
+        KIF::DexTree.advance(GameData::Species.get_species_form(@species, @form))
+      else
+        KIF::DexEvolutions.show = !KIF::DexEvolutions.show
+      end
       pbPlayCursorSE
       drawPage(@page)
     end

@@ -21,7 +21,7 @@ KIF::Options.add(:others, :save) {
                   _INTL("Use Kuray's QoL features (PC and Heal in the menu)")])
 }
 
-KIF::PauseMenu.add(:kif_pc, "PC", icon: "menuIcons/POKEMON",
+KIF::PauseMenu.add(:kif_pc, "PC", icon: "menuIcons/POKEMON", order: 10,
   condition: proc { $PokemonSystem.kurayqol == 1 },
   handler: proc { |scene|
     if KIF::PauseMenu.restricted?
@@ -40,7 +40,7 @@ KIF::PauseMenu.add(:kif_pc, "PC", icon: "menuIcons/POKEMON",
     :stay
   })
 
-KIF::PauseMenu.add(:kif_heal, "Heal Pokémon", icon: "menuIcons/POKEMON",
+KIF::PauseMenu.add(:kif_heal, "Heal Pokémon", icon: "menuIcons/POKEMON", order: 20,
   condition: proc { $PokemonSystem.kurayqol == 1 },
   handler: proc { |scene|
     if KIF::PauseMenu.restricted?

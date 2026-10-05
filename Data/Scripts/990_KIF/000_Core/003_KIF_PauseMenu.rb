@@ -19,16 +19,19 @@
 #===============================================================================
 module KIF
   module PauseMenu
-    Entry = Struct.new(:id, :label, :condition, :handler, :icon)
+    Entry = Struct.new(:id, :label, :condition, :handler, :icon, :order)
     @entries = []
 
-    def self.add(id, label, condition: nil, handler:, icon: nil)
+    # order: position among KIF entries (KIF: PC 10, Heal 20, Kuray Shop 30,
+    # Tutor.net 40); equal orders keep registration order.
+    def self.add(id, label, condition: nil, handler:, icon: nil, order: 100)
       @entries.reject! { |e| e.id == id }
-      @entries << Entry.new(id, label, condition, handler, icon)
+      @entries << Entry.new(id, label, condition, handler, icon, order)
     end
 
     def self.active_entries
-      return @entries.select { |e| e.condition.nil? || e.condition.call }
+      list = @entries.select { |e| e.condition.nil? || e.condition.call }
+      return list.each_with_index.sort_by { |e, i| [e.order || 100, i] }.map(&:first)
     end
 
     def self.label_for(entry)

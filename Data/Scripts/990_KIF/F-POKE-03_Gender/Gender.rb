@@ -15,7 +15,8 @@
 # * "Pizza": each Pokémon has a hidden roll (kuraygender, 0-65535, made the
 #   first time it's needed and saved); below 256 (1 in 256) its gender symbol
 #   is shown as KIF's pizza icon ("P" when naming). Its real gender is unchanged.
-#   (With KIF's Shenanigans, pizza Pokémon can attract anyone – F-UI-10.)
+#   F-UI-10 Shenanigans (On by default): pizza icon in battle boxes and pizza
+#   Attract; Off hides the battle icon (Summary/party/PC keep it, as KIF).
 #
 # 6.8.2 adaptations: no base method is copied. The colours are swapped where
 # a lone "♂"/"♀" is drawn (pbDrawTextPositions); the extra icons are drawn

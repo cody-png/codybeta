@@ -14,8 +14,9 @@
 # with the item's icon (Rare Candy for levels, Soothe Bell for friendship, the
 # stone / held item for item methods).
 #   Up to two end branches (Poliwag: Poliwrath / Politoed): left to right.
-#   More branches (Eevee): the first stage on top, its evolutions in a row
-#   below, four per page; Confirm (C) turns the page (shown in the title bar).
+#   More branches (Eevee): the stages up to the branching one on top, its
+#   evolutions in a row below, four per page; Confirm (C) turns the page.
+#   Several ways to evolve into the same species are one branch ("or ...").
 #===============================================================================
 KIF::Options.define(:dexevoview, 0, :global)
 
@@ -64,15 +65,34 @@ module KIF
     end
 
     # { :sp => Symbol, :kids => [[node, method, param], ...] }
-    def self.tree(species, depth = 0)
+    # Same species listed more than once (several ways to evolve into it) is
+    # one branch; the other ways are kept in :alts and shown as "or ...".
+    def self.tree(species, depth = 0, seen = [])
       data = GameData::Species.get(species)
       node = { :sp => data.species, :kids => [] }
-      return node if depth > 3
+      return node if depth > 3 || seen.include?(data.species)
+      seen += [data.species]
       data.get_evolutions(true).each do |evo|
-        next unless (GameData::Species.get(evo[0]) rescue nil)
-        node[:kids] << [tree(evo[0], depth + 1), evo[1], evo[2]]
+        target = (GameData::Species.get(evo[0]).species rescue nil)
+        next if target.nil? || seen.include?(target)
+        if (same = node[:kids].find { |k| k[0][:sp] == target })
+          (same[3] ||= []) << [evo[1], evo[2]]
+          next
+        end
+        node[:kids] << [tree(target, depth + 1, seen), evo[1], evo[2]]
       end
       return node
+    end
+
+    # Label of a branch, with its other methods as "or ..."
+    def self.branch_label(kid_entry)
+      lines, icon = method_label(kid_entry[1], kid_entry[2])
+      alts = kid_entry[3]
+      if alts && !alts.empty?
+        alt_lines, _ = method_label(alts[0][0], alts[0][1])
+        lines = [lines.join(" "), _INTL("or {1}", alt_lines.join(" "))]
+      end
+      return [lines, icon]
     end
 
     def self.leaves(node)
@@ -208,7 +228,8 @@ module KIF
         x = BOX_X + col * (node_w + gap)
         node_cmds(cmds, node[:sp], x, y, size, node_w, current, width)
         leaf = first_leaf
-        node[:kids].each do |kid, method, param|
+        node[:kids].each do |entry|
+          kid = entry[0]
           kn = leaves(kid)
           krows = (leaf...(leaf + kn)).to_a
           ky = krows.map { |r| row_y[r] }.sum / krows.length
@@ -217,7 +238,7 @@ module KIF
           x2 = x + node_w + gap + node_w / 2 - size / 2 - 4
           y2 = ky + size / 2
           cmds << [:arrow, x1, y1, x2, y2]
-          lines, icon = method_label(method, param)
+          lines, icon = branch_label(entry)
           diag = (y1 != y2)
           limit = diag ? gap + node_w - 24 - (icon ? 26 : 0) : x2 - x1 + 20
           lines = lines.map { |l| fit(l, limit, width) }
@@ -256,22 +277,45 @@ module KIF
 
     def self.vertical(root, current, page, width)
       cmds = []
-      kids = root[:kids]
+      # the stages before the first branching stage form a chain on top
+      chain = [[root, nil]]
+      while chain[-1][0][:kids].length == 1
+        chain << [chain[-1][0][:kids][0][0], chain[-1][0][:kids][0]]
+      end
+      branch = chain[-1][0]
+      kids = branch[:kids]
       pages = [(kids.length + PER_PAGE - 1) / PER_PAGE, 1].max
       page = page % pages
-      # first stage: small icon with its name to the right
       rsize = 32
-      name = GameData::Species.get(root[:sp]).name
-      nw = width.call(name)
-      x = BOX_X + (BOX_W - (rsize + 4 + nw)) / 2
-      cmds << [:icon, root[:sp], x, BOX_Y, rsize]
-      cmds << [:text, name, x + rsize + 4, BOX_Y + 6, 0]
-      cmds << [:rect, x - 2, BOX_Y - 1, rsize + 8 + nw, rsize + 2] if root[:sp] == current
+      parts = []
+      chain.each do |node, entry|
+        if entry
+          lines, _icon = branch_label(entry)
+          parts << [:text, fit(lines.join(" "), 90, width) + " >"]
+        end
+        parts << [:node, node[:sp], GameData::Species.get(node[:sp]).name]
+      end
+      widths = parts.map { |p| p[0] == :text ? width.call(p[1]) + 6 : rsize + 4 + width.call(p[2]) + 6 }
+      x = BOX_X + [(BOX_W - widths.sum) / 2, 0].max
+      parts.each_with_index do |p, i|
+        if p[0] == :text
+          cmds << [:text, p[1], x, BOX_Y + 6, 0]
+        else
+          nw = width.call(p[2])
+          cmds << [:icon, p[1], x, BOX_Y, rsize]
+          cmds << [:text, p[2], x + rsize + 4, BOX_Y + 6, 0]
+          cmds << [:rect, x - 2, BOX_Y - 1, rsize + 8 + nw, rsize + 2] if p[1] == current
+        end
+        x += widths[i]
+      end
       slot = BOX_W / PER_PAGE
       size = 36
-      kids[page * PER_PAGE, PER_PAGE].each_with_index do |(kid, method, param), i|
-        sx = BOX_X + i * slot
-        lines, icon = method_label(method, param)
+      shown = kids[page * PER_PAGE, PER_PAGE]
+      offset = (PER_PAGE - shown.length) * slot / 2   # centre a short last row
+      shown.each_with_index do |entry, i|
+        kid = entry[0]
+        sx = BOX_X + offset + i * slot
+        lines, icon = branch_label(entry)
         lines = lines.first(2).map { |l| fit(l, slot - (icon ? 24 : 4), width) }
         tw = lines.map { |l| width.call(l) }.max || 0
         lx = sx + (slot - (tw + (icon ? 22 : 0))) / 2

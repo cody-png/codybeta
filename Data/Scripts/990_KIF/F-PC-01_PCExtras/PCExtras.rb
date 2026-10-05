@@ -226,7 +226,9 @@ module KIF
       return nil if order < 0 || order > 1
       pairs = pokes.each_with_index.map { |p, i| [value(p, attr), i] }
       pairs.sort! { |a, b| compare(a, b) }
-      pairs.reverse! if order == 1
+      descending = (order == 1)
+      descending = !descending if attr == :bst   # BST: Normal = highest first (Cody)
+      pairs.reverse! if descending
       return pairs.map { |_, i| pokes[i] }
     end
 

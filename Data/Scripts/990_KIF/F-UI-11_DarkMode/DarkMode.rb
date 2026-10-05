@@ -8,6 +8,12 @@
 # KIF Settings > Graphics (in-game, per save) flips the same 6.8.2 setting
 # ($Trainer.pokenav.darkMode), so both switches stay in sync.
 # KIF 0.20.7's own battle-only dark mode (F-BATTLE-07) is a separate feature.
+#
+# Fix: some 6.8.2 screens load a "_dark" image that this (Kanto) install
+# doesn't ship – the battle command and fight buttons (cursor_command_dark,
+# cursor_fight_dark) and blank party panels (panel_blank_dark) – so they
+# vanished with dark mode on. A missing "_dark" image now falls back to the
+# normal one (6.8.2's own setBitmap already does this; these places don't).
 #===============================================================================
 module KIF
   module DarkMode
@@ -30,3 +36,14 @@ KIF::Options.add(:graphics, :save) {
                  [_INTL("Light Pokédex, Summary and PokéNav screens"),
                   _INTL("Dark Pokédex, Summary and PokéNav screens (PIF's dark mode)")])
 }
+
+class AnimatedBitmap
+  alias kif_dm_initialize initialize unless method_defined?(:kif_dm_initialize)
+
+  def initialize(file, *args)
+    if file.is_a?(String) && file.end_with?("_dark") && !pbResolveBitmap(file)
+      file = file[0...-5]
+    end
+    kif_dm_initialize(file, *args)
+  end
+end

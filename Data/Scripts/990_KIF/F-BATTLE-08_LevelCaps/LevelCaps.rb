@@ -12,9 +12,11 @@
 #   x1.0 / x0.9 (rounded). Applies to the player's Pokémon (KIF
 #   player_owned?). No cap once every badge is earned.
 # "Cap Behavior":
-#   Smart – Exp above the cap is banked, not lost. The Pokémon stays at the
-#           cap and gets the banked Exp (levelling normally) at its next Exp
-#           gain after the cap has risen.
+#   Smart – Exp above the cap is saved, not lost. The Pokémon stays at the
+#           cap; as soon as the cap rises (next badge, lower difficulty, or
+#           the cap turned off) the saved Exp is given back: party Pokémon
+#           level up on the spot ("grew to Lv. X", new moves, evolution),
+#           boxed Pokémon silently.
 #   Lock  – no Exp above the cap.
 #   RC    – each level that would go past the cap becomes a Rare Candy.
 #
@@ -25,9 +27,10 @@
 #   * KIF clamped level/Exp inside Pokemon#level and calc_stats, which ran
 #     calc_stats on every level read. Here the cap is applied where Exp is
 #     gained (the pbGainExpOne copy in F-BATTLE-09) and for Rare Candies.
-#     "Smart" in KIF let Exp grow past the cap while hiding the extra levels;
-#     the banked Exp gives the same result without a level that disagrees
-#     with the Exp.
+#     "Smart" in KIF let Exp grow past the cap while hiding the extra levels
+#     (6.8.2 recomputes the level whenever Exp changes, so that trick can't
+#     be used). The saved Exp gives the same result, and unlike KIF the
+#     levels it gives back also teach their moves and allow evolution.
 #   * While the KIF cap is on, 6.8.2's own "Level caps" rule (no Exp, or
 #     60% Exp past the cap) is skipped so the two don't stack.
 #===============================================================================
@@ -47,7 +50,7 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Cap Behavior"), [_INTL("Smart"), _INTL("Lock"), _INTL("RC")],
                  proc { $PokemonSystem.levelcapbehavior },
                  proc { |value| $PokemonSystem.levelcapbehavior = value },
-                 [_INTL("Exp past the cap is saved for when the cap rises."),
+                 [_INTL("The Pokemons can still earn exp (saved until the cap rises)."),
                   _INTL("The Pokemon can't earn exp."),
                   _INTL("Earn rare candies instead of going over the cap.")])
 }
@@ -83,6 +86,96 @@ module KIF
     def self.behavior
       return $PokemonSystem.levelcapbehavior.to_i
     end
+
+    #---------------------------------------------------------------------------
+    # Smart: give saved Exp back once there is room under the cap
+    #---------------------------------------------------------------------------
+    # Exp a Pokémon may still gain before reaching the current cap
+    def self.room(pkmn)
+      gr = pkmn.growth_rate
+      c = cap_for(pkmn)
+      limit = c ? gr.minimum_exp_for_level(c) : gr.maximum_exp
+      return [limit - pkmn.exp, 0].max
+    end
+
+    def self.release(pkmn, show)
+      return if pkmn.nil? || pkmn.egg? || pkmn.kif_banked_exp.to_i <= 0
+      give = [pkmn.kif_banked_exp, room(pkmn)].min
+      return if give <= 0
+      pkmn.kif_banked_exp -= give
+      old_level = pkmn.level
+      pkmn.exp = pkmn.exp + give   # 6.8.2 exp= recomputes the level
+      pkmn.calc_stats
+      new_level = pkmn.level
+      return unless show
+      pbMessage(_INTL("{1} gained {2} saved Exp. Points!", pkmn.name, give))
+      return if new_level <= old_level
+      ((old_level + 1)..new_level).each do |lv|
+        pbMessage(_INTL("{1} grew to Lv. {2}!", pkmn.name, lv))
+        pkmn.getMoveList.each { |m| pbLearnMove(pkmn, m[1], true) if m[0] == lv }
+      end
+      newspecies = pkmn.check_evolution_on_level_up
+      if newspecies
+        pbFadeOutInWithMusic {
+          evo = PokemonEvolutionScene.new
+          evo.pbStartScreen(pkmn, newspecies)
+          evo.pbEvolution
+          evo.pbEndScreen
+        }
+      end
+    end
+
+    def self.release_all
+      return unless $Trainer
+      $Trainer.party.each { |p| release(p, true) }
+      if $PokemonStorage
+        $PokemonStorage.maxBoxes.times do |b|
+          $PokemonStorage.maxPokemon(b).times do |i|
+            release($PokemonStorage[b, i], false)
+          end
+        end
+      end
+    end
+
+    def self.any_saved?
+      return false unless $Trainer
+      return true if $Trainer.party.any? { |p| p && p.kif_banked_exp.to_i > 0 }
+      return false unless $PokemonStorage
+      $PokemonStorage.maxBoxes.times do |b|
+        $PokemonStorage.maxPokemon(b).times do |i|
+          p = $PokemonStorage[b, i]
+          return true if p && p.kif_banked_exp.to_i > 0
+        end
+      end
+      return false
+    end
+
+    # Polled from the map: when the cap value changes (badge, difficulty,
+    # option), hand back saved Exp. Waits until no event or message runs.
+    @last_cap = :unset
+    @tick = 0
+    def self.poll
+      @tick += 1
+      return if @tick % 20 != 0
+      return unless $Trainer && $PokemonSystem
+      return if $game_temp && ($game_temp.message_window_showing || $game_temp.in_menu)
+      return if $game_system && $game_system.map_interpreter.running?
+      now = cap
+      return if now == @last_cap
+      @last_cap = now
+      release_all if any_saved?
+    rescue => e
+      KIF.log("Level cap release failed: #{e.message}")
+    end
+  end
+end
+
+class Scene_Map
+  alias kif_cap_update update unless method_defined?(:kif_cap_update)
+
+  def update(*args)
+    kif_cap_update(*args)
+    KIF::LevelCap.poll
   end
 end
 

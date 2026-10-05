@@ -31,6 +31,10 @@
 #     (6.8.2 recomputes the level whenever Exp changes, so that trick can't
 #     be used). The saved Exp gives the same result, and unlike KIF the
 #     levels it gives back also teach their moves and allow evolution.
+#   * Pokémon above the cap (cap lowered, difficulty raised, option turned
+#     on) are brought down to it when the cap changes or a save loads; their
+#     extra Exp is saved like Smart's and returns when the cap rises. KIF
+#     clamped too but threw that Exp away in Lock/RC (Cody, 2026-10-05).
 #   * While the KIF cap is on, 6.8.2's own "Level caps" rule (no Exp, or
 #     60% Exp past the cap) is skipped so the two don't stack.
 #===============================================================================
@@ -125,16 +129,42 @@ module KIF
       end
     end
 
+    # A Pokémon above the cap is brought down to it; the Exp above the cap is
+    # saved (kif_banked_exp) and comes back when the cap rises, so nothing is
+    # lost (KIF's Lock/RC threw that Exp away). Returns true if clamped.
+    def self.clamp(pkmn)
+      return false if pkmn.nil? || pkmn.egg?
+      c = cap_for(pkmn)
+      return false unless c && pkmn.level > c
+      limit = pkmn.growth_rate.minimum_exp_for_level(c)
+      extra = pkmn.exp - limit
+      return false if extra <= 0
+      pkmn.kif_banked_exp = pkmn.kif_banked_exp.to_i + extra
+      pkmn.exp = limit
+      pkmn.calc_stats
+      return true
+    end
+
+    # Cap changed: clamp Pokémon above it, give saved Exp back to the rest.
     def self.release_all
       return unless $Trainer
-      $Trainer.party.each { |p| release(p, true) }
+      clamped = []
+      $Trainer.party.each do |p|
+        next if p.nil?
+        clamp(p) ? clamped << p : release(p, true)
+      end
       if $PokemonStorage
         $PokemonStorage.maxBoxes.times do |b|
           $PokemonStorage.maxPokemon(b).times do |i|
-            release($PokemonStorage[b, i], false)
+            p = $PokemonStorage[b, i]
+            next if p.nil?
+            release(p, false) unless clamp(p)
           end
         end
       end
+      return if clamped.empty?
+      names = clamped.map { |p| p.name }.join(", ")
+      pbMessage(_INTL("Level cap Lv. {1}: {2} held at the cap. The extra Exp is saved for later.", cap, names))
     end
 
     def self.any_saved?
@@ -163,7 +193,7 @@ module KIF
       now = cap
       return if now == @last_cap
       @last_cap = now
-      release_all if any_saved?
+      release_all
     rescue => e
       KIF.log("Level cap release failed: #{e.message}")
     end

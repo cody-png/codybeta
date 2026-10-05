@@ -164,8 +164,6 @@ class KifOptionsBaseScene < PokemonOption_Scene
     for i in 0...@PokemonOptions.length
       @sprites["option"][i] = (@PokemonOptions[i].get || 0)
     end
-    @sprites["title"] = Window_UnformattedTextPokemon.newWithSize(
-      _INTL(kif_title), 0, 0, Graphics.width, 64, @viewport)
     @sprites["textbox"].text = getDefaultDescription
     pbFadeInAndShow(@sprites) { pbUpdate }
   end
@@ -173,6 +171,22 @@ class KifOptionsBaseScene < PokemonOption_Scene
   def pbFadeInAndShow(sprites, visiblesprites = nil)
     return if !@changedColor
     super
+  end
+
+  # Play test 2026-10-05: the title used to be drawn as a second window over
+  # PIF's "Options" title (it showed through), and the list ran 32px under
+  # the description box (last row cut off). Same layout as PIF otherwise.
+  def initUIElements
+    super
+    @sprites["title"].dispose if @sprites["title"]
+    @sprites["title"] = Window_UnformattedTextPokemon.newWithSize(
+      _INTL(kif_title), 0, 0, Graphics.width, 64, @viewport)
+  end
+
+  def initOptionsWindow
+    win = super
+    win.height = Graphics.height - @sprites["title"].height - @sprites["textbox"].height
+    return win
   end
 end
 

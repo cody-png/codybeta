@@ -130,3 +130,21 @@ class PokemonSummary_Scene
     KIF.log("EvoLock icon failed: #{e.message}")
   end
 end
+
+# Party screen (Cody, 2026-10-05): same padlock in the empty space between
+# the level and the HP numbers (status icons sit at x 78-122, HP text starts
+# around x 150).
+class PokemonPartyPanel
+  alias kif_evolock_refresh refresh unless method_defined?(:kif_evolock_refresh)
+
+  def refresh
+    redraw = @refreshBitmap
+    kif_evolock_refresh
+    return unless redraw && @pokemon && !@pokemon.egg? && @pokemon.kif_evo_locked?
+    return if @text && @text.length > 0   # "ABLE"/"NOT ABLE" annotations use this spot
+    return unless @overlaysprite && !@overlaysprite.disposed? && @overlaysprite.bitmap
+    KIF.draw_evolock_icon(@overlaysprite.bitmap, 130, 64)
+  rescue => e
+    KIF.log("EvoLock party icon failed: #{e.message}")
+  end
+end

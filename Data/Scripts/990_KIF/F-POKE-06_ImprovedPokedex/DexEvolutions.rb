@@ -125,7 +125,17 @@ class PokemonPokedexInfo_Scene
   alias kif_evo_drawPageInfo drawPageInfo unless method_defined?(:kif_evo_drawPageInfo)
 
   def drawPageInfo(*args)
-    ret = kif_evo_drawPageInfo(*args)
+    # With evolutions shown, the Sprite:/Entry: credit lines (224,156 and
+    # 224,188) are left out while the base page draws, instead of erasing
+    # them afterwards (erasing cut into the weight text above).
+    @kif_skip_credits = KIF::DexEvolutions.show && !@brief
+    $kif_dex_scene_drawing = self
+    begin
+      ret = kif_evo_drawPageInfo(*args)
+    ensure
+      @kif_skip_credits = false
+      $kif_dex_scene_drawing = nil
+    end
     unless @brief
       kif_draw_evolutions if KIF::DexEvolutions.show
       kif_draw_evo_hint
@@ -138,9 +148,6 @@ class PokemonPokedexInfo_Scene
     base = Color.new(88, 88, 80)
     shadow = Color.new(168, 184, 184)
     base, shadow = shadow, base if isDarkMode
-    # Hide the Sprite:/Entry: credits (the box itself is in the background)
-    # (to y 234: descenders of the old text reach below the second line)
-    overlay.fill_rect(220, 150, 290, 84, Color.new(0, 0, 0, 0))
     if $Trainer.owned?(@species)
       species_data = GameData::Species.get_species_form(@species, @form)
       lines = KIF::DexEvolutions.lines(overlay, species_data, 270)
@@ -167,6 +174,8 @@ class PokemonPokedexInfo_Scene
     pbSetSystemFont(overlay) if overlay
   end
 
+  attr_reader :kif_skip_credits
+
   alias kif_evo_pbUpdate pbUpdate unless method_defined?(:kif_evo_pbUpdate)
 
   def pbUpdate(*args)
@@ -178,4 +187,15 @@ class PokemonPokedexInfo_Scene
     end
     return ret
   end
+end
+
+# Leaves out the credit lines while drawPageInfo runs with evolutions shown.
+alias kif_evo_pbDrawTextPositions pbDrawTextPositions unless defined?(kif_evo_pbDrawTextPositions)
+
+def pbDrawTextPositions(bitmap, textpos)
+  scene = $kif_dex_scene_drawing
+  if scene && scene.kif_skip_credits && textpos.is_a?(Array)
+    textpos = textpos.reject { |t| t.is_a?(Array) && t[1] == 224 && (t[2] == 156 || t[2] == 188) }
+  end
+  return kif_evo_pbDrawTextPositions(bitmap, textpos)
 end

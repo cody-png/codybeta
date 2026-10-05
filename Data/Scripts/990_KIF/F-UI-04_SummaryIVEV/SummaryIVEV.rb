@@ -14,6 +14,7 @@
 #   * The Hoenn contest lobby summary (053_PIF_Hoenn/.../014_Summary.rb, which
 #     aliases drawPageThree) keeps its condition page.
 #   * Stat values use 6.8.2's dark-mode aware text colours.
+#   * Small +/- marks for the nature's raised/lowered stat (Cody, 2026-10-05).
 #===============================================================================
 KIF::Options.define(:summary_ivev, 1, :global)
 
@@ -87,6 +88,7 @@ class PokemonSummary_Scene
       drawTextEx(overlay, 224, 320, 282, 2, ability.description, @text_color_base, @text_color_shadow)
     end
     pbDrawTextPositions(overlay, textpos)
+    kif_draw_nature_marks(overlay, stats, ys)
     # Draw HP bar
     if @pokemon.hp > 0
       w = @pokemon.hp * 96 * 1.0 / @pokemon.totalhp
@@ -96,6 +98,27 @@ class PokemonSummary_Scene
       hpzone = 1 if @pokemon.hp <= (@pokemon.totalhp / 2).floor
       hpzone = 2 if @pokemon.hp <= (@pokemon.totalhp / 4).floor
       pbDrawImagePositions(overlay, [["Graphics/Pictures/Summary/overlay_hp", 360, 110, 0, hpzone * 6, w, 6]])
+    end
+  end
+
+  # Small "+" (raised) / "-" (lowered) left of the stat names, for the
+  # nature (Cody's request 2026-10-05; mock-up in the play-test notes).
+  def kif_draw_nature_marks(overlay, stats, ys)
+    return if @pokemon.shadowPokemon? && @pokemon.heartStage <= 3
+    nature = @pokemon.nature_for_stats
+    return unless nature
+    up = Color.new(224, 56, 48)
+    down = Color.new(56, 96, 200)
+    nature.stat_changes.each do |stat, change|
+      i = stats.index(stat)
+      next if i.nil? || change == 0
+      cy = ys[i] + 21
+      if change > 0
+        overlay.fill_rect(229, cy, 5, 1, up)
+        overlay.fill_rect(231, cy - 2, 1, 5, up)
+      else
+        overlay.fill_rect(229, cy, 5, 1, down)
+      end
     end
   end
 end

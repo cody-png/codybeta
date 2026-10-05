@@ -128,6 +128,18 @@ module KIF
           @prices[id] = [buy, sell]
         end
       end
+      return sort_tms(stock)
+    end
+
+    # TMs are listed in TM-number order inside their block (Cody, 2026-10-05)
+    def self.sort_tms(stock)
+      tm = proc { |id| (GameData::Item.get(id).is_TM? rescue false) }
+      idx = stock.each_index.select { |i| tm.call(stock[i]) }
+      sorted = idx.map { |i| stock[i] }.sort_by do |id|
+        num = (GameData::Item.get(id).name[/\d+/] rescue nil)
+        [num ? num.to_i : 9999, id.to_s]
+      end
+      idx.each_with_index { |i, k| stock[i] = sorted[k] }
       return stock
     end
 

@@ -8,7 +8,8 @@
 #   :278 a chain never breaks on shaking grass (PokeRadar+)
 #   016_UI/015_UI_Options.rb:2826-2830 option "PokeRadar+" (Others, Off)
 #
-# PokeRadar+ On: the chain count is shown each time the grass shakes, chains
+# PokeRadar+ On: the chain count is shown each time the grass shakes (port
+#   addition: "Radar Chain Count" Off hides it), chains
 #   don't randomly drop when you step into shaking grass, and a radar use with
 #   no shaking grass keeps the chain.
 # Always (as in KIF): while the radar is active your Repel steps don't run
@@ -22,6 +23,7 @@
 # put back. Hoenn's PokéNav radar (Settings::HOENN) isn't changed.
 #===============================================================================
 KIF::Options.define(:pokeradarplus, 0, :save)
+KIF::Options.define(:radarchaincount, 1, :save)   # port addition (Cody, 2026-10-05)
 
 KIF::Options.add(:others, :save) {
   EnumOption.new(_INTL("PokeRadar+"), [_INTL("Off"), _INTL("On")],
@@ -29,6 +31,13 @@ KIF::Options.add(:others, :save) {
                  proc { |value| $PokemonSystem.pokeradarplus = value },
                  [_INTL("Normal Poké Radar."),
                   _INTL("Adds a chain count display. Chains won't randomly drop.")])
+}
+KIF::Options.add(:others, :save) {
+  EnumOption.new(_INTL("Radar Chain Count"), [_INTL("Off"), _INTL("On")],
+                 proc { $PokemonSystem.radarchaincount },
+                 proc { |value| $PokemonSystem.radarchaincount = value },
+                 [_INTL("PokeRadar+ doesn't show the chain count"),
+                  _INTL("PokeRadar+ shows the chain count when the grass shakes")])
 }
 
 module KIF
@@ -64,7 +73,7 @@ KIF.guard_base("013_Items/005_Item_PokeRadar.rb", 2523489654, "pbPokeRadarHighli
 
 # Copy of 6.8.2 pbPokeRadarHighlightGrass with the KIF lines marked
 def pbPokeRadarHighlightGrass(showmessage = true)
-  if KIF::RadarPlus.on? && $PokemonTemp.pokeradar                       # KIF
+  if KIF::RadarPlus.on? && $PokemonTemp.pokeradar && $PokemonSystem.radarchaincount.to_i == 1 # KIF
     pbMessage(_INTL("Chain count: {1}\\wtnp[10]", $PokemonTemp.pokeradar[2])) # KIF
   end                                                                  # KIF
   grasses = [] # x, y, ring (0-3 inner to outer), rarity§

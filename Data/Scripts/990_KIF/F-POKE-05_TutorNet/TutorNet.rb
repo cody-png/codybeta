@@ -8,8 +8,8 @@
 # Pause menu "Tutor.net" (option On, not in the Bug Contest or the Elite Four
 # rooms): a list of every TM you own and every move tutor you have used.
 # TMs are free; a move tutor's move is unlocked for good the first time it is
-# bought (P10,000 for tutors registered by pbMoveTutorChoose). SHIFT + a party
-# member shows only that member's moves; ACTION (Z) shows the move's data.
+# bought (P10,000 for tutors registered by pbMoveTutorChoose). SHIFT (or L/R,
+# added for controllers) + a party member shows only that member's moves; ACTION (Z) shows the move's data.
 # Party icons show who can learn the highlighted move.
 # Moves are registered when TMs are obtained (found, received, bought) and
 # when a move tutor teaches; opening Tutor.net also registers every TM in the
@@ -426,7 +426,7 @@ class PokemonTutorNet_Scene
       update_indicators
       if Input.trigger?(Input::BACK)
         break
-      elsif Input.trigger?(Input::SHIFT) && !noshift
+      elsif (Input.trigger?(Input::SHIFT) || Input.trigger?(Input::AUX1) || Input.trigger?(Input::AUX2)) && !noshift   # KIF port: L/R for controllers
         pbPlayCursorSE
         newcommands=[]
         newmovelist=[]
@@ -668,7 +668,7 @@ class PokemonTutorNetScreen
     @scene.pbStartScene(realcommands, $Trainer.party,commands)
     if !$Trainer.tutornet_old_user
       pbMessage(_INTL("This is your first time logging in Tutor.net! Welcome!"))
-      pbMessage(_INTL("By pressing SHIFT and selecting a party member you can view only the moves that specific member can learn!"))
+      pbMessage(_INTL("By pressing SHIFT (or L/R) and selecting a party member you can view only the moves that specific member can learn!"))
       pbMessage(_INTL("By pressing the ACTION button (default: Z) you can view information of the move the cursor currently points to."))
       $Trainer.tutornet_old_user=true
     end

@@ -19,6 +19,8 @@
 #              Def, SpA, SpD, Spe, Caught Date, Shiny, OT, Gender, Ability,
 #              Nature, Held Item, 1st Type, 2nd Type, Caught Map, Happiness,
 #              EXP, Markings, Total IVs, Total EVs; Normal or Reverse order.
+#              Port addition: Sort by BST (base stat total incl. KIF fusion
+#              rules / self-fusion boost) after Spe.
 #              Sorted Pokémon are packed from the first slot (first unlocked
 #              box for Sort all).
 # Every box name shows a green (unlocked) or red (locked) "S" and "E".
@@ -174,6 +176,7 @@ module KIF
       ["Sort by HP", :totalhp], ["Sort by Atk", :attack],
       ["Sort by Def", :defense], ["Sort by SpA", :spatk],
       ["Sort by SpD", :spdef], ["Sort by Spe", :speed],
+      ["Sort by BST", :bst],   # port addition (Cody, 2026-10-05)
       ["Sort by Caught Date", :timeReceived], ["Sort by Shiny", :shiny],
       ["Sort by OT", :OT], ["Sort by Gender", :gender],
       ["Sort by Ability", :ability], ["Sort by Nature", :nature],
@@ -195,6 +198,7 @@ module KIF
             when :item     then p.item ? p.item.name : "0"
             when :type1    then GameData::Type.get(p.type1).id_number
             when :type2    then GameData::Type.get(p.type2).id_number
+            when :bst      then (p.respond_to?(:kif_effective_base_stats) ? p.kif_effective_base_stats : p.baseStats).values.sum
             when :totalivs then p.iv.values.sum
             when :totalevs then p.ev.values.sum
             else p.send(attr)

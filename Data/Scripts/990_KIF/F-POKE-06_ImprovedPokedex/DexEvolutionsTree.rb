@@ -98,6 +98,18 @@ module KIF
       return nil
     end
 
+    def self.iname(item)
+      return KIF::DexEvolutions.item_name(item)
+    end
+
+    # "Thunder Stone" -> ["Thunder", "Stone"] (split at the middle space)
+    def self.two_lines(text)
+      words = text.split(" ")
+      return [text] if words.length < 2
+      best = (1...words.length).min_by { |i| (words[0...i].join(" ").length - words[i..-1].join(" ").length).abs }
+      return [words[0...best].join(" "), words[best..-1].join(" ")]
+    end
+
     def self.type_name(t)
       return GameData::Type.get(t).name
     rescue
@@ -123,15 +135,15 @@ module KIF
       when :Shedinja then return [[_INTL("Lv {1}", param), _INTL("spare slot")], :RARECANDY]
       when :HappinessMoveType then return [[type_name(param)], :SOOTHEBELL]
       when :HappinessMove then return [[KIF::DexEvolutions.move_name(param)], :SOOTHEBELL]
-      when :HappinessHoldItem, :ItemHappiness then return [[_INTL("Friendship")], param]
-      when :HoldItemHappiness then return [[_INTL("Hold"), _INTL("Friendship")], param]
+      when :HappinessHoldItem, :ItemHappiness then return [[iname(param), _INTL("Friendship")], param]
+      when :HoldItemHappiness then return [[_INTL("Hold {1}", iname(param)), _INTL("Friendship")], param]
       when :Beauty then return [[_INTL("Beauty {1}", param)], nil]
       when :HasMove then return [[_INTL("Knows"), KIF::DexEvolutions.move_name(param)], nil]
       when :HasMoveType then return [[_INTL("{1} move", type_name(param))], nil]
       when :HasInParty then return [[_INTL("With"), sp_name(param)], nil]
       when :Location then return [[_INTL("Location")], nil]
       when :Region then return [[_INTL("Region")], nil]
-      when :TradeItem then return [[_INTL("Trade")], param]
+      when :TradeItem then return [[_INTL("Trade"), iname(param)], param]
       when :TradeSpecies then return [[_INTL("Trade for"), sp_name(param)], nil]
       end
       if m.start_with?("Level")
@@ -141,9 +153,10 @@ module KIF
       elsif m.start_with?("Trade")
         return [[_INTL("Trade"), w].compact, nil]
       elsif m.start_with?("Item")
-        return [[w].compact, param]
+        # the item is spelled out (Cody, 2026-10-05): "Moon Stone"
+        return [(w ? [iname(param), w] : two_lines(iname(param))), param]
       elsif m.include?("HoldItem")
-        return [[_INTL("Hold"), w].compact, param]
+        return [(w ? [_INTL("Hold {1}", iname(param)), w] : [_INTL("Hold"), iname(param)]), param]
       end
       return [[KIF::DexEvolutions.method_text(method, param)], nil]
     end
@@ -205,7 +218,9 @@ module KIF
           y2 = ky + size / 2
           cmds << [:arrow, x1, y1, x2, y2]
           lines, icon = method_label(method, param)
-          lines = lines.map { |l| fit(l, x2 - x1 + 20, width) }
+          diag = (y1 != y2)
+          limit = diag ? gap + node_w - 24 - (icon ? 26 : 0) : x2 - x1 + 20
+          lines = lines.map { |l| fit(l, limit, width) }
           mx = (x1 + x2) / 2
           my = (y1 + y2) / 2
           if y1 == y2 && !two_rows
@@ -218,9 +233,13 @@ module KIF
             isz = straight ? 20 : 24   # two-row straight arrows: label just above the line
             tw = lines.map { |l| width.call(l) }.max || 0
             rowh = [icon ? isz : 0, lines.length * 18].max
-            top = straight ? my - 2 - rowh : (up ? my - 8 - rowh : my + 6)
+            # branches: the label sits in the free band above (upper branch) or
+            # below (lower branch) the arrows, ending where the child's column
+            # starts (the parent's column is free there: the parent sits mid-way)
+            top = straight ? my - 2 - rowh : (up ? BOX_Y : BOX_Y + BOX_H - rowh)
             top = [[top, BOX_Y].max, BOX_Y + BOX_H - rowh].min
-            lx = mx + (straight ? 0 : 4) - ((icon ? isz + 2 : 0) + tw) / 2
+            bw = (icon ? isz + 2 : 0) + tw
+            lx = straight ? mx - bw / 2 : x + node_w + gap - 4 - bw
             if icon
               cmds << [:item, icon, lx, top + (rowh - isz) / 2, isz]
               lx += isz + 2
@@ -240,27 +259,29 @@ module KIF
       kids = root[:kids]
       pages = [(kids.length + PER_PAGE - 1) / PER_PAGE, 1].max
       page = page % pages
-      size = 40
-      # first stage: icon with its name to the right
+      # first stage: small icon with its name to the right
+      rsize = 32
       name = GameData::Species.get(root[:sp]).name
       nw = width.call(name)
-      x = BOX_X + (BOX_W - (size + 4 + nw)) / 2
-      cmds << [:icon, root[:sp], x, BOX_Y, size]
-      cmds << [:text, name, x + size + 4, BOX_Y + 10, 0]
-      cmds << [:rect, x - 2, BOX_Y - 1, size + 8 + nw, size + 2] if root[:sp] == current
+      x = BOX_X + (BOX_W - (rsize + 4 + nw)) / 2
+      cmds << [:icon, root[:sp], x, BOX_Y, rsize]
+      cmds << [:text, name, x + rsize + 4, BOX_Y + 6, 0]
+      cmds << [:rect, x - 2, BOX_Y - 1, rsize + 8 + nw, rsize + 2] if root[:sp] == current
       slot = BOX_W / PER_PAGE
+      size = 36
       kids[page * PER_PAGE, PER_PAGE].each_with_index do |(kid, method, param), i|
         sx = BOX_X + i * slot
         lines, icon = method_label(method, param)
-        label = fit(lines.join(" "), slot - (icon ? 26 : 6), width)
-        lw = width.call(label) + (icon ? 22 : 0)
-        lx = sx + (slot - lw) / 2
+        lines = lines.first(2).map { |l| fit(l, slot - (icon ? 24 : 4), width) }
+        tw = lines.map { |l| width.call(l) }.max || 0
+        lx = sx + (slot - (tw + (icon ? 22 : 0))) / 2
+        ty = BOX_Y + 33 + (lines.length == 1 ? 9 : 0)
         if icon
-          cmds << [:item, icon, lx, BOX_Y + 42, 20]
+          cmds << [:item, icon, lx, BOX_Y + 41, 20]
           lx += 22
         end
-        cmds << [:text, label, lx, BOX_Y + 43, 0] if label != ""
-        node_cmds(cmds, kid[:sp], sx + 2, BOX_Y + 63, size, slot - 4, current, width)
+        lines.each_with_index { |l, j| cmds << [:text, l, lx, ty + j * 18, 0] }
+        node_cmds(cmds, kid[:sp], sx + 2, BOX_Y + 70, size, slot - 4, current, width)
       end
       return [cmds, pages]
     end

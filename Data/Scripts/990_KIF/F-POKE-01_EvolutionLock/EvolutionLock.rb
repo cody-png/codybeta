@@ -95,3 +95,38 @@ KIF::PCActions.add(:evolock,
       screen.pbDisplay(_INTL("Pokemon evolution unlocked!"))
     end
   })
+
+#-------------------------------------------------------------------------------
+# Indicator (Cody, 2026-10-05): a small padlock next to the level in the
+# Summary header (every page) while the Pokémon is evolution-locked and the
+# option is On. Drawn with rectangles, so no new image is needed.
+#-------------------------------------------------------------------------------
+module KIF
+  def self.draw_evolock_icon(bitmap, x, y)
+    dark = Color.new(64, 64, 64)
+    gold = Color.new(232, 184, 48)
+    shine = Color.new(255, 232, 140)
+    # shackle
+    bitmap.fill_rect(x + 2, y, 8, 2, dark)
+    bitmap.fill_rect(x + 2, y, 2, 7, dark)
+    bitmap.fill_rect(x + 8, y, 2, 7, dark)
+    # body
+    bitmap.fill_rect(x, y + 6, 12, 9, dark)
+    bitmap.fill_rect(x + 1, y + 7, 10, 7, gold)
+    bitmap.fill_rect(x + 2, y + 8, 3, 1, shine)
+    # keyhole
+    bitmap.fill_rect(x + 5, y + 9, 2, 3, dark)
+  end
+end
+
+class PokemonSummary_Scene
+  alias kif_evolock_drawPage drawPage unless method_defined?(:kif_evolock_drawPage)
+
+  def drawPage(page)
+    kif_evolock_drawPage(page)
+    return if @pokemon.nil? || @pokemon.egg? || !@pokemon.kif_evo_locked?
+    KIF.draw_evolock_icon(@sprites["overlay"].bitmap, 106, 101)
+  rescue => e
+    KIF.log("EvoLock icon failed: #{e.message}")
+  end
+end

@@ -110,9 +110,44 @@ def getDevolvedSpecies(pokemon)
   return GameData::Species.get(pokemon.species).get_previous_species
 end
 
-def pbForceDevo(pokemon)
+# Fusions (Cody, 2026-10-05): when both head and body can devolve, ask which.
+# Returns the new species, or nil if nothing can devolve / the player cancels.
+def kif_devolution_target(pokemon, scene = nil)
+  sp = pokemon.species_data
+  unless sp.is_a?(GameData::FusedSpecies) && sp.head_pokemon && sp.body_pokemon
+    target = getDevolvedSpecies(pokemon)
+    return (target.nil? || target == pokemon.species) ? nil : target
+  end
+  head = sp.head_pokemon.species
+  body = sp.body_pokemon.species
+  head_prev = GameData::Species.get(head).get_previous_species
+  body_prev = GameData::Species.get(body).get_previous_species
+  options = []
+  if head_prev && head_prev != head
+    options << [_INTL("Head: {1} → {2}", GameData::Species.get(head).name, GameData::Species.get(head_prev).name),
+                fusionOf(head_prev, body)]
+  end
+  if body_prev && body_prev != body
+    options << [_INTL("Body: {1} → {2}", GameData::Species.get(body).name, GameData::Species.get(body_prev).name),
+                fusionOf(head, body_prev)]
+  end
+  return nil if options.empty?
+  return options[0][1] if options.length == 1
+  labels = options.map { |o| o[0] } + [_INTL("Cancel")]
+  text = _INTL("Devolve which part of {1}?", pokemon.name)
+  if scene && scene.respond_to?(:pbShowCommands)
+    choice = scene.pbShowCommands(text, labels)
+  else
+    choice = pbMessage(text, labels, labels.length)
+  end
+  return :cancel if choice.nil? || choice < 0 || choice >= options.length
+  return options[choice][1]
+end
+
+def pbForceDevo(pokemon, scene = nil)
   return false if pokemon.respond_to?(:kif_evo_locked?) && pokemon.kif_evo_locked?
-  evolution = getDevolvedSpecies(pokemon)
+  evolution = kif_devolution_target(pokemon, scene)
+  return nil if evolution == :cancel
   return false if evolution.nil? || evolution == pokemon.species
   evo = PokemonEvolutionScene.new
   evo.pbStartScreen(pokemon, evolution)
@@ -123,12 +158,10 @@ end
 
 ItemHandlers::UseOnPokemon.add(:DEVOLUTIONSPRAY, proc { |item, pokemon, scene|
   next false if pokemon.egg?
-  if pbForceDevo(pokemon)
-    next true
-  else
-    scene.pbDisplay(_INTL("It won't have any effect."))
-    next false
-  end
+  result = pbForceDevo(pokemon, scene)
+  next true if result
+  scene.pbDisplay(_INTL("It won't have any effect.")) if result == false
+  next false
 })
 
 #-------------------------------------------------------------------------------

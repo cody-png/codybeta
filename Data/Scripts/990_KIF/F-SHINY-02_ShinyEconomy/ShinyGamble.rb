@@ -72,7 +72,8 @@ module KIF
   end
 end
 
-class PokemonStorageScreen
+# Shared by the PC (PokemonStorageScreen) and the party menu (KIF::PartyActionHost).
+module KIF::PCActionMethods
   # KIF pbKuraShinify
   def kif_shiny_gamble(pkmn, selected)
     price = KIF::PCActions.price(KIF::ShinyActions::GAMBLE_PRICE)

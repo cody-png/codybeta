@@ -23,8 +23,9 @@
 #   Grass, Dewgong is Ice/Water.
 #
 # 6.8.2 adaptations (no copies of base methods):
-#   * The boost is applied through baseStats while calc_stats runs, so the
-#     Summary keeps showing the real base stats (same as KIF).
+#   * The boost is applied through baseStats while calc_stats runs. The
+#     Summary BST column shows the boosted values (kif_effective_base_stats;
+#     KIF showed the unboosted ones, Cody asked to see the boost 2026-10-05).
 #   * FusedSpecies caches its types when created, so KIF's change to
 #     calculate_type1/2 only took effect for fusions created after toggling.
 #     Here FusedSpecies#type1/type2 apply the rule when read.
@@ -274,15 +275,32 @@ class Pokemon
 
   alias kif_rules_calc_stats calc_stats unless method_defined?(:kif_rules_calc_stats)
 
-  def calc_stats(*args)
-    return kif_rules_calc_stats(*args) unless $PokemonSystem && $PokemonSystem.self_fusion_boost == 1
-    return kif_rules_calc_stats(*args) if KIF.endgame_challenge_active?
-    return kif_rules_calc_stats(*args) unless (isSelfFusion? rescue false)
+  # Self-fusion boost factor for this Pokémon, or nil when it doesn't apply.
+  def kif_self_fusion_factor
+    return nil unless $PokemonSystem && $PokemonSystem.self_fusion_boost == 1
+    return nil if KIF.endgame_challenge_active?
+    return nil unless (isSelfFusion? rescue false)
+    return nil if KIF::FusionRules.boosting.equal?(self)
     total = 0
     baseStats.each_value { |v| total += v }
+    return KIF::FusionRules.self_fusion_factor(total)
+  end
+
+  # Base stats as used for this Pokémon's stats (with the self-fusion boost).
+  # Shown in the Summary BST column.
+  def kif_effective_base_stats
+    ret = baseStats
+    factor = kif_self_fusion_factor
+    ret.each_key { |k| ret[k] = (ret[k] * factor).round } if factor
+    return ret
+  end
+
+  def calc_stats(*args)
+    factor = kif_self_fusion_factor
+    return kif_rules_calc_stats(*args) unless factor
     prev = [KIF::FusionRules.boosting, KIF::FusionRules.boost]
     KIF::FusionRules.boosting = self
-    KIF::FusionRules.boost = KIF::FusionRules.self_fusion_factor(total)
+    KIF::FusionRules.boost = factor
     begin
       return kif_rules_calc_stats(*args)
     ensure

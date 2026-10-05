@@ -62,7 +62,7 @@ class PokemonSummary_Scene
     ys = [70, 114, 146, 178, 210, 242]
     no_evs = $PokemonSystem.respond_to?(:noevsmode) && $PokemonSystem.noevsmode.to_i > 0
     max_ivs = $PokemonSystem.respond_to?(:maxivsmode) && $PokemonSystem.maxivsmode.to_i > 0
-    base_stats = @pokemon.baseStats
+    base_stats = @pokemon.respond_to?(:kif_effective_base_stats) ? @pokemon.kif_effective_base_stats : @pokemon.baseStats
     textpos = []
     stats.each_with_index do |stat, i|
       y = ys[i]

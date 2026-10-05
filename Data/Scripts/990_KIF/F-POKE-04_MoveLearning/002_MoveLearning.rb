@@ -157,3 +157,67 @@ class FusionTutorService
     return moves
   end
 end
+
+#-------------------------------------------------------------------------------
+# Party "Change moves" (Cody, 2026-10-05). In 6.8.2 it only lists moves the
+# Pokémon once knew (pbRememberMoves, 005_UI_Party.rb:1216). It now offers in
+# one list: those moves, level-up moves up to its level (pre-evolutions
+# included), egg moves, and event moves when "Event Moves" is On. Tutor moves
+# are not included (they are unlocked by finding the tutor; KIF's Tutor.net
+# is a separate feature).
+# Also avoids a 6.8.2 bug: pbRememberMoves deleted the current moves from the
+# Pokémon's learned_moves list each time it was opened.
+#-------------------------------------------------------------------------------
+module KIF
+  module MoveLearning
+    # Egg moves of the species, its baby form and, for fusions, both parts
+    # and their baby forms (same source as the Egg Move Tutor).
+    def self.egg_moves_for(pkmn)
+      species = [pkmn.species]
+      sp = pkmn.species_data
+      if sp.is_a?(GameData::FusedSpecies) && sp.head_pokemon && sp.body_pokemon
+        species << sp.head_pokemon.species << sp.body_pokemon.species
+      end
+      ret = []
+      species.each do |s|
+        data = GameData::Species.get(s) rescue next
+        ret |= Array(data.egg_moves)
+        baby = data.get_baby_species rescue s
+        ret |= Array(GameData::Species.get(baby).egg_moves) rescue nil
+      end
+      return ret
+    end
+
+    def self.change_moves_list(pkmn)
+      return [] if pkmn.nil? || pkmn.egg? || pkmn.shadowPokemon?
+      known = pkmn.moves.map { |m| m.id }
+      list = []
+      (pkmn.learned_moves || []).each do |m|
+        id = m.is_a?(Symbol) ? m : (m.id rescue nil)
+        next unless id && move_ok?(id)
+        list << id if (pkmn.compatible_with_move?(id) rescue true)
+      end
+      list |= MoveRelearnerScreen.new(nil).pbGetRelearnableMoves(pkmn)
+      list |= egg_moves_for(pkmn)
+      list |= pkmn.getEventMoveList if $PokemonSystem.eventmoves.to_i > 0
+      return list.select { |id| move_ok?(id) && !known.include?(id) }
+    end
+  end
+end
+
+class PokemonPartyScreen
+  def pbRememberMoves(pokemon)
+    moves = KIF::MoveLearning.change_moves_list(pokemon)
+    if moves.empty?
+      pbMessage(_INTL("{1} has no moves to remember!", pokemon.name))
+      return false
+    end
+    retval = true
+    pbFadeOutIn {
+      scene = MoveRelearner_Scene.new
+      screen = MoveRelearnerScreen.new(scene)
+      retval = screen.pbStartScreen(pokemon, moves)
+    }
+    return retval
+  end
+end

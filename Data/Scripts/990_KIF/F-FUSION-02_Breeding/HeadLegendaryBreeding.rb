@@ -83,3 +83,42 @@ def pbDayCareGetCompat
   ret += 1 if pkmn1.owner.id != pkmn2.owner.id
   return ret
 end
+
+#-------------------------------------------------------------------------------
+# Gender (found in Cody's play test 2026-10-05: Mew/Murkrow + Murkrow said
+# "prefer to play with other Pokémon"). 6.8.2 makes a fusion genderless when
+# either part is genderless, and genderless Pokémon only breed with Ditto.
+# Legendary heads are almost all genderless, so with the option On such a
+# fusion takes its gender from its body like old PIF/KIF
+# (FusedSpecies#calculate_gender returned the body's ratio, KIF
+# FusedSpecies.rb:427). Same personalID formula as Pokemon#gender, so the
+# gender is stable. Only applies while the option is On; the stored gender is
+# not changed.
+#-------------------------------------------------------------------------------
+class Pokemon
+  def kif_head_legendary_gender
+    return nil unless $PokemonSystem && $PokemonSystem.legendarybreed == 1
+    sp = species_data
+    return nil unless sp.is_a?(GameData::FusedSpecies) && sp.head_pokemon && sp.body_pokemon
+    return nil unless Array(sp.head_pokemon.egg_groups).include?(:Undiscovered)
+    return nil if Array(sp.body_pokemon.egg_groups).include?(:Undiscovered)
+    return nil if @gender == 0 || @gender == 1   # already has a gender
+    case sp.body_pokemon.gender_ratio
+    when :AlwaysMale   then return 0
+    when :AlwaysFemale then return 1
+    when :Genderless   then return nil
+    end
+    female_chance = GameData::GenderRatio.get(sp.body_pokemon.gender_ratio).female_chance
+    return ((@personalID & 0xFF) < female_chance) ? 1 : 0
+  rescue
+    return nil
+  end
+
+  alias kif_breed_gender gender unless method_defined?(:kif_breed_gender)
+
+  def gender
+    g = kif_head_legendary_gender
+    return g unless g.nil?
+    return kif_breed_gender
+  end
+end

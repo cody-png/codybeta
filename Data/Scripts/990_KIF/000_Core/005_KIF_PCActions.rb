@@ -13,6 +13,11 @@
 # Actions appear in registration order; a nil label hides the action.
 #===============================================================================
 module KIF
+  # Methods used by action handlers; mixed into every host (PC screen, party
+  # menu). Features add their helpers here.
+  module PCActionMethods
+  end
+
   module PCActions
     Action = Struct.new(:id, :label, :handler)
     @actions = []
@@ -36,6 +41,8 @@ module KIF
 end
 
 class PokemonStorageScreen
+  include KIF::PCActionMethods
+
   alias kif_pc_organizeActions organizeActions unless method_defined?(:kif_pc_organizeActions)
 
   def organizeActions(selected, pokemon, heldpoke, isTransferBox)
@@ -82,5 +89,79 @@ class PokemonStorageScreen
   def kif_refresh(selected)
     @scene.pbUpdateOverlay(selected[1], (selected[0] == -1) ? @storage.party : nil) rescue nil
     @scene.pbHardRefresh rescue nil
+  end
+end
+
+#===============================================================================
+# The same "Kuray Actions" in the party menu (Cody, 2026-10-05).
+# PokemonPartyScreen#pbPokemonScreen is one long method, so the entry is
+# inserted before "Cancel" when the scene shows the "Do what with X?" list.
+# Picking it runs the actions and hands the base method "Cancel", which just
+# returns to Pokémon selection.
+#===============================================================================
+module KIF
+  class PartyActionHost
+    include KIF::PCActionMethods
+
+    def initialize(scene, index)
+      @scene = scene
+      @index = index
+    end
+
+    def pbDisplay(text)
+      @scene.pbDisplay(text)
+    end
+
+    def pbConfirm(text)
+      return @scene.pbDisplayConfirm(text)
+    end
+
+    def pbShowCommands(msg, commands, index = 0)
+      return @scene.kif_party_raw_commands(msg, commands, index)
+    end
+
+    def kif_refresh(_selected)
+      @scene.pbHardRefresh rescue (@scene.pbRefresh rescue nil)
+    end
+
+    def run(pkmn)
+      list = KIF::PCActions.available(pkmn)
+      labels = list.map { |_, l| l } + [_INTL("Cancel")]
+      cmd = pbShowCommands(_INTL("Do what with {1}?", pkmn.name), labels)
+      return if cmd < 0 || cmd >= list.length
+      list[cmd][0].handler.call(self, pkmn, [-1, @index], nil)
+    end
+  end
+end
+
+class PokemonParty_Scene
+  alias kif_party_pbChoosePokemon pbChoosePokemon unless method_defined?(:kif_party_pbChoosePokemon)
+
+  def pbChoosePokemon(*args)
+    ret = kif_party_pbChoosePokemon(*args)
+    @kif_last_choice = ret.is_a?(Array) ? ret[1] : ret
+    return ret
+  end
+
+  alias kif_party_raw_commands pbShowCommands unless method_defined?(:kif_party_raw_commands)
+
+  def pbShowCommands(helptext, commands, index = 0)
+    idx = @kif_last_choice
+    pkmn = (idx.is_a?(Integer) && idx >= 0 && @party) ? @party[idx] : nil
+    cancel = _INTL("Cancel")
+    if pkmn.nil? || commands.last != cancel || !commands.include?(_INTL("Summary")) ||
+       helptext != _INTL("Do what with {1}?", pkmn.name) || KIF::PCActions.available(pkmn).empty?
+      return kif_party_raw_commands(helptext, commands, index)
+    end
+    pos = commands.length - 1
+    shown = commands.dup
+    shown.insert(pos, _INTL("Kuray Actions"))
+    ret = kif_party_raw_commands(helptext, shown, index)
+    if ret == pos
+      KIF::PartyActionHost.new(self, idx).run(pkmn)
+      pbRefresh rescue nil
+      return pos   # "Cancel" in the base list
+    end
+    return (ret > pos) ? ret - 1 : ret
   end
 end

@@ -52,8 +52,10 @@
 #   * Not ported (edge cases needing copies of long base methods): KIF let a
 #     drowsy/frostbitten Pokémon use Pursuit on a switching foe, and kept a
 #     multi-hit move going if its user fell asleep mid-move.
-#   * KIF's AI changes for Drowsy/Frostbite belong with DemICE's AI
-#     (F-BATTLE-03), which replaces those AI methods.
+#   * KIF's AI edits for Drowsy/Frostbite (004_AI_Move.rb:202,
+#     005_AI_Move_EffectScores.rb:1759, 006_AI_Move_Utilities.rb:485) were in
+#     base AI methods that DemICE's AI (F-BATTLE-03) replaces, so they never
+#     ran in KIF; not ported.
 #===============================================================================
 KIF::Options.define(:modernhail, 0, :save)
 KIF::Options.define(:frostbite, 0, :save)

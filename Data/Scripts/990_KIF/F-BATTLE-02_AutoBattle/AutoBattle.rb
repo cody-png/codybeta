@@ -23,7 +23,8 @@
 #     6.8.2's speed-up key and L/R are the KIF speed keys, so Auto-Battle and
 #     Battle Loop are toggled in KIF Settings. KIF's "Auto-Battle Shortcut"
 #     option is therefore not ported.
-#   * The AI used is 6.8.2's (DemICE's Powerful AI, F-BATTLE-03, isn't ported).
+#   * The AI used is DemICE's Powerful AI (F-BATTLE-03), or 6.8.2's with
+#     "Powerful AI" Off.
 #===============================================================================
 KIF::Options.define(:autobattler, 0, :save)
 KIF::Options.define(:autobattlershiny, 0, :save)

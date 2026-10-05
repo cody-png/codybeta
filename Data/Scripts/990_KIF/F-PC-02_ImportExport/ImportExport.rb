@@ -614,8 +614,11 @@ module KIF
       return out
     end
 
-    # Returns the list of .json files to use, or nil if cancelled.
-    def self.choose_files(screen, message)
+    # KIF navigationSystem. Returns nil if cancelled, else a hash:
+    #   :dir   folder used (nil for <This Folder+Sub-Folders>)
+    #   :files .json files to use
+    #   :random_root folder whose sub-folders are re-picked (Random Sub-Folder)
+    def self.navigate(screen, message)
       ensure_folder
       dir = FOLDER
       loop do
@@ -632,21 +635,27 @@ module KIF
         when "<...>"
           dir = File.dirname(dir)
         when "<This Folder>"
-          return jsons_in(dir, false)
+          return { :dir => dir, :files => jsons_in(dir, false), :random_root => nil }
         when "<This Folder+Sub-Folders>"
-          return jsons_in(dir, true)
+          return { :dir => nil, :files => jsons_in(dir, true), :random_root => nil }
         when "<Random Sub-Folder>"
           if subs.empty?
             pbPlayBuzzerSE
             screen.pbDisplay(_INTL("No sub-folders to randomize from!"))
           else
             pick = dirs_with_jsons(dir).sample
-            return pick ? jsons_in(pick, false) : []
+            return { :dir => pick, :files => (pick ? jsons_in(pick, false) : []), :random_root => dir }
           end
         else
           dir = File.join(dir, cmds[cmd]) if cmd >= fixed
         end
       end
+    end
+
+    # Returns the list of .json files to use, or nil if cancelled.
+    def self.choose_files(screen, message)
+      nav = navigate(screen, message)
+      return nav ? nav[:files] : nil
     end
 
     # Free slots: current box first, then Box 1 onwards (KIF), no transfer box

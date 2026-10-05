@@ -6,8 +6,8 @@
 # Window title (Cody, 2026-10-05: KIF version = this port's version):
 #   "Kuray's Infinite Fusion (KIF) | Version: <KIF::PORT_VERSION> |
 #    PIF Version: <6.8.2> | Speed: xN"
-#   KIF also showed Auto-Battler / Loop Self-Battle; they come with those
-#   features. The title is only rewritten when the text changes.
+#   plus KIF's "Auto-Battler (ON/OFF) | Loop Self-Battle (ON/OFF)".
+#   The title is only rewritten when the text changes.
 #
 # L / R (keyboard Q / W by default): L = next speed, R = back to 1x.
 #   Only in Toggle speed-up mode (6.8.2's Hold mode has no stored speed).
@@ -31,8 +31,15 @@ module KIF
     end
 
     def self.title_text
-      return _INTL("Kuray's Infinite Fusion (KIF) | Version: {1} | PIF Version: {2} | Speed: x{3}",
-                   KIF::PORT_VERSION, Settings::GAME_VERSION_NUMBER, current_speed)
+      ret = _INTL("Kuray's Infinite Fusion (KIF) | Version: {1} | PIF Version: {2} | Speed: x{3}",
+                  KIF::PORT_VERSION, Settings::GAME_VERSION_NUMBER, current_speed)
+      # KIF updateTitle: Auto-Battle / Battle Loop state (F-BATTLE-02, F-PC-03)
+      if $PokemonSystem && $PokemonSystem.respond_to?(:autobattler)
+        auto = ($PokemonSystem.autobattler.to_i == 1) ? "(ON)" : "(OFF)"
+        loop_on = ($PokemonSystem.respond_to?(:sb_loopinput) && $PokemonSystem.sb_loopinput.to_i == 1) ? "(ON)" : "(OFF)"
+        ret += " | Auto-Battler #{auto} | Loop Self-Battle #{loop_on}"
+      end
+      return ret
     end
 
     def self.update_title

@@ -18,6 +18,8 @@
 #     defines the $PokemonSystem accessor, its default, its scope
 #     (:global or :save) and its menu entry. A feature that is not ported
 #     yet therefore never shows a dead toggle.
+#   * ONLY .rb files may live in this folder: the loader evals every file it
+#     finds. Images/assets go to Graphics/Pictures/KIF/ (new files only).
 #   * Save data only ever contains core Ruby types (Integer/String/Array/Hash/
 #     Symbol), so a save made with this overlay still loads in vanilla PIF.
 #

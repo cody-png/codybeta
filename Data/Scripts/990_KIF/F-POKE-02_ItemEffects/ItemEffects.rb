@@ -181,3 +181,62 @@ if defined?(GENERIC_PRIZES_MULTI) && GENERIC_PRIZES_MULTI.is_a?(Array) &&
    !GENERIC_PRIZES_MULTI.frozen? && !GENERIC_PRIZES_MULTI.include?(:RARECANDY)
   GENERIC_PRIZES_MULTI.push(:RARECANDY)
 end
+
+#-------------------------------------------------------------------------------
+# Mist Stone: choose the evolution (port addition, Cody 2026-10-05)
+# 6.8.2 (New Items effects.rb:1559) picks a random one when there are several
+# (Eevee, or a fusion whose head and body can both evolve). Now, like the
+# Devolution Spray, the player chooses: "Head: Kabuto > Kabutops", "Body: ...",
+# or the species name. One possible evolution: no question. Cancel keeps the
+# stone. Evolution Lock still blocks it.
+#-------------------------------------------------------------------------------
+def kif_evo_choice_label(pokemon, target)
+  cur = pokemon.species_data
+  new = GameData::Species.get(target)
+  if cur.is_a?(GameData::FusedSpecies) && new.is_a?(GameData::FusedSpecies) &&
+     cur.head_pokemon && cur.body_pokemon && new.head_pokemon && new.body_pokemon
+    if cur.head_pokemon.species != new.head_pokemon.species
+      return _INTL("Head: {1} > {2}", cur.head_pokemon.name, new.head_pokemon.name)
+    elsif cur.body_pokemon.species != new.body_pokemon.species
+      return _INTL("Body: {1} > {2}", cur.body_pokemon.name, new.body_pokemon.name)
+    end
+  end
+  return new.name
+end
+
+# Species to evolve into, :cancel, or nil (no evolution)
+def kif_mist_stone_target(pokemon, scene = nil)
+  targets = getEvolvedSpecies(pokemon).map { |e| (GameData::Species.get(e[0]).species rescue nil) }
+  targets = targets.compact.uniq - [pokemon.species]
+  return nil if targets.empty?
+  return targets[0] if targets.length == 1
+  labels = targets.map { |t| kif_evo_choice_label(pokemon, t) } + [_INTL("Cancel")]
+  text = _INTL("Evolve {1} into which?", pokemon.name)
+  if scene && scene.respond_to?(:pbShowCommands)
+    choice = scene.pbShowCommands(text, labels)
+  else
+    choice = pbMessage(text, labels, labels.length)
+  end
+  return :cancel if choice.nil? || choice < 0 || choice >= targets.length
+  return targets[choice]
+end
+
+ItemHandlers::UseOnPokemon.add(:MISTSTONE, proc { |item, pokemon, scene|
+  next false if pokemon.egg?
+  if pokemon.respond_to?(:kif_evo_locked?) && pokemon.kif_evo_locked?
+    scene.pbDisplay(_INTL("It won't have any effect."))
+    next false
+  end
+  target = kif_mist_stone_target(pokemon, scene)
+  next false if target == :cancel
+  if target.nil?
+    scene.pbDisplay(_INTL("It won't have any effect."))
+    next false
+  end
+  evo = PokemonEvolutionScene.new
+  evo.pbStartScreen(pokemon, target)
+  evo.pbEvolution
+  evo.pbEndScreen
+  scene.pbRefresh if scene.respond_to?(:pbRefresh)
+  next true
+})

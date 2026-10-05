@@ -40,6 +40,33 @@ module KIF
   end
 end
 
+#===============================================================================
+# KIF box menu entries (F-PC-01/02/03). KIF 017_UI_PokemonStorage.rb:4783-4830
+# listed them after "Name": Lock Sorting, Lock Exporting, Buy Box, Sort,
+# Sort (all Boxes), Battle, Export this Box, Export All, Import, Import
+# Randomly. 6.8.2's pbBoxCommands keeps its list local, so while it runs the
+# entries are inserted before "Cancel" and the base method then sees "Cancel".
+#
+#   KIF::BoxCommands.add(:id, proc { |screen| label or nil },
+#                        proc { |screen| ... }, order: n)
+#===============================================================================
+module KIF
+  module BoxCommands
+    Command = Struct.new(:id, :label, :handler, :order, :index)
+    @commands = []
+
+    def self.add(id, label, handler, order: 100)
+      @commands.reject! { |c| c.id == id }
+      @commands << Command.new(id, label, handler, order, @commands.length)
+    end
+
+    def self.available(screen)
+      list = @commands.sort_by { |c| [c.order, c.index] }
+      return list.map { |c| [c, (c.label.call(screen) rescue nil)] }.select { |_, l| l }
+    end
+  end
+end
+
 class PokemonStorageScreen
   include KIF::PCActionMethods
 
@@ -56,7 +83,22 @@ class PokemonStorageScreen
 
   alias kif_pc_pbShowCommands pbShowCommands unless method_defined?(:kif_pc_pbShowCommands)
 
+  alias kif_box_pbBoxCommands pbBoxCommands unless method_defined?(:kif_box_pbBoxCommands)
+
+  def pbBoxCommands(*args)
+    @kif_boxcmd = true
+    begin
+      return kif_box_pbBoxCommands(*args)
+    ensure
+      @kif_boxcmd = false
+    end
+  end
+
   def pbShowCommands(msg, commands, index = 0)
+    if @kif_boxcmd
+      @kif_boxcmd = false   # only the box menu itself
+      return kif_box_menu(msg, commands, index)
+    end
     ctx = @kif_organize
     return kif_pc_pbShowCommands(msg, commands, index) unless ctx
     @kif_organize = nil   # only the first (organize) menu
@@ -75,6 +117,22 @@ class PokemonStorageScreen
       return cancel_idx
     end
     return ret > pos ? ret - 1 : ret
+  end
+
+  def kif_box_menu(msg, commands, index)
+    cancel_idx = commands.length - 1
+    if msg != _INTL("What do you want to do?") || commands[cancel_idx] != _INTL("Cancel") ||
+       @storage[@storage.currentBox].is_a?(StorageTransferBox)
+      return kif_pc_pbShowCommands(msg, commands, index)
+    end
+    list = KIF::BoxCommands.available(self)
+    return kif_pc_pbShowCommands(msg, commands, index) if list.empty?
+    shown = commands[0...cancel_idx] + list.map { |_, l| l } + [commands[cancel_idx]]
+    ret = kif_pc_pbShowCommands(msg, shown, index)
+    return ret if ret < cancel_idx
+    k = ret - cancel_idx
+    list[k][0].handler.call(self) if k < list.length
+    return cancel_idx
   end
 
   def kif_kuray_actions(selected, pkmn, heldpoke)

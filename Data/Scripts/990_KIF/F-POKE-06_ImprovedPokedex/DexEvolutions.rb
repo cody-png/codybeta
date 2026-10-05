@@ -5,7 +5,9 @@
 #
 # 6.8.2 redesigned the info page and uses KIF's box area for height/weight and
 # the sprite/entry credits. Cody chose (2026-10-05): the ACTION button (same
-# key as "Sort"/"Z" in lists) swaps the credits box for evolution lines.
+# key as Run: Z/Shift, a face button on controllers) swaps the credits box for
+# evolution lines; a small "RUN: Evolutions" / "RUN: Credits" hint sits in the
+# title bar.
 # The choice is remembered until the game closes.
 #   Normal species: "Gloom (Lv 21)", several evolutions share the two lines.
 #   Fusions: one line per part, by name: "Oddish > Gloom (Lv 21)" (head) and
@@ -124,7 +126,10 @@ class PokemonPokedexInfo_Scene
 
   def drawPageInfo(*args)
     ret = kif_evo_drawPageInfo(*args)
-    kif_draw_evolutions if KIF::DexEvolutions.show && !@brief
+    unless @brief
+      kif_draw_evolutions if KIF::DexEvolutions.show
+      kif_draw_evo_hint
+    end
     return ret
   end
 
@@ -134,7 +139,8 @@ class PokemonPokedexInfo_Scene
     shadow = Color.new(168, 184, 184)
     base, shadow = shadow, base if isDarkMode
     # Hide the Sprite:/Entry: credits (the box itself is in the background)
-    overlay.fill_rect(220, 152, 288, 70, Color.new(0, 0, 0, 0))
+    # (to y 234: descenders of the old text reach below the second line)
+    overlay.fill_rect(220, 150, 290, 84, Color.new(0, 0, 0, 0))
     if $Trainer.owned?(@species)
       species_data = GameData::Species.get_species_form(@species, @form)
       lines = KIF::DexEvolutions.lines(overlay, species_data, 270)
@@ -145,6 +151,20 @@ class PokemonPokedexInfo_Scene
                                   [lines[1] || "", 224, 188, 0, base, shadow]])
   rescue => e
     KIF.log("Dex evolutions failed: #{e.message}")
+  end
+
+  # Unobtrusive hint in the right end of the title bar, small font.
+  # "Run" is the button players already know (Z/Shift, a face button on
+  # controllers/Steam Deck/JoiPlay).
+  def kif_draw_evo_hint
+    overlay = @sprites["overlay"].bitmap
+    label = KIF::DexEvolutions.show ? _INTL("RUN: Credits") : _INTL("RUN: Evolutions")
+    pbSetSmallFont(overlay)
+    pbDrawTextPositions(overlay, [[label, 502, 2, 1, Color.new(248, 248, 248), Color.new(160, 40, 48)]])
+  rescue => e
+    KIF.log("Dex evolution hint failed: #{e.message}")
+  ensure
+    pbSetSystemFont(overlay) if overlay
   end
 
   alias kif_evo_pbUpdate pbUpdate unless method_defined?(:kif_evo_pbUpdate)

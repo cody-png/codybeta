@@ -122,3 +122,16 @@ class Pokemon
     return kif_breed_gender
   end
 end
+
+#-------------------------------------------------------------------------------
+# Crash fix (Cody's play test 2026-10-05: "undefined method include? for
+# :Undiscovered:Symbol" at the Day Care). 6.8.2 FusedSpecies#calculate_egg_groups
+# returns the bare Symbol :Undiscovered (not an Array) when a part is
+# unbreedable, and pbIsDitto? (007_Overworld_DayCare.rb:116) calls include? on
+# it. Vanilla never reaches pbIsDitto? for such a fusion (the Undiscovered
+# check returns first); with Head Legendary Breeding it does. Same method,
+# made array-safe.
+#-------------------------------------------------------------------------------
+def pbIsDitto?(pkmn)
+  return Array(pkmn.species_data.egg_groups).include?(:Ditto)
+end

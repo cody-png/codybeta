@@ -124,11 +124,11 @@ def kif_devolution_target(pokemon, scene = nil)
   body_prev = GameData::Species.get(body).get_previous_species
   options = []
   if head_prev && head_prev != head
-    options << [_INTL("Head: {1} → {2}", GameData::Species.get(head).name, GameData::Species.get(head_prev).name),
+    options << [_INTL("Head: {1} > {2}", GameData::Species.get(head).name, GameData::Species.get(head_prev).name),
                 fusionOf(head_prev, body)]
   end
   if body_prev && body_prev != body
-    options << [_INTL("Body: {1} → {2}", GameData::Species.get(body).name, GameData::Species.get(body_prev).name),
+    options << [_INTL("Body: {1} > {2}", GameData::Species.get(body).name, GameData::Species.get(body_prev).name),
                 fusionOf(head, body_prev)]
   end
   return nil if options.empty?

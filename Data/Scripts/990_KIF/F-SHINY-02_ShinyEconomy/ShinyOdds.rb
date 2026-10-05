@@ -22,8 +22,8 @@
 #   Shiny fusions always get head/body shiny parts so their colours change.
 #   The slider step follows "Increment Slider by" in KIF Settings.
 #
-# Not ported yet: the Poké Radar chain formula using shinyodds (KIF
-# 005_Item_PokeRadar.rb:185, see F-ITEM-04) and K-Egg odds (F-ITEM-02).
+# The Poké Radar chain formula using shinyodds is in F-ITEM-04. Not ported
+# yet: K-Egg odds (F-ITEM-02).
 # Shiny gamble odds: ShinyGamble.rb. Shiny Fuse Dye: F-SHINY-01 003_ShinyHooks.
 #===============================================================================
 KIF::Options.define(:shinyodds, Settings::SHINY_POKEMON_CHANCE || 16, :save)

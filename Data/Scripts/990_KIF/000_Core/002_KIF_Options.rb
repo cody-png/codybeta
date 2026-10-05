@@ -126,8 +126,10 @@ module KIF
   end
 end
 
+# No ensure_class: SaveData.valid? checks every registered value, and a save
+# without this key (vanilla PIF, PIF 6.4.5, KIF) would be rejected as
+# "corrupt". import_save_scope accepts nil / non-Hash values instead.
 SaveData.register(:kif_save_settings) do
-  ensure_class :Hash
   save_value { KIF::Options.export_save_scope }
   load_value { |value| KIF::Options.import_save_scope(value) }
   new_game_value { {} }

@@ -214,10 +214,10 @@ module SaveData
   end
 end
 
+# No ensure_class (see :kif_save_settings in 000_Core/002_KIF_Options.rb).
 SaveData.register(:kif_pending) do
-  ensure_class :Hash
   save_value { KIF::SaveImport.pending || {} }
-  load_value { |value| KIF::SaveImport.pending = value }
+  load_value { |value| KIF::SaveImport.pending = value.is_a?(Hash) ? value : {} }
   new_game_value { {} }
 end
 

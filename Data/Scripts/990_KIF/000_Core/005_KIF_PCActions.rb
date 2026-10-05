@@ -67,6 +67,30 @@ module KIF
   end
 end
 
+#===============================================================================
+# KIF multi-select entries (KIF 017_UI_PokemonStorage.rb:3265-3290: "Battle
+# Selected", "Export"). Inserted before "Cancel" in 6.8.2's
+# multipleSelectedPokemonCommands list ("Selected {1} Pokémon.").
+#   KIF::MultiCommands.add(:id, proc { |screen, box| label or nil },
+#                          proc { |screen, box| ... }, order: n)
+#===============================================================================
+module KIF
+  module MultiCommands
+    Command = Struct.new(:id, :label, :handler, :order, :index)
+    @commands = []
+
+    def self.add(id, label, handler, order: 100)
+      @commands.reject! { |c| c.id == id }
+      @commands << Command.new(id, label, handler, order, @commands.length)
+    end
+
+    def self.available(screen, box)
+      list = @commands.sort_by { |c| [c.order, c.index] }
+      return list.map { |c| [c, (c.label.call(screen, box) rescue nil)] }.select { |_, l| l }
+    end
+  end
+end
+
 class PokemonStorageScreen
   include KIF::PCActionMethods
 
@@ -94,7 +118,25 @@ class PokemonStorageScreen
     end
   end
 
+  if method_defined?(:multipleSelectedPokemonCommands)
+    alias kif_multi_cmds multipleSelectedPokemonCommands unless method_defined?(:kif_multi_cmds)
+
+    def multipleSelectedPokemonCommands(selected, *args)
+      @kif_multicmd = selected
+      begin
+        return kif_multi_cmds(selected, *args)
+      ensure
+        @kif_multicmd = nil
+      end
+    end
+  end
+
   def pbShowCommands(msg, commands, index = 0)
+    if @kif_multicmd
+      selected = @kif_multicmd
+      @kif_multicmd = nil
+      return kif_multi_menu(msg, commands, index, selected[0])
+    end
     if @kif_boxcmd
       @kif_boxcmd = false   # only the box menu itself
       return kif_box_menu(msg, commands, index)
@@ -132,6 +174,19 @@ class PokemonStorageScreen
     return ret if ret < cancel_idx
     k = ret - cancel_idx
     list[k][0].handler.call(self) if k < list.length
+    return cancel_idx
+  end
+
+  def kif_multi_menu(msg, commands, index, box)
+    cancel_idx = commands.length - 1
+    return kif_pc_pbShowCommands(msg, commands, index) if commands[cancel_idx] != _INTL("Cancel")
+    list = KIF::MultiCommands.available(self, box)
+    return kif_pc_pbShowCommands(msg, commands, index) if list.empty?
+    shown = commands[0...cancel_idx] + list.map { |_, l| l } + [commands[cancel_idx]]
+    ret = kif_pc_pbShowCommands(msg, shown, index)
+    return ret if ret < cancel_idx
+    k = ret - cancel_idx
+    list[k][0].handler.call(self, box) if k < list.length
     return cancel_idx
   end
 

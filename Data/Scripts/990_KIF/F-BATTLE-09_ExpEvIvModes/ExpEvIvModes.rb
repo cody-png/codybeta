@@ -167,7 +167,8 @@ class PokeBattle_Battle
   #-----------------------------------------------------------------------------
   # Full copy of PIF 6.8.2 PokeBattle_Battle#pbGainExpOne
   # (011_Battle/003_Battle/004_Battle_ExpAndMoveLearning.rb) with the two KIF
-  # changes marked "KIF". Level-cap behaviour (F-BATTLE-08) is not ported yet.
+  # changes marked "KIF" (ExpAll redistribution, Trainer Exp. Boost, and the
+  # F-BATTLE-08 level cap hooks kif_level_cap_active? / kif_apply_level_cap).
   #-----------------------------------------------------------------------------
   def pbGainExpOne(idxParty, defeatedBattler, numPartic, expShare, expAll, showMessages = true)
     pkmn = pbParty(0)[idxParty] # The Pokémon gaining EVs from defeatedBattler
@@ -235,6 +236,11 @@ class PokeBattle_Battle
     end
     exp = i if i >= 0
     # Make sure Exp doesn't exceed the maximum
+    kif_capped = respond_to?(:kif_level_cap_active?) && kif_level_cap_active?(pkmn)   # KIF
+    kif_candies = 0                                                                  # KIF
+    if kif_capped                                                                    # KIF
+      exp, kif_candies = kif_apply_level_cap(pkmn, exp, growth_rate)                 # KIF
+    else                                                                             # KIF
     if pokemonExceedsLevelCap(pkmn)
       if $PokemonSystem.level_caps==1 #Level caps enabled
         exp = 0
@@ -245,6 +251,7 @@ class PokeBattle_Battle
 
 
     exp = 0 if $PokemonSystem.level_caps==1 && pokemonExceedsLevelCap(pkmn)
+    end                                                                              # KIF
 
     expFinal = growth_rate.add_exp(pkmn.exp, exp)
     expGained = expFinal - pkmn.exp
@@ -252,7 +259,10 @@ class PokeBattle_Battle
 
 
 
-    return if expGained <= 0
+    if expGained <= 0
+      kif_give_cap_candies(pkmn, kif_candies) if kif_candies > 0                     # KIF
+      return
+    end
     # "Exp gained" message
     if showMessages
       if isOutsider
@@ -333,5 +343,6 @@ class PokeBattle_Battle
       moveList = pkmn.getMoveList
       moveList.each { |m| pbLearnMove(idxParty, m[1]) if m[0] == curLevel }
     end
+    kif_give_cap_candies(pkmn, kif_candies) if kif_candies > 0                       # KIF
   end
 end

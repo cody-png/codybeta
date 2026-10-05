@@ -97,17 +97,26 @@ module KIF
     #---------------------------------------------------------------------------
     # Per-save persistence
     #---------------------------------------------------------------------------
+    # Entries of the loaded :kif_save_settings hash that no ported feature
+    # defines (yet). Kept and written back so nothing from an old KIF save is
+    # lost before its feature is ported.
+    @carry = {}
+
     def self.export_save_scope
       hash = {}
+      @carry.each { |k, v| hash[k] = Marshal.load(Marshal.dump(v)) }
       return hash unless $PokemonSystem
       save_keys.each { |k| hash[k] = Marshal.load(Marshal.dump($PokemonSystem.send(k))) }
       return hash
     end
 
     def self.import_save_scope(hash)
+      hash = {} unless hash.is_a?(Hash)
+      @carry = {}
+      hash.each { |k, v| @carry[k] = v unless save_keys.include?(k) }
       return unless $PokemonSystem
       save_keys.each do |k|
-        if hash.is_a?(Hash) && hash.has_key?(k)
+        if hash.has_key?(k)
           $PokemonSystem.send(:"#{k}=", hash[k])
         else
           $PokemonSystem.send(:"#{k}=", copy_default(k))

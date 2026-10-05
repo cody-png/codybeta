@@ -12,9 +12,11 @@
 #     non-player battler gets +1 Atk/Def/SpA/SpD/Spe every 3 turns (Easy),
 #     2 turns (Normal) or every turn (Hard/Chaos).
 #
-# KIF quirks kept as-is (see port notes):
-#   * The replaced move bypasses pbTryUseMove, so a sleeping, frozen or fully
-#     paralysed Pokémon still uses Metronome/Splash, and no PP is used.
+# Fixed vs KIF (Cody, 2026-10-04): KIF skipped pbTryUseMove for the forced
+# move, so a sleeping, frozen, fully paralysed, flinching or confused Pokémon
+# still acted. The forced move now goes through PIF's normal checks
+# (incl. disobedience, Taunt, Gravity). As in KIF, it uses no PP.
+# KIF quirks still kept as-is (see port notes):
 #   * "Chaos" is described as +2 per turn, but KIF's code gives +1 per turn,
 #     i.e. the same as Hard.
 #   * Berserker boosts partner-trainer Pokémon on the player's side too
@@ -101,12 +103,36 @@ end
 #-------------------------------------------------------------------------------
 # Letdown / Metronome Madness – full copy of PIF 6.8.2
 # PokeBattle_Battler#pbUseMove (011_Battle/001_Battler/007_Battler_UseMove.rb)
-# with the KIF block inserted before the "Labels the move" step.
+# with the KIF block inserted before the "Labels the move" step and PP use
+# skipped for the forced move.
 #-------------------------------------------------------------------------------
 KIF.guard_base("011_Battle/001_Battler/007_Battler_UseMove.rb", 3893353249,
                "PokeBattle_Battler#pbUseMove")
 
 class PokeBattle_Battler
+  # Returns the Splash/Metronome move to force this turn, or nil.
+  # KIF 007_Battler_UseMove.rb:186-209: Letdown is rolled first (rand(1..100)
+  # <= 1/5/10/25/50); Metronome Madness applies only if Letdown didn't fire.
+  # Neither applies to special usages (called moves, multi-turn attacks).
+  def kif_challenge_forced_move(specialUsage)
+    return nil if specialUsage
+    if $PokemonSystem.ch_letdown != 0
+      skipletdown = $PokemonSystem.ch_letdownplayer == 1 && !pbOwnedByPlayerSerious?
+      if !skipletdown
+        letdownprob = [0, 1, 5, 10, 25, 50, 50]
+        if letdownprob[$PokemonSystem.ch_letdown] >= rand(1..100)
+          return PokeBattle_Move.from_pokemon_move(@battle, Pokemon::Move.new(:SPLASH))
+        end
+      end
+    end
+    if !usingMultiTurnAttack?
+      if $PokemonSystem.ch_metronome == 1 || ($PokemonSystem.ch_metronome == 2 && pbOwnedByPlayerSerious?)
+        return PokeBattle_Move.from_pokemon_move(@battle, Pokemon::Move.new(:METRONOME))
+      end
+    end
+    return nil
+  end
+
   def pbUseMove(choice, specialUsage = false)
     # NOTE: This is intentionally determined before a multi-turn attack can
     #       set specialUsage to true.
@@ -128,30 +154,10 @@ class PokeBattle_Battler
         end
       end
     end
-    # KIF – Challenge modifiers (Letdown / Metronome Madness). When one
-    # triggers, the replacement move skips pbTryUseMove and PP use (KIF
-    # 007_Battler_UseMove.rb:186-244).
-    normallogic = true
-    isletdown = false
-    if $PokemonSystem.ch_letdown != 0 && !specialUsage
-      skipletdown = $PokemonSystem.ch_letdownplayer == 1 && !pbOwnedByPlayerSerious?
-      if !skipletdown
-        letdownrng = rand(1..100)
-        letdownprob = [0, 1, 5, 10, 25, 50, 50]
-        if letdownprob[$PokemonSystem.ch_letdown] >= letdownrng
-          isletdown = true
-          normallogic = false
-          move = PokeBattle_Move.from_pokemon_move(@battle, Pokemon::Move.new(:SPLASH))
-        end
-      end
-    end
-    if !usingMultiTurnAttack? && !specialUsage && !isletdown
-      if $PokemonSystem.ch_metronome == 1 || ($PokemonSystem.ch_metronome == 2 && pbOwnedByPlayerSerious?)
-        move = PokeBattle_Move.from_pokemon_move(@battle, Pokemon::Move.new(:METRONOME))
-        normallogic = false
-      end
-    end
-    if normallogic
+    # KIF – Letdown / Metronome Madness: swap in the forced move, then let it
+    # go through the normal checks below.
+    kif_forced = kif_challenge_forced_move(specialUsage)
+    choice[2] = kif_forced if kif_forced
     # Labels the move being used as "move"
     move = choice[2]
     return if !move # if move was not chosen somehow
@@ -172,7 +178,7 @@ class PokeBattle_Battler
     move = choice[2] # In case disobedience changed the move to be used
     return if !move # if move was not chosen somehow
     # Subtract PP
-    if !specialUsage
+    if !specialUsage && !kif_forced   # KIF: forced move uses no PP
       if !pbReducePP(move)
         @battle.pbDisplay(_INTL("{1} used {2}!", pbThis, move.name))
         @battle.pbDisplay(_INTL("But there was no PP left for the move!"))
@@ -186,7 +192,6 @@ class PokeBattle_Battler
         return
       end
     end
-    end # KIF normallogic
     # Stance Change
     if self.ability == :STANCECHANGE
       if move.damagingMove?

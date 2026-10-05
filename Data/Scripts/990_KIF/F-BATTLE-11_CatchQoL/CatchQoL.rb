@@ -20,7 +20,7 @@
 #
 # NOT ported (superseded by PIF 6.8.2):
 #   Skip Caught Nickname -> PIF "Prompt Nicknames" option (Gameplay options).
-#   ENABLE_CRITICAL_CAPTURES = true -> left at PIF's false (see port notes).
+#   ENABLE_CRITICAL_CAPTURES -> ported as an option, see CriticalCaptures.rb.
 #===============================================================================
 KIF::Options.define(:recover_consumables, 0, :save)
 KIF::Options.define(:skipcaughtprompt, 0, :save)

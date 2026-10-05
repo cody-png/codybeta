@@ -4,8 +4,8 @@
 #   011_Battle/003_Battle/004_Battle_ExpAndMoveLearning.rb:62-66,124-163
 #   014_Pokemon/001_Pokemon.rb:961 (No-EVs), :2130 (Max IVs)
 #
-#   ExpAll Redistribution (expall_redist, 0-10, per-save, default 0); 1 = 10%
-#                          of Exp All exp redistributed ... 10 = 100% (see below)
+#   ExpAll Redistribution (expall_redist, 0-10, per-save, default 0): KIF's
+#                          split of one Exp All share by level gap (see below)
 #   Trainer Exp. Boost     (trainerexpboost, 0-1000 step 50, default 50 = PIF's x1.5)
 #   EVs Train Mode         (evstrain): defeated foes yield 0 EVs; held Power
 #                          items still add their +4 (they modify the yield hash
@@ -131,16 +131,18 @@ class PokeBattle_Battle
 
   # Exp gained by a non-participant through Exp All (only reached when Exp All
   # is active: the EXPALL item, or Easy difficulty in Kanto – unchanged PIF
-  # rule). Redesigned with Cody (2026-10-04) from KIF's Trapstarr version:
-  #   r = slider 0..10, f = r / 10 (fraction of the Exp All exp redistributed)
-  #   pool = (a / 2) * n         n = Pokémon getting Exp All exp this KO
+  # rule). KIF 0.20.7 (Trapstarr) 004_Battle_ExpAndMoveLearning.rb:129-153,
+  # with one fix (Cody, 2026-10-05: "KIF, fixed"):
+  #   r = slider 1..10 (0 = Off: everyone gets PIF's a/2)
+  #   e = 1 + 0.05 + r^1.1 / 1000           (the slider only bends the curve)
   #   gap_i = highest party level - level_i
-  #   w_i = gap_i^e / sum(gap^e) over those n,  e = 1.05 + r^1.1/1000 (KIF)
-  #   exp_i = (1 - f) * a/2 + f * pool * w_i
-  # r = 0 -> PIF (everyone a/2). r = 10 -> the whole pool goes to the
-  # lower-levelled Pokémon in proportion to how far behind they are. The pool
-  # is never smaller than PIF's (KIF's version shrank it to a single a/2).
-  # If nobody is behind (all gaps 0), everyone gets a/2.
+  #   exp_i = (a/2) * gap_i^e / sum(gap^e)  (one Exp All share is split)
+  # KIF summed the gaps of the whole party (fighters, Exp Share holders, eggs
+  # and fainted Pokémon too), so their part of the share was lost; here only
+  # the Pokémon receiving Exp All exp this KO are in the sum.
+  # The highest-level Pokémon gets nothing from the share. If nobody receiving
+  # it is below the highest level, everyone gets a/2 (as KIF's "all the same
+  # level" case).
   def kif_expall_share(a, pkmn, idxParty, defeatedBattler, expShare)
     r = $PokemonSystem.expall_redist
     base = a / 2
@@ -148,7 +150,7 @@ class PokeBattle_Battle
     party = pbParty(0)
     recipients = []
     party.each_with_index do |p, i|
-      next if !p || !p.able?
+      next if !p || p.egg? || !p.able?
       next if defeatedBattler.participants.include?(i) || expShare.include?(i)
       recipients << p
     end
@@ -158,10 +160,8 @@ class PokeBattle_Battle
     weights = recipients.map { |p| [highest_level - p.level, 0].max ** emphasis }
     sum = weights.sum
     return base if sum <= 0
-    f = [r, 10].min / 10.0
-    pool = base * recipients.length
     mine = weights[recipients.index { |p| p.equal?(pkmn) }]
-    return ((1 - f) * base + f * pool * (mine / sum)).round
+    return (base * mine / sum).round
   end
 
   #-----------------------------------------------------------------------------

@@ -35,15 +35,19 @@
 #     palette and/or hue.
 #   * The transform is computed once per distinct colour of the sprite
 #     (identical result, much faster) and cached (option "Shiny Cache").
-#   * New option "Shiny Polish" (default On): keeps outlines/shading readable,
-#     see KIF::Shiny::Polish. Off = exact KIF colours.
+#   * New option "Shiny Filter" (port addition): Off = exact KIF colours,
+#     Filtered = every KIF shiny goes through KIF::Shiny::Polish (outlines and
+#     shading stay readable), Hybrid (default, Cody 2026-10-05) = half of the
+#     shinies are filtered. Which half is a per-Pokémon roll saved with its
+#     colours (kif_filter_roll), re-rolled with them (gamble, debug re-roll)
+#     and copied with them (Shiny Fuse Dye).
 #===============================================================================
 KIF::Options.define(:shinyadvanced, 1, :save)        # 0 Simple, 1 Normal, 2 Advanced
 KIF::Options.define(:pifimprovedshinies, 0, :save)   # 0 Hybrid, 1 Split, 2 Vanilla, 3 Off
 KIF::Options.define(:shiny_cache, 0, :global)        # 0 Permanent, 1 Per Session, 2 Off
 KIF::Options.define(:shiny_icons_kuray, 0, :global)  # 0 Off, 1 On
 KIF::Options.define(:kurayshinyanim, 0, :global)     # 0 On, 1 Off, 2 All
-KIF::Options.define(:shinypolish, 1, :global)        # 0 Off, 1 On (port addition)
+KIF::Options.define(:shinyfilter, 2, :global)        # 0 Off, 1 Filtered, 2 Hybrid (port addition)
 
 KIF::Options.add(:shinies, :global) {
   EnumOption.new(_INTL("Shiny Animation"), [_INTL("On"), _INTL("Off"), _INTL("All")],
@@ -69,11 +73,12 @@ KIF::Options.add(:shinies, :global) {
                   _INTL("Shinies are not cached")])
 }
 KIF::Options.add(:shinies, :global) {
-  EnumOption.new(_INTL("Shiny Polish"), [_INTL("Off"), _INTL("On")],
-                 proc { $PokemonSystem.shinypolish },
-                 proc { |value| $PokemonSystem.shinypolish = value },
+  EnumOption.new(_INTL("Shiny Filter"), [_INTL("Off"), _INTL("Filtered"), _INTL("Hybrid")],
+                 proc { $PokemonSystem.shinyfilter },
+                 proc { |value| $PokemonSystem.shinyfilter = value },
                  [_INTL("KIF colours exactly as in KIF 0.20.7"),
-                  _INTL("Keep outlines and shading readable (fixes most odd-looking shinies)")])
+                  _INTL("Every shiny keeps readable outlines and shading"),
+                  _INTL("Half of the shinies are filtered, half keep raw KIF colours")])
 }
 KIF::Options.add(:shinies, :save) {
   EnumOption.new(_INTL("Shiny Colors"), [_INTL("Simple"), _INTL("Normal"), _INTL("Advanced")],
@@ -472,6 +477,14 @@ module KIF
     #---------------------------------------------------------------------------
     # Pipeline
     #---------------------------------------------------------------------------
+    # Shiny Filter: 0 Off, 1 Filtered, 2 Hybrid (per-Pokémon roll)
+    def self.filtered?(pkmn)
+      mode = $PokemonSystem ? $PokemonSystem.shinyfilter.to_i : 2
+      return false if mode == 0
+      return true if mode == 1
+      return pkmn.respond_to?(:kif_filter_roll?) ? pkmn.kif_filter_roll? == 1 : true
+    end
+
     # anim: AnimatedBitmap holding the plain (non-shiny) image, already a
     # private copy. kind: :sprite (battler) or :icon.
     # For :icon with PIF palette, the caller passes PIF's shiny icon instead
@@ -480,7 +493,7 @@ module KIF
       use_pif, use_kif = decide(pkmn)
       return anim unless use_kif
       adv = $PokemonSystem ? $PokemonSystem.shinyadvanced : 1
-      polish = $PokemonSystem ? $PokemonSystem.shinypolish == 1 : false
+      polish = filtered?(pkmn)
       hue = pkmn.shinyValue?
       codes = (adv == 0) ? [0, 1, 2] : [pkmn.shinyR?, pkmn.shinyG?, pkmn.shinyB?]
       krs = pkmn.shinyKRS?

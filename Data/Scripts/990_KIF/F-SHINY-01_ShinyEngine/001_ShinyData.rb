@@ -182,12 +182,20 @@ class Pokemon
   # Copies all KIF colour data of a single (unfused) Pokémon's main fields.
   def kif_shiny_colors
     return { :hue => shinyValue?, :pif => shinyimprovpif?, :r => shinyR?, :g => shinyG?,
-             :b => shinyB?, :krs => shinyKRS?.clone }
+             :b => shinyB?, :krs => shinyKRS?.clone, :filter => kif_filter_roll? }
   end
 
   def kif_set_shiny_colors(c)
     @shinyValue = c[:hue]; @shinyimprovpif = c[:pif]
     @shinyR = c[:r]; @shinyG = c[:g]; @shinyB = c[:b]; @shinyKRS = c[:krs].clone
+    @kif_filter_roll = c[:filter] if c[:filter]
+  end
+
+  # Shiny Filter "Hybrid": 1 = this shiny is filtered, 0 = raw KIF colours
+  attr_writer :kif_filter_roll
+  def kif_filter_roll?
+    @kif_filter_roll = rand(2) if @kif_filter_roll.nil?
+    return @kif_filter_roll
   end
 
   def kif_reroll_shiny_colors
@@ -197,5 +205,6 @@ class Pokemon
     @shinyG = kurayRNGforChannels
     @shinyB = kurayRNGforChannels
     @shinyKRS = kurayKRSmake
+    @kif_filter_roll = rand(2)
   end
 end

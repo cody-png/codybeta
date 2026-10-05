@@ -192,6 +192,12 @@ module KIF::PCActionMethods
       kif_refresh(selected)
       pbDisplay(_INTL("Changed Spr!"))
     end
+    if (q = kif_choose_number(_INTL("Hybrid filter: 0 = raw KIF colours, 1 = filtered"),
+                              0, 1, pkmn.kif_filter_roll?, 1))
+      pkmn.kif_filter_roll = q
+      kif_refresh(selected)
+      pbDisplay(_INTL("Changed Filter!"))
+    end
   end
 end
 

@@ -26,6 +26,8 @@
 #     versions), resolved when the shop opens; items missing from 6.8.2 are
 #     skipped.
 #   * K-Eggs (KIF items 2000-2032) and their unlock messages come with F-ITEM-02.
+#   * Port addition (Cody, 2026-10-05): the Celadon Prize Corner TMs Hyper
+#     Beam, Flamethrower, Ice Beam and Thunderbolt at P15,000 each.
 #   * KIF's "Dream more!" (unlimited Wonder Trades) was commented out in KIF.
 #===============================================================================
 KIF::Options.define(:kuraystreamerdream, 0, :save)
@@ -62,6 +64,9 @@ module KIF
       [[:TM, :SMARTSTRIKE], 30000, 15000], [[:TM, :STEELWING], 30000, 15000],
       [[:TM, :STOMPINGTANTRUM], 30000, 15000], [[:TM, :THROATCHOP], 30000, 15000],
       [[:TM, :SCALD], nil, nil],          # KIF listed it at its normal price
+      # Celadon Prize Corner TMs (Cody, 2026-10-05; still in the Prize Corner too)
+      [[:TM, :HYPERBEAM], 15000, 7500], [[:TM, :FLAMETHROWER], 15000, 7500],
+      [[:TM, :ICEBEAM], 15000, 7500], [[:TM, :THUNDERBOLT], 15000, 7500],
       [:FOCUSSASH, 6000, 3000], [:FLAMEORB, 6000, 3000], [:TOXICORB, 6000, 3000],
       [:LIFEORB, 6000, 3000],
       [:DEEPSEASCALE, 10000, 1000],

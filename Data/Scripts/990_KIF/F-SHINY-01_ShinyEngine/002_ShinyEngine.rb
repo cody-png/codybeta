@@ -35,12 +35,15 @@
 #     palette and/or hue.
 #   * The transform is computed once per distinct colour of the sprite
 #     (identical result, much faster) and cached (option "Shiny Cache").
+#   * New option "Shiny Polish" (default On): keeps outlines/shading readable,
+#     see KIF::Shiny::Polish. Off = exact KIF colours.
 #===============================================================================
 KIF::Options.define(:shinyadvanced, 1, :save)        # 0 Simple, 1 Normal, 2 Advanced
 KIF::Options.define(:pifimprovedshinies, 0, :save)   # 0 Hybrid, 1 Split, 2 Vanilla, 3 Off
 KIF::Options.define(:shiny_cache, 0, :global)        # 0 Permanent, 1 Per Session, 2 Off
 KIF::Options.define(:shiny_icons_kuray, 0, :global)  # 0 Off, 1 On
 KIF::Options.define(:kurayshinyanim, 0, :global)     # 0 On, 1 Off, 2 All
+KIF::Options.define(:shinypolish, 1, :global)        # 0 Off, 1 On (port addition)
 
 KIF::Options.add(:shinies, :global) {
   EnumOption.new(_INTL("Shiny Animation"), [_INTL("On"), _INTL("Off"), _INTL("All")],
@@ -64,6 +67,13 @@ KIF::Options.add(:shinies, :global) {
                  [_INTL("Shinies are cached permanently"),
                   _INTL("Shinies are cached per session"),
                   _INTL("Shinies are not cached")])
+}
+KIF::Options.add(:shinies, :global) {
+  EnumOption.new(_INTL("Shiny Polish"), [_INTL("Off"), _INTL("On")],
+                 proc { $PokemonSystem.shinypolish },
+                 proc { |value| $PokemonSystem.shinypolish = value },
+                 [_INTL("KIF colours exactly as in KIF 0.20.7"),
+                  _INTL("Keep outlines and shading readable (fixes most odd-looking shinies)")])
 }
 KIF::Options.add(:shinies, :save) {
   EnumOption.new(_INTL("Shiny Colors"), [_INTL("Simple"), _INTL("Normal"), _INTL("Advanced")],
@@ -237,32 +247,160 @@ module KIF
     end
 
     # Applies the channel step to every opaque pixel of a Bitmap, in place.
-    def self.channel_shift!(bmp, codes, krs, adv)
-      memo = {}
-      if bmp.respond_to?(:raw_data) && bmp.respond_to?(:raw_data=)
+    # Works per distinct colour: the result only depends on a pixel's RGB.
+    # With "Shiny Polish" on, the colour table is then cleaned up (see
+    # KIF::Shiny::Polish) before being written back.
+    def self.channel_shift!(bmp, codes, krs, adv, polish = false)
+      fast = bmp.respond_to?(:raw_data) && bmp.respond_to?(:raw_data=)
+      px = nil
+      if fast
         begin
           px = bmp.raw_data.unpack("N*")   # 0xRRGGBBAA per pixel
-          px.map! do |p|
-            next p if (p & 0xFF) == 0
-            memo[p] ||= begin
-              c = map_color((p >> 24) & 0xFF, (p >> 16) & 0xFF, (p >> 8) & 0xFF, codes, krs, adv)
-              (c[0] << 24) | (c[1] << 16) | (c[2] << 8) | (p & 0xFF)
-            end
-          end
-          bmp.raw_data = px.pack("N*")
-          return
         rescue
-          memo.clear   # fall back to the slow path below
+          fast = false
         end
       end
-      for x in 0...bmp.width
+      unless fast
+        px = []
         for y in 0...bmp.height
-          c = bmp.get_pixel(x, y)
-          next if c.alpha == 0
-          key = [c.red.to_i, c.green.to_i, c.blue.to_i]
-          n = (memo[key] ||= map_color(c.red, c.green, c.blue, codes, krs, adv))
-          bmp.set_pixel(x, y, Color.new(n[0], n[1], n[2], c.alpha))
+          for x in 0...bmp.width
+            c = bmp.get_pixel(x, y)
+            px << ((c.red.to_i << 24) | (c.green.to_i << 16) | (c.blue.to_i << 8) | c.alpha.to_i)
+          end
         end
+      end
+      hist = Hash.new(0)
+      px.each { |p| hist[p >> 8] += 1 if (p & 0xFF) != 0 }
+      return if hist.empty?
+      map = {}
+      hist.each_key do |rgb|
+        map[rgb] = map_color((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, codes, krs, adv)
+      end
+      map = Polish.polish(hist, map) if polish
+      packed = {}
+      map.each { |rgb, c| packed[rgb] = (c[0] << 16) | (c[1] << 8) | c[2] }
+      if fast
+        px.map! { |p| (p & 0xFF) == 0 ? p : ((packed[p >> 8] << 8) | (p & 0xFF)) }
+        bmp.raw_data = px.pack("N*")
+      else
+        i = 0
+        for y in 0...bmp.height
+          for x in 0...bmp.width
+            p = px[i]; i += 1
+            next if (p & 0xFF) == 0
+            c = map[p >> 8]
+            bmp.set_pixel(x, y, Color.new(c[0], c[1], c[2], p & 0xFF))
+          end
+        end
+      end
+    end
+
+    #---------------------------------------------------------------------------
+    # Shiny Polish (new in the port, option "Shiny Polish", default On)
+    #
+    # KIF's channel step can flip a sprite's light/dark structure: inverted
+    # codes (black and cyan stars) turn outlines and shadows bright, which is
+    # why most of them look bad. Pixel art reads by its value (light/dark)
+    # structure, so the polish keeps that structure and only lets KIF change
+    # the colours. Working in OKLab (a perceptual colour space), over the
+    # sprite's colour table weighted by pixel count:
+    #   1. If the lightness of the shifted colours correlates with the
+    #      original lightness below 0.6 (structure broken/inverted), every
+    #      colour keeps KIF's hue and colourfulness but gets back its original
+    #      lightness.
+    #   2. Otherwise only outlines are protected: originally dark colours
+    #      (L < 0.32) may get at most 0.08 lighter.
+    #   3. If the result is almost identical to the original (average
+    #      difference < 0.04), the hue is turned to its opposite so the shiny
+    #      is actually visible.
+    # Colours that don't fit in sRGB lose colourfulness, not lightness.
+    #---------------------------------------------------------------------------
+    module Polish
+      CORR_MIN     = 0.6
+      OUTLINE_L    = 0.32
+      OUTLINE_RISE = 0.08
+      DE_MIN       = 0.04
+
+      module_function
+
+      def lin(c)
+        c /= 255.0
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055)**2.4
+      end
+
+      def unlin(c)
+        return c <= 0.0031308 ? 12.92 * c : 1.055 * c**(1 / 2.4) - 0.055
+      end
+
+      def to_oklab(r, g, b)
+        r = lin(r); g = lin(g); b = lin(b)
+        l = (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)**(1.0 / 3)
+        m = (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)**(1.0 / 3)
+        s = (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)**(1.0 / 3)
+        return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+                1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+                0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s]
+      end
+
+      def from_oklab_linear(lv, a, b)
+        l = (lv + 0.3963377774 * a + 0.2158037573 * b)**3
+        m = (lv - 0.1055613458 * a - 0.0638541728 * b)**3
+        s = (lv - 0.0894841775 * a - 1.2914855480 * b)**3
+        return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+                -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+                -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s]
+      end
+
+      def to_rgb(lv, a, b)
+        k = 1.0
+        12.times do
+          c = from_oklab_linear(lv, a * k, b * k)
+          if c.all? { |v| v >= -0.0005 && v <= 1.0005 }
+            return c.map { |v| (unlin(v.clamp(0.0, 1.0)) * 255).round.clamp(0, 255) }
+          end
+          k *= 0.85
+        end
+        c = from_oklab_linear(lv, 0, 0)
+        return c.map { |v| (unlin(v.clamp(0.0, 1.0)) * 255).round.clamp(0, 255) }
+      end
+
+      # hist: {rgb_int => pixel count}; map: {rgb_int => [r, g, b]}
+      def polish(hist, map)
+        labs_in = {}
+        labs_k = {}
+        hist.each_key do |p|
+          labs_in[p] = to_oklab((p >> 16) & 255, (p >> 8) & 255, p & 255)
+          k = map[p]
+          labs_k[p] = to_oklab(k[0], k[1], k[2])
+        end
+        n = hist.values.sum.to_f
+        mi = hist.sum { |p, c| labs_in[p][0] * c } / n
+        mk = hist.sum { |p, c| labs_k[p][0] * c } / n
+        cov = hist.sum { |p, c| (labs_in[p][0] - mi) * (labs_k[p][0] - mk) * c }
+        vi = hist.sum { |p, c| (labs_in[p][0] - mi)**2 * c }
+        vk = hist.sum { |p, c| (labs_k[p][0] - mk)**2 * c }
+        corr = (vi > 0 && vk > 0) ? cov / Math.sqrt(vi * vk) : 1.0
+        relight = corr < CORR_MIN
+        out = {}
+        hist.each_key do |p|
+          li = labs_in[p][0]
+          l, a, b = labs_k[p]
+          if relight
+            l = li
+          elsif li < OUTLINE_L && l > li + OUTLINE_RISE
+            l = li + OUTLINE_RISE
+          end
+          out[p] = [l, a, b]
+        end
+        de = hist.sum do |p, c|
+          li, ai, bi = labs_in[p]
+          lo, ao, bo = out[p]
+          Math.sqrt((li - lo)**2 + (ai - ao)**2 + (bi - bo)**2) * c
+        end / n
+        flip = de < DE_MIN
+        res = {}
+        out.each { |p, (l, a, b)| res[p] = flip ? to_rgb(l, -a, -b) : to_rgb(l, a, b) }
+        return res
       end
     end
 
@@ -342,6 +480,7 @@ module KIF
       use_pif, use_kif = decide(pkmn)
       return anim unless use_kif
       adv = $PokemonSystem ? $PokemonSystem.shinyadvanced : 1
+      polish = $PokemonSystem ? $PokemonSystem.shinypolish == 1 : false
       hue = pkmn.shinyValue?
       codes = (adv == 0) ? [0, 1, 2] : [pkmn.shinyR?, pkmn.shinyG?, pkmn.shinyB?]
       krs = pkmn.shinyKRS?
@@ -351,7 +490,7 @@ module KIF
       key = nil
       if id
         key = [kind, id, base.width, base.height, dex, use_pif ? 1 : 0,
-               pkmn.body_shiny ? 1 : 0, pkmn.head_shiny ? 1 : 0, adv, hue,
+               pkmn.body_shiny ? 1 : 0, pkmn.head_shiny ? 1 : 0, adv, polish ? 1 : 0, hue,
                codes.join("."), krs.join(".")].join("_").gsub("-", "m")
       end
       if (hit = cache_get(key))
@@ -362,7 +501,7 @@ module KIF
         anim.shiftAllColors(dex, pkmn.body_shiny, pkmn.head_shiny)
       end
       anim.bitmap.hue_change(hue) if hue != 0
-      channel_shift!(anim.bitmap, codes, krs, adv) if adv != 0
+      channel_shift!(anim.bitmap, codes, krs, adv, polish) if adv != 0
       cache_put(key, anim.bitmap)
       return anim
     end

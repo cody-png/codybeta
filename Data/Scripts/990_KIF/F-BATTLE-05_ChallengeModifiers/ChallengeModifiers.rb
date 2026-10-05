@@ -10,15 +10,15 @@
 #     Splash. "Letdown Player Only" (ch_letdownplayer) limits it to the player.
 #   Berserker (ch_berserker): at end of round, after weather, every
 #     non-player battler gets +1 Atk/Def/SpA/SpD/Spe every 3 turns (Easy),
-#     2 turns (Normal) or every turn (Hard/Chaos).
+#     2 turns (Normal) or every turn (Hard); Chaos gives +2 every turn.
 #
 # Fixed vs KIF (Cody, 2026-10-04): KIF skipped pbTryUseMove for the forced
 # move, so a sleeping, frozen, fully paralysed, flinching or confused Pokémon
 # still acted. The forced move now goes through PIF's normal checks
 # (incl. disobedience, Taunt, Gravity). As in KIF, it uses no PP.
-# KIF quirks still kept as-is (see port notes):
-#   * "Chaos" is described as +2 per turn, but KIF's code gives +1 per turn,
-#     i.e. the same as Hard.
+# Also fixed: "Chaos" was described as +2 per turn but KIF's code gave +1
+# (same as Hard). It now gives +2.
+# KIF quirk still kept as-is (see port notes):
 #   * Berserker boosts partner-trainer Pokémon on the player's side too
 #     (only the player's own are skipped).
 #===============================================================================
@@ -86,9 +86,17 @@ class PokeBattle_Battle
       if requiredturns[mode] > 1
         next if battler.turnCount % requiredturns[mode] != 0
       end
-      berserkup = [:ATTACK, 1, :DEFENSE, 1, :SPECIAL_ATTACK, 1, :SPECIAL_DEFENSE, 1, :SPEED, 1]
+      # Chaos (4): +2 to every stat each turn ("sharply"), so all stats hit +6
+      # after 3 turns. KIF's code gave +1 here although the option text says +2.
+      amount = (mode == 4) ? 2 : 1
+      berserkup = [:ATTACK, amount, :DEFENSE, amount, :SPECIAL_ATTACK, amount,
+                   :SPECIAL_DEFENSE, amount, :SPEED, amount]
       next if !battler.pbCanRaiseStatStage?(berserkup[0], battler, self, true)
-      pbDisplay(_INTL("All stats from {1} increased! [BERSERKER MODE]", battler.pbThis))
+      if amount > 1
+        pbDisplay(_INTL("All stats from {1} sharply increased! [BERSERKER MODE]", battler.pbThis))
+      else
+        pbDisplay(_INTL("All stats from {1} increased! [BERSERKER MODE]", battler.pbThis))
+      end
       showAnim = true
       for i in 0...berserkup.length / 2
         next if !battler.pbCanRaiseStatStage?(berserkup[i * 2], battler, self)

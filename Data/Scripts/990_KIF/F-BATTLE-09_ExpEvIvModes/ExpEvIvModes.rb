@@ -4,7 +4,8 @@
 #   011_Battle/003_Battle/004_Battle_ExpAndMoveLearning.rb:62-66,124-163
 #   014_Pokemon/001_Pokemon.rb:961 (No-EVs), :2130 (Max IVs)
 #
-#   ExpAll Redistribution (expall_redist, 0-10, per-save, default 0)
+#   ExpAll Redistribution (expall_redist, 0-10, per-save, default 0); 1 = 10%
+#                          of Exp All exp redistributed ... 10 = 100% (see below)
 #   Trainer Exp. Boost     (trainerexpboost, 0-1000 step 50, default 50 = PIF's x1.5)
 #   EVs Train Mode         (evstrain): defeated foes yield 0 EVs; held Power
 #                          items still add their +4 (they modify the yield hash
@@ -128,25 +129,39 @@ class PokeBattle_Battle
     return (100 + boost) / 100.0
   end
 
-  # Exp gained by a non-participant through Exp All.
-  # KIF 004_Battle_ExpAndMoveLearning.rb:130-152 (Trapstarr). With the slider at
-  # 0 this is PIF's a / 2. Otherwise a / 2 is split across the party in
-  # proportion to (highest_level - level) ** (1 + 0.05 + r ** 1.1 / 1000),
-  # so lower-levelled Pokémon catch up; the highest-level Pokémon gets 0.
-  # If every party member has the same level, PIF's a / 2 is used.
-  def kif_expall_share(a, pkmn)
+  # Exp gained by a non-participant through Exp All (only reached when Exp All
+  # is active: the EXPALL item, or Easy difficulty in Kanto – unchanged PIF
+  # rule). Redesigned with Cody (2026-10-04) from KIF's Trapstarr version:
+  #   r = slider 0..10, f = r / 10 (fraction of the Exp All exp redistributed)
+  #   pool = (a / 2) * n         n = Pokémon getting Exp All exp this KO
+  #   gap_i = highest party level - level_i
+  #   w_i = gap_i^e / sum(gap^e) over those n,  e = 1.05 + r^1.1/1000 (KIF)
+  #   exp_i = (1 - f) * a/2 + f * pool * w_i
+  # r = 0 -> PIF (everyone a/2). r = 10 -> the whole pool goes to the
+  # lower-levelled Pokémon in proportion to how far behind they are. The pool
+  # is never smaller than PIF's (KIF's version shrank it to a single a/2).
+  # If nobody is behind (all gaps 0), everyone gets a/2.
+  def kif_expall_share(a, pkmn, idxParty, defeatedBattler, expShare)
     r = $PokemonSystem.expall_redist
-    return a / 2 if r.nil? || r == 0
-    party = $Trainer.party
-    highest_level = party.max_by(&:level).level
-    return a / 2 if party.all? { |p| p.level == highest_level }
-    total_exp = a / 2
+    base = a / 2
+    return base if r.nil? || r <= 0
+    party = pbParty(0)
+    recipients = []
+    party.each_with_index do |p, i|
+      next if !p || !p.able?
+      next if defeatedBattler.participants.include?(i) || expShare.include?(i)
+      recipients << p
+    end
+    return base if recipients.empty? || !recipients.any? { |p| p.equal?(pkmn) }
+    highest_level = party.select { |p| p && !p.egg? }.map(&:level).max || pkmn.level
     emphasis = 1 + (0.05 + r ** 1.1 / 1000.0)
-    differences = party.map { |p| (highest_level - p.level) ** emphasis }
-    sum = differences.sum
-    idx = party.index(pkmn)
-    return a / 2 if sum <= 0 || idx.nil?
-    return (total_exp * (differences[idx].to_f / sum)).round
+    weights = recipients.map { |p| [highest_level - p.level, 0].max ** emphasis }
+    sum = weights.sum
+    return base if sum <= 0
+    f = [r, 10].min / 10.0
+    pool = base * recipients.length
+    mine = weights[recipients.index { |p| p.equal?(pkmn) }]
+    return ((1 - f) * base + f * pool * (mine / sum)).round
   end
 
   #-----------------------------------------------------------------------------
@@ -184,7 +199,7 @@ class PokeBattle_Battle
       # NOTE: Exp All works like the Exp Share from Gen 6+, not like the Exp All
       #       from Gen 1, i.e. Exp isn't split between all Pokémon gaining it.
       # KIF (Trapstarr's ExpAll redistribution)
-      exp = kif_expall_share(a, pkmn)
+      exp = kif_expall_share(a, pkmn, idxParty, defeatedBattler, expShare)
     end
     return if exp <= 0
     # Pokémon gain more Exp from trainer battles

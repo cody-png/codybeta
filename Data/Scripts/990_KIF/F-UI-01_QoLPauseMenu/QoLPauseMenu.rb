@@ -9,7 +9,7 @@
 # it bypasses both – KIF's PC check ignored the marker, see port notes).
 # "Kuray Shop" and "Tutor.net" entries are added by their own features.
 #
-# KIF option "DEBUG" (global): adds a "Debug" entry even when $DEBUG is off.
+# KIF option "DEBUG" (global): handled by KIF.sync_debug (real debug mode).
 #===============================================================================
 KIF::Options.define(:kurayqol, 1, :save)
 
@@ -53,11 +53,6 @@ KIF::PauseMenu.add(:kif_heal, "Heal Pokémon", icon: "menuIcons/POKEMON",
     :stay
   })
 
-# Registered last so it sits below the other KIF entries.
-KIF::PauseMenu.add(:kif_debug, "Debug", icon: "menuIcons/DEBUG",
-  condition: proc { $PokemonSystem.debug == 1 && !$DEBUG },
-  handler: proc { |scene|
-    pbPlayDecisionSE
-    pbFadeOutIn { pbDebugMenu }
-    :stay
-  })
+# KIF option "DEBUG": now forces PIF's real debug mode (see
+# 000_Core/002_KIF_Options.rb KIF.sync_debug), so PIF's own "Debug" entry
+# appears and no separate KIF entry is needed.

@@ -226,7 +226,10 @@ class KifOptionsScene < KifOptionsBaseScene
                               _INTL("For large sliders (e.g. shiny odds), changes the increment rate of those sliders."))
     options << EnumOption.new(_INTL("DEBUG"), [_INTL("Off"), _INTL("On")],
                               proc { $PokemonSystem.debug },
-                              proc { |value| $PokemonSystem.debug = value },
+                              proc { |value|
+                                $PokemonSystem.debug = value
+                                KIF.sync_debug
+                              },
                               [_INTL("Doesn't force debug to be activated"),
                                _INTL("Force debug to be activated")])
     return options
@@ -267,3 +270,33 @@ class PokemonGameOption_Scene < PokemonOption_Scene
   end
 end
 
+
+#===============================================================================
+# KIF "DEBUG" option: "Force debug to be activated" – turns on PIF's real
+# debug mode ($DEBUG), so every debug entry (pause menu, Pokémon/PC
+# context menus, F9) appears. Turning it off restores $DEBUG only if KIF
+# was the one that turned it on.
+#===============================================================================
+module KIF
+  @debug_forced = false
+
+  def self.sync_debug
+    want = $PokemonSystem && $PokemonSystem.debug == 1
+    if want && !$DEBUG
+      $DEBUG = true
+      @debug_forced = true
+    elsif !want && @debug_forced
+      $DEBUG = false
+      @debug_forced = false
+    end
+  end
+end
+
+class Scene_Map
+  alias kif_debug_update update unless method_defined?(:kif_debug_update)
+
+  def update
+    KIF.sync_debug
+    kif_debug_update
+  end
+end

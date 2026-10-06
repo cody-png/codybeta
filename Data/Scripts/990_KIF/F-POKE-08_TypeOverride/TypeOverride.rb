@@ -16,11 +16,11 @@
 # (002_Battler_Initialize.rb:47, :81, :301), as do the Summary type icons.
 #
 # KIF's Pokemon#types (used by hasType?) ignored the override; this port
-# matches that unless TYPES_FOLLOW is true (pending Cody's answer).
+# follows the override too (port addition, Cody 2026-10-05; TYPES_FOLLOW).
 #===============================================================================
 module KIF
   module TypeOverride
-    TYPES_FOLLOW = false
+    TYPES_FOLLOW = true   # Cody 2026-10-05: hasType? follows the override too
 
     def self.valid?(t)
       return false if t.nil? || t == :NONE

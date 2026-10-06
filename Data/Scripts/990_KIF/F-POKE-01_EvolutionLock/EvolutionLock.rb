@@ -143,7 +143,11 @@ class PokemonPartyPanel
     return unless redraw && @pokemon && !@pokemon.egg? && @pokemon.kif_evo_locked?
     return if @text && @text.length > 0   # "ABLE"/"NOT ABLE" annotations use this spot
     return unless @overlaysprite && !@overlaysprite.disposed? && @overlaysprite.bitmap
-    KIF.draw_evolock_icon(@overlaysprite.bitmap, 130, 64)
+    pos = [130, 64]
+    if defined?(KIF::BigIcons) && KIF::BigIcons.party_layout?(@pokemon, @text)
+      pos = KIF::BigIcons::PARTY_LOCK_POS   # big icons: over the icon (Cody)
+    end
+    KIF.draw_evolock_icon(@overlaysprite.bitmap, pos[0], pos[1])
   rescue => e
     KIF.log("EvoLock party icon failed: #{e.message}")
   end

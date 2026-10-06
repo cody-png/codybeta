@@ -140,14 +140,134 @@ end
 end
 
 # Party: no Poké Ball under a big icon (KIF 005_UI_Party.rb:224-229)
+#
+# Party layout with big icons (port addition, Cody's mock-up 2026-10-05):
+#   * the icon sits 20 px lower;
+#   * the level moves 52 px right, just before the HP numbers;
+#   * a status badge (SLP/PSN/...) takes turns with the level in that spot,
+#     switching instantly every SWAP_SECONDS (only when there is a status);
+#   * the EvoLock padlock moves over the icon's bottom-left (F-POKE-01).
+# With an annotation ("ABLE"/"NOT ABLE") or for eggs the 6.8.2 layout is kept.
+module KIF
+  module BigIcons
+    PARTY_ICON_DROP = 20
+    PARTY_LV_X      = 72     # 6.8.2: 20 (Lv image) / 42 (number)
+    PARTY_LOCK_POS  = [12, 64]
+    SWAP_SECONDS    = 2.0
+
+    def self.party_layout?(panel_pokemon, text)
+      return false unless mode >= 1 && panel_pokemon && !panel_pokemon.egg?
+      return text.nil? || text.length == 0
+    end
+
+    # Same status choice as 6.8.2 PokemonPartyPanel#refresh (row in statuses)
+    def self.status_row(pkmn)
+      status = 0
+      if pkmn.fainted?
+        status = GameData::Status::DATA.keys.length / 2
+      elsif pkmn.status != :NONE
+        status = GameData::Status.get(pkmn.status).id_number
+      elsif pkmn.pokerusStage == 1
+        status = GameData::Status::DATA.keys.length / 2 + 1
+      end
+      return status - 1
+    end
+
+    def self.now
+      return System.uptime if defined?(System.uptime)
+      return Graphics.frame_count / [Graphics.frame_rate.to_f, 1.0].max
+    end
+  end
+end
+
 class PokemonPartyPanel
   alias kif_big_refresh refresh unless method_defined?(:kif_big_refresh)
+  alias kif_big_update update unless method_defined?(:kif_big_update)
+  alias kif_big_dispose dispose unless method_defined?(:kif_big_dispose)
+
+  def kif_big_layout?
+    return KIF::BigIcons.party_layout?(@pokemon, @text)
+  end
 
   def refresh
+    redraw = @refreshBitmap
     kif_big_refresh
+    return if disposed?
     if @ballsprite && !@ballsprite.disposed? && @pokemon && KIF::BigIcons.mode >= 1
       @ballsprite.visible = false
     end
+    kif_big_layout_refresh(redraw)
+  rescue => e
+    KIF.log("Big icon party layout failed: #{e.message}")
+  end
+
+  def kif_big_layout_refresh(redraw)
+    unless kif_big_layout?
+      @kif_lv_sprite.visible = false if @kif_lv_sprite && !@kif_lv_sprite.disposed?
+      @kif_st_sprite.visible = false if @kif_st_sprite && !@kif_st_sprite.disposed?
+      return
+    end
+    if @pkmnsprite && !@pkmnsprite.disposed?
+      @pkmnsprite.y = self.y + 40 + KIF::BigIcons::PARTY_ICON_DROP
+    end
+    if redraw && @overlaysprite && !@overlaysprite.disposed? && @overlaysprite.bitmap
+      bmp = @overlaysprite.bitmap
+      bmp.clear_rect(16, 56, 60, 30)   # 6.8.2's level (image 20,70 / number 42,57)
+      bmp.clear_rect(78, 68, 44, 16)   # 6.8.2's status badge
+      # EvoLock's padlock (drawn earlier at PARTY_LOCK_POS) was partly cleared
+      if defined?(KIF.draw_evolock_icon) && @pokemon.respond_to?(:kif_evo_locked?) &&
+         @pokemon.kif_evo_locked?
+        KIF.draw_evolock_icon(bmp, *KIF::BigIcons::PARTY_LOCK_POS)
+      end
+      kif_big_build_sprites
+    end
+    [@kif_lv_sprite, @kif_st_sprite].each do |s|
+      next unless s && !s.disposed?
+      s.x = self.x + KIF::BigIcons::PARTY_LV_X
+      s.y = self.y + 56
+      s.color = self.color
+      s.z = @overlaysprite.z
+    end
+    kif_big_swap
+  end
+
+  def kif_big_build_sprites
+    vp = self.viewport
+    @kif_lv_sprite ||= BitmapSprite.new(64, 30, vp)
+    @kif_st_sprite ||= BitmapSprite.new(44, 30, vp)
+    lv = @kif_lv_sprite.bitmap
+    lv.clear
+    pbDrawImagePositions(lv, [["Graphics/Pictures/Party/overlay_lv", 0, 14, 0, 0, 22, 14]])
+    pbSetSmallFont(lv)
+    pbDrawTextPositions(lv, [[@pokemon.level.to_s, 22, 1, 0,
+                              Color.new(248, 248, 248), Color.new(40, 40, 40)]])
+    st = @kif_st_sprite.bitmap
+    st.clear
+    @kif_has_status = false
+    row = KIF::BigIcons.status_row(@pokemon)
+    if row >= 0 && @statuses && !@statuses.disposed?
+      st.blt(0, 12, @statuses.bitmap, Rect.new(0, 16 * row, 44, 16))
+      @kif_has_status = true
+    end
+  end
+
+  # Level and status badge take turns, switching instantly (Cody)
+  def kif_big_swap
+    return unless @kif_lv_sprite && !@kif_lv_sprite.disposed?
+    show_status = @kif_has_status &&
+                  ((KIF::BigIcons.now / KIF::BigIcons::SWAP_SECONDS).floor % 2 == 1)
+    @kif_lv_sprite.visible = self.visible && !show_status
+    @kif_st_sprite.visible = self.visible && show_status if @kif_st_sprite && !@kif_st_sprite.disposed?
+  end
+
+  def update
+    kif_big_update
+    kif_big_swap if kif_big_layout?
+  end
+
+  def dispose
+    [@kif_lv_sprite, @kif_st_sprite].each { |s| s.dispose if s && !s.disposed? }
+    kif_big_dispose
   end
 end
 

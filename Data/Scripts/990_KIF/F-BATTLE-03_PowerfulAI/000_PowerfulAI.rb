@@ -5,8 +5,11 @@
 #   marked "# KIF port". KIF's options only had a "Powerful AI" label
 #   (016_UI/015_UI_Options.rb:2149); the AI itself was always on.
 #
-# Option Battles > "Powerful AI" (per save, default On) – port addition
-#   (Cody, 2026-10-05): Off uses PIF 6.8.2's own AI instead.
+# Option Battles > "Battle AI" PIF / DemICE (per save, default DemICE) – port
+#   addition (Cody, 2026-10-05). Named as a choice between two AIs rather
+#   than "harder" (Cody, play test 6). With $DEBUG on (KIF Debug option) and
+#   the console open, DemICE's AI prints its move/switch scores ("Switch
+#   score for: ...") – a way to see it is the one deciding.
 #
 # How the switch works: this file saves PIF's versions of the methods DemICE
 # replaces (as kif_pif_<name>) before 001-003 load; 999_Dispatch.rb then saves
@@ -33,11 +36,11 @@
 KIF::Options.define(:powerfulai, 1, :save)
 
 KIF::Options.add(:battles, :save) {
-  EnumOption.new(_INTL("Powerful AI"), [_INTL("Off"), _INTL("On")],
+  EnumOption.new(_INTL("Battle AI"), [_INTL("PIF"), _INTL("DemICE")],
                  proc { $PokemonSystem.powerfulai },
                  proc { |value| $PokemonSystem.powerfulai = value },
-                 [_INTL("Trainers and wild Pokémon use PIF's AI"),
-                  _INTL("Trainers and wild Pokémon use DemICE's Powerful AI")])
+                 [_INTL("Opponents use PIF 6.8.2's own AI"),
+                  _INTL("Opponents use DemICE's AI (from the community hard-mode mods)")])
 }
 
 module KIF

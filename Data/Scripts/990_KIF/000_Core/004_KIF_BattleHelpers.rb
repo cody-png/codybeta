@@ -17,8 +17,8 @@ class PokeBattle_Battler
 end
 
 module KIF
-  # DemICE's Endgame Challenge (F-BATTLE-04) sets switch 850 in KIF. That
-  # feature is not ported yet, so the challenge is never active.
+  # DemICE's Endgame Challenge (switch 850). Redefined by F-BATTLE-04
+  # (002_EndgameChallenge.rb); false only if that folder is removed.
   def self.endgame_challenge_active?
     return false
   end

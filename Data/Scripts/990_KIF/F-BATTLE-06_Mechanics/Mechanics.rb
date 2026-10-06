@@ -166,14 +166,8 @@ end
 #-------------------------------------------------------------------------------
 # Renamed texts
 #-------------------------------------------------------------------------------
-alias kif_mech__INTL _INTL unless defined?(kif_mech__INTL)
-
-def _INTL(*arg)
-  if arg[0].is_a?(String) && KIF::Mechanics::TEXTS.key?(arg[0])
-    new_text = KIF::Mechanics.reword(arg[0])
-    arg = [new_text] + arg[1..-1] if new_text
-  end
-  return kif_mech__INTL(*arg)
+KIF::Mechanics::TEXTS.each do |text, (test, new_text)|
+  KIF::TextSwap.add(text) { KIF::Mechanics.send(test) ? new_text : nil }
 end
 
 #-------------------------------------------------------------------------------

@@ -238,6 +238,20 @@ All options in this menu are per-save.
 
 - **Legendary Breeding** – Off / On *(Off, per save)*. Legendary Pokémon (and fusions with a legendary head or body) can breed with any Pokémon that can breed – no egg group or gender needed. The Egg is one of four results, 25% each: either parent, or either fusion of the two (Mewtwo + Vulpix → Mewtwo, Vulpix, Mewpix or Vultwo). With Ditto, the Egg is the other parent. Baby Pokémon still can't breed.
 
+### Randomizer
+
+Only on saves started as randomized saves: **Cody Settings → Randomizer**. The same screen also replaces PIF's randomizer menu when you make a randomized save.
+
+- **Seed** – an 8-character code (like `K7Q2-9XMA`). The same seed with the same settings gives the same randomized game (on the same KIF Beta version and sprite pack). New random seed, type one in, or copy it.
+- **Presets & sharing** – *Copy settings code* puts the seed and every setting on your clipboard as one line (paste it into Discord); *Paste settings code* loads someone else's. *Save as preset* / *Load preset* use files in the `Randomizer/Presets` folder.
+- **Spoiler log** – Off / On *(On)*. Writes `Randomizer Log - <seed>.txt` in the `Randomizer/Logs` folder every time something is shuffled: every Pokémon swap, route, trainer team, gym type, item and TM. *View spoiler log* shows it in-game (asks first).
+- **Pokémon** – each part has its own switch:
+  - *Wild encounters*: Off / Swap (each species becomes one other species everywhere) / Route (every route rolls its own) / Dynamic (every encounter is any Pokémon, rolled on the spot).
+  - *Starters* (Off / 1st stage / Any), *Static encounters*, *Gift Pokémon*, *Trades*.
+  - *Strength range* 0–999 (how close in base stat total a replacement must be; 999 = anything), *Legendaries*, *Custom sprites only*, *Fuse everything*.
+- **Trainers**, **Gyms**, **Items** – PIF's options (strength range, custom sprites only, gym types, rerandomize each battle, found/given/shop items and TMs, trainer held items).
+- **Randomize now** – applies the settings mid-game (asks first; your party and boxes stay).
+
 ### Interface
 
 - **Fusion Screen** – Off / On *(On, all saves)*. The DNA Splicers' preview shows, for both fusion orders, the fusion's name, types and the stats it will really have once fused (its fused level, the body's EVs and nature, the averaged IVs – or the higher ones with Super Splicers – and every setting that changes stats or types, such as No-EVs / Max IVs modes, custom fusion base stats, the self-fusion boost and Dominant Fusion Types). The higher stat of each left/right pair is green; the bars and "Base total" show the base stats. Press **A** on a fusion for **Change Body / Change Head / Confirm**. Change Body or Change Head lists that part's current form and every later evolution (branches included), tagged Stage 1, Stage 2 or Final; the preview follows the cursor, and the other side mirrors the change so both orders stay comparable. Confirm always fuses the Pokémon you have now (it reads "Fuse <name>" while you're previewing an evolution).

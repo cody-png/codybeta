@@ -2,7 +2,7 @@
 
 KIF brings the features of Kuray's Infinite Fusion 0.20.7 to Pokémon Infinite Fusion 6.8.2. Almost everything is optional and lives in one place:
 
-**Pause menu → Options → KIF Settings** (the last button in the list).
+**Pause menu → Options → KIF Settings** (near the bottom of the list). Right below it, **Cody Settings** holds features added in KIF Beta that were never part of the original KIF (see "Cody Settings" further down).
 
 KIF Settings opens six menus, listed below in the order you see them. Inside each menu:
 
@@ -223,6 +223,20 @@ All options in this menu are per-save.
 
 - **Increment Slider by** – 1 / 10 / 100 / 1000 / 10000 *(1)*. How far big sliders (like Wild Shiny Odds) move per press.
 - **DEBUG** – Off / On *(Off)*. Turns on PIF's debug mode, with the Debug menu and debug options in the PC and party.
+
+---
+
+## Cody Settings
+
+**Pause menu → Options → Cody Settings** – new features made for KIF Beta, kept apart from KIF's own settings. Same layout as KIF Settings, split into categories.
+
+### Battles
+
+- **Move Effectiveness** – Off / On *(On, all saves)*. The Fight menu shows how well each damaging move works against the foe: a green ▲ (super effective), orange ▼ (resisted) or grey ✕ (no effect) on each move button, and "Super eff." / "Resisted" / "No effect" under the PP of the highlighted move. With several foes, the info box lists each one with its multiplier (e.g. "Gyarados x4", "Onix x0") and the button marker shows the best result. Uses the battle's real type rules (including KIF's type buffs), but never reveals abilities such as Levitate.
+
+### Breeding & Fusion
+
+- **Legendary Breeding** – Off / On *(Off, per save)*. Legendary Pokémon (and fusions with a legendary head or body) can breed with any Pokémon that can breed – no egg group or gender needed. The Egg is one of four results, 25% each: either parent, or either fusion of the two (Mewtwo + Vulpix → Mewtwo, Vulpix, Mewpix or Vultwo). With Ditto, the Egg is the other parent. Baby Pokémon still can't breed.
 
 ---
 

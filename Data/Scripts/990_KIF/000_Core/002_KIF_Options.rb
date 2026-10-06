@@ -50,6 +50,24 @@ module KIF
 
     def self.defaults; @defaults; end
 
+    # Menus added by other settings roots (e.g. Cody Settings):
+    # id => [title, menu-button description, name colour, shadow colour, button label]
+    @extra_menus = {}
+
+    def self.register_menu(id, title, description, base, shadow, label)
+      @extra_menus[id] = [title, description, base, shadow, label]
+    end
+
+    def self.menu_info(menu)
+      return MENUS[menu] || @extra_menus[menu]
+    end
+
+    def self.menu_label(menu)
+      return MENU_BUTTON_LABELS[menu] if MENU_BUTTON_LABELS[menu]
+      info = @extra_menus[menu]
+      return info ? info[4] : menu.to_s
+    end
+
     def self.define(key, default, scope = :save)
       key = key.to_sym
       @defaults[key] = default
@@ -83,7 +101,7 @@ module KIF
     # Register a menu entry. The block must return an Option (built each time
     # the menu opens, so slider steps etc. are current).
     def self.add(menu, scope = :save, &builder)
-      raise ArgumentError, "Unknown KIF menu #{menu}" unless MENUS.has_key?(menu)
+      raise ArgumentError, "Unknown KIF menu #{menu}" unless menu_info(menu)
       (@entries[menu] ||= []) << [scope, builder]
     end
 
@@ -201,8 +219,8 @@ class KifOptionsMenuScene < KifOptionsBaseScene
     @menu = menu
   end
 
-  def kif_title; KIF::Options::MENUS[@menu][0]; end
-  def kif_colors; KIF::Options::MENUS[@menu][2, 2]; end
+  def kif_title; KIF::Options.menu_info(@menu)[0]; end
+  def kif_colors; KIF::Options.menu_info(@menu)[2, 2]; end
 
   def pbGetOptions(inloadscreen = false)
     options = []
@@ -225,14 +243,22 @@ class KifOptionsMenuScene < KifOptionsBaseScene
 end
 
 class KifOptionsScene < KifOptionsBaseScene
-  def pbGetOptions(inloadscreen = false)
+  # Menus listed on this screen (Cody Settings lists its own)
+  def kif_menu_ids; KIF::Options::MENUS.keys; end
+
+  def kif_menu_buttons
     options = []
-    KIF::Options::MENUS.each_key do |menu|
+    kif_menu_ids.each do |menu|
       next unless KIF::Options.menu_used?(menu)
-      options << ButtonOption.new(_INTL(KIF::Options::MENU_BUTTON_LABELS[menu]),
+      options << ButtonOption.new(_INTL(KIF::Options.menu_label(menu)),
                                   proc { @kif_open = menu; kif_open_menu },
-                                  _INTL(KIF::Options::MENUS[menu][1]))
+                                  _INTL(KIF::Options.menu_info(menu)[1]))
     end
+    return options
+  end
+
+  def pbGetOptions(inloadscreen = false)
+    options = kif_menu_buttons
     options << EnumOption.new(_INTL("Increment Slider by"),
                               KIF::Options::SLIDER_STEPS.map { |s| s.to_s },
                               proc { $PokemonSystem.raiserb },

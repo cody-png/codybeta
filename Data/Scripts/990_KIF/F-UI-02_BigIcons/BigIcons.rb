@@ -145,7 +145,7 @@ end
 #   * the icon sits 20 px lower;
 #   * the level moves 52 px right, just before the HP numbers;
 #   * a status badge (SLP/PSN/...) takes turns with the level in that spot,
-#     switching instantly every SWAP_SECONDS (only when there is a status);
+#     switching instantly every second (real time) (only when there is a status);
 #   * the EvoLock padlock moves over the icon's bottom-left (F-POKE-01).
 # With an annotation ("ABLE"/"NOT ABLE") or for eggs the 6.8.2 layout is kept.
 module KIF
@@ -153,7 +153,7 @@ module KIF
     PARTY_ICON_DROP = 20
     PARTY_LV_X      = 72     # 6.8.2: 20 (Lv image) / 42 (number)
     PARTY_LOCK_POS  = [12, 64]
-    SWAP_SECONDS    = 2.0
+    SWAP_SECONDS    = 1.0    # real time, so speed-up doesn't change it (Cody)
 
     def self.party_layout?(panel_pokemon, text)
       return false unless mode >= 1 && panel_pokemon && !panel_pokemon.egg?

@@ -42,10 +42,23 @@ module KIF
       return enum(key, name, [_INTL("Off"), _INTL("On")], [desc_off, desc_on])
     end
 
+    # 3-digit number (each digit 0-9) instead of a slider (Cody)
     def self.slider(key, name, desc)
-      return SliderOption.new(name, 0, 999, 5,
-                              proc { KIF::Rand.get(key) },
-                              proc { |v| KIF::Rand.set(key, v) }, desc)
+      return DynButton.new(proc { sprintf("%s: %03d", name, KIF::Rand.get(key)) },
+                           proc {
+                             params = ChooseNumberParams.new
+                             params.setRange(0, 999)
+                             params.setMaxDigits(3)
+                             params.setInitialValue(KIF::Rand.get(key))
+                             params.setCancelValue(KIF::Rand.get(key))
+                             KIF::Rand.digit_wrap = true
+                             begin
+                               v = pbMessageChooseNumber(_INTL("{1} (0-999)? Up/Down: digit, Left/Right: move.", name), params)
+                             ensure
+                               KIF::Rand.digit_wrap = false
+                             end
+                             KIF::Rand.set(key, v)
+                           }, desc)
     end
 
     def self.open_page(title, desc, color, &builder)
@@ -230,6 +243,37 @@ module KIF
       KIF::Rand.progress_done
       write_log
     end
+  end
+end
+
+module KIF
+  module Rand
+    @digit_wrap = false
+    class << self
+      attr_accessor :digit_wrap
+    end
+  end
+end
+
+# Strength range picker: each digit wraps on its own (0 down -> 9, 9 up -> 0)
+# without touching the other digits (PIF's number box carries/borrows).
+# Only while the randomizer's picker is open.
+class Window_InputNumberPokemon
+  alias kif_rand_update update unless method_defined?(:kif_rand_update)
+
+  def update
+    return kif_rand_update unless KIF::Rand.digit_wrap && self.active
+    return kif_rand_update unless Input.repeat?(Input::UP) || Input.repeat?(Input::DOWN)
+    digits = @digits_max + (@sign ? 1 : 0)
+    return kif_rand_update if @index == 0 && @sign
+    SpriteWindow_Base.instance_method(:update).bind(self).call
+    place = 10 ** (digits - 1 - @index)
+    d = (@number / place) % 10
+    nd = Input.repeat?(Input::UP) ? (d + 1) % 10 : (d + 9) % 10
+    @number += (nd - d) * place
+    pbPlayCursorSE
+    refresh
+    @frame = (@frame + 1) % 30
   end
 end
 

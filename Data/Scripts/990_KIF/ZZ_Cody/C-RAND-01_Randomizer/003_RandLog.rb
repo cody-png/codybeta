@@ -40,6 +40,7 @@ module KIF
       :evo_typed => ["Type-themed evolutions", ["Off", "On"]],
       :class_themes => ["Class themes", ["Off", "On"]],
       :theme_shuffle => ["Shuffle themes", ["Off", "On"]],
+      :extra_themes => ["Extra class themes", ["Off", "On"]],
       :rival_team => ["Rival keeps his team", ["Off", "On"]],
       :team_size => ["Team size", ["Same", "+1", "+2", "Full"]],
       :trainer_fuse => ["Trainer fuse everything", ["Off", "On"]]

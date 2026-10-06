@@ -254,6 +254,7 @@ Only on saves started as randomized saves: **Cody Settings → Randomizer**. The
   - **Strength range**, **Custom sprites only** – as in PIF.
   - **Class themes** – Off / On *(On)*. Every Pokémon of a themed class has its type: Bug Catchers use Bug types, Swimmers Water types, Hikers Rock/Ground, and so on; *Class theme list* shows every class. Follows randomized types. Gym leaders use the Gyms page.
   - **Shuffle themes** – Off / On. Each class gets a random type instead (the same for the same seed); Type Experts keep theirs.
+  - **Extra class themes** – Off / On *(On)*. Also themes the less obvious classes: Scientists, Bikers, Burglars, Jugglers, Robots, Roughnecks, Cue Balls, Aroma Ladies, Painters and Tubers.
   - **Rival keeps his team** – Off / On. Each Pokémon line in the rival's team gets one replacement line for every battle, at the same stage.
   - **Team size** – Same / +1 / +2 / Full. Extra Pokémon join at the team's average level.
   - **Fuse everything** – Off / On. Every trainer Pokémon is a fusion.

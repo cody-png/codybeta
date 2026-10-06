@@ -25,12 +25,19 @@ module KIF
       [:theme_shuffle, :enum, 2],
       [:rival_team, :enum, 2],
       [:team_size, :enum, 4],     # Same / +1 / +2 / Full
-      [:trainer_fuse, :enum, 2]
+      [:trainer_fuse, :enum, 2],
+      [:extra_themes, :enum, 2]   # themes for the less obvious classes
     ]
     # Added after the data settings, so older settings codes still line up
     DATA_SETTINGS.concat(TRAINER_SETTINGS)
     DATA_KEYS.concat(TRAINER_SETTINGS.map(&:first))
     DATA_DEFAULTS[:class_themes] = 1
+    DATA_DEFAULTS[:extra_themes] = 1
+
+    # Extra class themes (Cody: a toggle of their own); picked from their
+    # FireRed/LeafGreen teams
+    EXTRA_THEMES = [:SCIENTIST, :ROBOT, :JUGGLER, :BURGLAR, :BIKER, :ROUGHNECK,
+                    :CUEBALL, :AROMALADY, :PAINTER, :TUBER_F]
 
     RIVAL_TYPES = [:RIVAL1, :RIVAL2, :CHAMPION]
 
@@ -64,6 +71,7 @@ module KIF
         type = t.sub("TYPE_EXPERT_", "").to_sym
         return GameData::Type.exists?(type) ? [type] : nil
       end
+      return nil if dget(:extra_themes) == 0 && EXTRA_THEMES.include?(tr_type.to_sym)
       return CLASS_THEMES[tr_type.to_sym]
     end
 

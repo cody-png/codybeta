@@ -25,7 +25,7 @@ module KIF
     def self.page_state(page)
       case page
       when :pokemon then return on_off(pokemon_parts_on?)
-      when :trainers then return on_off(get(:trainers) == 1)
+      when :trainers then return on_off(get(:trainers) > 0)
       when :gyms then return on_off(get(:gyms) == 1)
       when :items then return on_off(sw(SWITCH_RANDOM_ITEMS_GENERAL))
       when :data then return on_off(dget(:types) > 0 || dget(:moves_follow) == 1 || dget(:tms_follow) == 1 || dget(:abilities) > 0 || dget(:stats) > 0)
@@ -113,14 +113,35 @@ module KIF
     def self.page_trainers
       open_page(_INTL("Randomizer: Trainers"), _INTL("Trainer teams."), nil) {
         [
-          onoff(:trainers, _INTL("Trainers"),
-                _INTL("Trainer teams are not randomized."),
-                _INTL("Trainer teams are randomized.")),
+          enum(:trainers, _INTL("Trainers"), [_INTL("Off"), _INTL("Random"), _INTL("Follow wild")],
+               [_INTL("Trainer teams are not randomized."),
+                _INTL("Every trainer's Pokémon are rolled on their own."),
+                _INTL("Trainer Pokémon follow the wild swap table: a trainer's Pidgey becomes whatever wild Pidgey became.")]),
           slider(:trainer_bst, _INTL("Strength range"),
                  _INTL("How close in base stat total a replacement must be. 999 = anything.")),
           onoff(:trainer_custom, _INTL("Custom sprites only"),
                 _INTL("Trainer teams can use auto-generated sprites."),
-                _INTL("Trainer teams only use Pokémon with a custom sprite."))
+                _INTL("Trainer teams only use Pokémon with a custom sprite.")),
+          onoff(:class_themes, _INTL("Class themes"),
+                _INTL("Trainer classes can use any type."),
+                _INTL("Every Pokémon of a themed class has its type: Bug Catchers use Bug types, Swimmers Water types, ...")),
+          onoff(:theme_shuffle, _INTL("Shuffle themes"),
+                _INTL("Classes keep their usual type (needs Class themes On)."),
+                _INTL("Each class gets a random type instead, e.g. Bug Catchers using Fire types. Type Experts keep theirs.")),
+          onoff(:rival_team, _INTL("Rival keeps his team"),
+                _INTL("The rival's team is rolled again for each battle."),
+                _INTL("Each Pokémon in the rival's team gets one replacement for every battle, evolving as his team does.")),
+          enum(:team_size, _INTL("Team size"), [_INTL("Same"), _INTL("+1"), _INTL("+2"), _INTL("Full")],
+               [_INTL("Trainers keep their usual number of Pokémon."),
+                _INTL("Trainers get 1 more Pokémon (up to 6), at the team's average level."),
+                _INTL("Trainers get 2 more Pokémon (up to 6), at the team's average level."),
+                _INTL("Every trainer has 6 Pokémon. The extras join at the team's average level.")]),
+          onoff(:trainer_fuse, _INTL("Fuse everything"),
+                _INTL("Trainer Pokémon can be unfused."),
+                _INTL("Every trainer Pokémon is a fusion.")),
+          ButtonOption.new(_INTL("Class theme list"), proc {
+            KIF::Rand.show_lines(_INTL("Class themes"), KIF::Rand.class_theme_lines)
+          }, _INTL("Which type each trainer class uses. Gym leaders use the Gyms page."))
         ]
       }
     end
@@ -610,7 +631,7 @@ class RandomizerOptionsScene < PokemonOption_Scene
     options << ButtonOption.new(_INTL("View spoiler log"), proc { r.view_log },
                                 _INTL("Shows everything that was randomized (asks first)."))
     [[:pokemon, _INTL("Pokémon"), _INTL("Wild encounters, starters, statics, gifts and trades.")],
-     [:trainers, _INTL("Trainers"), _INTL("Trainer teams.")],
+     [:trainers, _INTL("Trainers"), _INTL("Trainer teams, class themes and team size.")],
      [:gyms, _INTL("Gyms"), _INTL("Gym trainers, leaders and gym types.")],
      [:items, _INTL("Items"), _INTL("Found, given and shop items, TMs.")],
      [:data, _INTL("Pokémon data"), _INTL("Types, moves, abilities and base stats.")],

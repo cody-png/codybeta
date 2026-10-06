@@ -15,7 +15,7 @@ module KIF
       :wild_legend => ["Legendaries", ["Off", "On"]],
       :wild_custom => ["Custom sprites only", ["Off", "On"]],
       :fuse_all => ["Fuse everything", ["Off", "On"]],
-      :trainers => ["Trainers", ["Off", "On"]],
+      :trainers => ["Trainers", ["Off", "Random", "Follow wild"]],
       :trainer_bst => ["Strength range (trainers)", nil],
       :trainer_custom => ["Trainer custom sprites only", ["Off", "On"]],
       :gyms => ["Gym trainers", ["Off", "On"]],
@@ -37,7 +37,12 @@ module KIF
       :stats => ["Base stats", ["Same", "Shuffle", "Total", "Chaos"]],
       :chaos_safety => ["Chaos safety", ["Off", "Total", "Each stat"]],
       :evolutions => ["Evolutions", ["Same", "Random"]],
-      :evo_typed => ["Type-themed evolutions", ["Off", "On"]]
+      :evo_typed => ["Type-themed evolutions", ["Off", "On"]],
+      :class_themes => ["Class themes", ["Off", "On"]],
+      :theme_shuffle => ["Shuffle themes", ["Off", "On"]],
+      :rival_team => ["Rival keeps his team", ["Off", "On"]],
+      :team_size => ["Team size", ["Same", "+1", "+2", "Full"]],
+      :trainer_fuse => ["Trainer fuse everything", ["Off", "On"]]
     }
 
     def self.log_path
@@ -125,15 +130,17 @@ module KIF
         out << ["Pokémon data", lines]
       end
       hash = $PokemonGlobal.psuedoBSTHash
-      if pokemon_parts_on? && hash && !identity_dex?(hash)
-        whole = get(:wild_mode) == 1 || get(:statics) == 1 || get(:gifts) == 1 || get(:trades) == 1
+      follow = sw(SWITCH_RANDOM_TRAINERS) && get(:trainers) == 2
+      if (pokemon_parts_on? || follow) && hash && !identity_dex?(hash)
+        # Trainers on Follow wild use the table too, even with wild Pokémon Off
+        whole = get(:wild_mode) == 1 || get(:statics) == 1 || get(:gifts) == 1 || get(:trades) == 1 || follow
         lines = []
         (1..NB_POKEMON).each do |i|
           next unless hash[i]
           lines << sprintf("#%03d %s -> %s", i, species_name(i), species_name(hash[i]))
         end
         out << ["Pokémon swaps", lines] if whole
-        if get(:starters) > 0
+        if pokemon_parts_on? && get(:starters) > 0
           out << ["Starters", [1, 4, 7].map { |d|
             to = (obtainRandomizedStarter([1, 4, 7].index(d)) rescue hash[d])
             "#{species_name(d)} -> #{species_name(to)}"
@@ -168,12 +175,17 @@ module KIF
             tname = (GameData::TrainerType.get(tr.trainer_type).name rescue tr.trainer_type.to_s)
             old = tr.pokemon.map { |p| species_name(p[:species]) }.join(", ")
             new = team.map { |d| species_name(d) }.join(", ")
-            lines << "#{tname} #{tr.real_name}: #{old} -> #{new}"
+            tags = []
+            ct = dget(:class_themes) > 0 ? class_theme(tr.trainer_type) : nil
+            tags << ct.map { |x| type_name(x) }.join("/") if ct
+            tag = tags.empty? ? "" : " [#{tags.join(', ')}]"
+            lines << "#{tname} #{tr.real_name}#{tag}: #{old} -> #{new}"
           end
         rescue => e
           lines << "(trainers unavailable: #{e.message})"
         end
         out << ["Trainers", lines]
+        out << ["Class themes", class_theme_lines] if dget(:class_themes) > 0
       end
       if sw(SWITCH_RANDOMIZED_GYM_TYPES) && $game_variables[VAR_GYM_TYPES_ARRAY].is_a?(Array)
         base = (GYM_TYPES_ARRAY rescue [])

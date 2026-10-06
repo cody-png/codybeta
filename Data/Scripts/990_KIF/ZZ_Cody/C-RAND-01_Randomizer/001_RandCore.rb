@@ -55,7 +55,7 @@ module KIF
       [:wild_custom, :enum, 2],
       [:fuse_all, :enum, 2],
       # Trainers
-      [:trainers, :enum, 2],
+      [:trainers, :enum, 3],   # Off / Random / Follow wild
       [:trainer_bst, :int, 999],
       [:trainer_custom, :enum, 2],
       # Gyms
@@ -99,7 +99,8 @@ module KIF
       when :wild_legend  then return sw(SWITCH_RANDOM_WILD_LEGENDARIES) ? 1 : 0
       when :wild_custom  then return sw(SWITCH_RANDOM_WILD_ONLY_CUSTOMS) ? 1 : 0
       when :fuse_all     then return sw(SWITCH_RANDOM_WILD_TO_FUSION) ? 1 : 0
-      when :trainers     then return sw(SWITCH_RANDOM_TRAINERS) ? 1 : 0
+      when :trainers     then return 0 unless sw(SWITCH_RANDOM_TRAINERS)
+                              return data[:trainer_follow] ? 2 : 1
       when :trainer_bst  then return $game_variables[VAR_RANDOMIZER_TRAINER_BST].to_i
       when :trainer_custom then return sw(600) ? 1 : 0
       when :gyms         then return sw(SWITCH_RANDOMIZE_GYMS_SEPARATELY) ? 1 : 0
@@ -133,7 +134,9 @@ module KIF
       when :wild_legend  then setsw(SWITCH_RANDOM_WILD_LEGENDARIES, v == 1)
       when :wild_custom  then setsw(SWITCH_RANDOM_WILD_ONLY_CUSTOMS, v == 1)
       when :fuse_all     then setsw(SWITCH_RANDOM_WILD_TO_FUSION, v == 1)
-      when :trainers     then setsw(SWITCH_RANDOM_TRAINERS, v == 1)
+      when :trainers
+        setsw(SWITCH_RANDOM_TRAINERS, v > 0)
+        data[:trainer_follow] = (v == 2)
       when :trainer_bst  then $game_variables[VAR_RANDOMIZER_TRAINER_BST] = v.to_i
       when :trainer_custom then setsw(600, v == 1)
       when :gyms         then setsw(SWITCH_RANDOMIZE_GYMS_SEPARATELY, v == 1)
@@ -275,9 +278,15 @@ module KIF
       return nil unless (v1 && parts.length == 5) || (parts[0] == CODE_PREFIX && parts.length == 6)
       s = parse_seed(parts[1])
       enums = v1 ? SETTINGS.select { |x| x[1] == :enum } : code_enums
-      return nil unless s && parts[2].length == enums.length
+      # Codes from before newer settings existed are shorter; the rest keep
+      # their defaults
+      return nil unless s && (v1 ? parts[2].length == enums.length : parts[2].length.between?(1, enums.length))
       vals = {}
       enums.each_with_index do |(key, _k, max), i|
+        if i >= parts[2].length
+          vals[key] = (DATA_DEFAULTS[key] || 0)
+          next
+        end
         v = parts[2][i].to_i(36)
         return nil if v >= max
         vals[key] = v

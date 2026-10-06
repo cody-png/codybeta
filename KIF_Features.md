@@ -249,7 +249,15 @@ Only on saves started as randomized saves: **Cody Settings → Randomizer**. The
   - *Wild encounters*: Off / Swap (each species becomes one other species everywhere) / Route (every route rolls its own) / Dynamic (every encounter is any Pokémon, rolled on the spot).
   - *Starters* (Off / 1st stage / Any), *Static encounters*, *Gift Pokémon*, *Trades*.
   - *Strength range* 0–999 (how close in base stat total a replacement must be; 999 = anything), *Legendaries*, *Custom sprites only*, *Fuse everything*.
-- **Trainers**, **Gyms**, **Items** – PIF's options (strength range, custom sprites only, gym types, rerandomize each battle, found/given/shop items and TMs, trainer held items).
+- **Trainers**
+  - **Trainers** – Off / Random / Follow wild. Follow wild gives trainers the wild swap table (a trainer's Pidgey becomes whatever wild Pidgey became).
+  - **Strength range**, **Custom sprites only** – as in PIF.
+  - **Class themes** – Off / On *(On)*. Every Pokémon of a themed class has its type: Bug Catchers use Bug types, Swimmers Water types, Hikers Rock/Ground, and so on; *Class theme list* shows every class. Follows randomized types. Gym leaders use the Gyms page.
+  - **Shuffle themes** – Off / On. Each class gets a random type instead (the same for the same seed); Type Experts keep theirs.
+  - **Rival keeps his team** – Off / On. Each Pokémon line in the rival's team gets one replacement line for every battle, at the same stage.
+  - **Team size** – Same / +1 / +2 / Full. Extra Pokémon join at the team's average level.
+  - **Fuse everything** – Off / On. Every trainer Pokémon is a fusion.
+- **Gyms**, **Items** – PIF's options (custom sprites only, gym types, rerandomize each battle, found/given/shop items and TMs, trainer held items).
 - **Pokémon data** – changes the Pokémon themselves (fusions are built from their two parts, so they follow):
   - *Types*: Same / Random (each evolution family gets new types) / Dual (everyone gets two types); *Original type*: Allowed / Never.
   - *Moves follow type*: moves of the old type become moves of the new type at the same level with similar power (other moves stay). *TMs follow type* does the same for TM and tutor compatibility.

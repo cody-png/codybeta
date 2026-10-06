@@ -277,7 +277,52 @@ class Window_InputNumberPokemon
   end
 end
 
+# PIF's option list gives names 9/20 of the width and squeezes longer names
+# (blurry text, e.g. "Paste settings code"). The randomizer's lists draw
+# buttons across the whole row and give names 11/20 next to On/Off values.
+class KifRandOptionWindow < Window_PokemonOption
+  def drawItem(index, _count, rect)
+    return super if index >= @options.length
+    opt = @options[index]
+    if opt.is_a?(ButtonOption)
+      rect = drawCursor(index, rect)
+      pbDrawShadowText(self.contents, rect.x, rect.y, rect.width, rect.height, opt.name,
+                       @nameBaseColor, @nameShadowColor)
+      return
+    end
+    return super unless opt.is_a?(EnumOption) && opt.values.length > 1
+    rect = drawCursor(index, rect)
+    namew = rect.width * 11 / 20
+    valw = rect.width - namew
+    pbDrawShadowText(self.contents, rect.x, rect.y, namew, rect.height, opt.name,
+                     @nameBaseColor, @nameShadowColor)
+    widths = opt.values.map { |v| self.contents.text_size(v).width }
+    spacing = (valw - widths.sum) / [opt.values.length - 1, 1].max
+    spacing = 4 if spacing < 4
+    xpos = rect.x + namew
+    opt.values.each_with_index do |v, i|
+      sel = (i == self[index])
+      pbDrawShadowText(self.contents, xpos, rect.y, widths[i] + 2, rect.height, v,
+                       sel ? @selBaseColor : self.baseColor, sel ? @selShadowColor : self.shadowColor)
+      xpos += widths[i] + spacing
+    end
+  end
+end
+
+module KifRandWindowMixin
+  def initOptionsWindow
+    width = Graphics.width
+    height = (Graphics.height - @sprites["title"].height - @sprites["textbox"].height) + 32
+    win = KifRandOptionWindow.new(@PokemonOptions, 0, @sprites["title"].height, width, height)
+    win.viewport = @viewport
+    win.visible = true
+    return win
+  end
+end
+
 class KifRandPageScene < PokemonOption_Scene
+  include KifRandWindowMixin
+
   def initialize(title, desc, colors, builder)
     super()
     @kif_title = title
@@ -318,6 +363,8 @@ class KifRandPageScene < PokemonOption_Scene
 end
 
 class RandomizerOptionsScene < PokemonOption_Scene
+  include KifRandWindowMixin
+
   def initialize
     super
     $game_switches[SWITCH_RANDOMIZED_AT_LEAST_ONCE] = true

@@ -31,7 +31,7 @@ end
 module KIF
   module Rand
     ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"   # no I/O/0/1
-    CODE_PREFIX = "KIFR1"
+    CODE_PREFIX = "KIFR2"
     LOG_PREFIX = "Randomizer Log - "
     RAND_DIR = "Randomizer"
     LOG_DIR = "Randomizer/Logs"
@@ -81,6 +81,7 @@ module KIF
     # Settings (PIF switches / variables where PIF has them)
     #---------------------------------------------------------------------------
     def self.get(key)
+      return dget(key) if DATA_KEYS.include?(key)
       case key
       when :wild_mode
         return 0 unless sw(SWITCH_RANDOM_WILD) || data[:wild_mode]
@@ -116,6 +117,7 @@ module KIF
     end
 
     def self.set(key, v)
+      return dset(key, v) if DATA_KEYS.include?(key)
       case key
       when :wild_mode
         data[:wild_mode] = v
@@ -228,19 +230,51 @@ module KIF
     end
 
     #---------------------------------------------------------------------------
-    # Settings code: KIFR1-SEED-<one character per setting>-<wild BST>-<trainer BST>
+    # Settings code:
+    #   KIFR2-SEED-<one character per setting>-<wild BST>-<trainer BST>-<bans>
+    #   bans = "P" + Pokémon dex numbers, "M" + move numbers, "A" + ability
+    #   numbers (base 36, dot-separated), joined by "~"
+    #   KIFR1 codes (chunk 1, no data settings or bans) are still read.
     #---------------------------------------------------------------------------
-    def self.settings_code
-      flags = SETTINGS.select { |s| s[1] == :enum }.map { |s| get(s[0]).to_s(36) }.join
-      return [CODE_PREFIX, seed, flags, get(:wild_bst), get(:trainer_bst)].join("-")
+    CODE_PREFIX_V1 = "KIFR1"
+
+    def self.code_enums
+      return SETTINGS.select { |s| s[1] == :enum } + DATA_SETTINGS
     end
 
-    # Returns [seed, {key => value}] or nil
+    # GameData::Move.get doesn't take numbers; look them up once
+    def self.by_number(gd, n)
+      @by_number ||= {}
+      unless @by_number[gd]
+        h = {}
+        gd.each { |o| h[o.id_number] ||= o }
+        @by_number[gd] = h
+      end
+      return @by_number[gd][n]
+    end
+
+    def self.bans_code
+      parts = []
+      { "P" => [:pokemon, GameData::Species], "M" => [:moves, GameData::Move],
+        "A" => [:abilities, GameData::Ability] }.each do |tag, (kind, gd)|
+        ids = bans(kind).map { |id| (gd.get(id).id_number rescue nil) }.compact.sort
+        parts << tag + ids.map { |n| n.to_s(36) }.join(".")
+      end
+      return parts.join("~")
+    end
+
+    def self.settings_code
+      flags = code_enums.map { |s| get(s[0]).to_s(36) }.join
+      return [CODE_PREFIX, seed, flags, get(:wild_bst), get(:trainer_bst), bans_code].join("-")
+    end
+
+    # Returns [seed, {key => value}, bans or nil] or nil
     def self.parse_code(code)
       parts = code.to_s.strip.split("-")
-      return nil unless parts.length == 5 && parts[0] == CODE_PREFIX
+      v1 = parts[0] == CODE_PREFIX_V1
+      return nil unless (v1 && parts.length == 5) || (parts[0] == CODE_PREFIX && parts.length == 6)
       s = parse_seed(parts[1])
-      enums = SETTINGS.select { |x| x[1] == :enum }
+      enums = v1 ? SETTINGS.select { |x| x[1] == :enum } : code_enums
       return nil unless s && parts[2].length == enums.length
       vals = {}
       enums.each_with_index do |(key, _k, max), i|
@@ -251,7 +285,21 @@ module KIF
       return nil unless parts[3] =~ /\A\d+\z/ && parts[4] =~ /\A\d+\z/
       vals[:wild_bst] = [parts[3].to_i, 999].min
       vals[:trainer_bst] = [parts[4].to_i, 999].min
-      return [s, vals]
+      bans = nil
+      unless v1
+        bans = { :pokemon => [], :moves => [], :abilities => [] }
+        parts[5].split("~").each do |seg|
+          kind, gd = { "P" => [:pokemon, GameData::Species], "M" => [:moves, GameData::Move],
+                       "A" => [:abilities, GameData::Ability] }[seg[0]]
+          return nil unless kind
+          seg[1..-1].split(".").each do |n|
+            obj = by_number(gd, n.to_i(36))
+            return nil unless obj
+            bans[kind] << (kind == :pokemon ? obj.species : obj.id)
+          end
+        end
+      end
+      return [s, vals, bans]
     end
 
     def self.apply_code(code)
@@ -259,6 +307,9 @@ module KIF
       return false unless res
       self.seed = res[0]
       res[1].each { |k, v| set(k, v) }
+      if res[2]
+        res[2].each { |kind, list| data[:"ban_#{kind}"] = list }
+      end
       return true
     end
 

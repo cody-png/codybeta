@@ -28,6 +28,9 @@ module KIF
       when :trainers then return on_off(get(:trainers) == 1)
       when :gyms then return on_off(get(:gyms) == 1)
       when :items then return on_off(sw(SWITCH_RANDOM_ITEMS_GENERAL))
+      when :data then return on_off(dget(:types) > 0 || dget(:moves_follow) == 1 || dget(:tms_follow) == 1 || dget(:abilities) > 0 || dget(:stats) > 0)
+      when :evolutions then return on_off(dget(:evolutions) > 0)
+      when :exclusions then return (bans(:pokemon).length + bans(:moves).length + bans(:abilities).length).to_s
       end
       return ""
     end
@@ -154,6 +157,123 @@ module KIF
       }
     end
 
+    def self.page_data
+      open_page(_INTL("Randomizer: Pokémon data"), _INTL("Types, moves, abilities and base stats. Fusions follow."), GREEN) {
+        [
+          enum(:types, _INTL("Types"), [_INTL("Same"), _INTL("Random"), _INTL("Dual")],
+               [_INTL("Types stay the same."),
+                _INTL("Each evolution family gets new types."),
+                _INTL("New types, and every Pokémon gets two.")]),
+          enum(:type_orig, _INTL("Original type"), [_INTL("Allowed"), _INTL("Never")],
+               [_INTL("A Pokémon may roll its own type again."),
+                _INTL("A Pokémon never keeps its original types.")]),
+          onoff(:moves_follow, _INTL("Moves follow type"),
+                _INTL("Level-up and egg moves stay the same."),
+                _INTL("Moves of the old type become the new type's, same level, similar power.")),
+          onoff(:tms_follow, _INTL("TMs follow type"),
+                _INTL("TM and tutor compatibility stays the same."),
+                _INTL("TM/tutor moves of the old type become the new type's.")),
+          enum(:abilities, _INTL("Abilities"), [_INTL("Same"), _INTL("Random"), _INTL("Flavour"), _INTL("Bound")],
+               [_INTL("Abilities stay the same."),
+                _INTL("Any ability."),
+                _INTL("Type-flavoured: abilities themed on the Pokémon's types."),
+                _INTL("Type-bound: only abilities Pokémon of its types have in the base game.")]),
+          onoff(:no_selfharm, _INTL("No self-harm"),
+                _INTL("Any ability can be picked."),
+                _INTL("Never Truant, Slow Start, Defeatist, Klutz, Stall or weather that hurts its own type.")),
+          enum(:stats, _INTL("Base stats"), [_INTL("Same"), _INTL("Shuffle"), _INTL("Total"), _INTL("Chaos")],
+               [_INTL("Base stats stay the same."),
+                _INTL("Same numbers in a new order (the same order for the whole family)."),
+                _INTL("Random spread with the same total."),
+                _INTL("Every stat rolled from 1 to 255.")]),
+          enum(:chaos_safety, _INTL("Chaos safety"), [_INTL("Off"), _INTL("Total"), _INTL("Each stat")],
+               [_INTL("Chaos: an evolution can be weaker."),
+                _INTL("Chaos: evolving never lowers the base stat total."),
+                _INTL("Chaos: evolving never lowers any stat.")])
+        ]
+      }
+    end
+
+    def self.page_evolutions
+      open_page(_INTL("Randomizer: Evolutions"), _INTL("Evolves into a higher stage or a Final. Levels and items stay the same."), GREEN) {
+        [
+          enum(:evolutions, _INTL("Evolutions"), [_INTL("Same"), _INTL("Random")],
+               [_INTL("Evolutions stay the same."),
+                _INTL("Evolves into a higher stage or a Final. Levels and items stay the same.")]),
+          onoff(:evo_typed, _INTL("Type-themed"),
+                _INTL("The evolution can be any type."),
+                _INTL("The evolution shares a type with the Pokémon."))
+        ]
+      }
+    end
+
+    def self.page_exclusions
+      open_page(_INTL("Randomizer: Exclusions"), _INTL("Pokémon, moves and abilities the randomizer never picks."), nil) {
+        [[:pokemon, _INTL("Banned Pokémon")], [:moves, _INTL("Banned moves")], [:abilities, _INTL("Banned abilities")]].map do |kind, label|
+          DynButton.new(proc { "#{label} (#{KIF::Rand.bans(kind).length})" },
+                        proc { KIF::Rand.ban_picker(kind, label) },
+                        _INTL("A: ban / unban   L/R: page   Z: clear all"))
+        end
+      }
+    end
+
+    def self.ban_entries(kind)
+      @ban_entries ||= {}
+      @ban_entries[kind] ||= case kind
+        when :pokemon then base_species.map { |sp| [sp.species, sprintf("%03d %s", sp.id_number, sp.real_name)] }
+        when :moves then move_pool.map { |m| [m.id, m.real_name] }.sort_by { |x| x[1] }
+        else all_abilities.map { |a| [a, GameData::Ability.get(a).real_name] }.sort_by { |x| x[1] }
+      end
+    end
+
+    # A: ban/unban, L/R: page, Z (Action): clear all, B: back
+    def self.ban_picker(kind, label)
+      entries = ban_entries(kind)
+      list = bans(kind)
+      rows = proc { entries.map { |id, name| list.include?(id) ? "#{name}  [banned]" : name } }
+      vp = Viewport.new(0, 0, Graphics.width, Graphics.height)
+      vp.z = 999999
+      head = Window_UnformattedTextPokemon.newWithSize(label, 0, 0, Graphics.width, 64, vp)
+      win = Window_CommandPokemon.newWithSize(rows.call, 0, 64, Graphics.width, Graphics.height - 64, vp)
+      win.index = 0
+      loop do
+        Graphics.update
+        Input.update
+        win.update
+        if Input.trigger?(Input::USE)
+          id = entries[win.index][0]
+          list.include?(id) ? list.delete(id) : list << id
+          pbPlayDecisionSE
+          i = win.index
+          win.commands = rows.call
+          win.index = i
+        elsif Input.trigger?(Input::ACTION)
+          if !list.empty? && pbConfirmMessage(_INTL("Unban everything in this list?"))
+            list.clear
+            win.commands = rows.call
+          end
+        elsif Input.repeat?(Input::JUMPUP)
+          win.index = [win.index - 10, 0].max
+        elsif Input.repeat?(Input::JUMPDOWN)
+          win.index = [win.index + 10, entries.length - 1].min
+        elsif Input.trigger?(Input::BACK)
+          pbPlayCancelSE
+          break
+        end
+      end
+      win.dispose
+      head.dispose
+      vp.dispose
+      eat_input
+    end
+
+    # The page behind checks the same frame's Back press; one more input update
+    # makes sure closing a list doesn't close that page too
+    def self.eat_input
+      Graphics.update
+      Input.update
+    end
+
     #---------------------------------------------------------------------------
     def self.seed_menu
       cmds = [_INTL("New random seed"), _INTL("Type a seed"), _INTL("Copy seed"), _INTL("Cancel")]
@@ -225,6 +345,13 @@ module KIF
     def self.randomize_now
       sync_masters
       setsw(SWITCH_RANDOMIZED_AT_LEAST_ONCE, true)
+      progress("Randomizing Pokémon data...", 0.2)
+      if data_on?
+        randomize_data
+      else
+        data[:species] = nil
+        apply_data({})
+      end
       Kernel.initRandomTypeArray
       if pokemon_parts_on?
         data[:dex_ok] = false
@@ -292,25 +419,100 @@ class KifRandOptionWindow < Window_PokemonOption
     end
     return super unless opt.is_a?(EnumOption) && opt.values.length > 1
     rect = drawCursor(index, rect)
-    namew = rect.width * 11 / 20
+    namew = kif_name_width(rect.width)
     valw = rect.width - namew
     pbDrawShadowText(self.contents, rect.x, rect.y, namew, rect.height, opt.name,
                      @nameBaseColor, @nameShadowColor)
     widths = opt.values.map { |v| self.contents.text_size(v).width }
-    spacing = (valw - widths.sum) / [opt.values.length - 1, 1].max
-    spacing = 4 if spacing < 4
-    xpos = rect.x + namew
-    opt.values.each_with_index do |v, i|
-      sel = (i == self[index])
-      pbDrawShadowText(self.contents, xpos, rect.y, widths[i] + 2, rect.height, v,
-                       sel ? @selBaseColor : self.baseColor, sel ? @selShadowColor : self.shadowColor)
-      xpos += widths[i] + spacing
+    gaps = opt.values.length - 1
+    if widths.sum + gaps * 12 <= valw
+      # Every value fits: spread them over the value column
+      spacing = (valw - widths.sum) / gaps
+      xpos = rect.x + namew
+      opt.values.each_with_index do |v, i|
+        sel = (i == self[index])
+        pbDrawShadowText(self.contents, xpos, rect.y, widths[i] + 2, rect.height, v,
+                         sel ? @selBaseColor : self.baseColor, sel ? @selShadowColor : self.shadowColor)
+        xpos += widths[i] + spacing
+      end
+    else
+      # Too many to fit: show the chosen one between arrows (Left/Right still cycle)
+      v = opt.values[self[index]] || ""
+      pbDrawShadowText(self.contents, rect.x + namew, rect.y, valw, rect.height,
+                       "< #{v} >", @selBaseColor, @selShadowColor, 1)
     end
+  end
+
+  # The name column is as wide as the page's longest name (plus a gap), so
+  # pages with short names leave more room for the values
+  def kif_name_width(full)
+    return @kif_namew if @kif_namew
+    names = @options.select { |o| o.is_a?(EnumOption) }.map { |o| self.contents.text_size(o.name).width }
+    w = (names.max || 0) + 20
+    @kif_namew = [[w, full * 3 / 10].max, full * 11 / 20].min
+    return @kif_namew
+  end
+end
+
+#-------------------------------------------------------------------------------
+# Description box: text too long for its two lines scrolls slowly downwards
+# like a car radio display, then starts over (Cody)
+#-------------------------------------------------------------------------------
+module KifScrollText
+  HOLD  = 1.5    # s shown still at the top and at the bottom
+  SPEED = 24.0   # pixels per second (a line is 32)
+
+  def self.now
+    return Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  end
+
+  def setText(value)
+    super
+    @kif_t0 = KifScrollText.now
+    self.oy = 0
+  end
+
+  # The game's window only draws the lines that fit; this one draws all of
+  # them so they can scroll into view
+  def refresh
+    return super if self.letterbyletter
+    self.contents = pbDoEnsureBitmap(self.contents, [@bitmapwidth, 1].max, [@bitmapheight + 8, 1].max)
+    self.contents.font = @oldfont if @oldfont
+    self.contents.clear
+    (@fmtchars || []).each { |ch| drawSingleFormattedChar(self.contents, ch) }
+    self.contents.font = @oldfont if @oldfont
+  end
+
+  def kif_scroll_update
+    return if self.disposed? || !self.contents
+    # Only text with more lines than the box shows scrolls (a line is 32px;
+    # the few pixels of padding under the last line don't count)
+    over = (@bitmapheight || 0) - (self.height - self.borderY)
+    if over <= 8
+      self.oy = 0 if self.oy != 0
+      return
+    end
+    @kif_t0 ||= KifScrollText.now
+    move = over / SPEED
+    t = (KifScrollText.now - @kif_t0) % (HOLD * 2 + move)
+    y = (t < HOLD) ? 0 : [((t - HOLD) * SPEED).floor, over + 4].min
+    self.oy = y if self.oy != y
   end
 end
 
 module KifRandWindowMixin
+  def pbUpdate
+    super
+    tb = @sprites && @sprites["textbox"]
+    tb.kif_scroll_update if tb.respond_to?(:kif_scroll_update)
+  end
+
   def initOptionsWindow
+    tb = @sprites["textbox"]
+    if tb.is_a?(Window_AdvancedTextPokemon) && !tb.is_a?(KifScrollText)
+      tb.extend(KifScrollText)
+      tb.text = tb.text
+    end
     width = Graphics.width
     height = (Graphics.height - @sprites["title"].height - @sprites["textbox"].height) + 32
     win = KifRandOptionWindow.new(@PokemonOptions, 0, @sprites["title"].height, width, height)
@@ -410,7 +612,10 @@ class RandomizerOptionsScene < PokemonOption_Scene
     [[:pokemon, _INTL("Pokémon"), _INTL("Wild encounters, starters, statics, gifts and trades.")],
      [:trainers, _INTL("Trainers"), _INTL("Trainer teams.")],
      [:gyms, _INTL("Gyms"), _INTL("Gym trainers, leaders and gym types.")],
-     [:items, _INTL("Items"), _INTL("Found, given and shop items, TMs.")]].each do |page, label, desc|
+     [:items, _INTL("Items"), _INTL("Found, given and shop items, TMs.")],
+     [:data, _INTL("Pokémon data"), _INTL("Types, moves, abilities and base stats.")],
+     [:evolutions, _INTL("Evolutions"), _INTL("What each Pokémon evolves into.")],
+     [:exclusions, _INTL("Exclusions"), _INTL("Pokémon, moves and abilities never picked.")]].each do |page, label, desc|
       options << r::DynButton.new(proc { "#{label} (#{r.page_state(page)})" },
                                   proc { r.send("page_#{page}"); kif_refresh }, desc)
     end
@@ -428,7 +633,15 @@ class RandomizerOptionsScene < PokemonOption_Scene
   def pbEndScene
     super
     KIF::Rand.sync_masters
-    KIF::Rand.screen_closed! if $game_switches[SWITCH_DURING_INTRO]
+    if $game_switches[SWITCH_DURING_INTRO]
+      KIF::Rand.screen_closed!
+      # The intro's events shuffle the Pokédex/trainers next; the Pokémon data
+      # is made first so those shuffles see the new base stats
+      if KIF::Rand.data_on?
+        KIF::Rand.randomize_data
+        KIF::Rand.write_log   # the intro shuffles rewrite it if they run
+      end
+    end
   end
 end
 

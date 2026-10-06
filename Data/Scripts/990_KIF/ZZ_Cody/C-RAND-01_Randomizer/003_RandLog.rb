@@ -27,7 +27,17 @@ module KIF
       :given_items => ["Given items", ["Off", "On"]],
       :given_tms => ["Given TMs", ["Off", "On"]],
       :shop_items => ["Shop items", ["Off", "On"]],
-      :held_items => ["Trainer held items", ["Off", "On"]]
+      :held_items => ["Trainer held items", ["Off", "On"]],
+      :types => ["Types", ["Same", "Random", "Dual"]],
+      :type_orig => ["Original type", ["Allowed", "Never"]],
+      :moves_follow => ["Moves follow type", ["Off", "On"]],
+      :tms_follow => ["TMs follow type", ["Off", "On"]],
+      :abilities => ["Abilities", ["Same", "Random", "Type-flavoured", "Type-bound"]],
+      :no_selfharm => ["No self-harm", ["Off", "On"]],
+      :stats => ["Base stats", ["Same", "Shuffle", "Total", "Chaos"]],
+      :chaos_safety => ["Chaos safety", ["Off", "Total", "Each stat"]],
+      :evolutions => ["Evolutions", ["Same", "Random"]],
+      :evo_typed => ["Type-themed evolutions", ["Off", "On"]]
     }
 
     def self.log_path
@@ -75,11 +85,45 @@ module KIF
       count = (File.foreach(Settings::CUSTOM_SPRITES_FILE_PATH).count rescue 0)
       head << "Custom sprite list: #{count} entries (same seed = same game on the same KIF Beta version and sprite pack)"
       out << ["General", head]
-      out << ["Settings", SETTINGS.map { |key, _k, _m|
+      out << ["Settings", (SETTINGS + DATA_SETTINGS).map { |key, _k, _m|
         name, vals = LABELS[key]
         v = get(key)
         "#{name}: #{vals ? vals[v] : v}"
       }]
+      bl = [:pokemon, :moves, :abilities].map { |k| [k, bans(k)] }.reject { |_k, l| l.empty? }
+      unless bl.empty?
+        out << ["Exclusions", bl.map { |k, l| "#{k.to_s.capitalize}: #{l.map { |id| (k == :pokemon ? species_name(id) : (k == :moves ? (GameData::Move.get(id).name rescue id) : (GameData::Ability.get(id).name rescue id))) }.join(', ')}" }]
+      end
+      sp = data[:species]
+      if sp && !sp.empty?
+        lines = []
+        originals.keys.sort_by { |s| GameData::Species.get(s).id_number }.each do |s|
+          ch = sp[s]
+          next unless ch
+          g = GameData::Species.get(s)
+          bits = []
+          bits << [type_name(g.type1), (g.type2 != g.type1 ? type_name(g.type2) : nil)].compact.join("/") if ch.key?(:@type1)
+          if ch.key?(:@abilities)
+            ab = g.abilities.map { |a| GameData::Ability.get(a).name rescue a.to_s }.join(", ")
+            hid = (g.hidden_abilities || []).map { |a| GameData::Ability.get(a).name rescue a.to_s }.join(", ")
+            bits << (hid.empty? ? ab : "#{ab} (hidden: #{hid})")
+          end
+          if ch.key?(:@base_stats)
+            st = STAT_ORDER.map { |k| g.base_stats[k] }
+            bits << "#{st.join('/')} (#{st.sum})"
+          end
+          if ch.key?(:@evolutions)
+            ev = g.get_evolutions(true).map { |e| "#{species_name(e[0])} (#{e[1]}#{e[2] ? ' ' + e[2].to_s : ''})" }
+            bits << "evolves into #{ev.join(', ')}" unless ev.empty?
+          end
+          if ch.key?(:@moves)
+            diff = orig(s, :@moves).zip(g.moves).select { |a, b| a && b && a[1] != b[1] }
+            bits << "moves: " + diff.map { |a, b| "Lv#{a[0]} #{GameData::Move.get(a[1]).name}->#{GameData::Move.get(b[1]).name}" }.join(", ") unless diff.empty?
+          end
+          lines << sprintf("#%03d %s: %s", g.id_number, g.real_name, bits.join(" | ")) unless bits.empty?
+        end
+        out << ["Pokémon data", lines]
+      end
       hash = $PokemonGlobal.psuedoBSTHash
       if pokemon_parts_on? && hash && !identity_dex?(hash)
         whole = get(:wild_mode) == 1 || get(:statics) == 1 || get(:gifts) == 1 || get(:trades) == 1
@@ -177,24 +221,79 @@ module KIF
       end
     end
 
+    # Word-wraps one log line to the reader's width. " | " parts (Pokémon
+    # data) go on their own lines; wrapped parts are indented.
+    def self.wrap_line(bmp, line, width)
+      out = []
+      parts = line.split(" | ")
+      parts.each_with_index do |part, pi|
+        indent = (pi > 0) ? "    " : ""
+        cur = indent
+        part.split(" ").each do |word|
+          test = (cur.strip.empty?) ? cur + word : "#{cur} #{word}"
+          if bmp.text_size(test).width > width && !cur.strip.empty?
+            out << cur
+            cur = "    #{word}"
+          else
+            cur = test
+          end
+        end
+        out << cur
+      end
+      return out
+    end
+
+    # Reader for one log section: Up/Down scroll, Left/Right a page, B/A close
     def self.show_lines(title, lines)
       lines = [_INTL("(nothing)")] if lines.empty?
       vp = Viewport.new(0, 0, Graphics.width, Graphics.height)
       vp.z = 999999
       head = Window_UnformattedTextPokemon.newWithSize(title, 0, 0, Graphics.width, 64, vp)
-      win = Window_CommandPokemon.newWithSize(lines, 0, 64, Graphics.width, Graphics.height - 64, vp)
+      win = SpriteWindow_Base.new(0, 64, Graphics.width, Graphics.height - 64)
+      win.viewport = vp
+      win.setSkin(MessageConfig.pbGetSystemFrame) rescue nil
+      # Solid windows, so the menu behind doesn't show through the text
+      head.back_opacity = 255
+      win.back_opacity = 255
+      cw = win.width - win.borderX
+      ch = win.height - win.borderY
+      win.contents = Bitmap.new(cw, ch)
       pbSetSmallFont(win.contents) rescue nil
-      win.index = 0
+      base, shadow = (getDefaultTextColors(win.windowskin) rescue [Color.new(80, 80, 88), Color.new(160, 160, 168)])
+      lh = 26
+      rows = []
+      lines.each { |l| rows.concat(wrap_line(win.contents, l, cw - 12)) }
+      per = ch / lh
+      maxtop = [rows.length - per, 0].max
+      top = 0
+      draw = proc {
+        win.contents.clear
+        rows[top, per].each_with_index do |r, k|
+          pbDrawShadowText(win.contents, 4, k * lh, cw - 8, lh, r, base, shadow)
+        end
+        pos = rows.length > per ? "#{top + 1}-#{[top + per, rows.length].min}/#{rows.length}" : ""
+        head.text = pos.empty? ? title : "#{title}  (#{pos})"
+      }
+      draw.call
       loop do
         Graphics.update
         Input.update
-        win.update
-        break if Input.trigger?(Input::BACK) || Input.trigger?(Input::USE)
+        old = top
+        if Input.repeat?(Input::DOWN) then top += 1
+        elsif Input.repeat?(Input::UP) then top -= 1
+        elsif Input.repeat?(Input::RIGHT) || Input.repeat?(Input::JUMPDOWN) then top += per - 1
+        elsif Input.repeat?(Input::LEFT) || Input.repeat?(Input::JUMPUP) then top -= per - 1
+        elsif Input.trigger?(Input::BACK) || Input.trigger?(Input::USE) then break
+        end
+        top = top.clamp(0, maxtop)
+        draw.call if top != old
       end
       pbPlayCancelSE
+      win.contents.dispose
       win.dispose
       head.dispose
       vp.dispose
+      eat_input
     end
   end
 end

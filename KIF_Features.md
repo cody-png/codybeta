@@ -244,12 +244,19 @@ Only on saves started as randomized saves: **Cody Settings → Randomizer**. The
 
 - **Seed** – an 8-character code (like `K7Q2-9XMA`). The same seed with the same settings gives the same randomized game (on the same KIF Beta version and sprite pack). New random seed, type one in, or copy it.
 - **Presets & sharing** – *Copy settings code* puts the seed and every setting on your clipboard as one line (paste it into Discord); *Paste settings code* loads someone else's. *Save as preset* / *Load preset* use files in the `Randomizer/Presets` folder.
-- **Spoiler log** – Off / On *(On)*. Writes `Randomizer Log - <seed>.txt` in the `Randomizer/Logs` folder every time something is shuffled: every Pokémon swap, route, trainer team, gym type, item and TM. *View spoiler log* shows it in-game (asks first).
+- **Spoiler log** – Off / On *(On)*. Writes `Randomizer Log - <seed>.txt` in the `Randomizer/Logs` folder every time something is shuffled: every Pokémon swap, route, trainer team, gym type, item and TM. *View spoiler log* shows it in-game (asks first); Up/Down scroll, Left/Right turn a page.
 - **Pokémon** – each part has its own switch:
   - *Wild encounters*: Off / Swap (each species becomes one other species everywhere) / Route (every route rolls its own) / Dynamic (every encounter is any Pokémon, rolled on the spot).
   - *Starters* (Off / 1st stage / Any), *Static encounters*, *Gift Pokémon*, *Trades*.
   - *Strength range* 0–999 (how close in base stat total a replacement must be; 999 = anything), *Legendaries*, *Custom sprites only*, *Fuse everything*.
 - **Trainers**, **Gyms**, **Items** – PIF's options (strength range, custom sprites only, gym types, rerandomize each battle, found/given/shop items and TMs, trainer held items).
+- **Pokémon data** – changes the Pokémon themselves (fusions are built from their two parts, so they follow):
+  - *Types*: Same / Random (each evolution family gets new types) / Dual (everyone gets two types); *Original type*: Allowed / Never.
+  - *Moves follow type*: moves of the old type become moves of the new type at the same level with similar power (other moves stay). *TMs follow type* does the same for TM and tutor compatibility.
+  - *Abilities*: Same / Random / Flavour (abilities themed on the Pokémon's types) / Bound (only abilities Pokémon of its types have in the base game). *No self-harm* never gives Truant, Slow Start, Defeatist, Klutz, Stall, or weather that hurts the Pokémon's own type.
+  - *Base stats*: Same / Shuffle (same numbers, new order) / Total (random spread, same total) / Chaos (every stat 1–255). *Chaos safety*: Off / Total (evolving never lowers the total) / Each stat (evolving never lowers any stat).
+- **Evolutions** – Same / Random: a Pokémon that evolves turns into a higher stage or a Pokémon that doesn't evolve, at the same level or with the same item. *Type-themed*: the evolution shares a type.
+- **Exclusions** – lists of Pokémon, moves and abilities the randomizer never picks (A: ban/unban, L/R: page, Z: clear all). Bans only affect what the randomizer picks; parts that aren't randomized keep their normal Pokémon.
 - **Randomize now** – applies the settings mid-game (asks first; your party and boxes stay).
 
 ### Interface

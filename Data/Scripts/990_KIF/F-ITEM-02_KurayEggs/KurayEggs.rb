@@ -27,6 +27,9 @@
 #   * Pools cover 6.8.2's base species (1-NB_POKEMON, now 576).
 #   * Port fix: with the PC boxes full the egg is not used up (KIF consumed
 #     it and gave nothing).
+#   * Port addition (Cody, 2026-10-05): "Hoenn K-Egg" (item 2033), only the
+#     species 6.8.2 added after KIF (dex 502-576), as a test egg. Sold in the
+#     Kuray Shop at P20,000; uses the Random K-Egg icon (no art of its own).
 #===============================================================================
 KIF::Options.define(:kurayeggs_fusionpool, 0, :save)
 KIF::Options.define(:kurayeggs_rarity, 0, :save)
@@ -81,6 +84,7 @@ module KIF
     BASE_PRICE = 5000
     TIER_PRICES = [500, 800, 1200, 2000, 3500, 5000, 7000, 10000, 12000, 15000]
     ICON_FOLDER = "Graphics/Pictures/KIF/Items/"
+    HOENN_FIRST = 502          # first species after KIF's 501
 
     # [symbol, effect, name, price, description] in KIF's id order
     def self.definitions
@@ -98,6 +102,8 @@ module KIF
                  "Egg with a Pokémon who's BST is between #{MINBSTSHOW[t]} and #{MAXBSTSHOW[t]}. 10x shiny odds.")
       end
       add.call("Legendary", BASE_PRICE * 5, "Egg with a LEGENDARY Pokémon. 10x shiny odds.")
+      # Port addition (Cody): 6.8.2's new species only
+      add.call("Hoenn", BASE_PRICE * 4, "Egg with a Pokémon new to PIF 6.8.2 (Dex 502-576). 10x shiny odds.")
       @defs = defs
       return defs
     end
@@ -134,6 +140,7 @@ module KIF
         ok = case key
              when "Random"    then true
              when "Legendary" then LEGENDARIES_LIST.include?(sp.id)
+             when "Hoenn"     then i >= HOENN_FIRST
              when /^\d$/
                t = key.to_i
                bst = calcBaseStatsSum(sp.id)
@@ -168,6 +175,7 @@ module KIF
       when 0, 1, 20, 21 then return pick(pool("Random"))
       when 2..19        then return pick(pool(TYPES[effect - 2]))
       when 32           then return pick(pool("Legendary"))
+      when 33           then return pick(pool("Hoenn"))
       when 22..31
         tier = effect - 22
         roll = rand(1..100)
@@ -247,7 +255,7 @@ module KIF
     end
 
     def self.shop_stock
-      ids = [0, 1, 32, 21, 20] + (2..19).to_a + [22]
+      ids = [0, 1, 32, 33, 21, 20] + (2..19).to_a + [22]
       (1..8).each { |n| ids << 22 + n if badge?(n) }
       ids << 31 if elite4?
       return ids.map { |e| symbol(e) }
@@ -311,6 +319,8 @@ module GameData
         data = (try_get(item) rescue nil)
         if data && KIF::KurayEggs.egg?(data.id)
           path = KIF::KurayEggs::ICON_FOLDER + data.id.to_s
+          return path if pbResolveBitmap(path)
+          path = ICON_FOLDER + "KURAYEGG_RANDOM"   # Hoenn K-Egg has no icon of its own
           return path if pbResolveBitmap(path)
         end
         return kif_eggs_icon_filename(item)

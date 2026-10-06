@@ -238,6 +238,10 @@ All options in this menu are per-save.
 
 - **Legendary Breeding** – Off / On *(Off, per save)*. Legendary Pokémon (and fusions with a legendary head or body) can breed with any Pokémon that can breed – no egg group or gender needed. The Egg is one of four results, 25% each: either parent, or either fusion of the two (Mewtwo + Vulpix → Mewtwo, Vulpix, Mewpix or Vultwo). With Ditto, the Egg is the other parent. Baby Pokémon still can't breed.
 
+### Interface
+
+- **Fusion Screen** – Off / On *(On, all saves)*. The DNA Splicers' preview shows, for both fusion orders, the fusion's name, types and the stats it will really have once fused (its fused level, the body's EVs and nature, the averaged IVs – or the higher ones with Super Splicers – and every setting that changes stats or types, such as No-EVs / Max IVs modes, custom fusion base stats, the self-fusion boost and Dominant Fusion Types). The higher stat of each left/right pair is green; the bars and "Base total" show the base stats. Press **A** on a fusion for **Change Body / Change Head / Confirm**. Change Body or Change Head lists that part's current form and every later evolution (branches included), tagged Stage 1, Stage 2 or Final; the preview follows the cursor, and the other side mirrors the change so both orders stay comparable. Confirm always fuses the Pokémon you have now (it reads "Fuse <name>" while you're previewing an evolution).
+
 ---
 
 ## Elsewhere in the game

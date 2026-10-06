@@ -1,0 +1,67 @@
+
+=================
+
+[2026-10-05 18:47:05 -0700]
+While loading script: Data/Scripts/999_Main/999_Main.rb
+Exception: ArgumentError
+Message: wrong number of arguments (given 2, expected 1)
+
+Backtrace:
+TitleAndLoad.rb:70:in `pbChoose'
+MultiSaves.rb:626:in `block (2 levels) in pbStartLoadScreen'
+MultiSaves.rb:624:in `loop'
+MultiSaves.rb:624:in `block in pbStartLoadScreen'
+MultiSaves.rb:559:in `loop'
+MultiSaves.rb:559:in `pbStartLoadScreen'
+IntroScreen.rb:81:in `closeTitle'
+IntroScreen.rb:66:in `update'
+IntroScreen.rb:47:in `main'
+TitleAndLoad.rb:45:in `main'
+999_Main.rb:187:in `mainFunctionDebug'
+999_Main.rb:55:in `mainFunction'
+999_Main.rb:197:in `block (2 levels) in load_scripts_from_folder'
+999_Main.rb:196:in `loop'
+999_Main.rb:196:in `block in load_scripts_from_folder'
+000_CrashLog.rb:50:in `eval'
+000_CrashLog.rb:50:in `block in load_scripts_from_folder'
+000_CrashLog.rb:47:in `each'
+000_CrashLog.rb:47:in `load_scripts_from_folder'
+Section001:43:in `block in load_scripts_from_folder'
+Section001:42:in `each'
+Section001:42:in `load_scripts_from_folder'
+Section001:46:in `<main>'
+-e:in `eval'
+
+=================
+
+[2026-10-05 20:16:38 -0700]
+While loading script: Data/Scripts/999_Main/999_Main.rb
+Exception: NameError
+Message: uninitialized constant #<Class:GameData::Item>::ICON_FOLDER
+
+Backtrace:
+KurayEggs.rb:323:in `icon_filename'
+007_Item_Sprites.rb:80:in `item='
+020_UI_PokeMart.rb:585:in `block (2 levels) in pbChooseBuyItem'
+020_UI_PokeMart.rb:579:in `loop'
+020_UI_PokeMart.rb:579:in `block in pbChooseBuyItem'
+002_MessageConfig.rb:750:in `pbActivateWindow'
+020_UI_PokeMart.rb:577:in `pbChooseBuyItem'
+020_UI_PokeMart.rb:644:in `block in pbBuyScreen'
+020_UI_PokeMart.rb:642:in `loop'
+020_UI_PokeMart.rb:642:in `pbBuyScreen'
+KurayShop.rb:154:in `block in open'
+002_MessageConfig.rb:616:in `pbFadeOutIn'
+KurayShop.rb:151:in `open'
+KurayShop.rb:208:in `block (2 levels) in load_scripts_from_folder'
+003_KIF_PauseMenu.rb:85:in `block in pbShowCommands'
+003_KIF_PauseMenu.rb:80:in `loop'
+003_KIF_PauseMenu.rb:80:in `pbShowCommands'
+001_UI_PauseMenu.rb:163:in `block in pbStartPokemonMenu'
+001_UI_PauseMenu.rb:162:in `loop'
+001_UI_PauseMenu.rb:162:in `pbStartPokemonMenu'
+002_Scene_Map.rb:150:in `call_menu'
+002_Scene_Map.rb:265:in `update'
+UnrealTime.rb:297:in `update'
+002_KIF_Options.rb:314:in `update'
+LevelCaps.rb:207:in `update'

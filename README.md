@@ -24,7 +24,7 @@ KIF 0.20.7 was built on PIF 6.4.5. **KIF Beta** brings KIF's features to **PIF 6
 
 # Installation
 
-1. Click **Code → Download ZIP** on this page, or use this link: `https://github.com/YOUR-NAME/YOUR-REPO/archive/refs/heads/kif-beta.zip`
+1. Click **Code → Download ZIP** on this page, or use this link: https://github.com/cody-png/codybeta/archive/refs/heads/kif-beta.zip
 2. Unzip it anywhere.
 3. Run **Game.exe**.
 
@@ -47,7 +47,7 @@ Highlights:
 
 - **Pokémon Infinite Fusion:** Chardub/Frogman and the PIF team.
 - **Kuray Infinite Fusion:** Kurayami, with Reïzod, DemICE, Sylvi, Trapstarr, HungryPickle, Luminatron, Bluewuppo, JustAnotherU5er, Mirasein, FairyGodmother, Lolpy1, Rekt1029 and the whole KIF community.
-- **KIF Beta (PIF 6.8.2):** YOUR-NAME.
+- **KIF Beta (PIF 6.8.2):** cody-png.
 - Made with Pokémon Essentials.
 
 KIF is a fan project and is not affiliated with or endorsed by the PIF team.

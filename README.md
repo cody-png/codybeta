@@ -24,7 +24,7 @@ KIF 0.20.7 was built on PIF 6.4.5. **KIF Beta** brings KIF's features to **PIF 6
 
 # Installation
 
-1. Click **Code → Download ZIP** on this page, or use this link: `https://github.com/cody-png/kurayshinyrevamp/archive/refs/heads/kif-beta.zip`
+1. Click **Code → Download ZIP** on this page, or use this link: `https://github.com/cody-png/codybeta/archive/refs/heads/kif-beta.zip`
 2. Unzip it anywhere.
 3. Run **Game.exe**.
 

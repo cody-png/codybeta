@@ -6,15 +6,17 @@
 # * Intro skip: if a file named NoIntro.krs is in the save folder
 #   (%APPDATA%/<game>/, next to the saves), the game goes straight to the
 #   load screen – no intro movie, no title screen.
-# * Load screen: "Join Discord Server" and "Open Documentation" before
-#   "Quit Game", opening KIF's links (KIF::Links below) in the browser.
+# * Load screen: KIF's Discord and documentation links ("KIF Discord",
+#   "KIF Documentation"; KIF called them "Join Discord Server" / "Open
+#   Documentation" – renamed because 6.8.2 already lists PIF's "Discord").
 #
 # 6.8.2 adaptations:
 #   * KIF opened links with `open URL` (a macOS command, so it did nothing on
 #     Windows); 6.8.2's openUrlInBrowser works on all systems.
-#   * The two entries are added to 6.8.2's load menu without copying it:
-#     they are inserted before "Quit Game" and the menu's own choices are
-#     handed back unchanged.
+#   * The links go into 6.8.2's own link list (Settings::MAIN_MENU_LINKS),
+#     which its load menu shows after Options and opens itself. (First
+#     version wrapped the old 013_UI_Load menu, which 6.8.2's MultiSaves
+#     load menu replaces – crash fixed 2026-10-05.)
 #   * The random custom fusions on the title screen are 6.8.2's own now
 #     (getRandomCustomFusionForIntro), nothing to port. KIF's "Optidons" typo
 #     is not ported.
@@ -26,8 +28,7 @@ module KIF
 
     # [label, url]
     def self.load_menu
-      return [[_INTL("Join Discord Server"), DISCORD],
-              [_INTL("Open Documentation"), DOCUMENTATION]]
+      return [["KIF Discord", DISCORD], ["KIF Documentation", DOCUMENTATION]]
     end
 
     def self.no_intro?
@@ -51,31 +52,8 @@ class Scene_Intro
   end
 end
 
-class PokemonLoad_Scene
-  alias kif_ti_pbStartScene pbStartScene unless method_defined?(:kif_ti_pbStartScene)
-  alias kif_ti_pbChoose pbChoose unless method_defined?(:kif_ti_pbChoose)
-
-  def pbStartScene(commands, *args)
-    @kif_links = nil
-    if commands.is_a?(Array) && commands.length > 0
-      at = commands.length - 1                      # before "Quit Game"
-      links = KIF::Links.load_menu
-      commands.insert(at, *links.map { |l| l[0] })
-      @kif_links = [at, links]
-    end
-    return kif_ti_pbStartScene(commands, *args)
-  end
-
-  # The base menu keeps its own numbering: our entries are handled here
-  def pbChoose(commands)
-    loop do
-      ret = kif_ti_pbChoose(commands)
-      return ret unless @kif_links && ret.is_a?(Integer)
-      at, links = @kif_links
-      return ret if ret < at
-      return ret - links.length if ret >= at + links.length
-      pbPlayDecisionSE
-      openUrlInBrowser(links[ret - at][1])
-    end
-  end
-end
+# 6.8.2's load menu (MultiSaves.rb:532) already lists Settings::MAIN_MENU_LINKS
+# (PIF's Discord / FAQ / Wiki) and opens them; KIF's two links are added there.
+KIF::Links.load_menu.each do |label, url|
+  Settings::MAIN_MENU_LINKS[label] = url unless Settings::MAIN_MENU_LINKS.value?(url)
+end if defined?(Settings::MAIN_MENU_LINKS) && Settings::MAIN_MENU_LINKS.is_a?(Hash) && !Settings::MAIN_MENU_LINKS.frozen?

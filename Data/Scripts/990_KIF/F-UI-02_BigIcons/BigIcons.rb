@@ -23,6 +23,11 @@
 #     instead (Cody: ICS is covered by PIF).
 #   * KIF hid the PC party icons whenever the party tab was closed (big icons
 #     stick out above it); here they hide whenever the tab is off screen.
+#
+# Icon offsets (KIF 003_Pokemon_Sprites.rb:137-138, 155-180): a big icon moves
+# 16 px left (8 for eggs), not up. No offset on the Summary and naming
+# screens (KIF 006_UI_Summary.rb:137-138, :200-201; 024_UI_TextEntry.rb).
+# PC box icons move 16 px left and up (8 for eggs) – KIF 017:237-242.
 #===============================================================================
 KIF::Options.define(:kuraybigicons, 0, :global)
 
@@ -69,12 +74,10 @@ end
 # Icons (party, summary, naming...): Limited and All
 #-------------------------------------------------------------------------------
 class PokemonIconSprite
-  attr_accessor :kif_big_offset   # false on naming screens (KIF)
+  attr_accessor :kif_big_offset   # false on Summary/naming screens (KIF)
 
   alias kif_big_pokemon_set pokemon= unless method_defined?(:kif_big_pokemon_set)
   alias kif_big_x_set x= unless method_defined?(:kif_big_x_set)
-  alias kif_big_y_set y= unless method_defined?(:kif_big_y_set)
-
   def kif_big?
     return @kif_big == true
   end
@@ -108,27 +111,30 @@ class PokemonIconSprite
     super(@logical_x + (@adjusted_x || 0) + kif_big_shift) if kif_big_shift != 0
   end
 
-  def y=(value)
-    kif_big_y_set(value)
-    super(@logical_y + (@adjusted_y || 0) + kif_big_shift) if kif_big_shift != 0
-  end
 end
 
-# Naming screens: no offset (KIF 024_UI_TextEntry.rb:143-145)
-[:PokemonEntryScene, :PokemonEntryScene2].each do |cls|
+# Summary and naming screens: no offset (KIF 006_UI_Summary.rb:137-138,
+# :200-201; 024_UI_TextEntry.rb:143-145, :451-453)
+{ :PokemonEntryScene    => [["subject"], [:pbStartScene]],
+  :PokemonEntryScene2   => [["subject"], [:pbStartScene]],
+  :PokemonSummary_Scene => [["pokeicon"], [:pbStartScene, :pbStartForgetScene]]
+}.each do |cls, (keys, methods)|
   next unless Object.const_defined?(cls)
   Object.const_get(cls).class_eval do
-    alias_method :kif_big_pbStartScene, :pbStartScene unless method_defined?(:kif_big_pbStartScene)
-
-    define_method(:pbStartScene) do |*args|
-      ret = kif_big_pbStartScene(*args)
-      s = @sprites && @sprites["subject"]
-      if s.is_a?(PokemonIconSprite)
-        s.kif_big_offset = false
-        s.x = s.x
-        s.y = s.y
+    methods.each do |m|
+      next unless method_defined?(m)
+      orig = "kif_big_#{m}".to_sym
+      alias_method orig, m unless method_defined?(orig)
+      define_method(m) do |*args, &block|
+        ret = send(orig, *args, &block)
+        keys.each do |k|
+          s = @sprites && @sprites[k]
+          next unless s.is_a?(PokemonIconSprite)
+          s.kif_big_offset = false
+          s.x = s.x
+        end
+        ret
       end
-      ret
     end
   end
 end

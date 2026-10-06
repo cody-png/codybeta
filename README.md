@@ -1,3 +1,27 @@
+# Kuray's Infinite Fusion (KIF) – Beta
+
+KIF is a continuation of **Kuray's Infinite Fusion 0.20.7**, rebuilt on top of **Pokémon Infinite Fusion 6.8.2**. It brings back KIF's features: infinite shiny colours, Kuray QoL, the Kuray Shop and K-Eggs, Self-Battles, Import/Export, DemICE's AI and Endgame Challenge, the Mods folder and much more. Everything is optional.
+
+**Every feature and option is explained in [KIF_Features.md](KIF_Features.md)** (it also ships with the game, next to Game.exe).
+
+- **Play:** download the latest release, unzip it anywhere, and run **Game.exe**. KIF is standalone; do not install it over a PIF copy.
+- **Old KIF saves** load directly; their settings, Pokémon and items carry over.
+- **Bugs:** if the game crashes, send the `KIF_errorlog.txt` file from the game folder. Please report KIF problems to the KIF community, **not** to the PIF developers.
+
+KIF Discord: https://discord.gg/UFxQkUZeyE
+
+### Credits
+
+- **Pokémon Infinite Fusion** by Chardub/Frogman and the PIF team – the game KIF is built on.
+- **Kuray's Infinite Fusion** by Kurayami and contributors: Reïzod, Sylvi, DemICE, Trapstarr, Luminatron, Bluewuppo, Lolpy1, FairyGodmother, Mirasein, and everyone in the KIF community.
+- Made with Pokémon Essentials.
+
+KIF is a fan project and is not affiliated with or endorsed by the PIF team.
+
+-----------------------------------------------
+
+*The original Pokémon Infinite Fusion readme follows.*
+
 ## Thank you for downloading Pokémon Infinite Fusion!
 
 Playing the game

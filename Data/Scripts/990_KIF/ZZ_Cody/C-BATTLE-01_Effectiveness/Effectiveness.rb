@@ -2,7 +2,8 @@
 # C-BATTLE-01 – Move effectiveness indicator (Cody)
 # Cody Settings → Battles → "Move Effectiveness" (all saves, default On).
 #
-# Fight menu, for damaging moves only:
+# Fight menu, for damaging moves only (foe names too long for the box
+# scroll like a car radio display, one character every 0.3 s - Cody):
 #   * a marker on each move button: green ▲ super effective, orange ▼ resisted,
 #     grey ✕ no effect, nothing when neutral (pixel art at the game's 2x scale);
 #   * the highlighted move's info box adds "Super eff." / "Resisted" /
@@ -74,6 +75,25 @@ module KIF
       return "x#{m.round}"
     end
 
+    LINE_WIDTH   = 104   # px available for a foe line in the info box
+    SCROLL_HOLD  = 1.0   # s shown at the start and at the end of a scroll
+    SCROLL_STEP  = 0.3   # s per character step
+
+    def self.now
+      return Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+
+    # First character shown for a name that is `over` characters too long,
+    # `t` seconds after the menu opened: hold, step one character at a time,
+    # hold at the end, start again.
+    def self.scroll_offset(over, t)
+      return 0 if over <= 0
+      cycle = SCROLL_HOLD * 2 + over * SCROLL_STEP
+      t = t % cycle
+      return 0 if t < SCROLL_HOLD
+      return [((t - SCROLL_HOLD) / SCROLL_STEP).floor + 1, over].min
+    end
+
     def self.draw_marker(bitmap, x, y, res)
       st = STYLE[res]
       return unless st
@@ -113,6 +133,7 @@ class FightMenuDisplay
   def refreshMoveData(move)
     @typeIcon.y = self.y + 20 if USE_GRAPHICS && @typeIcon
     cody_eff_refreshMoveData(move)
+    @cody_lines = nil
     return unless USE_GRAPHICS && move && KIF::MoveEffect.on? && @battler
     foes = KIF::MoveEffect.foes(@battler)
     return if foes.empty? || move.statusMove?
@@ -125,16 +146,18 @@ class FightMenuDisplay
       pbDrawTextPositions(bmp, [[_INTL(st[2]), 448, 66, 2, st[3], st[4]]])
       pbSetNarrowFont(bmp)
     else
-      # Several foes: PP and type icon move up, one line per foe
-      bmp.clear
-      @typeIcon.y = self.y + 4
-      lines = []
+      # Several foes: PP and type icon move up, one line per foe. Names too
+      # long for the box scroll like a car radio display (Cody).
+      @typeIcon.y = self.y + 6
+      @cody_pp = nil
       if move.total_pp > 0
         base, shadow = FightMenuDisplay::TEXT_BASE_COLOR, FightMenuDisplay::TEXT_SHADOW_COLOR
         base, shadow = shadow, base if defined?(isDarkMode) && isDarkMode
-        lines << [_INTL("PP: {1}/{2}", move.pp, move.total_pp), 448, 30, 2, base, shadow]
+        @cody_pp = [_INTL("PP: {1}/{2}", move.pp, move.total_pp), 448, 26, 2, base, shadow]
       end
-      y = 48
+      pbSetSmallFont(bmp)
+      @cody_lines = []
+      y = (foes.length > 2) ? 42 : 44
       foes.first(3).each do |f|
         val = KIF::MoveEffect.value(move, @battler, f)
         res = KIF::MoveEffect.result(val) || :normal
@@ -143,16 +166,46 @@ class FightMenuDisplay
         shadow = st ? st[4] : FightMenuDisplay::TEXT_SHADOW_COLOR
         mult = KIF::MoveEffect.multiplier_text(val || ::Effectiveness::NORMAL_EFFECTIVE)
         name = f.name.to_s
-        pbSetSmallFont(bmp)
-        name = name[0...-1] while name.length > 1 && bmp.text_size("#{name} #{mult}").width > 104
-        lines << ["#{name} #{mult}", 448, y, 2, base, shadow]
-        y += (foes.length > 2) ? 14 : 18
+        fit = name.length
+        fit -= 1 while fit > 1 && bmp.text_size("#{name[0, fit]} #{mult}").width > KIF::MoveEffect::LINE_WIDTH
+        @cody_lines << { :name => name, :fit => fit, :mult => mult, :y => y, :base => base, :shadow => shadow }
+        y += (foes.length > 2) ? 14 : 16
       end
-      pbSetSmallFont(bmp)
-      pbDrawTextPositions(bmp, lines)
       pbSetNarrowFont(bmp)
+      @cody_marquee_t0 = KIF::MoveEffect.now
+      @cody_marquee_key = nil
+      cody_eff_draw_lines(true)
     end
   rescue => e
     KIF.log("Effectiveness text failed: #{e.message}")
+  end
+
+  def cody_eff_draw_lines(force = false)
+    return unless @cody_lines && @infoOverlay && !@infoOverlay.disposed?
+    t = KIF::MoveEffect.now - (@cody_marquee_t0 || 0)
+    offs = @cody_lines.map { |l| KIF::MoveEffect.scroll_offset(l[:name].length - l[:fit], t) }
+    return if !force && offs == @cody_marquee_key
+    @cody_marquee_key = offs
+    bmp = @infoOverlay.bitmap
+    bmp.clear
+    lines = []
+    lines << @cody_pp if @cody_pp
+    @cody_lines.each_with_index do |l, i|
+      lines << ["#{l[:name][offs[i], l[:fit]]} #{l[:mult]}", 448, l[:y], 2, l[:base], l[:shadow]]
+    end
+    pbSetSmallFont(bmp)
+    pbDrawTextPositions(bmp, lines)
+    pbSetNarrowFont(bmp)
+  end
+
+  alias cody_eff_update update unless method_defined?(:cody_eff_update)
+
+  def update
+    cody_eff_update
+    return unless @cody_lines && @cody_lines.any? { |l| l[:fit] < l[:name].length }
+    cody_eff_draw_lines
+  rescue => e
+    KIF.log("Effectiveness scroll failed: #{e.message}")
+    @cody_lines = nil
   end
 end

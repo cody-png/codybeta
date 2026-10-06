@@ -320,7 +320,7 @@ module GameData
         if data && KIF::KurayEggs.egg?(data.id)
           path = KIF::KurayEggs::ICON_FOLDER + data.id.to_s
           return path if pbResolveBitmap(path)
-          path = ICON_FOLDER + "KURAYEGG_RANDOM"   # Hoenn K-Egg has no icon of its own
+          path = KIF::KurayEggs::ICON_FOLDER + "KURAYEGG_RANDOM"   # Hoenn K-Egg has no icon of its own
           return path if pbResolveBitmap(path)
         end
         return kif_eggs_icon_filename(item)

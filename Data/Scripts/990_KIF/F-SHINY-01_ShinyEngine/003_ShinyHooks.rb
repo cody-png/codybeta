@@ -26,8 +26,7 @@ module GameData
           KIF.ensure_fusion_shiny_parts(pokemon) if defined?(KIF.ensure_fusion_shiny_parts)
           sprite = KIF::Shiny.without_shiny(pokemon) { kif_front_sprite_bitmap_pokemon(pokemon) }
           return sprite unless sprite
-          KIF::Shiny.privatize(sprite)
-          return KIF::Shiny.colorize!(sprite, pokemon, :sprite)
+          return KIF::Shiny.colorize!(sprite, pokemon, :sprite)   # copies only on a cache miss
         rescue => e
           KIF.log("KIF shiny engine failed (#{e.message}); using PIF shiny")
           return kif_front_sprite_bitmap_pokemon(pokemon)
@@ -53,8 +52,7 @@ module KIF
         anim = without_shiny(pkmn) { yield }
       end
       return anim unless anim
-      privatize(anim)
-      return colorize!(anim, pkmn, :icon, true)
+      return colorize!(anim, pkmn, :icon, true)   # copies only on a cache miss
     end
   end
 end
@@ -65,6 +63,7 @@ class PokemonIconSprite
   def pokemon=(value)
     kif_shiny_pokemon_set(value)
     return unless value.is_a?(Pokemon) && KIF::Shiny.icons_on? && KIF::Shiny.kif_render?(value)
+    return if defined?(KIF::BigIcons) && KIF::BigIcons.mode >= 1   # big icon replaces it
     begin
       anim = KIF::Shiny.icon_for(value) do
         if useRegularIcon(value.species) || value.egg?
@@ -91,6 +90,7 @@ class PokemonBoxIcon
   def refresh(*args)
     kif_shiny_refresh(*args)
     return unless @pokemon && KIF::Shiny.icons_on? && KIF::Shiny.kif_render?(@pokemon)
+    return if defined?(KIF::BigIcons) && KIF::BigIcons.mode == 2   # big icon replaces it
     begin
       pkmn = @pokemon
       anim = KIF::Shiny.icon_for(pkmn) do

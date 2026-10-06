@@ -109,7 +109,20 @@ module KIF
     end
 
     def self.symbol(effect); return definitions[effect][0]; end
-    def self.egg?(item); return definitions.any? { |d| d[0] == item }; end
+    def self.egg?(item)
+      @egg_ids ||= definitions.each_with_object({}) { |d, h| h[d[0]] = true }
+      return @egg_ids[item] == true
+    end
+
+    # Resolved icon path per egg id (icon_filename runs on every bag cursor move)
+    def self.icon_path(id)
+      @icon_paths ||= {}
+      return @icon_paths[id] if @icon_paths.has_key?(id)
+      path = ICON_FOLDER + id.to_s
+      path = ICON_FOLDER + "KURAYEGG_RANDOM" unless pbResolveBitmap(path)   # Hoenn K-Egg has no icon of its own
+      path = nil unless pbResolveBitmap(path)
+      return @icon_paths[id] = path
+    end
 
     # KIF kurayeggs_iteminject
     def self.register_items
@@ -318,10 +331,8 @@ module GameData
       def icon_filename(item)
         data = (try_get(item) rescue nil)
         if data && KIF::KurayEggs.egg?(data.id)
-          path = KIF::KurayEggs::ICON_FOLDER + data.id.to_s
-          return path if pbResolveBitmap(path)
-          path = KIF::KurayEggs::ICON_FOLDER + "KURAYEGG_RANDOM"   # Hoenn K-Egg has no icon of its own
-          return path if pbResolveBitmap(path)
+          path = KIF::KurayEggs.icon_path(data.id)
+          return path if path
         end
         return kif_eggs_icon_filename(item)
       end

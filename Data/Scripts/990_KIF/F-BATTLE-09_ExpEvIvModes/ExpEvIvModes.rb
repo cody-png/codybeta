@@ -68,13 +68,15 @@ class Pokemon
     return ret
   end
 
+  # Zero EVs for every stat (No-EVs mode); a Hash default so any stat id reads 0
+  module ::KIF; module ExpEvIv; ZERO_EV = Hash.new(0).freeze; end; end
+
   alias kif_calc_stats calc_stats unless method_defined?(:kif_calc_stats)
 
   def calc_stats(*args)
     return kif_calc_stats(*args) unless $PokemonSystem && $PokemonSystem.noevsmode > 0
     real_ev = @ev
-    @ev = {}
-    real_ev.each_key { |k| @ev[k] = 0 }
+    @ev = KIF::ExpEvIv::ZERO_EV   # read-only during calc_stats (no per-call hash)
     begin
       return kif_calc_stats(*args)
     ensure

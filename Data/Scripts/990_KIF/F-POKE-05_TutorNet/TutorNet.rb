@@ -71,6 +71,21 @@ module KIF
       return ret
     end
 
+    # The item is known: register its move without scanning the Bag (port –
+    # KIF rescanned the whole Bag twice per purchase / received item). A
+    # non-machine item still gets the full watch (randomized TM balls).
+    def self.watch_item(item)
+      data = GameData::Item.try_get(item) rescue nil
+      return watch_bag { yield } unless data && data.is_machine?
+      ret = yield
+      begin
+        pbTutorNetAdd(data.move) if data.move && ret   # false = the Bag refused it
+      rescue => e
+        KIF.log("Tutor.net registration failed: #{e.message}")
+      end
+      return ret
+    end
+
     def self.open
       tmtutor_convert
       scene = PokemonTutorNet_Scene.new
@@ -237,9 +252,11 @@ class TutorNetPartyPanel < SpriteWrapper
     @pkmnsprite = PokemonIconSprite.new(pokemon, viewport)
     @pkmnsprite.setOffset(PictureOrigin::Center)
     @pkmnsprite.z      = self.z + 1
-    @overlaysprite = BitmapSprite.new(Graphics.width, Graphics.height, viewport)
+    # Port: 48x48 / 20x28 surfaces (KIF used two full-screen bitmaps per
+    # panel, 12 per scene start, which is re-run after every purchase).
+    @overlaysprite = BitmapSprite.new(48, 48, viewport)
     @overlaysprite.z = self.z + 4
-    @cursorsprite = BitmapSprite.new(Graphics.width, Graphics.height, viewport)
+    @cursorsprite = BitmapSprite.new(20, 28, viewport)
     @cursorsprite.z = self.z + 6
     @compat = AnimatedBitmap.new(_INTL("Graphics/Pictures/KIF/Tutor.net/compat"))
     @monsel = AnimatedSprite.create("Graphics/Pictures/KIF/Tutor.net/moncursor", 4, 3)
@@ -608,6 +625,12 @@ class PokemonTutorNet_Scene
   def update_indicators(move_list=@move_list)
     list=@sprites["commands"]
     moveindex = list.move(move_list)
+    # Port: runs every frame of pbScene; the party checks (compatible_with_move?
+    # scans move lists) only re-run when the highlighted move or party changed.
+    key = [moveindex.is_a?(Array) ? moveindex[0][0] : nil,
+           $Trainer.party.map { |p| [p.species, p.egg?, p.moves.map(&:id)] }]
+    return if key == @kif_last_indicator_key
+    @kif_last_indicator_key = key
     if moveindex.is_a?(Array)
       movebatch=moveindex[0]
       move=movebatch[0]
@@ -1067,8 +1090,8 @@ def pbItemBall(*args)
   return KIF::TutorNet.watch_bag { kif_tn_pbItemBall(*args) }
 end
 
-def pbReceiveItem(*args)
-  return KIF::TutorNet.watch_bag { kif_tn_pbReceiveItem(*args) }
+def pbReceiveItem(item, *args)
+  return KIF::TutorNet.watch_item(item) { kif_tn_pbReceiveItem(item, *args) }
 end
 
 # KIF: a move tutor's move is registered at P10,000
@@ -1085,7 +1108,7 @@ class PokemonMartAdapter
   alias kif_tn_addItem addItem unless method_defined?(:kif_tn_addItem)
 
   def addItem(item)
-    return KIF::TutorNet.watch_bag { kif_tn_addItem(item) }
+    return KIF::TutorNet.watch_item(item) { kif_tn_addItem(item) }
   end
 end
 

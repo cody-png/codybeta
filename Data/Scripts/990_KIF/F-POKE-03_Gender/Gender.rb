@@ -25,6 +25,20 @@
 #===============================================================================
 module KIF
   module Gender
+    @icon_bitmaps = {}
+
+    def self.blt_icon(bitmap, path, x, y)
+      icon = @icon_bitmaps[path]
+      if !icon || icon.disposed?
+        file = pbResolveBitmap(path)
+        return unless file
+        icon = @icon_bitmaps[path] = Bitmap.new(file)
+      end
+      bitmap.blt(x, y, icon, Rect.new(0, 0, icon.width, icon.height))
+    rescue => e
+      KIF.log("Gender icon failed: #{e.message}")
+    end
+
     MALE   = [Color.new(55, 148, 229), Color.new(68, 98, 125)]
     FEMALE = [Color.new(229, 55, 203), Color.new(137, 73, 127)]
     GENDERLESS_TEXT = [Color.new(55, 229, 81), Color.new(68, 127, 76)]
@@ -193,10 +207,12 @@ class PokemonDataBox
       KIF::Gender.hide_symbols = old
     end
     x = @spriteBaseX + 126
+    # Databox refreshes while the HP bar animates: the two icons are loaded
+    # once and blitted, instead of resolved + loaded from disk each time.
     if pizza
-      pbDrawImagePositions(self.bitmap, [[KIF::Gender::ICON_PIZZA, x - 18, 5]])
+      KIF::Gender.blt_icon(self.bitmap, KIF::Gender::ICON_PIZZA, x - 18, 5)
     elsif @battler.displayGender == 2
-      pbDrawImagePositions(self.bitmap, [[KIF::Gender::ICON_GENDERLESS, x - 14, 14]])
+      KIF::Gender.blt_icon(self.bitmap, KIF::Gender::ICON_GENDERLESS, x - 14, 14)
     end
   rescue => e
     KIF.log("Databox gender icon failed: #{e.message}")

@@ -45,8 +45,10 @@ module KIF
       MessageConfig.pbSetNarrowFontName(f[2])
     end
 
+    SIZE_INDEX = { :system => 3, :small => 4, :narrow => 5 }
+
     def self.size(kind)
-      return FONTS[choice][{ :system => 3, :small => 4, :narrow => 5 }[kind]]
+      return FONTS[choice][SIZE_INDEX[kind]]
     end
 
     def self.chinese?
@@ -71,20 +73,22 @@ alias kif_font_pbSetSystemFont pbSetSystemFont unless defined?(kif_font_pbSetSys
 alias kif_font_pbSetSmallFont pbSetSmallFont unless defined?(kif_font_pbSetSmallFont)
 alias kif_font_pbSetNarrowFont pbSetNarrowFont unless defined?(kif_font_pbSetNarrowFont)
 
+# Called for every text draw: with the Default font nothing is changed, so the
+# wrappers only do work when another font is chosen (sizes then differ).
 def pbSetSystemFont(bitmap)
   KIF::GameFont.sync
   kif_font_pbSetSystemFont(bitmap)
-  bitmap.font.size = KIF::GameFont.size(:system) unless KIF::GameFont.chinese?
+  bitmap.font.size = KIF::GameFont.size(:system) if KIF::GameFont.choice != 0 && !KIF::GameFont.chinese?
 end
 
 def pbSetSmallFont(bitmap)
   KIF::GameFont.sync
   kif_font_pbSetSmallFont(bitmap)
-  bitmap.font.size = KIF::GameFont.size(:small) unless KIF::GameFont.chinese?
+  bitmap.font.size = KIF::GameFont.size(:small) if KIF::GameFont.choice != 0 && !KIF::GameFont.chinese?
 end
 
 def pbSetNarrowFont(bitmap)
   KIF::GameFont.sync
   kif_font_pbSetNarrowFont(bitmap)
-  bitmap.font.size = KIF::GameFont.size(:narrow) unless KIF::GameFont.chinese?
+  bitmap.font.size = KIF::GameFont.size(:narrow) if KIF::GameFont.choice != 0 && !KIF::GameFont.chinese?
 end

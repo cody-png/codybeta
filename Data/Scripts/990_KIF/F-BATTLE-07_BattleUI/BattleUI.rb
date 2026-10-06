@@ -282,8 +282,9 @@ class PokemonDataBox
     return if @battler.is_a?(PokeBattle_FakeBattler)
     return if @battler.fainted?
     sheet = KIF::BattleUI::TYPE_SHEETS[mode]
-    return unless sheet && pbResolveBitmap(sheet)
+    return unless sheet
     if !@kif_typeBitmap || @kif_typeBitmap.disposed? || @kif_typeSheet != sheet
+      return unless pbResolveBitmap(sheet)   # disk probe only when the sheet changes
       @kif_typeBitmap.dispose if @kif_typeBitmap && !@kif_typeBitmap.disposed?
       @kif_typeBitmap = AnimatedBitmap.new(sheet)
       @kif_typeSheet = sheet

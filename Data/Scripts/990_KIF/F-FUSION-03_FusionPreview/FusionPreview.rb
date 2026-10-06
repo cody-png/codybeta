@@ -127,7 +127,6 @@ module GameData
         c = KIF::FusionPreview.color
         if c && ret && c[0] == species
           begin
-            KIF::Shiny.privatize(ret)
             KIF::Shiny.colorize!(ret, c[1], :sprite)
           rescue => e
             KIF.log("Fusion preview colours failed: #{e.message}")

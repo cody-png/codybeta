@@ -94,8 +94,10 @@ module KIF
       ]
     end
 
+    COUNT = 160   # names.length (the 160 _INTL strings are not built just to count them)
+
     def self.kif?(id)
-      return id.is_a?(Integer) && id >= FIRST && id < FIRST + names.length
+      return id.is_a?(Integer) && id >= FIRST && id < FIRST + COUNT
     end
 
     def self.path(id)
@@ -129,8 +131,9 @@ class PokemonBoxSprite
 
   def getBoxBitmap
     bg = @storage[@boxnumber].background
-    if KIF::Wallpapers.kif?(bg) && pbResolveBitmap(KIF::Wallpapers.path(bg))
-      return if @bg == bg && @boxbitmap
+    if KIF::Wallpapers.kif?(bg)
+      return if @bg == bg && @boxbitmap          # same wallpaper: no disk probe
+      return kif_wp_getBoxBitmap unless pbResolveBitmap(KIF::Wallpapers.path(bg))
       @bg = bg
       @boxbitmap.dispose if @boxbitmap
       @boxbitmap = AnimatedBitmap.new(KIF::Wallpapers.path(bg))

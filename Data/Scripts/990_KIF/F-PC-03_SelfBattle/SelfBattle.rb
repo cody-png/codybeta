@@ -413,9 +413,10 @@ class PokeBattle_Scene
         @kif_win_display.z = 9999
         @kif_win_display.y = Graphics.height - 96
       end
-      text = "[ Player: #{$PokemonSystem.player_wins} | Enemy: #{$PokemonSystem.enemy_wins} ]"
-      return if @kif_win_text == text
-      @kif_win_text = text
+      key = [$PokemonSystem.player_wins, $PokemonSystem.enemy_wins]
+      return if @kif_win_text == key   # per battle frame: compare the counts, build the text on change
+      @kif_win_text = key
+      text = "[ Player: #{key[0]} | Enemy: #{key[1]} ]"
       bmp = @kif_win_display.bitmap
       bmp.clear
       # KIF: lighter text with dark mode on

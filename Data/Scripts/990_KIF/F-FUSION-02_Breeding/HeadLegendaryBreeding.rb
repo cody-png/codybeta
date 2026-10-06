@@ -98,11 +98,11 @@ end
 class Pokemon
   def kif_head_legendary_gender
     return nil unless $PokemonSystem && $PokemonSystem.legendarybreed == 1
+    return nil if @gender == 0 || @gender == 1   # already has a gender (cheap test first: gender is read constantly)
     sp = species_data
     return nil unless sp.is_a?(GameData::FusedSpecies) && sp.head_pokemon && sp.body_pokemon
     return nil unless Array(sp.head_pokemon.egg_groups).include?(:Undiscovered)
     return nil if Array(sp.body_pokemon.egg_groups).include?(:Undiscovered)
-    return nil if @gender == 0 || @gender == 1   # already has a gender
     case sp.body_pokemon.gender_ratio
     when :AlwaysMale   then return 0
     when :AlwaysFemale then return 1

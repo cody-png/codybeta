@@ -52,9 +52,8 @@ module KIF
       stamp = Time.now.strftime("%Y%m%d%H%M%S")
       clean = name.to_s.gsub(/[\\\/:*?"<>|]/, "").strip
       file = clean.empty? ? "#{slot}_#{stamp}.rxdata" : "#{slot}_#{stamp}_#{clean}.rxdata"
-      File.open(save_path, "rb") do |src|
-        File.open(File.join(slot_dir(save_path, slot), file), "wb") { |dst| dst.write(src.read) }
-      end
+      # streamed copy (KIF read the whole save into memory first)
+      IO.copy_stream(save_path, File.join(slot_dir(save_path, slot), file))
     rescue => e
       KIF.log("Save backup failed: #{e.message}")
     end

@@ -436,6 +436,7 @@ module KIF
     def self.cache_get(key)
       return nil if key.nil? || cache_mode == 2
       if (bmp = @memory[key]) && !bmp.disposed?
+        @memory.delete(key); @memory[key] = bmp   # LRU: a hit moves to the end
         return copy_bitmap(bmp)
       end
       if cache_mode == 0
@@ -485,8 +486,10 @@ module KIF
       return pkmn.respond_to?(:kif_filter_roll?) ? pkmn.kif_filter_roll? == 1 : true
     end
 
-    # anim: AnimatedBitmap holding the plain (non-shiny) image, already a
-    # private copy. kind: :sprite (battler) or :icon.
+    # anim: AnimatedBitmap holding the plain (non-shiny) image. Its bitmap may
+    # still be a shared (spritesheet / RPG::Cache) one: a private copy is
+    # only made on a cache miss, right before recolouring; a cache hit just
+    # swaps in the cached copy. kind: :sprite (battler) or :icon.
     # For :icon with PIF palette, the caller passes PIF's shiny icon instead
     # and pif_done = true.
     def self.colorize!(anim, pkmn, kind = :sprite, pif_done = false)
@@ -510,6 +513,7 @@ module KIF
         anim.bitmap = hit
         return anim
       end
+      privatize(anim)
       if use_pif && !pif_done
         anim.shiftAllColors(dex, pkmn.body_shiny, pkmn.head_shiny)
       end

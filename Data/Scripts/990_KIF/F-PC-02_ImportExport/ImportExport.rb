@@ -323,7 +323,7 @@ module KIF
       sprite_scale size_category
     ]
     SPECIAL_KEYS = %w[species exp level owner moves mail heal_status pif_extra json_version]
-    SKIP_EXTRA = [:@species_data, :@moves, :@owner, :@mail, :@kif_banked_exp]
+    SKIP_EXTRA = [:@species_data, :@moves, :@owner, :@mail, :@kif_banked_exp, :@kif_sd_token]
     OBJECT_CLASSES = ["PIFSprite", "Pokemon::Move", "Pokemon::Owner"]
 
     def self.allowed?

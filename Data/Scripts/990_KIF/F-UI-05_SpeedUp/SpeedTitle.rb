@@ -42,7 +42,15 @@ module KIF
       return ret
     end
 
+    # Runs every Graphics.update: only the three cheap inputs are compared;
+    # the title string is rebuilt (and set) when one of them changed.
     def self.update_title
+      ps = $PokemonSystem
+      key = [current_speed,
+             ps && ps.respond_to?(:autobattler) ? ps.autobattler.to_i : nil,
+             ps && ps.respond_to?(:sb_loopinput) ? ps.sb_loopinput.to_i : nil]
+      return if key == @last_key
+      @last_key = key
       text = title_text
       return if text == @last_title
       @last_title = text

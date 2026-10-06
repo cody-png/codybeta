@@ -34,7 +34,7 @@ KIF::Options.define(:kuraybigicons, 0, :global)
 KIF::Options.add(:graphics, :global) {
   EnumOption.new(_INTL("Big Pokémon Icons"), [_INTL("Off"), _INTL("Limited"), _INTL("All")],
                  proc { $PokemonSystem.kuraybigicons },
-                 proc { |value| $PokemonSystem.kuraybigicons = value },
+                 proc { |value| $PokemonSystem.kuraybigicons = value; KIF::BigIcons.clear_cache },
                  [_INTL("Pokémon will use their small box sprites for icons"),
                   _INTL("Pokémon icons will use their full-size battle sprites (except in boxes)"),
                   _INTL("Pokémon icons will use their full-size battle sprites")])
@@ -46,8 +46,53 @@ module KIF
       return $PokemonSystem ? $PokemonSystem.kuraybigicons.to_i : 0
     end
 
+    # Scaled icons are cached (KIF rebuilt one from the full battle sprite on
+    # every refresh: a PC page = 30 sprite loads + 30 shiny renders). The key
+    # is everything that decides the picture; a hit costs one small blt.
+    CACHE_LIMIT = 80
+    @cache = {}
+
+    # A still image standing in for the AnimatedBitmap the sprites expect
+    class Icon
+      attr_reader :bitmap
+      def initialize(bitmap); @bitmap = bitmap; end
+      def width;  @bitmap.width;  end
+      def height; @bitmap.height; end
+      def update; end
+      def disposed?; @bitmap.disposed?; end
+      def dispose; @bitmap.dispose unless @bitmap.disposed?; end
+      def pbSetColor(*args); end   # IconSprite#setColor (unused for icons)
+    end
+
+    def self.clear_cache
+      @cache.each_value { |b| b.dispose if b && !b.disposed? }
+      @cache.clear
+    end
+
+    def self.cache_key(pkmn)
+      ps = pkmn.pif_sprite rescue nil
+      sprite = ps ? [ps.type, ps.head_id, ps.body_id, ps.alt_letter, ps.local_path] : nil
+      shiny = nil
+      if pkmn.shiny?
+        shiny = [pkmn.head_shiny, pkmn.body_shiny, (pkmn.shinyValue? rescue nil),
+                 (pkmn.shinyR? rescue nil), (pkmn.shinyG? rescue nil), (pkmn.shinyB? rescue nil),
+                 (pkmn.shinyKRS? rescue nil), (pkmn.shinyimprovpif? rescue nil),
+                 ($PokemonSystem.shinyadvanced rescue nil), ($PokemonSystem.pifimprovedshinies rescue nil),
+                 (defined?(KIF::Shiny) ? [KIF::Shiny.icons_on?, (KIF::Shiny.filtered?(pkmn) rescue nil)] : nil)]
+      end
+      return [pkmn.species, pkmn.form, pkmn.egg?, sprite, shiny,
+              (pkmn.hat rescue nil), (pkmn.sprite_scale rescue nil), mode >= 1]
+    end
+
     # Battle sprite scaled down to icon size (a private copy)
     def self.bitmap_for(pkmn)
+      key = cache_key(pkmn) rescue nil
+      if key && (hit = @cache[key]) && !hit.disposed?
+        @cache.delete(key); @cache[key] = hit
+        copy = Bitmap.new(hit.width, hit.height)
+        copy.blt(0, 0, hit, Rect.new(0, 0, hit.width, hit.height))
+        return Icon.new(copy)
+      end
       plain = defined?(KIF::Shiny) && pkmn.shiny? && !KIF::Shiny.icons_on?
       anim = if plain
                KIF::Shiny.without_shiny(pkmn) { GameData::Species.sprite_bitmap_from_pokemon(pkmn) }
@@ -61,8 +106,17 @@ module KIF
       h = [(src.height * scale).floor, 1].max
       small = Bitmap.new(w, h)
       small.stretch_blt(Rect.new(0, 0, w, h), src, Rect.new(0, 0, src.width, src.height))
-      anim.bitmap = small
-      return anim
+      if key
+        if @cache.length >= CACHE_LIMIT
+          old_key, old = @cache.first
+          @cache.delete(old_key)
+          old.dispose if old && !old.disposed?
+        end
+        keep = Bitmap.new(w, h)
+        keep.blt(0, 0, small, Rect.new(0, 0, w, h))
+        @cache[key] = keep
+      end
+      return Icon.new(small)
     rescue => e
       KIF.log("Big icon failed: #{e.message}")
       return nil

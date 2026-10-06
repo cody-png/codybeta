@@ -177,16 +177,17 @@ module Effectiveness
   class << self
     alias kif_mech_calculate_one calculate_one unless method_defined?(:kif_mech_calculate_one)
 
+    # Hottest type-chart method (the AI calls it thousands of times a turn):
+    # the defend type is tested before any option is read.
     def calculate_one(attack_type, defend_type)
       ret = kif_mech_calculate_one(attack_type, defend_type)
-      if KIF::Mechanics.icebuff? && defend_type == :ICE && [:WATER, :FLYING].include?(attack_type)
-        ret = NOT_VERY_EFFECTIVE_ONE
-      end
-      if KIF::Mechanics.bugbuff != 0 && defend_type == :BUG && [:PSYCHIC, :DARK, :FAIRY].include?(attack_type)
-        ret = NOT_VERY_EFFECTIVE_ONE
-      end
-      if KIF::Mechanics.bugbuff == 2 && defend_type == :FAIRY && attack_type == :BUG
-        ret = SUPER_EFFECTIVE_ONE
+      case defend_type
+      when :ICE
+        ret = NOT_VERY_EFFECTIVE_ONE if (attack_type == :WATER || attack_type == :FLYING) && KIF::Mechanics.icebuff?
+      when :BUG
+        ret = NOT_VERY_EFFECTIVE_ONE if (attack_type == :PSYCHIC || attack_type == :DARK || attack_type == :FAIRY) && KIF::Mechanics.bugbuff != 0
+      when :FAIRY
+        ret = SUPER_EFFECTIVE_ONE if attack_type == :BUG && KIF::Mechanics.bugbuff == 2
       end
       return ret
     end

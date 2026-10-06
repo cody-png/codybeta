@@ -32,7 +32,7 @@ class PokeBattle_AI
 		# NOTE: A move is only added to the choices array if it has a non-zero
 		#       score.
 		choices     = []
-		if !@battle.wildBattle?
+		if $DEBUG && !@battle.wildBattle?   # KIF port: console text only in debug
 			echo("\n\nDamage calculations for: "+user.name+"\n")
 			echo("------------------------------------------")
 		end
@@ -45,7 +45,7 @@ class PokeBattle_AI
 			end
 		end
 
-		if !@battle.wildBattle?
+		if $DEBUG && !@battle.wildBattle?
 			echo("\nChoices and scores:\n") #for: "+user.name+"\n")
 			echo("------------------------\n")#----------------\n")
 		end
@@ -54,7 +54,7 @@ class PokeBattle_AI
 		maxScore   = 0
 		choices.each do |c|
 			totalScore += c[1]
-			if !@battle.wildBattle?
+			if $DEBUG && !@battle.wildBattle?
 				echo(c[3]+": "+c[1].to_s+"\n")
 			end
 			maxScore = c[1] if maxScore < c[1]
@@ -749,7 +749,7 @@ class PokeBattle_AI
 		end
 		# Type effectiveness
 		if skill>=PBTrainerAI.mediumSkill
-			typemod = pbCalcTypeMod(type,user,target)
+			typemod = typeMod   # KIF port: computed once at the top of this method
 			multipliers[:final_damage_multiplier] *= typemod.to_f / Effectiveness::NORMAL_EFFECTIVE
 		end
 		# Burn

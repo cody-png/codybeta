@@ -49,3 +49,76 @@ class Pokemon
     return sd
   end
 end
+
+#-------------------------------------------------------------------------------
+# Pokédex list (016_UI/Pokedex/003_UI_Pokedex_Main.rb)
+#   * pbRefresh runs on every cursor move and asks for the Seen/Owned totals;
+#     each total walks every fusion slot (~330,000 entries, Player::Pokedex
+#     #count_dex), so scrolling dropped frames. The totals can't change while
+#     the list is open, so they're counted once per visit (again after an
+#     entry page closes).
+#   * setIconBitmap keeps a copy of every sprite looked at and never frees
+#     them; they're freed when the Pokédex closes.
+#-------------------------------------------------------------------------------
+module KIF
+  module Perf
+    @dex_counts = nil
+    class << self
+      attr_accessor :dex_counts
+    end
+  end
+end
+
+class Player < Trainer
+  class Pokedex
+    alias kif_perf_seen_count seen_count unless method_defined?(:kif_perf_seen_count)
+    alias kif_perf_owned_count owned_count unless method_defined?(:kif_perf_owned_count)
+
+    def seen_count(dex = -1)
+      c = KIF::Perf.dex_counts
+      return kif_perf_seen_count(dex) unless c && c[:dex].equal?(self)
+      key = [:seen, dex]
+      return c[key] if c.key?(key)
+      return c[key] = kif_perf_seen_count(dex)
+    end
+
+    def owned_count(dex = -1)
+      c = KIF::Perf.dex_counts
+      return kif_perf_owned_count(dex) unless c && c[:dex].equal?(self)
+      key = [:owned, dex]
+      return c[key] if c.key?(key)
+      return c[key] = kif_perf_owned_count(dex)
+    end
+  end
+end
+
+class PokemonPokedex_Scene
+  alias kif_perf_pbPokedex pbPokedex unless method_defined?(:kif_perf_pbPokedex)
+  alias kif_perf_pbDexEntry pbDexEntry unless method_defined?(:kif_perf_pbDexEntry)
+  alias kif_perf_pbEndScene pbEndScene unless method_defined?(:kif_perf_pbEndScene)
+
+  def pbPokedex(*args)
+    old = KIF::Perf.dex_counts
+    KIF::Perf.dex_counts = { :dex => $Trainer.pokedex }
+    begin
+      return kif_perf_pbPokedex(*args)
+    ensure
+      KIF::Perf.dex_counts = old
+    end
+  end
+
+  def pbDexEntry(*args)
+    c = KIF::Perf.dex_counts
+    c.delete_if { |k, _| k != :dex } if c
+    return kif_perf_pbDexEntry(*args)
+  end
+
+  def pbEndScene(*args)
+    ret = kif_perf_pbEndScene(*args)
+    if @sprites_cache
+      @sprites_cache.each_value { |bmp| bmp.dispose if bmp && !bmp.disposed? rescue nil }
+      @sprites_cache = nil
+    end
+    return ret
+  end
+end

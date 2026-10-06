@@ -11,8 +11,14 @@
 #     ("Gyarados x4", "Onix x0") when there are several foes.
 # With several foes the marker shows the best result among them.
 # Uses the battle's own type calculation (in-battle types, KIF type buffs,
-# Scrappy, Ring Target, grounded Flying types, ...); abilities like Levitate
-# or Wonder Guard are not revealed. Status moves show nothing.
+# Scrappy, Ring Target, grounded Flying types, ...). Status moves show nothing.
+# Abilities stay hidden until the battle reveals them (Cody, 2026-10-06): once
+# a foe's ability has been shown (ability pop-up / message), its immunity
+# counts – Levitate (Ground), Flash Fire, Volt/Water Absorb, Lightning Rod,
+# Motor Drive, Sap Sipper, Storm Drain, Dry Skin, Soundproof, Bulletproof,
+# Wonder Guard – unless the user has Mold Breaker / Teravolt / Turboblaze or
+# the ability is suppressed. Air Balloon, Magnet Rise and Telekinesis (all
+# announced in battle) make Ground moves show "No effect" too.
 #===============================================================================
 KIF::Options.define(:cody_effectiveness, 1, :global)
 
@@ -54,10 +60,44 @@ module KIF
       boost = move.instance_variable_get(:@powerBoost)
       type = move.pbCalcType(user)
       move.instance_variable_set(:@powerBoost, boost)
-      return move.pbCalcTypeMod(type, user, target)
+      val = move.pbCalcTypeMod(type, user, target)
+      val = ::Effectiveness::INEFFECTIVE if val && known_immunity?(move, type, user, target, val)
+      return val
     rescue => e
       KIF.log("Effectiveness check failed: #{e.message}")
       return nil
+    end
+
+    # Ability => move type it makes the holder immune to
+    TYPE_IMMUNE = { :FLASHFIRE => :FIRE, :LIGHTNINGROD => :ELECTRIC, :MOTORDRIVE => :ELECTRIC,
+                    :VOLTABSORB => :ELECTRIC, :SAPSIPPER => :GRASS, :STORMDRAIN => :WATER,
+                    :WATERABSORB => :WATER, :DRYSKIN => :WATER }
+
+    # Has the battle shown this battler's current ability?
+    def self.revealed?(battle, target, ability)
+      known = battle.instance_variable_get(:@cody_known_abilities)
+      return false unless known && target.pokemon
+      return known[target.pokemon.object_id] == ability && target.hasActiveAbility?(ability)
+    end
+
+    def self.known_immunity?(move, type, user, target, val)
+      battle = target.battle
+      return false if ::Effectiveness.ineffective?(val)
+      # Ground moves vs floating foes (announced effects, or revealed Levitate)
+      if type == :GROUND && !move.hitsFlyingTargets? && target.airborne?
+        return true if target.hasActiveItem?(:AIRBALLOON)
+        return true if target.effects[PBEffects::MagnetRise] > 0
+        return true if target.effects[PBEffects::Telekinesis] > 0
+        return true if revealed?(battle, target, :LEVITATE) && !user.hasMoldBreaker?
+      end
+      return false if user.hasMoldBreaker?
+      ab = target.ability_id
+      return false unless ab && revealed?(battle, target, ab)
+      return true if TYPE_IMMUNE[ab] == type
+      return true if ab == :SOUNDPROOF && move.soundMove?
+      return true if ab == :BULLETPROOF && move.bombMove?
+      return true if ab == :WONDERGUARD && !::Effectiveness.super_effective?(val)
+      return false
     end
 
     def self.result(val)
@@ -207,5 +247,27 @@ class FightMenuDisplay
   rescue => e
     KIF.log("Effectiveness scroll failed: #{e.message}")
     @cody_lines = nil
+  end
+end
+
+#-------------------------------------------------------------------------------
+# Abilities the battle has revealed (ability pop-up, or its message when the
+# pop-ups are off): Pokémon => ability shown
+#-------------------------------------------------------------------------------
+class PokeBattle_Battle
+  alias cody_eff_pbShowAbilitySplash pbShowAbilitySplash unless method_defined?(:cody_eff_pbShowAbilitySplash)
+
+  def pbShowAbilitySplash(battler, *args)
+    begin
+      if battler && battler.pokemon
+        name = args[2]
+        if name.nil? || name == battler.abilityName
+          @cody_known_abilities ||= {}
+          @cody_known_abilities[battler.pokemon.object_id] = battler.ability_id
+        end
+      end
+    rescue
+    end
+    return cody_eff_pbShowAbilitySplash(battler, *args)
   end
 end

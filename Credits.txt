@@ -1,0 +1,276 @@
+##########		CREDITS	         ###############
+Pok?mon Infinite Fusion & Pok?mon Infinite Fusion: Hoenn
+Game made by Chardub
+
+*This is NOT an official Pokemon game. The author of this game is not 
+affiliated with Nintendo in any way 
+
+##################################
+##	Programming  / Events  ##
+#################################
+Chardub
+
+##############################
+##	Maps		    		##
+##############################	
+Chardub, Kiwikelly, Payapon
+
+#################################
+#	Story / Dialogues	#
+#################################
+Chardub
+Kiwikelly
+The story and dialogues were based off Pok?mon Ruby, Sapphire and Emerald, as well as Pok?mon
+Omega Ruby and Alpha Sapphire, which are all made by Game Freak.
+
+##############################
+##	Music		    							##
+##############################	
+Pory
+
+##############################
+## Animation									##
+#############################
+-- Intro cinematic animation --
+Kiwikelly
+
+
+
+
+###########################################################
+###	Fusion Sprites										###
+##########################################################
+
+Generated Sprites
+############################
+Pokefusion 2 (version 4.5+)
+http://japeal.com/pkm
+
+Special thanks to Aegide and Reizod for helping to rip the sprites from the website
+and to the owners of the respective fusion websites for accepting to share
+their sprites.
+
+Custom sprites
+#####################
+Individual sprite credits can be found in Data/SPRITE_CREDS file for full, up to date credits
+
+Custom sprites collecting and handling
+Kiwikelly, Payapon, Thornsoflight
+
+Discord custom sprites coordination 
+--- Sprite Managers ---
+avianAnnihilator<s>Blaquaza
+BBoutton<s>CaBiNE
+CoramSun<s>hero.drawing
+Howlingstarr<s>Ignus
+Kiwi<s>Maelmc
+Milchik the Miltank<s>Payapon
+Pix<s>Rosemagwin
+Thornsoflight<s>FauxBlue
+
+### Spriter application reviews (Klefki)
+007z3lda<s>barkey<s>the_cardinals
+doodledoo<s>grafaiguy<s>gummy.frog
+holgast<s>ignust<s>jcobe800
+markusknight<s>monolithyk<s>stickieanimates
+takopus<s>_woofa_<s>yumatei
+
+### Sprites quality assurance (Chansey)
+dodoowner_<s>fauxblue<s>fioretovi
+<greystorm101<s>.payapon<s>smasllcutekitty
+odditylad<s>midnightender6<s>toadettexmushina
+
+### Spriting process checking (Swablu)
+cataylor_01<s>pikahunter07<s>say_4732
+justvince.<s>
+
+### Abandoned sprites harvesting (Zigzagoon)
+_testrun_<s>greystorm101<s>.izik
+mystora<s>reddevil85<s>riberna
+chespining<s>togepimax
+
+
+
+
+###################################
+###	Game quality assurance					###
+###################################
+### Tech support and bugs reporting management 
+sapphire_chuu<s>megaman.
+ymirbot<s>
+
+### Tech support and bugs reporting(Porygon)
+sapphire_chu<s>ernesto_gaming<s>xiaoanemo
+kitsuwren<s>lunarcharlotte<s>megaman.
+casinoluck<s>ymirbot
+
+
+
+###################################
+###	Custom Pok?dex entries					###
+###################################
+### Pok?dex entries quality control (Unown)
+luvischlo<s>char_latte3412<s>strawbearycandy
+bobosmith01<s>griddle<s>.izik
+knilk<s>lordjoostmeister<s>.realthree
+wigglypon<s>wildheartrazorfangs<s>ziggaway
+
+### Individual Pok?dex entries credits can be found in Data/pokedex/dex.json 
+
+###########################################################
+####		Pokemon Essentials			 ###
+###########################################################
+Maruno (http://pokemonessentials.wikia.com/wiki/Pok%C3%A9mon_Essentials_Wiki)
+
+###########################################################
+###			Playtesting			###
+###########################################################
+Playtesting was done by various members of the Discord channel. 
+Special thanks to all of you!
+###########################################################
+###			Graphics			  #
+###########################################################
+Title screen background and logo by Doctor Miawoo
+Gen 4 Legendary trio eggs by calicorn
+
+###########################################################
+###	General graphics / Music / Intellectual property  #
+###########################################################
+Nintendo
+GameFreak
+
+###########################################################
+###	French translation  #
+###########################################################
+anthonygourmand
+locpic_
+blood.wolf58 (Willi)
+ragzzh
+
+#######################################################################
+The following ressources were also used 
+with their respective authors' consent
+#######################################################################
+### Sprites ###
+	Overworld Sprites:
+		Custom graphics:
+		Kiwikelly, Knuckles, UnworthyPie
+
+		Free use graphics:
+		Rick1234 (BW overworld sprites)
+		Hankiro (Oak backsprite) 		http://s296.photobucket.com/user/Hankiro/media/ProfOakBackSprite.png.html
+		SailorVicious (Prof. Elm OW sprite) 	https://www.deviantart.com/sailorvicious
+		OceansLugiaSpirit (Koga OW sprite)  	http://oceanslugiaspirit.deviantart.com/
+		Wolfang62: https://www.deviantart.com/wolfang62/art/Wimpod-Sprite-Overworld-836704744
+		zender1752 (Sabrina OW sprite)	https://www.deviantart.com/zender1752/art/Pokemon-Anime-Delia-Ketchum-Overworld-sprite-840038766
+		wesleyfg (Hoenn overworld NPCs) https://www.deviantart.com/wesleyfg/art/Hoenn-People-OW-in-BW-style-274475232
+		Wergan https://www.deviantart.com/wergan/art/Pokemon-Random-characters-002-959395621
+		TooManyLuigis, Mortedes, Billla,WolfPP: Golurk overworld sprite https://www.deviantart.com/wolfang62/art/Golurk-Sprite-Overworld-834611476
+	Battle sprites: 
+		Custom graphics:
+		Kiwikelly, UnworthyPie
+
+		Free use graphics:
+		luckygirl88  (Misty VS sprite) 		http://luckygirl88.deviantart.com/art/Pokemon-BW-Misty-Sprite-Sheet-268364830
+		Lorelei VS sprite by Nalty 		http://nalty.deviantart.com/art/Lorelei-VS-Sprite-177184960
+		x-5-4-5-2 (Sabrina sprite) 		https://www.deviantart.com/x-5-4-5-2/art/Game-Sabrina-204548703
+		
+		Zender1752 	(overworld mom sprite) 	https://www.deviantart.com/zender1752/art/Pokemon-Anime-Delia-Ketchum-Overworld-sprite-840038766
+		
+### Custom tileset graphics ###
+Kiwikelly
+
+### Battle menu buttons: ###
+TCGrunler#4583
+elupsis
+
+### Battle type icons ###
+audreyeyeyeye https://www.deviantart.com/audreyeyeyeye/art/Pokemon-Type-Icons-FREE-TO-USE-909562921
+
+### Public tileset graphics ### 
+	Jorginho (OutsideEmerald)
+	ThatsSoWitty (Cave) http://thatssowitty.deviantart.com/art/The-Public-Pokemon-Tileset-281342410
+	DirtyWiggles (Gen 5 tileset) http://dirtywiggles.deviantart.com/art/RPG-Maker-Friendly-Tileset-5-0-generation-5-tiles-683576419
+	aveontrainer
+	princess-phoenix	https://www.deviantart.com/princess-phoenix/art/Fossil-Museum-Tileset-780178878
+	The Public Pokemon Tileset (Assembled by ThatsSoWitty) http://thatssowitty.deviantart.com/art/The-Public-Pokemon-Tileset-281342410
+	Includes tiles by the following DeviantArt users (in no specific order):
+   		kyle-dove, rayd12smitty, Speedialga, Spacemotion, Alucus ,Pokemon-Diamond, kizemaru-kurunosuke, EpicDay,
+   		Thurpok, UltimoSpriter, iametrine, Minorthreat0987 , TyranitarDark,  Heavy-Metal-Lover, KKKaito,
+   		WesleyFG, BoOmxBiG, EternalTakai, Hek-el-grande
+
+	It is assumed that these people were contacted by ThatsSoWitty and gave him their consent to use their
+	tiles to be used in this pack.
+
+	Other tiles:
+		Chardub, chimcharsfireworkd, Rossay, Shiney570,
+		Phyromatical, Gallanty (deviantart)
+
+### Music ###
+	Saffron City (Team Rocket): mystora				
+	Pokeli 			https://www.youtube.com/channel/UC2ccJMFWSbjklOQESSBP_dw
+				https://www.youtube.com/watch?v=0ohkADYWCYE
+				https://www.youtube.com/watch?v=6EWYYzRSpMM
+	TailDoll666100 (Lavender Tower) 	https://www.youtube.com/watch?v=9cijOh7i7KI
+	Team Rocket hideout: Kazune Sawatari 	http://kazune8390.g.ribbon.to/
+						https://www.youtube.com/watch?v=frcGm7DRWX8
+	Silph Co. : sentsinkantéun	https://soundcloud.com/sentsinkanteun/silph-co-remix
+	S.S. Anne			https://soundcloud.com/sentsinkanteun
+
+	Pokémon Infernal Red Natural Green OST - Vermilion City  : Nanashima 	https://www.youtube.com/user/nanashimagalaxy
+										https://www.youtube.com/watch?v=m9XKnGRmB18
+
+	Pokemon Powerplant & Pokemon mansion remix: CharizardTheMaster		https://www.youtube.com/watch?v=K3G73gGCabs
+
+	Surfing theme: The Zame Jack 	https://soundcloud.com/user-272720300/surfing-kanto-remastered
+
+
+### Other graphics			
+Hoenn map: shivanking (Deviantart)
+Move animations:
+
+	Augmented Reborn Animations Project
+	Project lead by StCooler.
+	Contributors: StCooler, DarryBD99, WolfPP, ardicoozer, riddlemeree.
+	Thanks to the Reborn team for letting people use their resources. You are awesome.
+	Thanks to BellBlitzKing for his Pokemon Sound Effects Pack: Gen 1 to Gen 7 - All Attacks SFX.
+
+	Dig:  WolfPP (Pokecommunity)
+	Bone Club, Bonemerang, Bone Rush: rekman (Pokecommunity)
+###########################################################
+###			RPG Maker Scripts		###
+###########################################################
+
+andracass (Pokémon Reborn)	Compiler optimization
+Luka S.J.			Elite Battle System
+				Animated Title Screen (modified):
+shiney570 			BW2 Summary script (+ graphics)	http://reliccastle.com/forums/showthread.php?tid=1090
+mej71 				Randomizer mode (adapted from)	(https://www.pokecommunity.com/showthread.php?t=360904)
+Erasus 				BW Bag (Pokecommunity)
+Umbreon 			Randomized Pokemon Script
+FL				Set controls screen
+				Unreal time system
+KleinStudio 			Water bubble script 	http://kleinstudio.deviantart.com/art/SCRIPT-Water-Bubbles-add-on-for-Essentials-535907963)
+				Graphics ripped by Zenionith (http://zenionith.deviantart.com/)
+				Footprints script	http://pokemonfangames.com/script.php?id=6
+carmaniac			Speech Bubbles script	http://www.pokecommunity.com/showthread.php?t=295277
+Wootius				Turbo Speed		https://www.pokecommunity.com/showthread.php?t=306037
+Marin				Better maps script	https://www.pokecommunity.com/showthread.php?t=411299
+barafanatic			Safari Zone improvements
+M3rein				Easy Questing System 
+bo4p5687			Multisave
+Vizualise			In-battle type icons (adapted from) https://github.com/Vizualyse/PokemonInfiniteFusion-EnemyTypesMod
+
+
+#### Data sources ###			  
+Bulbapedia (Movesets)
+Project: Generation 6 for Pokémon Essentials (PBS files)
+	Project Organization:WorldSlayer
+	PBS file editing:
+	mej71,karstictrainer, WorldSlayer, TheDeKay, viperk1, SunakazeKun,Radical Raptr, RPD490, Takyon!, Pokegod7020
+	Research:Drakath569,Florio, MrDeepDarkMind, snooper117
+
+
+
+
+#### CUSTOM FUSION SPRITES ######

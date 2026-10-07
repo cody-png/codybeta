@@ -242,13 +242,13 @@ All options in this menu are per-save.
 
 ### Randomizer
 
-Only on saves started as randomized saves: **Cody Settings → Randomizer**. The same screen also replaces PIF's randomizer menu when you make a randomized save.
+Only on saves started as randomized saves: **Cody Settings → Randomizer**. The same screen also replaces PIF's randomizer menu when you make a randomized save, and the Update Man's *Advanced options → Randomizer options → Randomizer settings* opens it too.
 
 - **Seed** – an 8-character code (like `K7Q2-9XMA`). The same seed with the same settings gives the same randomized game (on the same KIF Beta version and sprite pack). New random seed, type one in, or copy it.
 - **Presets & sharing** – *Copy settings code* puts the seed and every setting on your clipboard as one line (paste it into Discord); *Paste settings code* loads someone else's. *Save as preset* / *Load preset* use files in the `Randomizer/Presets` folder (saving over an existing name asks first; presets from earlier KIF Beta versions still load).
 - **Spoiler log** – Off / On *(On)*. Writes `Randomizer Log - <seed>.txt` in the `Randomizer/Logs` folder every time something is shuffled: every Pokémon swap, route, trainer team, gym type, item and TM. *View spoiler log* shows it in-game (asks first; each part is built when opened); Up/Down scroll, Left/Right turn a page, Z jumps to a dex number or text.
 - **Pokémon** – each part has its own switch:
-  - *Wild encounters*: Off / Swap (each species becomes one other species everywhere) / Route (every route rolls its own) / Dynamic (every encounter rolls its own Pokémon on the spot, within the Strength range) / Dynamic Route (like Route, but a route rolls new Pokémon every time you enter it).
+  - *Wild encounters*: Off / Swap (each species becomes one other species everywhere) / Route (every route rolls its own) / Dynamic (every encounter rolls its own Pokémon on the spot, within the Strength range) / Dynamic Route (like Route, but a route rolls new Pokémon every time you enter it; the roll stays while you're on that map, saving and loading included, and follows the seed).
   - *PokéRadar*: the radar's route list matches what really appears (PIF used the Swap table even when wild Pokémon weren't swapped); radar-only rares are randomized too (Swap: what it became; Route: one per route; Dynamic Route: one per visit; Dynamic: any). Oak's aide on Route 24 finishes her field research in Dynamic (nothing repeats) and in Dynamic Route (once the visit is catalogued), with the quest points and reward.
   - *Starters* (Off / 1st stage / Any), *Static encounters*, *Gift Pokémon*.
   - *Trades*: Off / Swap (what the Pokémon became; fusion trades too) / Random (each trade rolls its own within the Strength range). The spoiler log lists every trade.
@@ -280,7 +280,7 @@ Only on saves started as randomized saves: **Cody Settings → Randomizer**. The
 - **Evolutions** – Same / Random: a Pokémon that evolves turns into a higher stage or a Pokémon that doesn't evolve, at the same level or with the same item. *Type-themed*: the evolution shares a type.
 - **Exclusions** – lists of Pokémon, moves and abilities the randomizer never picks (A: ban/unban, L/R: page, Z: clear all). Bans only affect what the randomizer picks; parts that aren't randomized keep their normal Pokémon.
 - **Randomize now** – applies the settings mid-game (asks first; your party and boxes stay).
-- **Settings wait for Randomize now** – changing a setting on a randomized save doesn't change your game until you randomize. Changed settings are marked `*`, and the Randomize now button shows how many. Leaving the screen with changes asks: *Randomize now*, *Keep for later* (they stay marked next time, the game keeps the old ones), or *Undo changes*. The new-game setup works as before.
+- **Settings wait for Randomize now** – changing a setting on a randomized save doesn't change your game until you randomize. Changed settings are marked `*`, and the Randomize now button shows how many. Leaving the screen with changes asks: *Randomize now*, *Keep for later* (they stay marked next time, the game keeps the old ones), or *Undo changes*. The new-game setup works as before. (The Spoiler log switch is the one setting that applies at once.)
 
 ### Interface
 

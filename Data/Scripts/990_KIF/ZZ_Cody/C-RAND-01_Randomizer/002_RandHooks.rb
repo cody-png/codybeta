@@ -245,11 +245,18 @@ end
 # Common Event 15 asks for the strength ranges with its own menus right after
 # PIF's screen (during the intro); the new screen has the sliders, so those
 # two menus (Common Events 56/57) are skipped right after it closes.
+# Outside the intro (the Update Man's "Randomizer settings"), Common Event 15
+# would ask to re-shuffle right after the screen's own apply prompt; the
+# screen is opened on its own instead.
 class Interpreter
   alias kif_rand_command_117 command_117 unless method_defined?(:kif_rand_command_117)
 
   def command_117
     if [56, 57].include?(@parameters[0]) && KIF::Rand.skip_bst_prompts?
+      return true
+    end
+    if @parameters[0] == 15 && $game_switches && $PokemonGlobal && !$game_switches[SWITCH_DURING_INTRO]
+      pbFadeOutIn { PokemonOptionScreen.new(RandomizerOptionsScene.new).pbStartScreen }
       return true
     end
     return kif_rand_command_117

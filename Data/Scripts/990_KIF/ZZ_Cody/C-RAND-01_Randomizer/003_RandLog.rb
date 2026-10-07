@@ -108,7 +108,7 @@ module KIF
         out << ["Starters", method(:sec_starters)] if pokemon_parts_on? && get(:starters) > 0
       end
       out << ["Routes", method(:sec_routes)] if pokemon_parts_on? && sw(SWITCH_RANDOM_WILD_AREA)
-      out << ["Routes", proc { ["Dynamic Route: every route rolls new Pokémon each time you enter it."] }] if dynamic_route?
+      out << ["Routes", method(:sec_dynamic_route)] if dynamic_route?
       out << ["Trades", method(:trade_lines)] if pokemon_parts_on? && get(:trades) > 0
       if sw(SWITCH_RANDOM_TRAINERS) && $PokemonGlobal.randomTrainersHash
         out << ["Trainers", method(:sec_trainers)]
@@ -228,6 +228,21 @@ module KIF
         enc.types.each do |type, list|
           names = list.map { |e| species_name(e[1]) }.uniq
           lines << "#{map} (#{type}): #{names.join(', ')}"
+        end
+      end
+      return lines
+    end
+
+    # Dynamic Route: only the map you're on has a roll (kept in the save)
+    def self.sec_dynamic_route
+      lines = ["Dynamic Route: every route rolls new Pokémon each time you enter it."]
+      kept = data[:droute]
+      if kept.is_a?(Array) && kept[1].is_a?(Hash)
+        map = (pbGetMapNameFromId(kept[0]) rescue kept[0].to_s)
+        kept[1].each do |type, list|
+          next unless list.is_a?(Array) && !list.empty?
+          names = list.map { |e| species_name(e[1]) }.uniq
+          lines << "#{map} (#{type}), this visit: #{names.join(', ')}"
         end
       end
       return lines

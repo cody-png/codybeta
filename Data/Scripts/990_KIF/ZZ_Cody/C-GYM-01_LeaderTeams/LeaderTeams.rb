@@ -105,9 +105,25 @@ module KIF
       return KIF::Rand.dex_of(sp)
     end
 
+    # Types, stats and evolutions follow the save (the randomizer's Pokémon
+    # data); everything remembered below is dropped when that data changes
+    # (KIF::Perf.token changes on every data load / apply)
+    def self.cache
+      token = defined?(KIF::Perf) ? KIF::Perf.token : 0
+      if @cache_token != token
+        @cache_token = token
+        @typed = {}
+        @min_level = {}
+        @bst = {}
+      end
+      return @typed
+    end
+
     def self.bst(dex)
+      cache
+      return @bst[dex] if @bst.key?(dex)
       sp = GameData::Species.get(dex)
-      return sp.base_stats.values.sum
+      return @bst[dex] = sp.base_stats.values.sum
     rescue
       return 0
     end
@@ -131,7 +147,7 @@ module KIF
     # Lowest level a base Pokémon is normally seen at (level evolutions use
     # their level; stones, trades and friendship count as a bit later)
     def self.min_level(dex)
-      @min_level ||= {}
+      cache
       return @min_level[dex] if @min_level.key?(dex)
       @min_level[dex] = 1
       sp = GameData::Species.get(dex)
@@ -155,7 +171,7 @@ module KIF
 
     # The stage of the line that fits the level: down while too evolved, up
     # while an evolution is already reachable
-    def self.fit_level(dex, level)
+    def self.fit_level(dex, level, rng)
       cur = dex
       10.times do
         break if min_level(cur) <= level
@@ -168,7 +184,7 @@ module KIF
         evos = GameData::Species.get(cur).get_evolutions(true).map { |e| dex(e[0]) }
         evos = evos.select { |d| d > 0 && d <= NB_POKEMON && min_level(d) <= level }
         break if evos.empty?
-        cur = evos[rand(evos.length)]
+        cur = evos[rng.rand(evos.length)]
       end
       return cur
     rescue
@@ -180,11 +196,7 @@ module KIF
     end
 
     def self.typed_bases(type)
-      @typed ||= {}
-      @typed[type] ||= begin
-        # Any member of a line whose stages have the type
-        bases.select { |d| has_type?(d, type) }
-      end
+      return cache[type] ||= bases.select { |d| has_type?(d, type) }
     end
 
     def self.family_root(dex)
@@ -203,20 +215,23 @@ module KIF
       return [family_root(b), family_root(h)]
     end
 
-    # One extra Pokémon (dex number) or nil
-    def self.pick_one(type, level, target, fused_frac, used, used_roots)
+    # One extra Pokémon (dex number) or nil. Rolls come from rng (its own
+    # Random): the game's own random numbers are left alone, and PIF's
+    # fusion data, which draws some while a fusion is first built, can't
+    # change the pick.
+    def self.pick_one(type, level, target, fused_frac, used, used_roots, rng)
       typed = type ? typed_bases(type).reject { |d| banned?(d) } : []
       typed = bases.reject { |d| banned?(d) } if typed.empty?
       all = bases
       tol = 0.10
       600.times do |i|
         tol += 0.03 if i > 0 && i % 40 == 0
-        a = fit_level(typed[rand(typed.length)], level)
+        a = fit_level(typed[rng.rand(typed.length)], level, rng)
         cand = a
-        if rand(1000) < (fused_frac * 1000).round   # (PIF: rand() is 0 or 1)
-          b = fit_level(all[rand(all.length)], level)
+        if rng.rand(1000) < (fused_frac * 1000).round
+          b = fit_level(all[rng.rand(all.length)], level, rng)
           next if banned?(b)
-          x, y = rand(2) == 0 ? [a, b] : [b, a]
+          x, y = rng.rand(2) == 0 ? [a, b] : [b, a]
           cand = KIF::Rand.fuse(x, y)
           cand = KIF::Rand.fuse(y, x) if type && !has_type?(cand, type)
         end
@@ -242,15 +257,22 @@ module KIF
       used = party.map { |p| dex(p.species) }
       used_roots = []
       pid = ($Trainer.id rescue 0)
-      KIF::Rand.with_seed(:leader_extras, tr_data.id.inspect, pid) do
-        n.times do
-          d = pick_one(type, level, target, fused_frac, used, used_roots)
-          break unless d
-          used << d
-          used_roots.concat(roots_of(d))
-          party.push(make_pokemon(d, level, trainer))
-        end
+      rng = Random.new(KIF::Rand.sub_seed(:leader_extras, tr_data.id.inspect, pid))
+      picks = []
+      n.times do
+        d = pick_one(type, level, target, fused_frac, used, used_roots, rng)
+        break unless d
+        used << d
+        used_roots.concat(roots_of(d))
+        picks << d
       end
+      # Same nature / gender every time too
+      extras = KIF::Rand.with_seed(:leader_extras, tr_data.id.inspect, pid) {
+        picks.map { |d| make_pokemon(d, level, trainer) }
+      }
+      # Random held items roll like the rest of the team's (outside the seed)
+      extras.each { |p| p.item = pbGetRandomHeldItem.id if $game_switches[SWITCH_RANDOM_HELD_ITEMS] }
+      party.concat(extras)
     end
 
     # Like the rest of a trainer's team (PIF's to_trainer IVs/EVs)
@@ -261,7 +283,6 @@ module KIF
         pkmn.iv[s.id] = [level / 2, Pokemon::IV_STAT_LIMIT].min
         pkmn.ev[s.id] = [level * 3 / 2, Pokemon::EV_LIMIT / 6].min
       end
-      pkmn.item = pbGetRandomHeldItem.id if $game_switches[SWITCH_RANDOM_HELD_ITEMS]
       pkmn.calc_stats
       return pkmn
     end

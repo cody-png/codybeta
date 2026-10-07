@@ -447,6 +447,7 @@ module KIF
       self.log_suspended = false
       progress_done
       write_log
+      data.delete(:droute)   # Dynamic Route: the map you're on is rolled again
       refresh_encounters
     end
 

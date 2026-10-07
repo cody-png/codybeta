@@ -37,22 +37,38 @@ module KIF
     #---------------------------------------------------------------------------
     # Dynamic Route
     #---------------------------------------------------------------------------
+    # The current map's roll is kept in the save ([map, tables]): loading the
+    # save again (Game.load sets the encounters up again) doesn't reroll it,
+    # and entering any other map drops it. Rolls follow the seed and the
+    # visit count, so the same seed and the same path give the same routes.
     def self.reroll_tables(encounters, map_id)
+      kept = data[:droute]
+      if kept.is_a?(Array) && kept[0] != map_id
+        data.delete(:droute)
+        kept = nil
+      end
       tables = encounters.instance_variable_get(:@encounter_tables)
       return unless tables.is_a?(Hash) && !tables.empty?
+      if kept && kept[1].is_a?(Hash)
+        encounters.instance_variable_set(:@encounter_tables, Marshal.load(Marshal.dump(kept[1])))
+        return
+      end
       data[:visit] = (data[:visit] || 0) + 1
       bst = get(:wild_bst)
       fusions = sw(SWITCH_RANDOM_WILD_TO_FUSION)
       customs = (fusions && sw(SWITCH_RANDOM_WILD_ONLY_CUSTOMS)) ? custom_dex_list : []
       customs = [] if customs.length < 50
       max = fusions ? PBSpecies.maxValue : NB_POKEMON
-      with_memo do
-        tables.each_key do |type|
-          list = tables[type]
-          next unless list.is_a?(Array) && !list.empty?
-          tables[type] = randomizePokemonList(list, bst, max, !customs.empty?, customs)
+      with_seed(:droute, map_id, data[:visit]) do
+        with_memo do
+          tables.each_key do |type|
+            list = tables[type]
+            next unless list.is_a?(Array) && !list.empty?
+            tables[type] = randomizePokemonList(list, bst, max, !customs.empty?, customs)
+          end
         end
       end
+      data[:droute] = [map_id, Marshal.load(Marshal.dump(tables))]
     rescue => e
       KIF.log("Dynamic Route roll failed on map #{map_id}: #{e.class}: #{e.message}")
     end

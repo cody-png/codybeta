@@ -141,13 +141,14 @@ module KIF
           next
         end
         new = species_name(to)
-        esc = Regexp.escape(name)
-        out = out.gsub(/\b(a|an|A|An)(\s+(?:\\[Cc]\[\d+\])?)#{esc}\b/) {
+        # Not \b: names can end in "." or a symbol (Mime Jr., Nidoran)
+        esc = "(?<![A-Za-z0-9])" + Regexp.escape(name) + "(?![A-Za-z0-9])"
+        out = out.gsub(/\b(a|an|A|An)(\s+(?:\\[Cc]\[\d+\])?)#{esc}/) {
           art = article_for(new)
           art = art.capitalize if $1[0] == "A"
           "#{art}#{$2}#{new}"
         }
-        out = out.gsub(/\b#{esc}\b/, new)
+        out = out.gsub(/#{esc}/, new)
       end
       return [out, note]
     end

@@ -278,6 +278,7 @@ Only on saves started as randomized saves: **Cody Settings → Randomizer**. The
 - **Evolutions** – Same / Random: a Pokémon that evolves turns into a higher stage or a Pokémon that doesn't evolve, at the same level or with the same item. *Type-themed*: the evolution shares a type.
 - **Exclusions** – lists of Pokémon, moves and abilities the randomizer never picks (A: ban/unban, L/R: page, Z: clear all). Bans only affect what the randomizer picks; parts that aren't randomized keep their normal Pokémon.
 - **Randomize now** – applies the settings mid-game (asks first; your party and boxes stay).
+- **Settings wait for Randomize now** – changing a setting on a randomized save doesn't change your game until you randomize. Changed settings are marked `*`, and the Randomize now button shows how many. Leaving the screen with changes asks: *Randomize now*, *Keep for later* (they stay marked next time, the game keeps the old ones), or *Undo changes*. The new-game setup works as before.
 
 ### Interface
 

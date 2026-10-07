@@ -18,6 +18,18 @@ module KIF
       end
     end
 
+    # A setting row; "*" after the name = changed, not applied yet
+    class MarkedEnum < EnumOption
+      def initialize(key, *args)
+        @kif_key = key
+        super(*args)
+      end
+
+      def name
+        return KIF::Rand.respond_to?(:mark) ? KIF::Rand.mark(@kif_key, @name) : @name
+      end
+    end
+
     def self.on_off(on)
       return on ? _INTL("On") : _INTL("Off")
     end
@@ -36,7 +48,7 @@ module KIF
     end
 
     def self.enum(key, name, values, descs)
-      return EnumOption.new(name, values,
+      return MarkedEnum.new(key, name, values,
                             proc { (KIF::Rand.get(key) rescue 0).clamp(0, values.length - 1) },
                             proc { |v| KIF::Rand.set(key, v) }, descs)
     end
@@ -47,7 +59,7 @@ module KIF
 
     # 3-digit number (each digit 0-9) instead of a slider (Cody)
     def self.slider(key, name, desc)
-      return DynButton.new(proc { sprintf("%s: %03d", name, KIF::Rand.get(key)) },
+      return DynButton.new(proc { KIF::Rand.mark(key, sprintf("%s: %03d", name, KIF::Rand.get(key))) },
                            proc {
                              params = ChooseNumberParams.new
                              params.setRange(0, 999)
@@ -201,7 +213,7 @@ module KIF
           onoff(:shop_basics, _INTL("Keep shop basics"),
                 _INTL("Poké Balls and Splicers can be randomized out of shops too."),
                 _INTL("Poké Balls and Splicers stay buyable.")),
-          DynButton.new(proc { _INTL("Banned items ({1})", KIF::Rand.item_bans.length) },
+          DynButton.new(proc { KIF::Rand.mark(:__ban_items, _INTL("Banned items ({1})", KIF::Rand.item_bans.length)) },
                         proc { KIF::Rand.ban_picker(:items, _INTL("Banned items")) },
                         _INTL("Items that are never a random result. Starts with items that have no use in PIF."))
         ]
@@ -261,7 +273,7 @@ module KIF
     def self.page_exclusions
       open_page(_INTL("Randomizer: Exclusions"), _INTL("Pokémon, moves and abilities the randomizer never picks."), nil) {
         [[:pokemon, _INTL("Banned Pokémon")], [:moves, _INTL("Banned moves")], [:abilities, _INTL("Banned abilities")]].map do |kind, label|
-          DynButton.new(proc { "#{label} (#{KIF::Rand.bans(kind).length})" },
+          DynButton.new(proc { KIF::Rand.mark(:"__ban_#{kind}", "#{label} (#{KIF::Rand.bans(kind).length})") },
                         proc { KIF::Rand.ban_picker(kind, label) },
                         _INTL("A: ban / unban   L/R: page   Z: clear all"))
         end
@@ -517,7 +529,7 @@ class KifRandOptionWindow < Window_PokemonOption
   # pages with short names leave more room for the values
   def kif_name_width(full)
     return @kif_namew if @kif_namew
-    names = @options.select { |o| o.is_a?(EnumOption) }.map { |o| self.contents.text_size(o.name).width }
+    names = @options.select { |o| o.is_a?(EnumOption) }.map { |o| self.contents.text_size(o.name.sub(/ \*\z/, "") + " *").width }
     w = (names.max || 0) + 20
     @kif_namew = [[w, full * 3 / 10].max, full * 11 / 20].min
     return @kif_namew
@@ -667,7 +679,7 @@ class RandomizerOptionsScene < PokemonOption_Scene
   def pbGetOptions(inloadscreen = false)
     r = KIF::Rand
     options = []
-    options << r::DynButton.new(proc { _INTL("Seed: {1}", r.format_seed) },
+    options << r::DynButton.new(proc { r.mark(:__seed, _INTL("Seed: {1}", r.format_seed)) },
                                 proc { r.seed_menu; kif_refresh },
                                 _INTL("Same seed + same settings = the same game."))
     options << ButtonOption.new(_INTL("Presets & sharing"), proc { r.page_presets; kif_refresh },
@@ -690,12 +702,16 @@ class RandomizerOptionsScene < PokemonOption_Scene
                                   proc { r.send("page_#{page}"); kif_refresh }, desc)
     end
     unless $game_switches[SWITCH_DURING_INTRO]
-      options << ButtonOption.new(_INTL("Randomize now"), proc {
+      options << r::DynButton.new(proc {
+        n = r.respond_to?(:changed_keys) ? r.changed_keys.length : 0
+        n > 0 ? _INTL("Randomize now ({1} changed *)", n) : _INTL("Randomize now")
+      }, proc {
         if pbConfirmMessage(_INTL("Randomize with seed {1}? Your current randomized Pokémon, trainers and items are replaced. Your party and boxes stay.", r.format_seed))
           r.randomize_now
           pbMessage(_INTL("Done!"))
+          kif_refresh
         end
-      }, _INTL("Applies these settings now."))
+      }, _INTL("Settings only take effect when you randomize. Changed ones are marked *."))
     end
     return options
   end

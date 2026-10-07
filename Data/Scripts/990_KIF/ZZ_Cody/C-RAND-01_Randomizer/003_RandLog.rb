@@ -10,7 +10,7 @@ module KIF
       :starters => ["Starters", ["Off", "1st stage", "Any"]],
       :statics => ["Static encounters", ["Off", "On"]],
       :gifts => ["Gift Pokémon", ["Off", "On"]],
-      :trades => ["Trades", ["Off", "On"]],
+      :trades => ["Trades", ["Off", "Swap", "Random"]],
       :wild_bst => ["Strength range (Pokémon)", nil],
       :wild_legend => ["Legendaries", ["Off", "On"]],
       :wild_custom => ["Custom sprites only", ["Off", "On"]],
@@ -41,6 +41,7 @@ module KIF
       :class_themes => ["Class themes", ["Off", "On"]],
       :theme_shuffle => ["Shuffle themes", ["Off", "On"]],
       :extra_themes => ["Extra class themes", ["Off", "On"]],
+      :npc_requests => ["NPC requests", ["Original", "Swapped", "Any"]],
       :unfused => ["Unfused trainer Pokémon", ["Normal", "25%", "50%", "75%", "All"]],
       :item_mode => ["Item mode", ["Mapped", "Dynamic"]],
       :keep_categories => ["Keep item categories", ["Off", "On"]],
@@ -107,6 +108,8 @@ module KIF
         out << ["Starters", method(:sec_starters)] if pokemon_parts_on? && get(:starters) > 0
       end
       out << ["Routes", method(:sec_routes)] if pokemon_parts_on? && sw(SWITCH_RANDOM_WILD_AREA)
+      out << ["Routes", proc { ["Dynamic Route: every route rolls new Pokémon each time you enter it."] }] if dynamic_route?
+      out << ["Trades", method(:trade_lines)] if pokemon_parts_on? && get(:trades) > 0
       if sw(SWITCH_RANDOM_TRAINERS) && $PokemonGlobal.randomTrainersHash
         out << ["Trainers", method(:sec_trainers)]
         out << ["Class themes", method(:class_theme_lines)] if dget(:class_themes) > 0

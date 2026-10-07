@@ -49,7 +49,7 @@ module KIF
       [:starters, :enum, 3],
       [:statics, :enum, 2],
       [:gifts, :enum, 2],
-      [:trades, :enum, 2],
+      [:trades, :enum, 3],     # Off / Swap / Random
       [:wild_bst, :int, 999],
       [:wild_legend, :enum, 2],
       [:wild_custom, :enum, 2],
@@ -95,7 +95,9 @@ module KIF
         return sw(SWITCH_RANDOM_STARTER_FIRST_STAGE) ? 1 : 2
       when :statics      then return sw(SWITCH_RANDOM_STATIC_ENCOUNTERS) ? 1 : 0
       when :gifts        then return sw(SWITCH_RANDOM_GIFT_POKEMON) ? 1 : 0
-      when :trades       then return data[:trades] ? 1 : 0
+      when :trades
+        t = data[:trades]
+        return t == true ? 1 : t.to_i   # old saves stored true/false
       when :wild_bst     then return $game_variables[VAR_RANDOMIZER_WILD_POKE_BST].to_i
       when :wild_legend  then return sw(SWITCH_RANDOM_WILD_LEGENDARIES) ? 1 : 0
       when :wild_custom  then return sw(SWITCH_RANDOM_WILD_ONLY_CUSTOMS) ? 1 : 0
@@ -131,7 +133,7 @@ module KIF
         setsw(SWITCH_RANDOM_STARTER_FIRST_STAGE, v == 1)
       when :statics      then setsw(SWITCH_RANDOM_STATIC_ENCOUNTERS, v == 1)
       when :gifts        then setsw(SWITCH_RANDOM_GIFT_POKEMON, v == 1)
-      when :trades       then data[:trades] = (v == 1)
+      when :trades       then data[:trades] = v.to_i
       when :wild_bst     then $game_variables[VAR_RANDOMIZER_WILD_POKE_BST] = v.to_i
       when :wild_legend  then setsw(SWITCH_RANDOM_WILD_LEGENDARIES, v == 1)
       when :wild_custom  then setsw(SWITCH_RANDOM_WILD_ONLY_CUSTOMS, v == 1)
@@ -165,7 +167,7 @@ module KIF
     def self.sync_masters
       return unless $game_switches
       poke = get(:wild_mode) > 0 || get(:starters) > 0 || get(:statics) == 1 ||
-             get(:gifts) == 1 || get(:trades) == 1
+             get(:gifts) == 1 || get(:trades) > 0
       setsw(SWITCH_RANDOM_WILD, poke)
       setsw(SWITCH_RANDOM_ITEMS, sw(SWITCH_RANDOM_FOUND_ITEMS) || sw(SWITCH_RANDOM_GIVEN_ITEMS))
       setsw(SWITCH_RANDOM_TMS, sw(SWITCH_RANDOM_FOUND_TMS) || sw(SWITCH_RANDOM_GIVEN_TMS))

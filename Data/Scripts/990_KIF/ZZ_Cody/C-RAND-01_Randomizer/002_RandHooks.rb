@@ -187,17 +187,17 @@ class Object
     return kif_rand_obtainRandomizedStarter(*args)
   end
 
+  # Trades: Swap = the swap table (fusions part by part), Random = a roll
+  # within the Strength range for that trade (009_RandRequests.rb)
   def pbStartTrade(pokemonIndex, newpoke, *args)
-    if KIF::Rand.pokemon_parts_on? && KIF::Rand.get(:trades) == 1 && !$game_switches[SWITCH_DONT_RANDOMIZE]
+    if KIF::Rand.pokemon_parts_on? && KIF::Rand.get(:trades) > 0 && !$game_switches[SWITCH_DONT_RANDOMIZE]
       begin
-        KIF::Rand.ensure_dex
-        hash = $PokemonGlobal.psuedoBSTHash
         if newpoke.is_a?(Pokemon)
-          to = KIF::Rand.dex_of(hash && hash[getDexNumberForSpecies(newpoke.species)])
-          newpoke.species = getSpecies(to).species if to > 0
+          to = KIF::Rand.trade_result(newpoke.species)
+          newpoke.species = to if to
         else
-          to = KIF::Rand.dex_of(hash && hash[getDexNumberForSpecies(newpoke)])
-          newpoke = getSpecies(to).species if to > 0
+          to = KIF::Rand.trade_result(newpoke)
+          newpoke = to if to
         end
       rescue => e
         KIF.log("Randomized trade failed: #{e.message}")

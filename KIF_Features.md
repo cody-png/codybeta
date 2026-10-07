@@ -248,7 +248,9 @@ Only on saves started as randomized saves: **Cody Settings → Randomizer**. The
 - **Pokémon** – each part has its own switch:
   - *Wild encounters*: Off / Swap (each species becomes one other species everywhere) / Route (every route rolls its own) / Dynamic (every encounter rolls its own Pokémon on the spot, within the Strength range) / Dynamic Route (like Route, but a route rolls new Pokémon every time you enter it).
   - *PokéRadar*: the radar's route list matches what really appears (PIF used the Swap table even when wild Pokémon weren't swapped); radar-only rares are randomized too (Swap: what it became; Route: one per route; Dynamic Route: one per visit; Dynamic: any). Oak's aide on Route 24 finishes her field research in Dynamic (nothing repeats) and in Dynamic Route (once the visit is catalogued), with the quest points and reward.
-  - *Starters* (Off / 1st stage / Any), *Static encounters*, *Gift Pokémon*, *Trades*.
+  - *Starters* (Off / 1st stage / Any), *Static encounters*, *Gift Pokémon*.
+  - *Trades*: Off / Swap (what the Pokémon became; fusion trades too) / Random (each trade rolls its own within the Strength range). The spoiler log lists every trade.
+  - *NPC requests*: Original / Swapped *(default)* / Any. When a trade or quest asks for a specific Pokémon: Swapped = what it became (Swap mode; other modes accept any Pokémon), Any = any Pokémon. The NPC's lines name the new Pokémon; with Any they add "(Any Pokémon will do.)". PokéRadar rares are always asked for as what they became.
   - *Strength range* 0–999 (how close in base stat total a replacement must be; 999 = anything), *Legendaries*, *Custom sprites only*, *Fuse everything*.
 - **Trainers**
   - **Trainers** – Off / Random / Follow wild. Follow wild gives trainers the wild swap table (a trainer's Pidgey becomes whatever wild Pidgey became).

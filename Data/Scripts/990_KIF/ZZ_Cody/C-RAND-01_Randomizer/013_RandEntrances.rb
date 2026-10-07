@@ -392,13 +392,49 @@ module KIF
           map_in, map_out = shape == 1 ? simple_places(d, doors, rng, coupled) : [{}, {}]
           next unless grow(d, doors, rng, coupled, map_in, map_out, start, extra)   # nil: dead end, try again
           next unless map_in.length == doors.length && map_out.length == doors.length
-          res = sweep(d, edges_for(d, map_in, map_out), extra, nil, start)
+          edges = edges_for(d, map_in, map_out)
+          res = sweep(d, edges, extra, nil, start)
           next unless beatable?(d, res[:seen])
+          # mid-game: the player isn't in Pallet Town; from wherever they
+          # stand on the current map the end must be reachable too (every
+          # region of that map the layout reaches, with everything gathered
+          # so far assumed from scratch - conservative)
+          next unless beatable_from_here?(d, edges, res)
           return { in: map_in, out: map_out, sig: d[:signature], attempts: i + 1, seen: [],
                    shape: shape, doors: Rand.dget(:ent_doors), coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]),
                    start_door: start_door && start_door[:id], start_done: false, progress: map_progress(res) }
         end
         return nil
+      end
+
+      def self.beatable_from_here?(d, edges, res)
+        return true unless $game_map && $Trainer && $Trainer.has_pokedex && !$game_switches[SWITCH_DURING_INTRO]
+        here = "#{$game_map.map_id}:"
+        nodes = res[:seen].keys.select { |k| k.start_with?(here) && !k.include?(":g") }.first(12)
+        return true if nodes.empty?   # not a place the model knows (an interior stair, a cutscene map)
+        mine = current_flags(d)
+        # tiny pockets (a tile behind a ledge, an NPC's spot) aren't where the
+        # player is; every region with some reach of its own must get there
+        return nodes.all? { |n| r = sweep(d, edges, mine, nil, n); r[:seen].length < 20 || beatable?(d, r[:seen]) }
+      end
+
+      # The flags this save really has, read from the game state
+      def self.current_flags(d)
+        flags = {}
+        d[:providers].each { |f, _w, needs| flags[f] = true; needs.each { |x| flags[x] = true } }
+        out = []
+        flags.each_key do |f|
+          case f.to_s
+          when /\Asw_(\d+)\z/ then out << f if $game_switches[$1.to_i]
+          when /\Avar_(\d+)\z/ then v = $game_variables[$1.to_i]; out << f if v && v != 0 && v != ""
+          when /\Abadge_(\d+)\z/ then out << f if $Trainer.badges[$1.to_i]
+          when /\Aitem_(\w+)\z/ then out << f if $PokemonBag && $PokemonBag.pbHasItem?($1.to_sym)
+          end
+        end
+        return out
+      rescue => e
+        KIF.log("Entrances: current flags failed (#{e.class}: #{e.message})")
+        return []
       end
 
       # Pokémon Center doors to start from: in a town, or on any outdoor map

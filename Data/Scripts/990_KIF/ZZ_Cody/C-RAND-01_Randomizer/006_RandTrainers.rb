@@ -33,8 +33,9 @@ module KIF
       [:unfused, :enum, 5]        # Normal / 25% / 50% / 75% / All
     ]
     # Added after the data settings, so older settings codes still line up
-    DATA_SETTINGS.concat(TRAINER_SETTINGS)
-    DATA_KEYS.concat(TRAINER_SETTINGS.map(&:first))
+    # (only once, even if this file is loaded again)
+    TRAINER_SETTINGS.each { |st| DATA_SETTINGS << st unless DATA_KEYS.include?(st[0]) }
+    TRAINER_SETTINGS.each { |st| DATA_KEYS << st[0] unless DATA_KEYS.include?(st[0]) }
     DATA_DEFAULTS[:class_themes] = 1
     DATA_DEFAULTS[:extra_themes] = 1
 

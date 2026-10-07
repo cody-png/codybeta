@@ -19,8 +19,9 @@
 module KIF
   module Rand
     REQUEST_SETTINGS = [[:npc_requests, :enum, 3]]   # Original / Swapped / Any
-    DATA_SETTINGS.concat(REQUEST_SETTINGS)
-    DATA_KEYS.concat(REQUEST_SETTINGS.map(&:first))
+    # (only once, even if this file is loaded again)
+    REQUEST_SETTINGS.each { |st| DATA_SETTINGS << st unless DATA_KEYS.include?(st[0]) }
+    REQUEST_SETTINGS.each { |st| DATA_KEYS << st[0] unless DATA_KEYS.include?(st[0]) }
     DATA_DEFAULTS[:npc_requests] = 1
 
     REQUEST_RE = /species\s*==\s*:(\w+)|isSpecies\?\(\s*:(\w+)|pbHasSpecies\?\(\s*:(\w+)/

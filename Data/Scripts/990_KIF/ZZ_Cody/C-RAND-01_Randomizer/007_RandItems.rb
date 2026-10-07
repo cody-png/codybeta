@@ -19,8 +19,9 @@ module KIF
       [:keep_categories, :enum, 2],
       [:shop_basics, :enum, 2]
     ]
-    DATA_SETTINGS.concat(ITEM_SETTINGS)
-    DATA_KEYS.concat(ITEM_SETTINGS.map(&:first))
+    # (only once, even if this file is loaded again)
+    ITEM_SETTINGS.each { |st| DATA_SETTINGS << st unless DATA_KEYS.include?(st[0]) }
+    ITEM_SETTINGS.each { |st| DATA_KEYS << st[0] unless DATA_KEYS.include?(st[0]) }
     DATA_DEFAULTS[:shop_basics] = 1
 
     # Items with no use in PIF (nothing to do with them but sell for little)

@@ -15,7 +15,8 @@ module KIF
       [:ent_doors, :enum, 3],     # Dungeons / Buildings / Everything
       [:ent_coupled, :enum, 2],   # Off / On (default On, see dget below)
       [:ent_hints, :enum, 2],     # Off / On
-      [:ent_start, :enum, 3]      # Pallet / Random town / Random map
+      [:ent_start, :enum, 3],     # Pallet / Random town / Random map
+      [:ent_levels, :enum, 2]     # Off / By progress
     ]
     ENT_SETTINGS.each { |st| DATA_SETTINGS << st unless DATA_KEYS.include?(st[0]) }
     ENT_SETTINGS.each { |st| DATA_KEYS << st[0] unless DATA_KEYS.include?(st[0]) }
@@ -24,6 +25,7 @@ module KIF
     LABELS[:ent_coupled] = ["Coupled", ["Off", "On"]]
     LABELS[:ent_hints] = ["Door hints", ["Off", "On"]]
     LABELS[:ent_start] = ["Start", ["Pallet", "Random town", "Random map"]]
+    LABELS[:ent_levels] = ["Level scaling", ["Off", "By progress"]]
 
     DATA_DEFAULTS[:ent_coupled] = 1   # Coupled unless switched off
 
@@ -92,7 +94,7 @@ module KIF
         return lifts.any? { |set| !set.empty? && set.all? { |s|
           case s
           when Integer then have.include?(:"sw_#{s}")
-          when Symbol then have.include?(s) || (s.to_s =~ /\Abadges_(\d+)\z/ && badges >= $1.to_i)
+          when Symbol then s == :always || have.include?(s) || (s.to_s =~ /\Abadges_(\d+)\z/ && badges >= $1.to_i)
           else s.to_s =~ /\Avar(\d+)>=/ ? have.include?(:"var_#{$1}") : s.to_s.start_with?("self")
           end } }
       end
@@ -120,8 +122,10 @@ module KIF
         gates = d[:gates]
         have = from ? from[:have].dup : (d[:start_with] + extra).uniq
         seen = from ? from[:seen].dup : {}
+        order = from ? from[:order].dup : {}   # node => how many nodes were reached before it
         sphere = from ? from[:spheres] - 1 : 0
         seen[start || d[:start]] ||= sphere
+        order[start || d[:start]] ||= 0
         loop do
           break if stop_at && have.include?(stop_at)
           badges = have.count { |f| f.to_s.start_with?(BADGE_PREFIX) }
@@ -136,6 +140,7 @@ module KIF
               next unless req.all? { |r| satisfied?(r, all, gates, badges) }
               now[to] = true
               seen[to] ||= sphere
+              order[to] ||= order.length
               queue << to
             end
           end
@@ -157,7 +162,7 @@ module KIF
           sphere += 1
         end
         badges = have.count { |f| f.to_s.start_with?(BADGE_PREFIX) }
-        return { seen: seen, have: have, all: flag_hash(have, badges), badges: badges, spheres: sphere + 1 }
+        return { seen: seen, order: order, have: have, all: flag_hash(have, badges), badges: badges, spheres: sphere + 1 }
       end
 
       # The graph for a layout: map_in (door => door whose place it leads
@@ -391,7 +396,7 @@ module KIF
           next unless beatable?(d, res[:seen])
           return { in: map_in, out: map_out, sig: d[:signature], attempts: i + 1, seen: [],
                    shape: shape, doors: Rand.dget(:ent_doors), coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]),
-                   start_door: start_door && start_door[:id], start_done: false }
+                   start_door: start_door && start_door[:id], start_done: false, progress: map_progress(res) }
         end
         return nil
       end
@@ -410,6 +415,22 @@ module KIF
       def self.pre_dex_flags(d)
         res = sweep(d, edges_for(d, {}, {}), [], nil, nil, POKEDEX_FLAG)
         return res[:have]
+      end
+
+      # How far into the game each map is: the share of all reached nodes
+      # that came before its first node, in PROGRESS_BINS steps (0 = the
+      # start, PROGRESS_BINS - 1 = the last places reached)
+      PROGRESS_BINS = 40
+      def self.map_progress(res)
+        order = res[:order]
+        total = [order.length, 1].max
+        out = {}
+        order.each do |node, k|
+          mid = node.split(":")[0].to_i
+          bin = (k * PROGRESS_BINS / total).to_i.clamp(0, PROGRESS_BINS - 1)
+          out[mid] = bin if out[mid].nil? || bin < out[mid]
+        end
+        return out
       end
 
       # Sphere of each door: when its doorstep first comes into reach
@@ -523,6 +544,50 @@ module KIF
         KIF.log("Random start home failed (#{e.class}: #{e.message})")
       end
 
+      #-------------------------------------------------------------------------
+      # Level scaling: trainers are as strong as vanilla trainers met at the
+      # same point of the game. Progress = how far into the reachable world a
+      # map is (see map_progress); the data file carries each map's vanilla
+      # progress and the vanilla level curve over progress.
+      #-------------------------------------------------------------------------
+      def self.scaling?
+        return active? && Rand.dget(:ent_levels) == 1 && state[:progress].is_a?(Hash) && dat[:level_curve]
+      end
+
+      def self.level_factor(map_id)
+        return 1.0 unless scaling?
+        van = dat[:map_progress][map_id]
+        now = state[:progress][map_id]
+        return 1.0 unless van && now && van != now
+        curve = dat[:level_curve]
+        a = curve[van]; b = curve[now]
+        return 1.0 unless a && b && a > 0
+        return (b / a.to_f).clamp(0.3, 3.0)
+      end
+
+      def self.scale_trainer(trainer, map_id = nil)
+        return trainer unless trainer && scaling?
+        map_id ||= $game_map ? $game_map.map_id : nil
+        return trainer unless map_id
+        f = level_factor(map_id)
+        return trainer if (f - 1.0).abs < 0.02
+        max = GameData::GrowthRate.max_level
+        trainer.party.each do |pkmn|
+          old = pkmn.level
+          lv = (old * f).round.clamp(1, max)
+          next if lv == old
+          natural = pkmn.getMoveList.select { |m| m[0] <= old }.map { |m| m[1] }.last(4) rescue nil
+          pkmn.level = lv
+          pkmn.calc_stats
+          # moves picked by level follow it; a hand-written set stays
+          pkmn.reset_moves if natural && pkmn.moves.map(&:id).sort == natural.uniq.sort
+        end
+        return trainer
+      rescue => e
+        KIF.log("Level scaling failed (#{e.class}: #{e.message})")
+        return trainer
+      end
+
       def self.start_name
         s = state
         return nil unless s && s[:start_door]
@@ -570,6 +635,7 @@ module KIF
         out << _INTL("Settings: {1}, {2}, {3}", LABELS[:entrances][1][s[:shape] || 2], LABELS[:ent_doors][1][s[:doors] || 2],
                      s[:coupled] ? _INTL("coupled") : _INTL("decoupled"))
         out << _INTL("Start: {1}", start_name) if start_name
+        out << _INTL("Level scaling: trainers follow how far into the game their map is") if scaling?
         out << _INTL("Found so far: {1} of {2} doors", (s[:seen] || []).length, s[:in].length)
         sph = s[:spheres] || {}
         d[:doors].sort_by { |o| [sph[o[:id]] || 99, d[:names][o[:map]].to_s, o[:tiles][0][1], o[:tiles][0][0]] }.each do |o|
@@ -651,5 +717,17 @@ class Player
     end
   rescue => e
     KIF.log("Random start flag failed (#{e.class}: #{e.message})")
+  end
+end
+
+#-------------------------------------------------------------------------------
+# Level scaling: every trainer loaded for a battle
+#-------------------------------------------------------------------------------
+class Object
+  alias kif_ent_pbLoadTrainer pbLoadTrainer unless method_defined?(:kif_ent_pbLoadTrainer) || private_method_defined?(:kif_ent_pbLoadTrainer)
+
+  def pbLoadTrainer(tr_type, tr_name, tr_version = 0)
+    trainer = kif_ent_pbLoadTrainer(tr_type, tr_name, tr_version)
+    return KIF::Rand::ER.scale_trainer(trainer)
   end
 end

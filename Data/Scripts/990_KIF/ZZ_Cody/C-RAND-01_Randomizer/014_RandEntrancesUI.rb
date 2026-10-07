@@ -23,7 +23,10 @@ module KIF
           enum(:ent_start, _INTL("Start"), [_INTL("Pallet"), _INTL("Random town"), _INTL("Random map")],
                [_INTL("Your journey starts in Pallet Town as usual."),
                 _INTL("When Oak hands you the Pokédex, leaving the lab takes you to a random town's Pokémon Center, which becomes home. New games only."),
-                _INTL("Like Random town, but any Pokémon Center in Kanto, routes included. New games only.")])
+                _INTL("Like Random town, but any Pokémon Center in Kanto, routes included. New games only.")]),
+          onoff(:ent_levels, _INTL("Level scaling"),
+                _INTL("Trainers keep their usual levels, wherever their map ends up."),
+                _INTL("Trainers are as strong as the ones you'd normally meet at that point of the game: a gym reached first has low levels, the Elite Four reached early is weaker."))
         ]
         unless $game_switches[SWITCH_DURING_INTRO]
           rows << ButtonOption.new(_INTL("Entrance log"), proc { KIF::Rand::ER.show_log },

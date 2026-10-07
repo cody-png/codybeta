@@ -471,12 +471,17 @@ module KIF
       max = fusions ? PBSpecies.maxValue : NB_POKEMON
       legend = sw(SWITCH_RANDOM_WILD_LEGENDARIES)
       old_dex = getDexNumberForSpecies(old_species) rescue nil
-      40.times do
+      # Strength range applies to Dynamic too (Cody): the pick stays within
+      # range of the usual Pokémon, widening a little when nothing fits
+      bst = get(:wild_bst)
+      300.times do |i|
+        bst += 5 if i > 0 && i % 20 == 0 && bst < 999
         pick = dex_of(pool ? pool.sample : rand(max) + 1)
         next if pick <= 0 || pick >= Settings::ZAPMOLCUNO_NB
         next unless (GameData::Species.exists?(pick) rescue false)
         next if species_banned?(pick)
         next unless old_dex.nil? || legendaryOk(old_dex, pick, legend)
+        next if old_dex && bst < 999 && bstNotOk(pick, old_dex, bst)
         return GameData::Species.get(pick).species
       end
       return old_species   # nothing allowed came up: the usual Pokémon

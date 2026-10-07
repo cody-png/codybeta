@@ -11,7 +11,7 @@
 #   * Rival keeps his team: each Pokémon line in a rival's team gets one
 #     replacement line for every battle with him, at the same stage.
 #   * Team size: Same / +1 / +2 / Full – extra Pokémon join at the team's
-#     average level.
+#     average level. Gym Leaders use the Gyms page's Leader team size.
 #   * Fuse everything: every trainer Pokémon is a fusion.
 #   * Unfused Pokémon: Normal (PIF's odds: nearly every pick is a fusion) /
 #     25% / 50% / 75% / All of the picks are plain Pokémon. Fuse everything
@@ -152,7 +152,8 @@ module KIF
 
     def self.trainer_features?
       return trainer_mode == 2 || dget(:class_themes) > 0 || dget(:rival_team) == 1 ||
-             dget(:team_size) > 0 || dget(:trainer_fuse) == 1 || dget(:unfused) > 0
+             dget(:team_size) > 0 || dget(:trainer_fuse) == 1 || dget(:unfused) > 0 ||
+             dget(:leader_size) > 0
     end
 
     # Should this pick be a plain (unfused) Pokémon? Normal = PIF's own odds.
@@ -374,15 +375,6 @@ module KIF
     #---------------------------------------------------------------------------
     # The shuffle
     #---------------------------------------------------------------------------
-    def self.extra_count(n)
-      case dget(:team_size)
-      when 1 then return [n + 1, 6].min - n
-      when 2 then return [n + 2, 6].min - n
-      when 3 then return 6 - n
-      end
-      return 0
-    end
-
     # Follow wild needs the swap table even when no wild part is randomized;
     # made on its own seed (before the trainers' one) so it's the same table
     # either way
@@ -411,7 +403,7 @@ module KIF
         olds = tr.pokemon.map { |p| dex_of(p[:species]) }
         rival = dget(:rival_team) == 1 && RIVAL_TYPES.include?(tr.trainer_type)
         theme = themes_on ? class_theme(tr.trainer_type) : nil
-        n = olds.length + extra_count(olds.length)
+        n = olds.length + team_extra_count(tr.trainer_type, olds.length)
         team = []
         n.times do |i|
           old = olds[i] || olds[rand(olds.length)] || 1
@@ -474,7 +466,7 @@ module GameData
     def kif_add_extras(trainer)
       return unless trainer && $game_switches && $game_switches[SWITCH_RANDOM_TRAINERS]
       return if $game_switches[SWITCH_FIRST_RIVAL_BATTLE]
-      return if KIF::Rand.dget(:team_size) == 0
+      return if KIF::Rand.team_extra_setting(@trainer_type) == 0
       th = $PokemonGlobal.randomTrainersHash
       team = th && th[self.id]
       return unless team && team.length > @pokemon.length
@@ -490,6 +482,11 @@ module GameData
         species = reverseFusionSpecies(species) if $game_switches[SWITCH_REVERSED_MODE]
         sp = species.is_a?(GameData::Species) ? species.id : species
         pkmn = Pokemon.new(sp, level, trainer)
+        # IVs/EVs like the rest of the team (PIF's to_trainer)
+        GameData::Stat.each_main do |s|
+          pkmn.iv[s.id] = [level / 2, Pokemon::IV_STAT_LIMIT].min
+          pkmn.ev[s.id] = [level * 3 / 2, Pokemon::EV_LIMIT / 6].min
+        end
         pkmn.item = pbGetRandomHeldItem.id if $game_switches[SWITCH_RANDOM_HELD_ITEMS]
         pkmn.calc_stats
         party.push(pkmn)

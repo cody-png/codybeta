@@ -154,9 +154,9 @@ module KIF
                 _INTL("Each Pokémon in the rival's team gets one replacement for every battle, evolving as his team does.")),
           enum(:team_size, _INTL("Team size"), [_INTL("Same"), _INTL("+1"), _INTL("+2"), _INTL("Full")],
                [_INTL("Trainers keep their usual number of Pokémon."),
-                _INTL("Trainers get 1 more Pokémon (up to 6), at the team's average level."),
-                _INTL("Trainers get 2 more Pokémon (up to 6), at the team's average level."),
-                _INTL("Every trainer has 6 Pokémon. The extras join at the team's average level.")]),
+                _INTL("Trainers get 1 more Pokémon (up to 6), at the team's average level. Gym Leaders: see the Gyms page."),
+                _INTL("Trainers get 2 more Pokémon (up to 6), at the team's average level. Gym Leaders: see the Gyms page."),
+                _INTL("Every trainer has 6 Pokémon. The extras join at the team's average level. Gym Leaders: see the Gyms page.")]),
           onoff(:trainer_fuse, _INTL("Fuse everything"),
                 _INTL("Trainer Pokémon can be unfused."),
                 _INTL("Every trainer Pokémon is a fusion.")),
@@ -187,7 +187,12 @@ module KIF
                 _INTL("Gym types are shuffled.")),
           onoff(:gym_each, _INTL("Rerandomize each battle"),
                 _INTL("Gym teams stay the same each try."),
-                _INTL("Gym teams change on every try."))
+                _INTL("Gym teams change on every try.")),
+          enum(:leader_size, _INTL("Leader team size"), [_INTL("Same"), _INTL("+1"), _INTL("+2"), _INTL("Full")],
+               [_INTL("Gym Leaders bring their usual number of Pokémon."),
+                _INTL("Gym Leaders bring one more Pokémon, in every battle with them."),
+                _INTL("Gym Leaders bring two more Pokémon, in every battle with them."),
+                _INTL("Gym Leaders bring six Pokémon, in every battle with them.")])
         ]
       }
     end

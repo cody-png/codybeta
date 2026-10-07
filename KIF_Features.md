@@ -233,6 +233,8 @@ All options in this menu are per-save.
 ### Battles
 
 - **Move Effectiveness** – Off / On *(On, all saves)*. The Fight menu shows how well each damaging move works against the foe: a green ▲ (super effective), orange ▼ (resisted) or grey ✕ (no effect) on each move button, and "Super eff." / "Resisted" / "No effect" under the PP of the highlighted move. With several foes, the info box lists each one with its multiplier (e.g. "Gyarados x4", "Onix x0") and names too long for the box scroll like a car radio display. The button marker shows the best result. Uses the battle's real type rules (including KIF's type buffs). Abilities stay hidden until the battle reveals them: once a foe's Levitate, Flash Fire, Volt Absorb, Water Absorb, Wonder Guard (and similar) has popped up, its immunity shows as "No effect" for the rest of that battle (not against Mold Breaker). Air Balloon and Magnet Rise also show Ground moves as "No effect".
+- **Gym Leader teams** – Normal / +1 / +2 / Full *(Normal, per save)*. Gym Leaders bring extra Pokémon to every battle with them (gym, rematch or story battle). The extras have the gym's type (randomized gym types count), are fusions about as often as the rest of the team, are about as strong as the team, are evolved as far as their level allows and join at the team's average level. Never legendaries, repeats or banned Pokémon, and the same every time for a save. On randomized saves with random trainers, the Randomizer's *Leader team size* decides instead.
+- **Your Pokémon in gyms** – Normal / +1 / +2 / Full *(Normal, per save)*. Raises how many Pokémon you may pick before a Kanto Gym Leader battle (Full = your whole party). The picker still shows.
 
 ### Breeding & Fusion
 
@@ -259,10 +261,10 @@ Only on saves started as randomized saves: **Cody Settings → Randomizer**. The
   - **Shuffle themes** – Off / On. Each class gets a random type instead (the same for the same seed); Type Experts keep theirs.
   - **Extra class themes** – Off / On *(On)*. Also themes the less obvious classes: Scientists, Bikers, Burglars, Jugglers, Robots, Roughnecks, Cue Balls, Aroma Ladies, Painters and Tubers.
   - **Rival keeps his team** – Off / On. Each Pokémon line in the rival's team gets one replacement line for every battle, at the same stage.
-  - **Team size** – Same / +1 / +2 / Full. Extra Pokémon join at the team's average level.
+  - **Team size** – Same / +1 / +2 / Full. Extra Pokémon join at the team's average level. Not Gym Leaders (see Gyms).
   - **Fuse everything** – Off / On. Every trainer Pokémon is a fusion.
   - **Unfused Pokémon** – Normal / 25% / 50% / 75% / All. How many trainer Pokémon are plain, unfused Pokémon (Normal = the game's own odds, nearly all fusions). Fuse everything wins if both are on.
-- **Gyms** – PIF's options (custom sprites only, gym types, rerandomize each battle).
+- **Gyms** – PIF's options (custom sprites only, gym types, rerandomize each battle), plus **Leader team size** – Same / +1 / +2 / Full: Gym Leaders bring extra Pokémon in every battle with them.
 - **Items**
   - **Item mode** – Mapped / Dynamic. Mapped: each item always becomes the same other item. Dynamic: every item ball, gift and shop rolls its own item; the same spot always gives the same item for the same seed. TMs follow the mode too.
   - **Found items**, **Found TMs**, **Given items**, **Given TMs**, **Shop items** – each only changes its own part.

@@ -69,7 +69,7 @@ module KIF
       [:given_items, :enum, 2],
       [:given_tms, :enum, 2],
       [:shop_items, :enum, 2],
-      [:held_items, :enum, 2]
+      [:held_items, :enum, 3]  # Off / Random / Fixed
     ]
 
     def self.data
@@ -112,7 +112,8 @@ module KIF
       when :given_items  then return sw(SWITCH_RANDOM_GIVEN_ITEMS) ? 1 : 0
       when :given_tms    then return sw(SWITCH_RANDOM_GIVEN_TMS) ? 1 : 0
       when :shop_items   then return sw(SWITCH_RANDOM_SHOP_ITEMS) ? 1 : 0
-      when :held_items   then return sw(SWITCH_RANDOM_HELD_ITEMS) ? 1 : 0
+      when :held_items   then return 0 unless sw(SWITCH_RANDOM_HELD_ITEMS)
+                              return data[:held_fixed] ? 2 : 1
       end
       return 0
     end
@@ -152,7 +153,9 @@ module KIF
       when :given_items  then setsw(SWITCH_RANDOM_GIVEN_ITEMS, v == 1)
       when :given_tms    then setsw(SWITCH_RANDOM_GIVEN_TMS, v == 1)
       when :shop_items   then setsw(SWITCH_RANDOM_SHOP_ITEMS, v == 1)
-      when :held_items   then setsw(SWITCH_RANDOM_HELD_ITEMS, v == 1)
+      when :held_items
+        setsw(SWITCH_RANDOM_HELD_ITEMS, v > 0)
+        data[:held_fixed] = (v == 2)
       end
       sync_masters
     end
@@ -256,10 +259,12 @@ module KIF
       return @by_number[gd][n]
     end
 
+    BAN_TAGS = { "P" => [:pokemon, GameData::Species], "M" => [:moves, GameData::Move],
+                 "A" => [:abilities, GameData::Ability], "I" => [:items, GameData::Item] }
+
     def self.bans_code
       parts = []
-      { "P" => [:pokemon, GameData::Species], "M" => [:moves, GameData::Move],
-        "A" => [:abilities, GameData::Ability] }.each do |tag, (kind, gd)|
+      BAN_TAGS.each do |tag, (kind, gd)|
         ids = bans(kind).map { |id| (gd.get(id).id_number rescue nil) }.compact.sort
         parts << tag + ids.map { |n| n.to_s(36) }.join(".")
       end
@@ -298,8 +303,8 @@ module KIF
       unless v1
         bans = { :pokemon => [], :moves => [], :abilities => [] }
         parts[5].split("~").each do |seg|
-          kind, gd = { "P" => [:pokemon, GameData::Species], "M" => [:moves, GameData::Move],
-                       "A" => [:abilities, GameData::Ability] }[seg[0]]
+          kind, gd = BAN_TAGS[seg[0]]
+          bans[kind] ||= []
           return nil unless kind
           seg[1..-1].split(".").each do |n|
             obj = by_number(gd, n.to_i(36))
@@ -308,6 +313,8 @@ module KIF
           end
         end
       end
+      # Codes from before banned items existed: the default list
+      bans[:items] ||= :default if bans
       return [s, vals, bans]
     end
 
@@ -317,7 +324,7 @@ module KIF
       self.seed = res[0]
       res[1].each { |k, v| set(k, v) }
       if res[2]
-        res[2].each { |kind, list| data[:"ban_#{kind}"] = list }
+        res[2].each { |kind, list| data[:"ban_#{kind}"] = (list == :default ? nil : list) }
       end
       return true
     end

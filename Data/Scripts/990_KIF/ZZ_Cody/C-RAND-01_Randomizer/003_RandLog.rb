@@ -27,7 +27,7 @@ module KIF
       :given_items => ["Given items", ["Off", "On"]],
       :given_tms => ["Given TMs", ["Off", "On"]],
       :shop_items => ["Shop items", ["Off", "On"]],
-      :held_items => ["Trainer held items", ["Off", "On"]],
+      :held_items => ["Trainer held items", ["Off", "Random", "Fixed"]],
       :types => ["Types", ["Same", "Random", "Dual"]],
       :type_orig => ["Original type", ["Allowed", "Never"]],
       :moves_follow => ["Moves follow type", ["Off", "On"]],
@@ -41,6 +41,9 @@ module KIF
       :class_themes => ["Class themes", ["Off", "On"]],
       :theme_shuffle => ["Shuffle themes", ["Off", "On"]],
       :extra_themes => ["Extra class themes", ["Off", "On"]],
+      :item_mode => ["Item mode", ["Mapped", "Dynamic"]],
+      :keep_categories => ["Keep item categories", ["Off", "On"]],
+      :shop_basics => ["Keep shop basics", ["Off", "On"]],
       :rival_team => ["Rival keeps his team", ["Off", "On"]],
       :team_size => ["Team size", ["Same", "+1", "+2", "Full"]],
       :trainer_fuse => ["Trainer fuse everything", ["Off", "On"]]
@@ -180,7 +183,12 @@ module KIF
             ct = dget(:class_themes) > 0 ? class_theme(tr.trainer_type) : nil
             tags << ct.map { |x| type_name(x) }.join("/") if ct
             tag = tags.empty? ? "" : " [#{tags.join(', ')}]"
-            lines << "#{tname} #{tr.real_name}#{tag}: #{old} -> #{new}"
+            line = "#{tname} #{tr.real_name}#{tag}: #{old} -> #{new}"
+            if get(:held_items) == 2
+              held = (0...team.length).map { |i| item_name(fixed_held(tr.id, i)) }
+              line += " | held: #{held.join(', ')}"
+            end
+            lines << line
           end
         rescue => e
           lines << "(trainers unavailable: #{e.message})"
@@ -197,14 +205,23 @@ module KIF
         end
         out << ["Gym types", lines]
       end
-      ih = $PokemonGlobal.randomItemsHash
-      if ih && !ih.empty? && (sw(SWITCH_RANDOM_ITEMS) || sw(SWITCH_RANDOM_SHOP_ITEMS))
-        out << ["Items", ih.map { |a, b| "#{item_name(a)} -> #{item_name(b)}" }]
+      if dynamic_items?
+        if sw(SWITCH_RANDOM_ITEMS) || sw(SWITCH_RANDOM_TMS)
+          out << ["Items and TMs (Dynamic, by spot)", dynamic_item_lines]
+        end
+        out << ["Shops", ["Dynamic: every shop rolls its own stock."]] if sw(SWITCH_RANDOM_SHOP_ITEMS)
+      else
+        ih = $PokemonGlobal.randomItemsHash
+        if ih && !ih.empty? && (sw(SWITCH_RANDOM_ITEMS) || sw(SWITCH_RANDOM_SHOP_ITEMS))
+          out << ["Items", ih.map { |a, b| "#{item_name(a)} -> #{item_name(b)}" }]
+        end
+        tm = $PokemonGlobal.randomTMsHash
+        if tm && !tm.empty? && sw(SWITCH_RANDOM_TMS)
+          out << ["TMs", tm.map { |a, b| "#{item_name(a)} -> #{item_name(b)}" }]
+        end
       end
-      tm = $PokemonGlobal.randomTMsHash
-      if tm && !tm.empty? && sw(SWITCH_RANDOM_TMS)
-        out << ["TMs", tm.map { |a, b| "#{item_name(a)} -> #{item_name(b)}" }]
-      end
+      ib = item_bans
+      out << ["Banned items", [ib.map { |i| item_name(i) }.join(", ")]] if sw(SWITCH_RANDOM_ITEMS_GENERAL) && !ib.empty?
       return out
     end
 

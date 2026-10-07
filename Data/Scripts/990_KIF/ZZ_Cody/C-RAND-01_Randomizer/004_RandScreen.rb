@@ -171,12 +171,27 @@ module KIF
     def self.page_items
       open_page(_INTL("Randomizer: Items"), _INTL("Items and TMs."), nil) {
         [
+          enum(:item_mode, _INTL("Item mode"), [_INTL("Mapped"), _INTL("Dynamic")],
+               [_INTL("Each item always becomes the same other item (every Potion is a Lure)."),
+                _INTL("Every item ball, gift and shop rolls its own item. The same spot always gives the same item.")]),
           onoff(:found_items, _INTL("Found items"), _INTL("Items on the ground are normal."), _INTL("Items on the ground are randomized.")),
           onoff(:found_tms, _INTL("Found TMs"), _INTL("TMs on the ground are normal."), _INTL("TMs on the ground are randomized.")),
           onoff(:given_items, _INTL("Given items"), _INTL("Items from NPCs are normal."), _INTL("Items from NPCs are randomized (may break some quests).")),
           onoff(:given_tms, _INTL("Given TMs"), _INTL("TMs from NPCs are normal."), _INTL("TMs from NPCs are randomized.")),
           onoff(:shop_items, _INTL("Shop items"), _INTL("Shops sell their usual items."), _INTL("Shop stock is randomized.")),
-          onoff(:held_items, _INTL("Trainer held items"), _INTL("Trainers hold their usual items."), _INTL("Trainers hold random items."))
+          enum(:held_items, _INTL("Trainer held items"), [_INTL("Off"), _INTL("Random"), _INTL("Fixed")],
+               [_INTL("Trainers hold their usual items."),
+                _INTL("Trainers hold a random item, new every battle."),
+                _INTL("Each trainer's Pokémon hold a random item, the same every battle.")]),
+          onoff(:keep_categories, _INTL("Keep categories"),
+                _INTL("Any item can become any other item."),
+                _INTL("Balls stay balls, medicine stays medicine, berries stay berries, held items stay held items...")),
+          onoff(:shop_basics, _INTL("Keep shop basics"),
+                _INTL("Poké Balls and Splicers can be randomized out of shops too."),
+                _INTL("Poké Balls and Splicers stay buyable.")),
+          DynButton.new(proc { _INTL("Banned items ({1})", KIF::Rand.item_bans.length) },
+                        proc { KIF::Rand.ban_picker(:items, _INTL("Banned items")) },
+                        _INTL("Items that are never a random result. Starts with items that have no use in PIF."))
         ]
       }
     end
@@ -246,6 +261,7 @@ module KIF
       @ban_entries[kind] ||= case kind
         when :pokemon then base_species.map { |sp| [sp.species, sprintf("%03d %s", sp.id_number, sp.real_name)] }
         when :moves then move_pool.map { |m| [m.id, m.real_name] }.sort_by { |x| x[1] }
+        when :items then (item_sources(false) + item_sources(true)).map { |i| [i.id, i.name] }.sort_by { |x| x[1] }
         else all_abilities.map { |a| [a, GameData::Ability.get(a).real_name] }.sort_by { |x| x[1] }
       end
     end

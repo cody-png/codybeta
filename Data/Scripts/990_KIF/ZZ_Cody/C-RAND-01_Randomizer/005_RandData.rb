@@ -87,6 +87,7 @@ module KIF
     end
 
     def self.bans(kind)
+      return item_bans if kind == :items
       data[:"ban_#{kind}"] ||= []
       return data[:"ban_#{kind}"]
     end

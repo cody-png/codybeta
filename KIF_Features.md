@@ -258,7 +258,14 @@ Only on saves started as randomized saves: **Cody Settings → Randomizer**. The
   - **Rival keeps his team** – Off / On. Each Pokémon line in the rival's team gets one replacement line for every battle, at the same stage.
   - **Team size** – Same / +1 / +2 / Full. Extra Pokémon join at the team's average level.
   - **Fuse everything** – Off / On. Every trainer Pokémon is a fusion.
-- **Gyms**, **Items** – PIF's options (custom sprites only, gym types, rerandomize each battle, found/given/shop items and TMs, trainer held items).
+- **Gyms** – PIF's options (custom sprites only, gym types, rerandomize each battle).
+- **Items**
+  - **Item mode** – Mapped / Dynamic. Mapped: each item always becomes the same other item. Dynamic: every item ball, gift and shop rolls its own item; the same spot always gives the same item for the same seed. TMs follow the mode too.
+  - **Found items**, **Found TMs**, **Given items**, **Given TMs**, **Shop items** – each only changes its own part.
+  - **Trainer held items** – Off / Random / Fixed. Random gives a new item every battle; Fixed gives each trainer's Pokémon the same item every time.
+  - **Keep categories** – Off / On. Balls stay balls, medicine stays medicine, berries, held items, evolution items, gems, mail, battle items and TMs stay in their group.
+  - **Keep shop basics** – Off / On *(On)*. Poké Balls and Splicers stay buyable.
+  - **Banned items** – never a random result. Starts with the items that have no use in PIF (shards, apricorns, contest scarves, mail, flavour-only berries, ...).
 - **Pokémon data** – changes the Pokémon themselves (fusions are built from their two parts, so they follow):
   - *Types*: Same / Random (each evolution family gets new types) / Dual (everyone gets two types); *Original type*: Allowed / Never.
   - *Moves follow type*: moves of the old type become moves of the new type at the same level with similar power (other moves stay). *TMs follow type* does the same for TM and tutor compatibility.

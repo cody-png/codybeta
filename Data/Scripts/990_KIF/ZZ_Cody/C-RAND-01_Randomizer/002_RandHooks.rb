@@ -59,13 +59,13 @@ class Object
   alias kif_rand_show_shuffle_progress show_shuffle_progress unless method_defined?(:kif_rand_show_shuffle_progress) || private_method_defined?(:kif_rand_show_shuffle_progress)
 
   def pbShuffleItems(*args)
-    ret = KIF::Rand.with_seed(:items) { kif_rand_pbShuffleItems(*args) }
+    ret = KIF::Rand.with_seed(:items) { KIF::Rand.shuffle_items }
     KIF::Rand.write_log
     return ret
   end
 
   def pbShuffleTMs(*args)
-    ret = KIF::Rand.with_seed(:tms) { kif_rand_pbShuffleTMs(*args) }
+    ret = KIF::Rand.with_seed(:tms) { KIF::Rand.shuffle_tms }
     KIF::Rand.write_log
     return ret
   end

@@ -74,8 +74,10 @@ module KIF
     }
 
     def self.dget(key)
-      v = data[key]
-      v = DATA_DEFAULTS[key] || 0 if v.nil?
+      default = DATA_DEFAULTS[key] || 0
+      v = as_int(data[key], default)
+      max = setting_max(key)
+      return default if v < 0 || (max && v > max)
       return v
     end
 

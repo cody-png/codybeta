@@ -80,7 +80,34 @@ module KIF
     #---------------------------------------------------------------------------
     # Settings (PIF switches / variables where PIF has them)
     #---------------------------------------------------------------------------
+    # Every setting read goes through here: whatever a save holds (older
+    # versions stored true/false, a newer version may store a number this one
+    # doesn't know), the menus and the randomizer get a whole number in range.
+    def self.as_int(v, default = 0)
+      return v if v.is_a?(Integer)
+      return 1 if v == true
+      return 0 if v == false
+      return default
+    end
+
+    def self.setting_max(key)
+      s = SETTINGS.find { |x| x[0] == key } || (defined?(DATA_SETTINGS) && DATA_SETTINGS.find { |x| x[0] == key })
+      return nil unless s
+      return s[1] == :int ? s[2] : s[2] - 1
+    end
+
     def self.get(key)
+      v = as_int(get_raw(key), 0)
+      max = setting_max(key)
+      v = 0 if v < 0
+      v = max if max && v > max
+      return v
+    rescue => e
+      KIF.log("Randomizer setting #{key} couldn't be read (#{e.class}: #{e.message}); using 0")
+      return 0
+    end
+
+    def self.get_raw(key)
       return dget(key) if DATA_KEYS.include?(key)
       case key
       when :wild_mode
@@ -96,8 +123,7 @@ module KIF
       when :statics      then return sw(SWITCH_RANDOM_STATIC_ENCOUNTERS) ? 1 : 0
       when :gifts        then return sw(SWITCH_RANDOM_GIFT_POKEMON) ? 1 : 0
       when :trades
-        t = data[:trades]
-        return t == true ? 1 : t.to_i   # old saves stored true/false
+        return as_int(data[:trades], 0)   # older saves stored true/false
       when :wild_bst     then return $game_variables[VAR_RANDOMIZER_WILD_POKE_BST].to_i
       when :wild_legend  then return sw(SWITCH_RANDOM_WILD_LEGENDARIES) ? 1 : 0
       when :wild_custom  then return sw(SWITCH_RANDOM_WILD_ONLY_CUSTOMS) ? 1 : 0

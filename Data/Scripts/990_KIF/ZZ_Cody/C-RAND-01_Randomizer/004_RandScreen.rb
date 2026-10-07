@@ -37,7 +37,7 @@ module KIF
 
     def self.enum(key, name, values, descs)
       return EnumOption.new(name, values,
-                            proc { KIF::Rand.get(key) },
+                            proc { (KIF::Rand.get(key) rescue 0).clamp(0, values.length - 1) },
                             proc { |v| KIF::Rand.set(key, v) }, descs)
     end
 

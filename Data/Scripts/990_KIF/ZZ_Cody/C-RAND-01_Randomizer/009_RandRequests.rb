@@ -129,7 +129,7 @@ module KIF
     # [renamed text, show the "any" note after it?]
     def self.rename_text(text, subs)
       note = false
-      out = text.dup
+      out = utf8(text).dup
       subs.each do |from, to, _kind|
         name = (GameData::Species.get(from).name rescue nil)
         next unless name && out.include?(name)

@@ -235,6 +235,7 @@ All options in this menu are per-save.
 - **Move Effectiveness** – Off / On *(On, all saves)*. The Fight menu shows how well each damaging move works against the foe: a green ▲ (super effective), orange ▼ (resisted) or grey ✕ (no effect) on each move button, and "Super eff." / "Resisted" / "No effect" under the PP of the highlighted move. With several foes, the info box lists each one with its multiplier (e.g. "Gyarados x4", "Onix x0") and names too long for the box scroll like a car radio display. The button marker shows the best result. Uses the battle's real type rules (including KIF's type buffs). Abilities stay hidden until the battle reveals them: once a foe's Levitate, Flash Fire, Volt Absorb, Water Absorb, Wonder Guard (and similar) has popped up, its immunity shows as "No effect" for the rest of that battle (not against Mold Breaker). Air Balloon and Magnet Rise also show Ground moves as "No effect".
 - **Gym Leader teams** – Normal / +1 / +2 / Full *(Normal, per save)*. Gym Leaders bring extra Pokémon to every battle with them (gym, rematch or story battle). The extras have the gym's type (randomized gym types count), are fusions about as often as the rest of the team, are about as strong as the team, are evolved as far as their level allows and join at the team's average level. Never legendaries, repeats or banned Pokémon, and the same every time for a save. On randomized saves with random trainers, the Randomizer's *Leader team size* decides instead.
 - **Your Pokémon in gyms** – Normal / +1 / +2 / Full *(Normal, per save)*. Raises how many Pokémon you may pick before a Kanto Gym Leader battle (Full = your whole party). The picker still shows.
+- With either setting on, the Kanto Gym Leaders say the real numbers ("I will be using three Pokémon, and you may use two."). At six they say "my full team" / "your whole team" instead of a number.
 
 ### Breeding & Fusion
 
@@ -242,7 +243,7 @@ All options in this menu are per-save.
 
 ### Randomizer
 
-Only on saves started as randomized saves: **Cody Settings → Randomizer**. The same screen also replaces PIF's randomizer menu when you make a randomized save, and the Update Man's *Advanced options → Randomizer options → Randomizer settings* opens it too.
+Only on saves started as randomized saves: **Cody Settings → Randomizer**. The same screen also replaces PIF's randomizer menu when you make a randomized save, and the Update Man's *Advanced options → Randomizer options* opens it too. In Oak's Lab, *Re-randomize Pokémon?* opens it as well, so you can pick a new seed before choosing your starter (the same seed always gives the same starters).
 
 - **Seed** – an 8-character code (like `K7Q2-9XMA`). The same seed with the same settings gives the same randomized game (on the same KIF Beta version and sprite pack). New random seed, type one in, or copy it.
 - **Presets & sharing** – *Copy settings code* puts the seed and every setting on your clipboard as one line (paste it into Discord); *Paste settings code* loads someone else's. *Save as preset* / *Load preset* use files in the `Randomizer/Presets` folder (saving over an existing name asks first; presets from earlier KIF Beta versions still load).

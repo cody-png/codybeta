@@ -317,6 +317,13 @@ module KIF
       return v
     end
 
+    # Map texts load as raw bytes (RPG Maker data); read them as UTF-8
+    def self.utf8(s)
+      return s if s.encoding == Encoding::UTF_8
+      u = s.dup.force_encoding(Encoding::UTF_8)
+      return u.valid_encoding? ? u : s
+    end
+
     # Dex number of a species, symbol, number or PIFSprite. PIF's swap table
     # and custom sprite lists can hold PIFSprites (seen in Cody's saves), and
     # getDexNumberForSpecies passes those through untouched.

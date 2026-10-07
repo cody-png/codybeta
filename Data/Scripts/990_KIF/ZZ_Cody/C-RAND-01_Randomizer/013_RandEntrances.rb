@@ -14,7 +14,8 @@ module KIF
       [:entrances, :enum, 3],     # Off / Simple / Full
       [:ent_doors, :enum, 3],     # Dungeons / Buildings / Everything
       [:ent_coupled, :enum, 2],   # Off / On (default On, see dget below)
-      [:ent_hints, :enum, 2]      # Off / On
+      [:ent_hints, :enum, 2],     # Off / On
+      [:ent_start, :enum, 3]      # Pallet / Random town / Random map
     ]
     ENT_SETTINGS.each { |st| DATA_SETTINGS << st unless DATA_KEYS.include?(st[0]) }
     ENT_SETTINGS.each { |st| DATA_KEYS << st[0] unless DATA_KEYS.include?(st[0]) }
@@ -22,6 +23,7 @@ module KIF
     LABELS[:ent_doors] = ["Which doors", ["Dungeons", "Buildings", "Everything"]]
     LABELS[:ent_coupled] = ["Coupled", ["Off", "On"]]
     LABELS[:ent_hints] = ["Door hints", ["Off", "On"]]
+    LABELS[:ent_start] = ["Start", ["Pallet", "Random town", "Random map"]]
 
     DATA_DEFAULTS[:ent_coupled] = 1   # Coupled unless switched off
 
@@ -29,6 +31,11 @@ module KIF
       DATA_PATH = "Data/KIF/entrances.dat"
       RETRIES = 40
       BADGE_PREFIX = "badge_"
+      POKEDEX_FLAG = :sw_988           # set by Oak when he hands over the Pokédex
+      OAK_LABS = [77, 551, 552, 593, 659, 724, 740, 847]
+      PALLET = 42
+      INDIGO = 303
+      NO_START = [303, 167]   # Indigo Plateau, Crimson City (nowhere to go without 8 badges)
 
       class << self
         attr_accessor :dat_cache
@@ -109,13 +116,14 @@ module KIF
       # `from` continues an earlier sweep of a graph that has only gained
       # edges since (the shuffler adds doors one batch at a time): what was
       # reached stays reached, so only the new edges need following.
-      def self.sweep(d, edges, extra = [], from = nil)
+      def self.sweep(d, edges, extra = [], from = nil, start = nil, stop_at = nil)
         gates = d[:gates]
         have = from ? from[:have].dup : (d[:start_with] + extra).uniq
         seen = from ? from[:seen].dup : {}
         sphere = from ? from[:spheres] - 1 : 0
-        seen[d[:start]] ||= sphere
+        seen[start || d[:start]] ||= sphere
         loop do
+          break if stop_at && have.include?(stop_at)
           badges = have.count { |f| f.to_s.start_with?(BADGE_PREFIX) }
           all = flag_hash(have, badges)
           queue = seen.keys
@@ -244,7 +252,7 @@ module KIF
       # not yet reached, or a reached exit out to a doorstep not yet reached;
       # sweep; repeat. Coupled: the exit of the place you entered leads back
       # to the door you came through. Leftovers pair at random.
-      def self.grow(d, doors, rng, coupled, map_in = {}, map_out = {})
+      def self.grow(d, doors, rng, coupled, map_in = {}, map_out = {}, start = nil, extra = [])
         ids = doors.map { |x| x[:id] }
         free_doors = ids - map_in.keys                   # doors without a place
         free_places = ids - map_in.values                # places nobody leads into
@@ -258,7 +266,7 @@ module KIF
         loop do
           break if free_doors.empty? && free_exits.empty?
           edges = edges_for(d, map_in, map_out, pending)
-          res = sweep(d, edges, [], res)
+          res = sweep(d, edges, extra, res, start)
           seen = res[:seen]
           want = nil
           open_doors = free_doors.select { |id| door_reached?(byid[id], res) }
@@ -358,17 +366,50 @@ module KIF
         doors = doors_for(d, Rand.dget(:ent_doors))
         coupled = Rand.dget(:ent_coupled) == 1
         rng = Random.new(Rand.sub_seed(*seed_parts))
+        # Random start: picked once per seed; only for a game that hasn't got
+        # its Pokédex yet (the move happens when Oak hands it over)
+        start_door = nil; start = nil; extra = []; cands = []
+        if Rand.dget(:ent_start) > 0 && !($Trainer && $Trainer.has_pokedex)
+          cands = start_candidates(d, Rand.dget(:ent_start) == 1).shuffle(random: rng)
+          start_door = cands.first
+          if start_door
+            start = start_door[:in_node]
+            extra = pre_dex_flags(d)
+          end
+        end
         RETRIES.times do |i|
           Rand.progress(_INTL("Shuffling entrances... (try {1})", i + 1), 0.1 + 0.8 * i / RETRIES) if Rand.respond_to?(:progress)
+          # a start that keeps failing gives way to the next candidate
+          if start_door && i > 0 && i % 5 == 0 && cands.length > 1
+            start_door = cands[(i / 5) % cands.length]
+            start = start_door[:in_node]
+          end
           map_in, map_out = shape == 1 ? simple_places(d, doors, rng, coupled) : [{}, {}]
-          next unless grow(d, doors, rng, coupled, map_in, map_out)   # nil: dead end, try again
+          next unless grow(d, doors, rng, coupled, map_in, map_out, start, extra)   # nil: dead end, try again
           next unless map_in.length == doors.length && map_out.length == doors.length
-          res = sweep(d, edges_for(d, map_in, map_out))
+          res = sweep(d, edges_for(d, map_in, map_out), extra, nil, start)
           next unless beatable?(d, res[:seen])
           return { in: map_in, out: map_out, sig: d[:signature], attempts: i + 1, seen: [],
-                   shape: shape, doors: Rand.dget(:ent_doors), coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]) }
+                   shape: shape, doors: Rand.dget(:ent_doors), coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]),
+                   start_door: start_door && start_door[:id], start_done: false }
         end
         return nil
+      end
+
+      # Pokémon Center doors to start from: in a town, or on any outdoor map
+      def self.start_candidates(d, towns_only)
+        d[:doors].select { |o|
+          next false unless o[:pool] == :building && !NO_START.include?(o[:map])
+          next false unless d[:names][o[:to][0]].to_s =~ /Pok[eé]mon Center/i
+          !towns_only || d[:names][o[:map]].to_s =~ /City|Town|Island/
+        }.sort_by { |o| o[:id] }
+      end
+
+      # What the start of the game gives before the Pokédex (Pallet, Route 1,
+      # Viridian): a game that starts elsewhere has been through that
+      def self.pre_dex_flags(d)
+        res = sweep(d, edges_for(d, {}, {}), [], nil, nil, POKEDEX_FLAG)
+        return res[:have]
       end
 
       # Sphere of each door: when its doorstep first comes into reach
@@ -449,6 +490,46 @@ module KIF
         return targets[[map_id, event_id]]
       end
 
+      # Random start: Oak has handed over the Pokédex and the player leaves
+      # the lab - that door leads into the start town's Pokémon Center once
+      def self.start_target(map_id, params)
+        s = state
+        return nil unless active? && s[:start_door] && s[:start_pending] && !s[:start_done]
+        return nil unless OAK_LABS.include?(map_id) && params[1] == PALLET
+        o = dat[:door_by_id][s[:start_door]]
+        return nil unless o
+        s[:start_done] = true
+        s[:start_pending] = false
+        @new_home = [o[:to][0], o[:to][1], o[:to][2], o[:to_dir]]
+        return [o[:to][0], o[:to][1], o[:to][2], o[:to_dir]]
+      end
+
+      class << self
+        attr_accessor :new_home
+      end
+
+      # After arriving: the Center becomes home (where you wake up after a loss)
+      def self.settle_home
+        h = @new_home
+        return unless h
+        @new_home = nil
+        $PokemonGlobal.pokecenterMapId = h[0]
+        $PokemonGlobal.pokecenterX = h[1]
+        $PokemonGlobal.pokecenterY = h[2]
+        $PokemonGlobal.pokecenterDirection = h[3] == 0 ? 2 : h[3]
+        o = dat[:door_by_id][state[:start_door]]
+        pbMessage(_INTL("Your journey starts in {1}.", dat[:names][o[:map]])) if o
+      rescue => e
+        KIF.log("Random start home failed (#{e.class}: #{e.message})")
+      end
+
+      def self.start_name
+        s = state
+        return nil unless s && s[:start_door]
+        o = dat[:door_by_id][s[:start_door]]
+        return o && dat[:names][o[:map]]
+      end
+
       # Remember a door the player used (for the Entrance log)
       def self.note(door_id, kind)
         s = state
@@ -488,6 +569,7 @@ module KIF
         out = []
         out << _INTL("Settings: {1}, {2}, {3}", LABELS[:entrances][1][s[:shape] || 2], LABELS[:ent_doors][1][s[:doors] || 2],
                      s[:coupled] ? _INTL("coupled") : _INTL("decoupled"))
+        out << _INTL("Start: {1}", start_name) if start_name
         out << _INTL("Found so far: {1} of {2} doors", (s[:seen] || []).length, s[:in].length)
         sph = s[:spheres] || {}
         d[:doors].sort_by { |o| [sph[o[:id]] || 99, d[:names][o[:map]].to_s, o[:tiles][0][1], o[:tiles][0][0]] }.each do |o|
@@ -513,14 +595,14 @@ class Interpreter
   def command_201
     KIF::Rand::ER.ensure_layout if @parameters[0] == 0 && $PokemonGlobal
     return kif_ent_command_201 unless @parameters[0] == 0 && KIF::Rand::ER.active?
-    t = KIF::Rand::ER.target(@map_id, @event_id)
+    t = KIF::Rand::ER.start_target(@map_id, @parameters) || KIF::Rand::ER.target(@map_id, @event_id)
     return kif_ent_command_201 unless t
     saved = @parameters
     @parameters = [0, t[0], t[1], t[2], t[3], saved[5]]
     begin
       r = kif_ent_command_201
       # @index moved on: the transfer is set up
-      KIF::Rand::ER.note(t[4], t[5]) if $game_temp.player_transferring
+      KIF::Rand::ER.note(t[4], t[5]) if $game_temp.player_transferring && t[4]
       return r
     ensure
       @parameters = saved
@@ -551,5 +633,23 @@ module KIF
         end
       end
     end
+  end
+end
+
+#-------------------------------------------------------------------------------
+# Random start: the Pokédex is the signal
+#-------------------------------------------------------------------------------
+class Player
+  alias kif_ent_has_pokedex= has_pokedex= unless method_defined?(:"kif_ent_has_pokedex=")
+
+  def has_pokedex=(value)
+    before = @has_pokedex
+    self.kif_ent_has_pokedex = value
+    if value && !before && KIF::Rand::ER.active?
+      s = KIF::Rand::ER.state
+      s[:start_pending] = true if s[:start_door] && !s[:start_done]
+    end
+  rescue => e
+    KIF.log("Random start flag failed (#{e.class}: #{e.message})")
   end
 end

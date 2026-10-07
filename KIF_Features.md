@@ -285,8 +285,9 @@ Only on saves started as randomized saves: **Cody Settings → Randomizer**. The
   - **Which doors** – Dungeons (caves, towers, forests, gates, tunnels) / Buildings (Centers, gyms, marts, houses) / Everything.
   - **Coupled** – Off / On *(On)*. On: going back the way you came returns you to where you were. Off: the way back may lead somewhere else again.
   - **Door hints** – Off / On. After a shuffled door, a line names the door you came out of and the place it belongs to.
+  - **Start** – Pallet / Random town / Random map. When Oak hands you the Pokédex, leaving his lab takes you to a random Pokémon Center (in a town, or anywhere in Kanto), which becomes home; the layout is checked from there. New games only – on a save that already has the Pokédex the start stays where you are.
   - **Entrance log** – every shuffled door you have used so far and where it led, plus how many you haven't found. The spoiler log's *Entrances* part lists the whole layout by sphere (how far into the game each door comes into reach).
-  - A new game shuffles when the intro ends; on a randomized save it happens at Randomize now. Same seed and settings = same layout. If no finishable layout is found (rare), doors stay normal and the game says so. Sevii, Johto, the insides of dungeons, Fly spots and a random start town are later batches.
+  - A new game shuffles when the intro ends; on a randomized save it happens at Randomize now. Same seed and settings = same layout. If no finishable layout is found (rare), doors stay normal and the game says so. Sevii, Johto, the insides of dungeons and Fly spots are later batches.
 - **Randomize now** – applies the settings mid-game (asks first; your party and boxes stay).
 - **Settings wait for Randomize now** – changing a setting on a randomized save doesn't change your game until you randomize. Changed settings are marked `*`, and the Randomize now button shows how many. Leaving the screen with changes asks: *Randomize now*, *Keep for later* (they stay marked next time, the game keeps the old ones), or *Undo changes*. The new-game setup works as before. (The Spoiler log switch is the one setting that applies at once.)
 

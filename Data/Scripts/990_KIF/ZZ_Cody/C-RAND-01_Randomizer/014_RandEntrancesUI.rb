@@ -19,7 +19,11 @@ module KIF
                 _INTL("Going back the way you came returns you to where you were.")),
           onoff(:ent_hints, _INTL("Door hints"),
                 _INTL("Nothing is shown when you come out of a shuffled door."),
-                _INTL("A line names the door you came out of and the place it belongs to."))
+                _INTL("A line names the door you came out of and the place it belongs to.")),
+          enum(:ent_start, _INTL("Start"), [_INTL("Pallet"), _INTL("Random town"), _INTL("Random map")],
+               [_INTL("Your journey starts in Pallet Town as usual."),
+                _INTL("When Oak hands you the Pokédex, leaving the lab takes you to a random town's Pokémon Center, which becomes home. New games only."),
+                _INTL("Like Random town, but any Pokémon Center in Kanto, routes included. New games only.")])
         ]
         unless $game_switches[SWITCH_DURING_INTRO]
           rows << ButtonOption.new(_INTL("Entrance log"), proc { KIF::Rand::ER.show_log },
@@ -127,6 +131,7 @@ class Scene_Map
 
   def transfer_player(cancel_swimming = true)
     kif_enthint_transfer_player(cancel_swimming)
+    KIF::Rand::ER.settle_home if KIF::Rand::ER.new_home
     hint = KIF::Rand::ER.pending_hint
     return unless hint
     KIF::Rand::ER.pending_hint = nil

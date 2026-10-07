@@ -6,7 +6,7 @@
 module KIF
   module Rand
     LABELS = {
-      :wild_mode => ["Wild encounters", ["Off", "Swap", "Route", "Dynamic"]],
+      :wild_mode => ["Wild encounters", ["Off", "Swap", "Route", "Dynamic", "Dynamic Route"]],
       :starters => ["Starters", ["Off", "1st stage", "Any"]],
       :statics => ["Static encounters", ["Off", "On"]],
       :gifts => ["Gift Pokémon", ["Off", "On"]],

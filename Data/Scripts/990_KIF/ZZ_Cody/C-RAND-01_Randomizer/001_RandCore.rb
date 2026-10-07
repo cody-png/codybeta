@@ -45,7 +45,7 @@ module KIF
 
     SETTINGS = [
       # Pokémon
-      [:wild_mode, :enum, 4],
+      [:wild_mode, :enum, 5],   # Off / Swap / Route / Dynamic / Dynamic Route
       [:starters, :enum, 3],
       [:statics, :enum, 2],
       [:gifts, :enum, 2],
@@ -86,6 +86,7 @@ module KIF
       when :wild_mode
         return 0 unless sw(SWITCH_RANDOM_WILD) || data[:wild_mode]
         return 3 if data[:wild_mode] == 3
+        return 4 if data[:wild_mode] == 4
         return 2 if sw(SWITCH_RANDOM_WILD_AREA)
         return 1 if sw(SWITCH_WILD_RANDOM_GLOBAL)
         return 0
@@ -243,30 +244,48 @@ module KIF
     # again on every try). Nothing about a Pokémon changes during a shuffle.
     @memo_bst = {}
     @memo_legend = {}
+    @memo_depth = 0
+    def self.memo_on?
+      return @seeded > 0 || @memo_depth > 0
+    end
+
+    # Remember lookups for the length of the block (Dynamic Route re-rolls a
+    # whole map's table at once)
+    def self.with_memo
+      memo_clear if @memo_depth == 0 && @seeded == 0
+      @memo_depth += 1
+      begin
+        return yield
+      ensure
+        @memo_depth -= 1
+        memo_clear if @memo_depth == 0 && @seeded == 0
+      end
+    end
+
     def self.memo_clear
       @memo_bst = {}
       @memo_legend = {}
     end
 
     def self.memo_bst(dex)
-      return nil unless @seeded > 0 && dex.is_a?(Integer)
+      return nil unless memo_on? && dex.is_a?(Integer)
       return @memo_bst[dex] if @memo_bst.key?(dex)
       return nil
     end
 
     def self.memo_bst_set(dex, v)
-      @memo_bst[dex] = v if @seeded > 0 && dex.is_a?(Integer)
+      @memo_bst[dex] = v if memo_on? && dex.is_a?(Integer)
       return v
     end
 
     # (PIF's Pokédex shuffle asks with species symbols, the others with numbers)
     def self.memo_legend(dex)
-      return nil unless @seeded > 0 && (dex.is_a?(Integer) || dex.is_a?(Symbol))
+      return nil unless memo_on? && (dex.is_a?(Integer) || dex.is_a?(Symbol))
       return @memo_legend.key?(dex) ? @memo_legend[dex] : nil
     end
 
     def self.memo_legend_set(dex, v)
-      @memo_legend[dex] = v if @seeded > 0 && (dex.is_a?(Integer) || dex.is_a?(Symbol))
+      @memo_legend[dex] = v if memo_on? && (dex.is_a?(Integer) || dex.is_a?(Symbol))
       return v
     end
 

@@ -77,11 +77,12 @@ module KIF
       open_page(_INTL("Randomizer: Pokémon"), _INTL("Which Pokémon are randomized, and how."), GREEN) {
         [
           enum(:wild_mode, _INTL("Wild encounters"),
-               [_INTL("Off"), _INTL("Swap"), _INTL("Route"), _INTL("Dynamic")],
+               [_INTL("Off"), _INTL("Swap"), _INTL("Route"), _INTL("Dynamic"), _INTL("Dynamic Route")],
                [_INTL("Wild Pokémon are not randomized."),
                 _INTL("Each species becomes one other species everywhere."),
                 _INTL("Every route rolls its own Pokémon."),
-                _INTL("Every encounter rolls its own Pokémon on the spot, within the Strength range.")]),
+                _INTL("Every encounter rolls its own Pokémon on the spot, within the Strength range."),
+                _INTL("Like Route, but a route rolls new Pokémon every time you enter it. Leave, and they may be gone for good.")]),
           enum(:starters, _INTL("Starters"), [_INTL("Off"), _INTL("1st"), _INTL("Any")],
                [_INTL("The starters are not randomized."),
                 _INTL("The starters are random first-stage Pokémon."),

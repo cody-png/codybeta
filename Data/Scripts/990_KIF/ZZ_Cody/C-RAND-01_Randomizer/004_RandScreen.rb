@@ -142,6 +142,12 @@ module KIF
           onoff(:trainer_fuse, _INTL("Fuse everything"),
                 _INTL("Trainer Pokémon can be unfused."),
                 _INTL("Every trainer Pokémon is a fusion.")),
+          enum(:unfused, _INTL("Unfused Pokémon"), [_INTL("Normal"), _INTL("25%"), _INTL("50%"), _INTL("75%"), _INTL("All")],
+               [_INTL("The game's own odds: nearly every trainer Pokémon is a fusion."),
+                _INTL("About 1 in 4 trainer Pokémon is a plain, unfused Pokémon."),
+                _INTL("About half of trainer Pokémon are plain, unfused Pokémon."),
+                _INTL("About 3 in 4 trainer Pokémon are plain, unfused Pokémon."),
+                _INTL("Every trainer Pokémon is a plain, unfused Pokémon (Fuse everything wins if both are on).")]),
           ButtonOption.new(_INTL("Class theme list"), proc {
             KIF::Rand.show_lines(_INTL("Class themes"), KIF::Rand.class_theme_lines)
           }, _INTL("Which type each trainer class uses. Gym leaders use the Gyms page."))

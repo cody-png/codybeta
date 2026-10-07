@@ -41,6 +41,7 @@ module KIF
       :class_themes => ["Class themes", ["Off", "On"]],
       :theme_shuffle => ["Shuffle themes", ["Off", "On"]],
       :extra_themes => ["Extra class themes", ["Off", "On"]],
+      :unfused => ["Unfused trainer Pokémon", ["Normal", "25%", "50%", "75%", "All"]],
       :item_mode => ["Item mode", ["Mapped", "Dynamic"]],
       :keep_categories => ["Keep item categories", ["Off", "On"]],
       :shop_basics => ["Keep shop basics", ["Off", "On"]],
@@ -331,7 +332,27 @@ module KIF
       return out
     end
 
-    # Reader for one log section: Up/Down scroll, Left/Right a page, B/A close
+    # Jump target: "#025"-style rows for a number, else the next row holding
+    # the text (from the row after the current one, wrapping around)
+    def self.find_row(rows, text, from)
+      text = text.to_s.strip
+      return nil if text.empty?
+      if text =~ /\A#?(\d{1,3})\z/
+        tag = sprintf("#%03d ", $1.to_i)
+        i = rows.index { |r| r.start_with?(tag) }
+        return i if i
+      end
+      down = text.downcase
+      n = rows.length
+      (1..n).each do |k|
+        i = (from + k) % n
+        return i if rows[i].downcase.include?(down)
+      end
+      return nil
+    end
+
+    # Reader for one log section: Up/Down scroll, Left/Right a page, Z jump
+    # to a dex number / text, B/A close
     def self.show_lines(title, lines)
       lines = [_INTL("(nothing)")] if lines.empty?
       vp = Viewport.new(0, 0, Graphics.width, Graphics.height)
@@ -359,7 +380,7 @@ module KIF
         rows[top, per].each_with_index do |r, k|
           pbDrawShadowText(win.contents, 4, k * lh, cw - 8, lh, r, base, shadow)
         end
-        pos = rows.length > per ? "#{top + 1}-#{[top + per, rows.length].min}/#{rows.length}" : ""
+        pos = rows.length > per ? "#{top + 1}-#{[top + per, rows.length].min}/#{rows.length}  Z: jump" : ""
         head.text = pos.empty? ? title : "#{title}  (#{pos})"
       }
       draw.call
@@ -371,6 +392,16 @@ module KIF
         elsif Input.repeat?(Input::UP) then top -= 1
         elsif Input.repeat?(Input::RIGHT) || Input.repeat?(Input::JUMPDOWN) then top += per - 1
         elsif Input.repeat?(Input::LEFT) || Input.repeat?(Input::JUMPUP) then top -= per - 1
+        elsif Input.trigger?(Input::ACTION)
+          text = pbMessageFreeText(_INTL("Jump to (dex number or text):"), "", false, 24)
+          if text && !text.strip.empty?
+            i = find_row(rows, text, top)
+            if i
+              top = i
+            else
+              pbMessage(_INTL("Nothing here matches {1}.", text.strip))
+            end
+          end
         elsif Input.trigger?(Input::BACK) || Input.trigger?(Input::USE) then break
         end
         top = top.clamp(0, maxtop)

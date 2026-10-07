@@ -13,6 +13,9 @@
 #   * Team size: Same / +1 / +2 / Full – extra Pokémon join at the team's
 #     average level.
 #   * Fuse everything: every trainer Pokémon is a fusion.
+#   * Unfused Pokémon: Normal (PIF's odds: nearly every pick is a fusion) /
+#     25% / 50% / 75% / All of the picks are plain Pokémon. Fuse everything
+#     wins when both are on.
 #   (Double battles are KIF's Battle Format option, not part of this.)
 # Everything is made when the trainers are shuffled (seeded) and kept in
 # $PokemonGlobal.randomTrainersHash like PIF's own shuffle; with none of the
@@ -26,7 +29,8 @@ module KIF
       [:rival_team, :enum, 2],
       [:team_size, :enum, 4],     # Same / +1 / +2 / Full
       [:trainer_fuse, :enum, 2],
-      [:extra_themes, :enum, 2]   # themes for the less obvious classes
+      [:extra_themes, :enum, 2],  # themes for the less obvious classes
+      [:unfused, :enum, 5]        # Normal / 25% / 50% / 75% / All
     ]
     # Added after the data settings, so older settings codes still line up
     DATA_SETTINGS.concat(TRAINER_SETTINGS)
@@ -147,7 +151,31 @@ module KIF
 
     def self.trainer_features?
       return trainer_mode == 2 || dget(:class_themes) > 0 || dget(:rival_team) == 1 ||
-             dget(:team_size) > 0 || dget(:trainer_fuse) == 1
+             dget(:team_size) > 0 || dget(:trainer_fuse) == 1 || dget(:unfused) > 0
+    end
+
+    # Should this pick be a plain (unfused) Pokémon? Normal = PIF's own odds.
+    UNFUSED_CHANCE = [nil, 25, 50, 75, 100]
+    def self.unfused_roll?
+      c = UNFUSED_CHANCE[dget(:unfused)]
+      return false unless c
+      return rand(100) < c
+    end
+
+    # A plain Pokémon near the old one's strength (themed when a theme is given)
+    def self.unfused_pick(old, theme)
+      if theme
+        bases = themed_bases(theme)
+        return nil if bases.empty?
+        bst = get(:trainer_bst)
+        600.times do |i|
+          bst += 5 if i > 0 && i % 25 == 0
+          cand = bases[rand(bases.length)]
+          return cand if pick_ok?(old, cand, bst)
+        end
+        return bases[rand(bases.length)]
+      end
+      return random_base(old)
     end
 
     #---------------------------------------------------------------------------
@@ -231,6 +259,10 @@ module KIF
 
     # One Pokémon for a trainer: like PIF's pick, plus the theme
     def self.trainer_pick(old, theme, customs)
+      if unfused_roll?
+        u = unfused_pick(old, theme)
+        return u if u
+      end
       bst = get(:trainer_bst)
       unless theme
         return dex_of(customs ? getNewCustomSpecies(old, customs, bst) : getNewSpecies(old, bst))

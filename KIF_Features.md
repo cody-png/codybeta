@@ -244,7 +244,7 @@ Only on saves started as randomized saves: **Cody Settings → Randomizer**. The
 
 - **Seed** – an 8-character code (like `K7Q2-9XMA`). The same seed with the same settings gives the same randomized game (on the same KIF Beta version and sprite pack). New random seed, type one in, or copy it.
 - **Presets & sharing** – *Copy settings code* puts the seed and every setting on your clipboard as one line (paste it into Discord); *Paste settings code* loads someone else's. *Save as preset* / *Load preset* use files in the `Randomizer/Presets` folder (saving over an existing name asks first; presets from earlier KIF Beta versions still load).
-- **Spoiler log** – Off / On *(On)*. Writes `Randomizer Log - <seed>.txt` in the `Randomizer/Logs` folder every time something is shuffled: every Pokémon swap, route, trainer team, gym type, item and TM. *View spoiler log* shows it in-game (asks first; each part is built when opened); Up/Down scroll, Left/Right turn a page.
+- **Spoiler log** – Off / On *(On)*. Writes `Randomizer Log - <seed>.txt` in the `Randomizer/Logs` folder every time something is shuffled: every Pokémon swap, route, trainer team, gym type, item and TM. *View spoiler log* shows it in-game (asks first; each part is built when opened); Up/Down scroll, Left/Right turn a page, Z jumps to a dex number or text.
 - **Pokémon** – each part has its own switch:
   - *Wild encounters*: Off / Swap (each species becomes one other species everywhere) / Route (every route rolls its own) / Dynamic (every encounter is any Pokémon, rolled on the spot).
   - *Starters* (Off / 1st stage / Any), *Static encounters*, *Gift Pokémon*, *Trades*.
@@ -258,6 +258,7 @@ Only on saves started as randomized saves: **Cody Settings → Randomizer**. The
   - **Rival keeps his team** – Off / On. Each Pokémon line in the rival's team gets one replacement line for every battle, at the same stage.
   - **Team size** – Same / +1 / +2 / Full. Extra Pokémon join at the team's average level.
   - **Fuse everything** – Off / On. Every trainer Pokémon is a fusion.
+  - **Unfused Pokémon** – Normal / 25% / 50% / 75% / All. How many trainer Pokémon are plain, unfused Pokémon (Normal = the game's own odds, nearly all fusions). Fuse everything wins if both are on.
 - **Gyms** – PIF's options (custom sprites only, gym types, rerandomize each battle).
 - **Items**
   - **Item mode** – Mapped / Dynamic. Mapped: each item always becomes the same other item. Dynamic: every item ball, gift and shop rolls its own item; the same spot always gives the same item for the same seed. TMs follow the mode too.

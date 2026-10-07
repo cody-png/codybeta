@@ -359,6 +359,11 @@ module KIF
           ButtonOption.new(_INTL("Save as preset"), proc {
             name = pbMessageFreeText(_INTL("Preset name:"), "", false, 30)
             if name && !name.strip.empty?
+              clean = name.gsub(/[\\\/:*?"<>|]/, "").strip
+              if KIF::Rand.preset_names.include?(clean) &&
+                 !pbConfirmMessage(_INTL("A preset called {1} already exists. Replace it?", clean))
+                next
+              end
               ok = KIF::Rand.save_preset(name)
               pbMessage(ok ? _INTL("Saved to the {1} folder.", KIF::Rand::PRESET_DIR) : _INTL("Couldn't save that preset."))
             end
@@ -385,6 +390,7 @@ module KIF
     def self.randomize_now
       sync_masters
       setsw(SWITCH_RANDOMIZED_AT_LEAST_ONCE, true)
+      self.log_suspended = true
       progress("Randomizing Pokémon data...", 0.2)
       if data_on?
         randomize_data
@@ -408,6 +414,9 @@ module KIF
       pbShuffleItems if sw(SWITCH_RANDOM_ITEMS) || sw(SWITCH_RANDOM_SHOP_ITEMS)
       pbShuffleTMs if sw(SWITCH_RANDOM_TMS)
       KIF::Rand.progress_done
+    ensure
+      self.log_suspended = false
+      progress_done
       write_log
     end
   end

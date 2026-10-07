@@ -18,6 +18,7 @@ class << Kernel
   def pbShuffleDex(range = 50, type = 0)
     range = $game_variables[VAR_RANDOMIZER_WILD_POKE_BST] if $game_variables
     ret = KIF::Rand.with_seed(:dex) { kif_rand_pbShuffleDex(range, type) }
+    KIF::Rand.sanitize_tables
     KIF::Rand.progress_done
     KIF::Rand.data[:dex_ok] = true
     KIF::Rand.write_log
@@ -75,6 +76,26 @@ class Object
   def show_shuffle_progress(i)
     return kif_rand_show_shuffle_progress(i) if KIF::Rand.seeded == 0
     KIF::Rand.progress(_INTL("Shuffling Pokémon..."), i.to_f / NB_POKEMON) if i % 25 == 0
+  end
+end
+
+# Faster shuffles: while a seeded shuffle runs, the two lookups PIF makes for
+# every candidate (base stat total, legendary check) are remembered per
+# Pokémon (KIF::Rand.memo_*). Outside shuffles nothing changes.
+class Object
+  alias kif_rand_calcBaseStatsSum calcBaseStatsSum unless method_defined?(:kif_rand_calcBaseStatsSum) || private_method_defined?(:kif_rand_calcBaseStatsSum)
+  alias kif_rand_is_legendary is_legendary unless method_defined?(:kif_rand_is_legendary) || private_method_defined?(:kif_rand_is_legendary)
+
+  def calcBaseStatsSum(species)
+    v = KIF::Rand.memo_bst(species)
+    return v if v
+    return KIF::Rand.memo_bst_set(species, kif_rand_calcBaseStatsSum(species))
+  end
+
+  def is_legendary(dex_num, printInfo = false)
+    v = KIF::Rand.memo_legend(dex_num)
+    return v unless v.nil?
+    return KIF::Rand.memo_legend_set(dex_num, kif_rand_is_legendary(dex_num, printInfo))
   end
 end
 
@@ -172,11 +193,11 @@ class Object
         KIF::Rand.ensure_dex
         hash = $PokemonGlobal.psuedoBSTHash
         if newpoke.is_a?(Pokemon)
-          to = hash && hash[getDexNumberForSpecies(newpoke.species)]
-          newpoke.species = getSpecies(to).species if to
+          to = KIF::Rand.dex_of(hash && hash[getDexNumberForSpecies(newpoke.species)])
+          newpoke.species = getSpecies(to).species if to > 0
         else
-          to = hash && hash[getDexNumberForSpecies(newpoke)]
-          newpoke = getSpecies(to).species if to
+          to = KIF::Rand.dex_of(hash && hash[getDexNumberForSpecies(newpoke)])
+          newpoke = getSpecies(to).species if to > 0
         end
       rescue => e
         KIF.log("Randomized trade failed: #{e.message}")
@@ -200,7 +221,8 @@ class PokemonEncounters
         enc[0] = KIF::Rand.dynamic_species(enc[0])
       elsif $game_switches[SWITCH_WILD_RANDOM_GLOBAL]
         KIF::Rand.ensure_dex
-        enc[0] = GameData::Species.get(getRandomizedTo(enc[0])).species
+        to = KIF::Rand.dex_of(getRandomizedTo(enc[0]))
+        enc[0] = GameData::Species.get(to).species if to > 0
       end
     rescue => e
       KIF.log("Extra wild Pokémon randomizing failed: #{e.message}")
@@ -247,7 +269,7 @@ module KIF
     end
 
     def self.skip_bst_prompts?
-      return false unless @screen_closed_at
+      return false unless @screen_closed_at && $game_switches && $game_switches[SWITCH_DURING_INTRO]
       return Process.clock_gettime(Process::CLOCK_MONOTONIC) - @screen_closed_at < 5
     end
   end

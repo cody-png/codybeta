@@ -65,7 +65,9 @@ module KIF
     end
 
     def self.species_name(dex)
+      dex = dex_of(dex) unless dex.is_a?(Symbol) || dex.is_a?(String)
       if dex.is_a?(Integer)
+        return "?" if dex <= 0
         return triple_names[dex] || dex.to_s if dex >= Settings::ZAPMOLCUNO_NB
         if dex > NB_POKEMON
           body = getBodyID(dex)
@@ -84,148 +86,204 @@ module KIF
       return GameData::Type.get(id).name rescue id.to_s
     end
 
-    # [[section title, [lines]], ...]
-    def self.build_log
+    #---------------------------------------------------------------------------
+    # Sections. Each is [title, proc] so the in-game viewer only builds the
+    # part that is opened (the Pokémon data and trainer parts take seconds);
+    # the file gets them all.
+    #---------------------------------------------------------------------------
+    def self.sections
       out = []
+      out << ["General", method(:sec_general)]
+      out << ["Settings", method(:sec_settings)]
+      out << ["Exclusions", method(:sec_exclusions)] if [:pokemon, :moves, :abilities].any? { |k| !bans(k).empty? }
+      out << ["Pokémon data", method(:sec_pokemon_data)] if data[:species] && !data[:species].empty?
+      hash = $PokemonGlobal.psuedoBSTHash
+      follow = sw(SWITCH_RANDOM_TRAINERS) && get(:trainers) == 2
+      if (pokemon_parts_on? || follow) && hash && !identity_dex?(hash)
+        # Trainers on Follow wild use the table too, even with wild Pokémon Off
+        whole = get(:wild_mode) == 1 || get(:statics) == 1 || get(:gifts) == 1 || get(:trades) == 1 || follow
+        out << ["Pokémon swaps", method(:sec_swaps)] if whole
+        out << ["Starters", method(:sec_starters)] if pokemon_parts_on? && get(:starters) > 0
+      end
+      out << ["Routes", method(:sec_routes)] if pokemon_parts_on? && sw(SWITCH_RANDOM_WILD_AREA)
+      if sw(SWITCH_RANDOM_TRAINERS) && $PokemonGlobal.randomTrainersHash
+        out << ["Trainers", method(:sec_trainers)]
+        out << ["Class themes", method(:class_theme_lines)] if dget(:class_themes) > 0
+      end
+      out << ["Gym types", method(:sec_gym_types)] if sw(SWITCH_RANDOMIZED_GYM_TYPES) && $game_variables[VAR_GYM_TYPES_ARRAY].is_a?(Array)
+      if dynamic_items?
+        out << ["Items and TMs (Dynamic, by spot)", method(:dynamic_item_lines)] if sw(SWITCH_RANDOM_ITEMS) || sw(SWITCH_RANDOM_TMS)
+        out << ["Shops", proc { ["Dynamic: every shop rolls its own stock."] }] if sw(SWITCH_RANDOM_SHOP_ITEMS)
+      else
+        ih = $PokemonGlobal.randomItemsHash
+        out << ["Items", method(:sec_items)] if ih && !ih.empty? && (sw(SWITCH_RANDOM_ITEMS) || sw(SWITCH_RANDOM_SHOP_ITEMS))
+        tm = $PokemonGlobal.randomTMsHash
+        out << ["TMs", method(:sec_tms)] if tm && !tm.empty? && sw(SWITCH_RANDOM_TMS)
+      end
+      out << ["Banned items", method(:sec_banned_items)] if sw(SWITCH_RANDOM_ITEMS_GENERAL) && !item_bans.empty?
+      return out
+    end
+
+    # [[section title, [lines]], ...] – everything built (for the file)
+    def self.build_log
+      return sections.map { |title, body| [title, section_lines(body)] }
+    end
+
+    def self.section_lines(body)
+      lines = body.call
+      return lines.is_a?(Array) ? lines : [lines.to_s]
+    rescue => e
+      return ["(unavailable: #{e.message})"]
+    end
+
+    def self.sec_general
       head = []
       head << "Seed: #{format_seed}"
       head << "Settings code: #{settings_code}"
       head << "Made: #{Time.now.strftime('%Y-%m-%d %H:%M')}"
       count = (File.foreach(Settings::CUSTOM_SPRITES_FILE_PATH).count rescue 0)
       head << "Custom sprite list: #{count} entries (same seed = same game on the same KIF Beta version and sprite pack)"
-      out << ["General", head]
-      out << ["Settings", (SETTINGS + DATA_SETTINGS).map { |key, _k, _m|
+      return head
+    end
+
+    def self.sec_settings
+      return (SETTINGS + DATA_SETTINGS).map { |key, _k, _m|
         name, vals = LABELS[key]
         v = get(key)
-        "#{name}: #{vals ? vals[v] : v}"
-      }]
+        "#{name || key}: #{vals ? vals[v] : v}"
+      }
+    end
+
+    def self.sec_exclusions
       bl = [:pokemon, :moves, :abilities].map { |k| [k, bans(k)] }.reject { |_k, l| l.empty? }
-      unless bl.empty?
-        out << ["Exclusions", bl.map { |k, l| "#{k.to_s.capitalize}: #{l.map { |id| (k == :pokemon ? species_name(id) : (k == :moves ? (GameData::Move.get(id).name rescue id) : (GameData::Ability.get(id).name rescue id))) }.join(', ')}" }]
-      end
-      sp = data[:species]
-      if sp && !sp.empty?
-        lines = []
-        originals.keys.sort_by { |s| GameData::Species.get(s).id_number }.each do |s|
-          ch = sp[s]
-          next unless ch
-          g = GameData::Species.get(s)
-          bits = []
-          bits << [type_name(g.type1), (g.type2 != g.type1 ? type_name(g.type2) : nil)].compact.join("/") if ch.key?(:@type1)
-          if ch.key?(:@abilities)
-            ab = g.abilities.map { |a| GameData::Ability.get(a).name rescue a.to_s }.join(", ")
-            hid = (g.hidden_abilities || []).map { |a| GameData::Ability.get(a).name rescue a.to_s }.join(", ")
-            bits << (hid.empty? ? ab : "#{ab} (hidden: #{hid})")
+      return bl.map { |k, l|
+        names = l.map { |id|
+          case k
+          when :pokemon then species_name(id)
+          when :moves then (GameData::Move.get(id).name rescue id.to_s)
+          else (GameData::Ability.get(id).name rescue id.to_s)
           end
-          if ch.key?(:@base_stats)
-            st = STAT_ORDER.map { |k| g.base_stats[k] }
-            bits << "#{st.join('/')} (#{st.sum})"
-          end
-          if ch.key?(:@evolutions)
-            ev = g.get_evolutions(true).map { |e| "#{species_name(e[0])} (#{e[1]}#{e[2] ? ' ' + e[2].to_s : ''})" }
-            bits << "evolves into #{ev.join(', ')}" unless ev.empty?
-          end
-          if ch.key?(:@moves)
-            diff = orig(s, :@moves).zip(g.moves).select { |a, b| a && b && a[1] != b[1] }
-            bits << "moves: " + diff.map { |a, b| "Lv#{a[0]} #{GameData::Move.get(a[1]).name}->#{GameData::Move.get(b[1]).name}" }.join(", ") unless diff.empty?
-          end
-          lines << sprintf("#%03d %s: %s", g.id_number, g.real_name, bits.join(" | ")) unless bits.empty?
+        }
+        "#{k.to_s.capitalize}: #{names.join(', ')}"
+      }
+    end
+
+    def self.sec_pokemon_data
+      sp = data[:species] || {}
+      lines = []
+      originals.keys.sort_by { |s| GameData::Species.get(s).id_number }.each do |s|
+        ch = sp[s]
+        next unless ch
+        g = GameData::Species.get(s)
+        bits = []
+        bits << [type_name(g.type1), (g.type2 != g.type1 ? type_name(g.type2) : nil)].compact.join("/") if ch.key?(:@type1)
+        if ch.key?(:@abilities)
+          ab = g.abilities.map { |a| GameData::Ability.get(a).name rescue a.to_s }.join(", ")
+          hid = (g.hidden_abilities || []).map { |a| GameData::Ability.get(a).name rescue a.to_s }.join(", ")
+          bits << (hid.empty? ? ab : "#{ab} (hidden: #{hid})")
         end
-        out << ["Pokémon data", lines]
+        if ch.key?(:@base_stats)
+          st = STAT_ORDER.map { |k| g.base_stats[k] }
+          bits << "#{st.join('/')} (#{st.sum})"
+        end
+        if ch.key?(:@evolutions)
+          ev = g.get_evolutions(true).map { |e| "#{species_name(e[0])} (#{e[1]}#{e[2] ? ' ' + e[2].to_s : ''})" }
+          bits << "evolves into #{ev.join(', ')}" unless ev.empty?
+        end
+        if ch.key?(:@moves)
+          diff = orig(s, :@moves).zip(g.moves).select { |a, b| a && b && a[1] != b[1] }
+          bits << "moves: " + diff.map { |a, b| "Lv#{a[0]} #{GameData::Move.get(a[1]).name}->#{GameData::Move.get(b[1]).name}" }.join(", ") unless diff.empty?
+        end
+        lines << sprintf("#%03d %s: %s", g.id_number, g.real_name, bits.join(" | ")) unless bits.empty?
       end
-      hash = $PokemonGlobal.psuedoBSTHash
-      follow = sw(SWITCH_RANDOM_TRAINERS) && get(:trainers) == 2
-      if (pokemon_parts_on? || follow) && hash && !identity_dex?(hash)
-        # Trainers on Follow wild use the table too, even with wild Pokémon Off
-        whole = get(:wild_mode) == 1 || get(:statics) == 1 || get(:gifts) == 1 || get(:trades) == 1 || follow
-        lines = []
-        (1..NB_POKEMON).each do |i|
-          next unless hash[i]
-          lines << sprintf("#%03d %s -> %s", i, species_name(i), species_name(hash[i]))
-        end
-        out << ["Pokémon swaps", lines] if whole
-        if pokemon_parts_on? && get(:starters) > 0
-          out << ["Starters", [1, 4, 7].map { |d|
-            to = (obtainRandomizedStarter([1, 4, 7].index(d)) rescue hash[d])
-            "#{species_name(d)} -> #{species_name(to)}"
-          }]
-        end
+      return lines
+    end
+
+    def self.sec_swaps
+      hash = $PokemonGlobal.psuedoBSTHash || {}
+      lines = []
+      (1..NB_POKEMON).each do |i|
+        next unless hash[i]
+        lines << sprintf("#%03d %s -> %s", i, species_name(i), species_name(hash[i]))
       end
-      if pokemon_parts_on? && sw(SWITCH_RANDOM_WILD_AREA)
-        lines = []
-        begin
-          GameData::EncounterRandom.each do |enc|
-            map = (pbGetMapNameFromId(enc.map) rescue enc.map.to_s)
-            enc.types.each do |type, list|
-              names = list.map { |e| species_name(e[1]) }.uniq
-              lines << "#{map} (#{type}): #{names.join(', ')}"
-            end
-          end
-        rescue => e
-          lines << "(routes unavailable: #{e.message})"
-        end
-        out << ["Routes", lines]
-      end
-      th = $PokemonGlobal.randomTrainersHash
-      if sw(SWITCH_RANDOM_TRAINERS) && th
-        lines = []
-        begin
-          seen = {}
-          getTrainersDataMode.list_all.each do |_key, tr|
-            next if seen[tr.id]   # PIF's trainer data lists each trainer under two keys
-            seen[tr.id] = true
-            team = th[tr.id]
-            next unless team
-            tname = (GameData::TrainerType.get(tr.trainer_type).name rescue tr.trainer_type.to_s)
-            old = tr.pokemon.map { |p| species_name(p[:species]) }.join(", ")
-            new = team.map { |d| species_name(d) }.join(", ")
-            tags = []
-            ct = dget(:class_themes) > 0 ? class_theme(tr.trainer_type) : nil
-            tags << ct.map { |x| type_name(x) }.join("/") if ct
-            tag = tags.empty? ? "" : " [#{tags.join(', ')}]"
-            line = "#{tname} #{tr.real_name}#{tag}: #{old} -> #{new}"
-            if get(:held_items) == 2
-              held = (0...team.length).map { |i| item_name(fixed_held(tr.id, i)) }
-              line += " | held: #{held.join(', ')}"
-            end
-            lines << line
-          end
-        rescue => e
-          lines << "(trainers unavailable: #{e.message})"
-        end
-        out << ["Trainers", lines]
-        out << ["Class themes", class_theme_lines] if dget(:class_themes) > 0
-      end
-      if sw(SWITCH_RANDOMIZED_GYM_TYPES) && $game_variables[VAR_GYM_TYPES_ARRAY].is_a?(Array)
-        base = (GYM_TYPES_ARRAY rescue [])
-        lines = []
-        $game_variables[VAR_GYM_TYPES_ARRAY].each_with_index do |t, i|
-          from = base[i] ? type_name(base[i]) : "?"
-          lines << "Gym #{i + 1}: #{from} -> #{type_name(t)}"
-        end
-        out << ["Gym types", lines]
-      end
-      if dynamic_items?
-        if sw(SWITCH_RANDOM_ITEMS) || sw(SWITCH_RANDOM_TMS)
-          out << ["Items and TMs (Dynamic, by spot)", dynamic_item_lines]
-        end
-        out << ["Shops", ["Dynamic: every shop rolls its own stock."]] if sw(SWITCH_RANDOM_SHOP_ITEMS)
-      else
-        ih = $PokemonGlobal.randomItemsHash
-        if ih && !ih.empty? && (sw(SWITCH_RANDOM_ITEMS) || sw(SWITCH_RANDOM_SHOP_ITEMS))
-          out << ["Items", ih.map { |a, b| "#{item_name(a)} -> #{item_name(b)}" }]
-        end
-        tm = $PokemonGlobal.randomTMsHash
-        if tm && !tm.empty? && sw(SWITCH_RANDOM_TMS)
-          out << ["TMs", tm.map { |a, b| "#{item_name(a)} -> #{item_name(b)}" }]
+      return lines
+    end
+
+    def self.sec_starters
+      hash = $PokemonGlobal.psuedoBSTHash || {}
+      return [1, 4, 7].map { |d|
+        to = (obtainRandomizedStarter([1, 4, 7].index(d)) rescue hash[d])
+        "#{species_name(d)} -> #{species_name(to)}"
+      }
+    end
+
+    def self.sec_routes
+      lines = []
+      GameData::EncounterRandom.each do |enc|
+        map = (pbGetMapNameFromId(enc.map) rescue enc.map.to_s)
+        enc.types.each do |type, list|
+          names = list.map { |e| species_name(e[1]) }.uniq
+          lines << "#{map} (#{type}): #{names.join(', ')}"
         end
       end
-      ib = item_bans
-      out << ["Banned items", [ib.map { |i| item_name(i) }.join(", ")]] if sw(SWITCH_RANDOM_ITEMS_GENERAL) && !ib.empty?
-      return out
+      return lines
+    end
+
+    def self.sec_trainers
+      th = $PokemonGlobal.randomTrainersHash || {}
+      lines = []
+      seen = {}
+      getTrainersDataMode.list_all.each do |_key, tr|
+        next if seen[tr.id]   # PIF's trainer data lists each trainer under two keys
+        seen[tr.id] = true
+        team = th[tr.id]
+        next unless team
+        tname = (GameData::TrainerType.get(tr.trainer_type).name rescue tr.trainer_type.to_s)
+        old = tr.pokemon.map { |p| species_name(p[:species]) }.join(", ")
+        new = team.map { |d| species_name(d) }.join(", ")
+        ct = dget(:class_themes) > 0 ? class_theme(tr.trainer_type) : nil
+        tag = ct ? " [#{ct.map { |x| type_name(x) }.join('/')}]" : ""
+        line = "#{tname} #{tr.real_name}#{tag}: #{old} -> #{new}"
+        if get(:held_items) == 2
+          held = (0...team.length).map { |i| item_name(fixed_held(tr.id, i)) }
+          line += " | held: #{held.join(', ')}"
+        end
+        lines << line
+      end
+      return lines
+    end
+
+    def self.sec_gym_types
+      base = (GYM_TYPES_ARRAY rescue [])
+      lines = []
+      $game_variables[VAR_GYM_TYPES_ARRAY].each_with_index do |t, i|
+        from = base[i] ? type_name(base[i]) : "?"
+        lines << "Gym #{i + 1}: #{from} -> #{type_name(t)}"
+      end
+      return lines
+    end
+
+    def self.sec_items
+      return ($PokemonGlobal.randomItemsHash || {}).map { |a, b| "#{item_name(a)} -> #{item_name(b)}" }
+    end
+
+    def self.sec_tms
+      return ($PokemonGlobal.randomTMsHash || {}).map { |a, b| "#{item_name(a)} -> #{item_name(b)}" }
+    end
+
+    def self.sec_banned_items
+      return [item_bans.map { |i| item_name(i) }.join(", ")]
+    end
+
+    # Randomize now shuffles several parts in a row; the log is written once
+    # at the end instead of after each part (each write builds every section)
+    @log_suspended = false
+    class << self
+      attr_accessor :log_suspended
     end
 
     def self.write_log
+      return if @log_suspended
       return unless log_on? && $PokemonGlobal && $game_switches
       sections = build_log
       make_dir(LOG_DIR)
@@ -242,12 +300,12 @@ module KIF
 
     def self.view_log
       return unless pbConfirmMessage(_INTL("The spoiler log shows everything that was randomized. View it?"))
-      sections = build_log
+      secs = sections
       loop do
-        titles = sections.map { |t, l| "#{t} (#{l.length})" }
+        titles = secs.map { |t, _b| t }
         pick = pbMessage(_INTL("Which part?"), titles + [_INTL("Close")], titles.length + 1)
         break if pick < 0 || pick >= titles.length
-        show_lines(sections[pick][0], sections[pick][1])
+        show_lines(secs[pick][0], section_lines(secs[pick][1]))
       end
     end
 

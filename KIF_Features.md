@@ -243,8 +243,8 @@ All options in this menu are per-save.
 Only on saves started as randomized saves: **Cody Settings → Randomizer**. The same screen also replaces PIF's randomizer menu when you make a randomized save.
 
 - **Seed** – an 8-character code (like `K7Q2-9XMA`). The same seed with the same settings gives the same randomized game (on the same KIF Beta version and sprite pack). New random seed, type one in, or copy it.
-- **Presets & sharing** – *Copy settings code* puts the seed and every setting on your clipboard as one line (paste it into Discord); *Paste settings code* loads someone else's. *Save as preset* / *Load preset* use files in the `Randomizer/Presets` folder.
-- **Spoiler log** – Off / On *(On)*. Writes `Randomizer Log - <seed>.txt` in the `Randomizer/Logs` folder every time something is shuffled: every Pokémon swap, route, trainer team, gym type, item and TM. *View spoiler log* shows it in-game (asks first); Up/Down scroll, Left/Right turn a page.
+- **Presets & sharing** – *Copy settings code* puts the seed and every setting on your clipboard as one line (paste it into Discord); *Paste settings code* loads someone else's. *Save as preset* / *Load preset* use files in the `Randomizer/Presets` folder (saving over an existing name asks first; presets from earlier KIF Beta versions still load).
+- **Spoiler log** – Off / On *(On)*. Writes `Randomizer Log - <seed>.txt` in the `Randomizer/Logs` folder every time something is shuffled: every Pokémon swap, route, trainer team, gym type, item and TM. *View spoiler log* shows it in-game (asks first; each part is built when opened); Up/Down scroll, Left/Right turn a page.
 - **Pokémon** – each part has its own switch:
   - *Wild encounters*: Off / Swap (each species becomes one other species everywhere) / Route (every route rolls its own) / Dynamic (every encounter is any Pokémon, rolled on the spot).
   - *Starters* (Off / 1st stage / Any), *Static encounters*, *Gift Pokémon*, *Trades*.

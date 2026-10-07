@@ -233,8 +233,13 @@ module KIF
     #---------------------------------------------------------------------------
     ITEM_CALL = /pb(ItemBall|ReceiveItem)\(\s*(?::|PBItems::)(\w+)/
 
-    def self.dynamic_item_lines
-      lines = []
+    # Every item ball / gift in the maps' events: [map id, map name, event id,
+    # :found/:given, item id]. Map files never change while the game runs,
+    # so they're read once (the log is written after every shuffle).
+    @item_spots = nil
+    def self.item_spots
+      return @item_spots if @item_spots
+      spots = []
       infos = (load_data("Data/MapInfos.rxdata") rescue {})
       infos.keys.sort.each do |mid|
         map = (load_data(sprintf("Data/Map%03d.rxdata", mid)) rescue nil)
@@ -255,14 +260,23 @@ module KIF
                 seen[[kind, item]] = true
                 it = (GameData::Item.get(item.to_sym) rescue nil)
                 next unless it
-                ctx = (kind == "ItemBall") ? :found : :given
-                next unless item_part_on?(it, ctx) && item_randomizable?(it)
-                new = roll_item(it, ctx, mid, eid)
-                lines << "#{name} (#{ctx}): #{it.name} -> #{(GameData::Item.get(new).name rescue new)}"
+                spots << [mid, name, eid, (kind == "ItemBall") ? :found : :given, it.id]
               end
             end
           end
         end
+      end
+      @item_spots = spots
+      return spots
+    end
+
+    def self.dynamic_item_lines
+      lines = []
+      item_spots.each do |mid, name, eid, ctx, item|
+        it = GameData::Item.get(item)
+        next unless item_part_on?(it, ctx) && item_randomizable?(it)
+        new = roll_item(it, ctx, mid, eid)
+        lines << "#{name} (#{ctx}): #{it.name} -> #{(GameData::Item.get(new).name rescue new)}"
       end
       return lines
     rescue => e
@@ -277,8 +291,6 @@ end
 class Object
   alias kif_rand_pbItemBall pbItemBall unless method_defined?(:kif_rand_pbItemBall) || private_method_defined?(:kif_rand_pbItemBall)
   alias kif_rand_pbReceiveItem pbReceiveItem unless method_defined?(:kif_rand_pbReceiveItem) || private_method_defined?(:kif_rand_pbReceiveItem)
-  alias kif_rand_pbGetRandomItem pbGetRandomItem unless method_defined?(:kif_rand_pbGetRandomItem) || private_method_defined?(:kif_rand_pbGetRandomItem)
-  alias kif_rand_replaceShopStock replaceShopStockWithRandomized unless method_defined?(:kif_rand_replaceShopStock) || private_method_defined?(:kif_rand_replaceShopStock)
   alias kif_rand_pbGetRandomHeldItem pbGetRandomHeldItem unless method_defined?(:kif_rand_pbGetRandomHeldItem) || private_method_defined?(:kif_rand_pbGetRandomHeldItem)
 
   def pbItemBall(*args)

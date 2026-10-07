@@ -168,6 +168,7 @@ module KIF
         ch = changes[s] || {}
         fields.each do |f, v|
           val = ch.key?(f) ? ch[f] : v
+          next if sp.instance_variable_get(f) == val   # already right: no copy
           sp.instance_variable_set(f, Marshal.load(Marshal.dump(val)))
         end
       end
@@ -178,6 +179,9 @@ module KIF
     def self.recalc_owned
       list = []
       list.concat($Trainer.party) if $Trainer && $Trainer.party
+      if $PokemonGlobal && $PokemonGlobal.respond_to?(:daycare) && $PokemonGlobal.daycare.is_a?(Array)
+        $PokemonGlobal.daycare.each { |slot| list << slot[0] if slot.is_a?(Array) && slot[0].is_a?(Pokemon) }
+      end
       if $PokemonStorage
         $PokemonStorage.maxBoxes.times do |b|
           $PokemonStorage.maxPokemon(b).times { |i| list << $PokemonStorage[b, i] }
@@ -482,11 +486,17 @@ module KIF
       end
       perms = {}
       done = {}
-      # pre-evolutions first (repeat until every predecessor is done)
+      # pre-evolutions first (repeat while something gets done; whatever is
+      # left after that - only possible with an evolution loop - is done
+      # without a floor)
       pending = order.dup
-      3.times do
+      strict = true
+      loop do
+        before = pending.length
+        pend_set = {}
+        pending.each { |x| pend_set[x] = true }
         pending = pending.reject do |s|
-          next false if preds[s].any? { |p| !done[p] && pending.include?(p) && p != s }
+          next false if strict && preds[s].any? { |p| !done[p] && pend_set[p] && p != s }
           old = STAT_ORDER.map { |k| orig(s, :@base_stats)[k] }
           case mode
           when 1
@@ -515,6 +525,11 @@ module KIF
           out[s] = { :@base_stats => STAT_ORDER.each_with_index.map { |k, i| [k, v[i]] }.to_h }
           true
         end
+        break if pending.empty?
+        if pending.length == before
+          break unless strict
+          strict = false
+        end
       end
       return out
     end
@@ -532,6 +547,7 @@ module Game
     def load(*args)
       ret = kif_rand_load(*args)
       begin
+        KIF::Rand.sanitize_tables if $PokemonGlobal
         KIF::Rand.apply_data
       rescue => e
         KIF.log("Randomizer data failed to load: #{e.class}: #{e.message}")

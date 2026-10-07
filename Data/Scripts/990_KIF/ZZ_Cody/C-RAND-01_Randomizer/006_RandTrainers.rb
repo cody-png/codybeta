@@ -153,19 +153,6 @@ module KIF
     #---------------------------------------------------------------------------
     # Picking
     #---------------------------------------------------------------------------
-    # Dex number of a species, symbol, number or PIFSprite (PIF's custom
-    # sprite lists and swap table can hold PIFSprites)
-    def self.dex_of(sp)
-      return sp if sp.is_a?(Integer)
-      return 0 if sp.nil?
-      if sp.respond_to?(:head_id) && sp.respond_to?(:body_id)
-        h = sp.head_id.to_i
-        b = sp.body_id.to_i
-        return b > 0 ? b * NB_POKEMON + h : h
-      end
-      return (GameData::Species.get(sp).id_number rescue 0)
-    end
-
     def self.fused?(dex)
       return dex > NB_POKEMON && dex < Settings::ZAPMOLCUNO_NB
     end
@@ -392,7 +379,6 @@ module KIF
         rival = dget(:rival_team) == 1 && RIVAL_TYPES.include?(tr.trainer_type)
         theme = themes_on ? class_theme(tr.trainer_type) : nil
         n = olds.length + extra_count(olds.length)
-        themed = Array.new(n, !theme.nil?)
         team = []
         n.times do |i|
           old = olds[i] || olds[rand(olds.length)] || 1
@@ -408,7 +394,7 @@ module KIF
               dex = rival_pick(map, old)
             end
           else
-            th = themed[i] ? theme : nil
+            th = theme
             if i < olds.length && (old == Settings::RIVAL_STARTER_PLACEHOLDER_SPECIES || old >= Settings::ZAPMOLCUNO_NB)
               dex = old
             elsif trainer_mode == 2
@@ -471,6 +457,7 @@ module GameData
         species = reverseFusionSpecies(species) if $game_switches[SWITCH_REVERSED_MODE]
         sp = species.is_a?(GameData::Species) ? species.id : species
         pkmn = Pokemon.new(sp, level, trainer)
+        pkmn.item = pbGetRandomHeldItem.id if $game_switches[SWITCH_RANDOM_HELD_ITEMS]
         pkmn.calc_stats
         party.push(pkmn)
       end

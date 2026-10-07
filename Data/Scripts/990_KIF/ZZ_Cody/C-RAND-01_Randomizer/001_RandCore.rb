@@ -227,12 +227,61 @@ module KIF
       return yield if @seeded > 0
       @seeded += 1
       srand(sub_seed(*parts))
+      memo_clear
       begin
         return yield
       ensure
         @seeded -= 1
+        memo_clear
         srand(Random.new_seed)
       end
+    end
+
+    # While a seeded shuffle runs, base stat totals and legendary checks are
+    # remembered per Pokémon: every candidate PIF tries builds a whole
+    # FusedSpecies for them otherwise (and the "old" Pokémon is looked up
+    # again on every try). Nothing about a Pokémon changes during a shuffle.
+    @memo_bst = {}
+    @memo_legend = {}
+    def self.memo_clear
+      @memo_bst = {}
+      @memo_legend = {}
+    end
+
+    def self.memo_bst(dex)
+      return nil unless @seeded > 0 && dex.is_a?(Integer)
+      return @memo_bst[dex] if @memo_bst.key?(dex)
+      return nil
+    end
+
+    def self.memo_bst_set(dex, v)
+      @memo_bst[dex] = v if @seeded > 0 && dex.is_a?(Integer)
+      return v
+    end
+
+    # (PIF's Pokédex shuffle asks with species symbols, the others with numbers)
+    def self.memo_legend(dex)
+      return nil unless @seeded > 0 && (dex.is_a?(Integer) || dex.is_a?(Symbol))
+      return @memo_legend.key?(dex) ? @memo_legend[dex] : nil
+    end
+
+    def self.memo_legend_set(dex, v)
+      @memo_legend[dex] = v if @seeded > 0 && (dex.is_a?(Integer) || dex.is_a?(Symbol))
+      return v
+    end
+
+    # Dex number of a species, symbol, number or PIFSprite. PIF's swap table
+    # and custom sprite lists can hold PIFSprites (seen in Cody's saves), and
+    # getDexNumberForSpecies passes those through untouched.
+    def self.dex_of(sp)
+      return sp if sp.is_a?(Integer)
+      return 0 if sp.nil?
+      if sp.respond_to?(:head_id) && sp.respond_to?(:body_id)
+        h = sp.head_id.to_i
+        b = sp.body_id.to_i
+        return b > 0 ? b * NB_POKEMON + h : h
+      end
+      return (GameData::Species.get(sp).id_number rescue 0)
     end
 
     #---------------------------------------------------------------------------
@@ -357,7 +406,7 @@ module KIF
     def self.load_preset(name)
       path = "#{PRESET_DIR}/#{name}.txt"
       return false unless File.exist?(path)
-      line = File.readlines(path).map(&:strip).find { |l| l.start_with?(CODE_PREFIX) }
+      line = File.readlines(path).map(&:strip).find { |l| l.start_with?(CODE_PREFIX) || l.start_with?(CODE_PREFIX_V1) }
       return line ? apply_code(line) : false
     end
 
@@ -378,6 +427,23 @@ module KIF
         return
       end
       Kernel.pbShuffleDex($game_variables[VAR_RANDOMIZER_WILD_POKE_BST])
+    end
+
+    # PIF's tables sometimes hold PIFSprite objects instead of dex numbers
+    # (older saves). PIF's own code crashes on those (GameData::Species.get
+    # refuses them), so they're turned into the numbers they stand for when a
+    # save is loaded and after each shuffle. Same Pokémon, plain numbers.
+    def self.sanitize_tables
+      h = $PokemonGlobal.psuedoBSTHash
+      if h.is_a?(Hash)
+        h.each { |k, v| h[k] = dex_of(v) unless v.is_a?(Integer) }
+      end
+      t = $PokemonGlobal.randomTrainersHash
+      if t.is_a?(Hash)
+        t.each_value { |team| team.map! { |v| v.is_a?(Integer) ? v : dex_of(v) } if team.is_a?(Array) }
+      end
+    rescue => e
+      KIF.log("Randomizer table clean-up failed: #{e.message}")
     end
 
     #---------------------------------------------------------------------------
@@ -405,14 +471,15 @@ module KIF
       max = fusions ? PBSpecies.maxValue : NB_POKEMON
       legend = sw(SWITCH_RANDOM_WILD_LEGENDARIES)
       old_dex = getDexNumberForSpecies(old_species) rescue nil
-      pick = nil
       40.times do
-        pick = pool ? pool.sample : rand(max) + 1
-        ok = (GameData::Species.exists?(pick) rescue false)
-        next unless ok
-        break if old_dex.nil? || legendaryOk(old_dex, pick, legend)
+        pick = dex_of(pool ? pool.sample : rand(max) + 1)
+        next if pick <= 0 || pick >= Settings::ZAPMOLCUNO_NB
+        next unless (GameData::Species.exists?(pick) rescue false)
+        next if species_banned?(pick)
+        next unless old_dex.nil? || legendaryOk(old_dex, pick, legend)
+        return GameData::Species.get(pick).species
       end
-      return GameData::Species.get(pick).species
+      return old_species   # nothing allowed came up: the usual Pokémon
     rescue => e
       KIF.log("Dynamic encounter failed: #{e.message}")
       return old_species

@@ -424,6 +424,15 @@ module KIF
       self.log_suspended = false
       progress_done
       write_log
+      refresh_encounters
+    end
+
+    # The map you're standing on copied its encounter table when you entered
+    # it; reload it so new Route results apply right away, not after leaving
+    def self.refresh_encounters
+      $PokemonEncounters.setup($game_map.map_id) if $PokemonEncounters && $game_map
+    rescue => e
+      KIF.log("Encounter refresh failed: #{e.message}")
     end
   end
 end

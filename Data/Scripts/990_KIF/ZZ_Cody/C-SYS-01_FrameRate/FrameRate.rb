@@ -24,6 +24,7 @@ module KIF
     WINDOW     = 80      # steps per speed check (2 seconds)
     SLOW_STEP  = 0.030   # s; a step that took longer than this was a slow one (normal: 0.025)
     WAIT_UP    = 400     # smooth steps before trying a higher rate again (10 seconds)
+    LOG_STEP   = 0.012   # s; with KIF debug on, steps slower than this are written to the frame log
     # Held keys repeat after this many steps, then in this rhythm - what the
     # engine does at 40 (it times key repeat in drawn frames, so above 40 it
     # would repeat slower; while drawing in between, key repeat is done here)
@@ -154,7 +155,7 @@ module KIF
     def self.step
       @count += 1
       boot unless @booted
-      watch_speed if @target > BASE && @logic == BASE
+      watch_speed if @logic == BASE && (@target > BASE || $DEBUG)
       unless drawing_between?
         @delta = nil
         yield
@@ -169,14 +170,27 @@ module KIF
       @phase -= @rate
       shot = capture
       total = 0
-      begin
-        fractions.each do |a|
-          pose(shot, a) if shot
-          yield
-          total += Graphics.kif_fps_delta.to_i if Graphics.respond_to?(:kif_fps_delta)
+      if shot.nil? || fractions.length < 2
+        # nothing on the map moved (menu, battle, standing still): one frame,
+        # then the rest of the step's time is waited out instead of drawn
+        yield
+        total += Graphics.kif_fps_delta.to_i if Graphics.respond_to?(:kif_fps_delta)
+        if fractions.length > 1
+          rest = (fractions.length - 1) / @rate.to_f
+          sleep(rest)
+          total += (rest * 1_000_000).round
+          Graphics.frame_reset if Graphics.respond_to?(:frame_reset)
         end
-      ensure
-        restore(shot) if shot
+      else
+        begin
+          fractions.each do |a|
+            pose(shot, a)
+            yield
+            total += Graphics.kif_fps_delta.to_i if Graphics.respond_to?(:kif_fps_delta)
+          end
+        ensure
+          restore(shot)
+        end
       end
       @delta = total
     end
@@ -369,7 +383,13 @@ module KIF
       @last_at = now
       return unless last
       @window += 1
-      @slow += 1 if now - last > SLOW_STEP
+      took = now - last
+      @slow += 1 if took > SLOW_STEP
+      if $DEBUG
+        maps = ($MapFactory ? $MapFactory.maps.map(&:map_id) : []) rescue []
+        note_slow(took, maps) if took > LOG_STEP
+        @maps_were = maps
+      end
       return if @window < WINDOW
       if @slow > WINDOW / 2 && @rate > BASE
         lower = rates.select { |r| r < @rate }.max || BASE
@@ -390,6 +410,23 @@ module KIF
         @good = 0
       end
       @window = @slow = 0
+    end
+
+    # With KIF's debug option on: slow steps go to KIF_framelog.txt in the
+    # save folder, with where the player was and what the game was doing
+    def self.note_slow(took, maps)
+      ev = (pbMapInterpreterRunning? rescue false)
+      msg = (($game_temp && $game_temp.message_window_showing) rescue false)
+      line = sprintf("%s  %5.1f ms  map %s at %s,%s  maps loaded %s%s  rate %d/%d%s%s",
+                     Time.now.strftime("%H:%M:%S"), took * 1000,
+                     ($game_map ? $game_map.map_id : "-"), ($game_player ? $game_player.x : "-"),
+                     ($game_player ? $game_player.y : "-"), maps.inspect,
+                     (@maps_were && @maps_were != maps) ? " (was #{@maps_were.inspect})" : "",
+                     @rate, @target, ev ? "  event running" : "", msg ? "  message" : "")
+      path = File.join((RTP.getSaveFolder rescue "."), "KIF_framelog.txt")
+      File.open(path, "a") { |f| f.puts(line) }
+    rescue
+      nil
     end
 
     def self.rates

@@ -1,12 +1,12 @@
 #===============================================================================
 # C-SYS-02 – Skip intro (Cody, 2026-10-08)
-#   Cody Settings > Interface > "Skip intro": Off (default) / On.
+#   Cody Settings > Interface > "Skip intro": Off / On (default).
 #   On: the game starts at the title screen without the opening movie
 #   (Gengar and Nidorino). The title screen and its music stay.
 #   (A NoIntro.krs file in the save folder still goes straight to the load
 #   screen, as in KIF.)
 #===============================================================================
-KIF::Options.define(:cody_skipintro, 0, :global)
+KIF::Options.define(:cody_skipintro, 1, :global)   # On: no movie unless a player turns it back on
 
 KIF::Options.add(:cody_interface, :global) {
   EnumOption.new(_INTL("Skip intro"), [_INTL("Off"), _INTL("On")],
@@ -19,7 +19,7 @@ KIF::Options.add(:cody_interface, :global) {
 module KIF
   module SkipIntro
     def self.on?
-      return ($PokemonSystem.cody_skipintro rescue 0).to_i == 1
+      return ($PokemonSystem.cody_skipintro rescue 1).to_i == 1
     end
   end
 end

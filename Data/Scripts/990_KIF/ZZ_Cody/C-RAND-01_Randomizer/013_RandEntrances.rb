@@ -264,11 +264,11 @@ module KIF
           wait = pending && pending[o[:id]]
           unless wait && !map_in.key?(o[:id])
             i = byid[map_in[o[:id]] || o[:id]]
-            o[:out_edges].each { |src, needs| (edges[src] ||= []) << [i[:in_node], needs] }
+            o[:out_edges].each { |src, needs| (edges[src] ||= []) << [i[:in_node], needs, 1] }
           end
           unless wait && !map_out.key?(o[:id])
             back = byid[map_out[o[:id]] || o[:id]]
-            o[:exit_edges].each { |src, needs| (edges[src] ||= []) << [back[:exit_node], needs] }
+            o[:exit_edges].each { |src, needs| (edges[src] ||= []) << [back[:exit_node], needs, 1] }
           end
         end
         return edges
@@ -451,7 +451,7 @@ module KIF
       end
 
       # A layout for the current settings, or nil when none was found
-      def self.generate(seed_parts = [:entrances], random_start: false)
+      def self.generate(seed_parts = [:entrances], random_start: false, origin_door: nil)
         d = dat
         return nil unless d
         shape = Rand.dget(:entrances)
@@ -469,6 +469,12 @@ module KIF
             start = start_door[:in_node]
             extra = current_flags(d)
           end
+        elsif origin_door
+          # Randomize now on a random-start save: the world still grows from
+          # the start Center (and is measured from there for level scaling);
+          # where the player stands is checked as usual
+          start = origin_door[:in_node]
+          extra = current_flags(d)
         end
         RETRIES.times do |i|
           Rand.progress(_INTL("Shuffling entrances... (try {1})", i + 1), 0.1 + 0.8 * i / RETRIES) if Rand.respond_to?(:progress)
@@ -491,9 +497,11 @@ module KIF
           regions = regions_on
           rsig = {}
           regions.each { |r| rsig[r] = (d[:region_sigs] || {})[r] if r != 0 }
+          first = start_door || origin_door
           return { in: map_in, out: map_out, sig: d[:signature], rsig: rsig, regions: regions, attempts: i + 1, seen: [],
                    shape: shape, doors: Rand.dget(:ent_doors), coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]),
-                   start_door: start_door && start_door[:id], start_done: !start_door.nil?, progress: map_progress(res), pv: d[:progress_version] }
+                   start_door: first && first[:id], start_done: !first.nil?, progress: map_progress(res), pv: d[:progress_version],
+                   near: near_start(d, edges, res, start), nv: NEAR_VERSION, seed: Rand.seed }
         end
         return nil
       end
@@ -558,6 +566,38 @@ module KIF
         return out
       end
 
+      # How many doors from the start each map is, for the maps you can reach
+      # with nothing (sphere 0): fewest doors walked through on the way there.
+      # Places that need a badge or key item first aren't counted (you get
+      # there stronger anyway).
+      NEAR_VERSION = 1
+      NEAR_MAX = 30
+      def self.near_start(d, edges, res, start = nil)
+        seen = res[:seen]; all = res[:all]; gates = d[:gates]; badges = res[:badges]
+        from = start || d[:start]
+        hops = { from => 0 }
+        front = [from]; back = []
+        until front.empty? && back.empty?
+          n = front.empty? ? back.shift : front.shift
+          h = hops[n]
+          next if h > NEAR_MAX
+          (edges[n] || []).each do |to, req, door|
+            next unless seen[to] == 0
+            nh = h + (door ? 1 : 0)
+            next if hops[to] && hops[to] <= nh
+            next unless req.all? { |r| satisfied?(r, all, gates, badges) }
+            hops[to] = nh
+            door ? back << to : front.unshift(to)
+          end
+        end
+        out = {}
+        hops.each do |node, h|
+          m = node.split(":")[0].to_i
+          out[m] = h if out[m].nil? || h < out[m]
+        end
+        return out
+      end
+
       # Sphere of each door: when its doorstep first comes into reach
       def self.door_spheres(d, map_in, seen)
         out = {}
@@ -582,7 +622,14 @@ module KIF
           @targets = nil
           return
         end
-        layout = generate
+        old = state
+        if same_layout?(old)
+          # nothing about the doors changed: keep them (and what you found)
+          Rand.data[:ent_done] = true
+          return
+        end
+        origin = old.is_a?(Hash) ? start_origin(old) : nil
+        layout = generate([:entrances], origin_door: origin)
         Rand.progress_done if Rand.respond_to?(:progress_done)
         Rand.data[:ent_done] = true
         if layout
@@ -593,6 +640,28 @@ module KIF
           pbMessage(_INTL("No beatable entrance layout was found for this seed; entrances stay as they are.")) if defined?(pbMessage)
           KIF.log("Entrances: no beatable layout after #{RETRIES} tries (seed #{Rand.seed})")
         end
+      end
+
+      # Would a new shuffle give these same doors? (same data, seed and door
+      # settings). Layouts from before the seed was stored count as the same seed.
+      def self.same_layout?(s)
+        return false unless s.is_a?(Hash) && dat && layout_current?(s)
+        return false unless s[:shape] == Rand.dget(:entrances) && s[:doors] == Rand.dget(:ent_doors)
+        return false unless s[:coupled] == (Rand.dget(:ent_coupled) == 1)
+        return false unless (s[:regions] || [0]).sort == regions_on.sort
+        return false if s[:seed] && s[:seed] != Rand.seed
+        return true
+      end
+
+      # Where the journey started: the random start Center, or (saves whose
+      # start got lost to an earlier Randomize now) the Center that is home
+      def self.start_origin(s)
+        d = dat
+        return d[:door_by_id][s[:start_door]] if s[:start_door] && d[:door_by_id][s[:start_door]]
+        return nil unless Rand.data[:ent_start_done] && $PokemonGlobal
+        home = $PokemonGlobal.pokecenterMapId rescue nil
+        return nil unless home && home > 0
+        return d[:doors].find { |o| o[:to][0] == home && o[:pool] == :building }
       end
 
       # A new game picks its settings in the intro, where nothing is shuffled
@@ -760,9 +829,10 @@ module KIF
 
       # One Pokémon to a new level by the map's factor; moves picked by level
       # follow it unless `keep_moves`
-      def self.rescale(pkmn, f, keep_moves = false)
+      def self.rescale(pkmn, f, keep_moves = false, cap = nil)
         old = pkmn.level
         lv = (old * f).round.clamp(1, GameData::GrowthRate.max_level)
+        lv = [lv, cap].min if cap
         return if lv == old
         natural = keep_moves ? nil : (pkmn.getMoveList.select { |m| m[0] <= old }.map { |m| m[1] }.last(4) rescue nil)
         pkmn.level = lv
@@ -775,8 +845,9 @@ module KIF
         map_id ||= $game_map ? $game_map.map_id : nil
         return unless map_id
         f = level_factor(map_id)
-        return if (f - 1.0).abs < 0.02
-        rescale(pkmn, f)
+        cap = level_cap(map_id)
+        return if (f - 1.0).abs < 0.02 && !(cap && pkmn.level > cap)
+        rescale(pkmn, f, false, cap)
       rescue => e
         KIF.log("Wild level scaling failed (#{e.class}: #{e.message})")
       end
@@ -786,15 +857,19 @@ module KIF
       # gets them worked out again, once, so its levels match the new curve
       def self.layout_progress
         s = state; d = dat
-        return s[:progress] if d[:progress_version].nil? || s[:pv] == d[:progress_version]
+        return s[:progress] if (d[:progress_version].nil? || s[:pv] == d[:progress_version]) && s[:nv] == NEAR_VERSION
         start = nil; extra = []
-        if s[:start_door] && (o = d[:door_by_id][s[:start_door]])
+        if (o = start_origin(s))
           start = o[:in_node]
           extra = current_flags(d)
+          s[:start_door] ||= o[:id]
         end
-        res = sweep(d, edges_for(d, s[:in], s[:out]), extra, nil, start)
+        edges = edges_for(d, s[:in], s[:out])
+        res = sweep(d, edges, extra, nil, start)
         s[:progress] = map_progress(res)
+        s[:near] = near_start(d, edges, res, start)
         s[:pv] = d[:progress_version]
+        s[:nv] = NEAR_VERSION
         return s[:progress]
       rescue => e
         KIF.log("Entrance level bins couldn't be updated (#{e.class}: #{e.message})")
@@ -809,7 +884,20 @@ module KIF
         curve = dat[:level_curve]
         a = curve[van]; b = curve[now]
         return 1.0 unless a && b && a > 0
-        return (b / a.to_f).clamp(0.3, 3.0)
+        return (b / a.to_f).clamp(0.05, 3.0)
+      end
+
+      # Near the start nothing outlevels a fresh starter: on the maps you can
+      # reach with nothing, no Pokémon is above NEAR_LEVEL, plus NEAR_STEP for
+      # every door further from the start
+      NEAR_LEVEL = 7
+      NEAR_STEP  = 3
+      def self.level_cap(map_id)
+        return nil unless scaling?
+        layout_progress
+        h = (state[:near] || {})[map_id]
+        return nil unless h
+        return NEAR_LEVEL + NEAR_STEP * h
       end
 
       def self.scale_trainer(trainer, map_id = nil)
@@ -817,9 +905,10 @@ module KIF
         map_id ||= $game_map ? $game_map.map_id : nil
         return trainer unless map_id
         f = level_factor(map_id)
-        return trainer if (f - 1.0).abs < 0.02
+        cap = level_cap(map_id)
+        return trainer if (f - 1.0).abs < 0.02 && !(cap && trainer.party.any? { |pk| pk.level > cap })
         # moves picked by level follow it; a hand-written set stays
-        trainer.party.each { |pkmn| rescale(pkmn, f) }
+        trainer.party.each { |pkmn| rescale(pkmn, f, false, cap) }
         return trainer
       rescue => e
         KIF.log("Level scaling failed (#{e.class}: #{e.message})")

@@ -37,7 +37,7 @@ module KIF
         ]
         unless $game_switches[SWITCH_DURING_INTRO]
           rows << ButtonOption.new(_INTL("Entrance log"), proc { KIF::Rand::ER.show_log },
-                                   _INTL("Every shuffled door you have used so far, and where it led."))
+                                   _INTL("The doors you have used so far on the Town Map, newest first, and where each one led."))
         end
         rows
       }
@@ -59,18 +59,7 @@ module KIF
     end
 
     module ER
-      # The doors used so far, as a reader
-      def self.show_log
-        s = state
-        unless active? && s[:seen] && !s[:seen].empty?
-          pbMessage(active? ? _INTL("You haven't used a shuffled door yet.") : _INTL("Entrances are not shuffled on this save."))
-          return
-        end
-        lines = s[:seen].map { |door_id, kind| describe(door_id, kind) }.reject(&:empty?)
-        lines << ""
-        lines << _INTL("Doors not yet found: {1}", [s[:in].length - s[:seen].map(&:first).uniq.length, 0].max)
-        Rand.show_lines(_INTL("Entrance log ({1} found)", s[:seen].map(&:first).uniq.length), lines)
-      end
+      # (the Entrance log itself: 015_RandEntrancesMap)
 
       # The hint after a shuffled warp: where you came out, and whose door it is
       def self.hint_for(map_id, event_id)

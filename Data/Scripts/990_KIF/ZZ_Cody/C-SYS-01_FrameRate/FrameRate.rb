@@ -538,7 +538,7 @@ if defined?(TilemapRenderer)
 
     def kif_fps_ring(on)
       @tiles.each { |col| col.each { |coord| coord.each { |tile| tile.dispose } } }
-      extra = on ? 2 : 1
+      extra = on ? 3 : 1   # the usual spare row/column, plus one on each side
       @tiles_horizontal_count = (Graphics.width.to_f / DISPLAY_TILE_WIDTH).ceil + extra
       @tiles_vertical_count = (Graphics.height.to_f / DISPLAY_TILE_HEIGHT).ceil + extra
       @tiles = Array.new(@tiles_horizontal_count) {

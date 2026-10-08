@@ -22,11 +22,12 @@ module KIF
                 _INTL("A line names the door you came out of and the place it belongs to.")),
           enum(:ent_start, _INTL("Start"), [_INTL("Pallet"), _INTL("Random town"), _INTL("Random map")],
                [_INTL("Your journey starts in Pallet Town as usual."),
-                _INTL("When Oak hands you the Pokédex, leaving the lab takes you to a random town's Pokémon Center, which becomes home. New games only."),
+                _INTL("Oak's parcel errand is skipped: once you have your starter, the next door hands you the Pokédex and takes you to a random town's Pokémon Center, which becomes home. New games only."),
                 _INTL("Like Random town, but any Pokémon Center in Kanto, routes included. New games only.")]),
-          onoff(:ent_levels, _INTL("Level scaling"),
-                _INTL("Trainers keep their usual levels, wherever their map ends up."),
-                _INTL("Trainers are as strong as the ones you'd normally meet at that point of the game: a gym reached first has low levels, the Elite Four reached early is weaker."))
+          enum(:ent_levels, _INTL("Level scaling"), [_INTL("Off"), _INTL("Trainers"), _INTL("Trainers + wild")],
+               [_INTL("Levels stay as usual, wherever a map ends up."),
+                _INTL("Trainers are as strong as the ones you'd normally meet at that point of the game: a gym reached first has low levels, the Elite Four reached early is weaker."),
+                _INTL("Like Trainers, and wild Pokémon (grass, water, overworld legendaries) follow the same scale.")])
         ]
         unless $game_switches[SWITCH_DURING_INTRO]
           rows << ButtonOption.new(_INTL("Entrance log"), proc { KIF::Rand::ER.show_log },
@@ -135,6 +136,7 @@ class Scene_Map
   def transfer_player(cancel_swimming = true)
     kif_enthint_transfer_player(cancel_swimming)
     KIF::Rand::ER.settle_home if KIF::Rand::ER.new_home
+    KIF::Rand::ER.show_handover_message if KIF::Rand::ER.handover_msg
     hint = KIF::Rand::ER.pending_hint
     return unless hint
     KIF::Rand::ER.pending_hint = nil

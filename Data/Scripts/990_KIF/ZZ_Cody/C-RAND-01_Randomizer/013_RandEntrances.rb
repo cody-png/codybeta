@@ -16,7 +16,7 @@ module KIF
       [:ent_coupled, :enum, 2],   # Off / On (default On, see dget below)
       [:ent_hints, :enum, 2],     # Off / On
       [:ent_start, :enum, 3],     # Pallet / Random town / Random map
-      [:ent_levels, :enum, 2]     # Off / By progress
+      [:ent_levels, :enum, 3]     # Off / Trainers / Trainers + wild
     ]
     ENT_SETTINGS.each { |st| DATA_SETTINGS << st unless DATA_KEYS.include?(st[0]) }
     ENT_SETTINGS.each { |st| DATA_KEYS << st[0] unless DATA_KEYS.include?(st[0]) }
@@ -25,7 +25,7 @@ module KIF
     LABELS[:ent_coupled] = ["Coupled", ["Off", "On"]]
     LABELS[:ent_hints] = ["Door hints", ["Off", "On"]]
     LABELS[:ent_start] = ["Start", ["Pallet", "Random town", "Random map"]]
-    LABELS[:ent_levels] = ["Level scaling", ["Off", "By progress"]]
+    LABELS[:ent_levels] = ["Level scaling", ["Off", "Trainers", "Trainers + wild"]]
 
     DATA_DEFAULTS[:ent_coupled] = 1   # Coupled unless switched off
 
@@ -33,7 +33,6 @@ module KIF
       DATA_PATH = "Data/KIF/entrances.dat"
       RETRIES = 40
       BADGE_PREFIX = "badge_"
-      POKEDEX_FLAG = :sw_988           # set by Oak when he hands over the Pokédex
       OAK_LABS = [77, 551, 552, 593, 659, 724, 740, 847]
       PALLET = 42
       INDIGO = 303
@@ -363,7 +362,7 @@ module KIF
       end
 
       # A layout for the current settings, or nil when none was found
-      def self.generate(seed_parts = [:entrances])
+      def self.generate(seed_parts = [:entrances], random_start: false)
         d = dat
         return nil unless d
         shape = Rand.dget(:entrances)
@@ -371,15 +370,15 @@ module KIF
         doors = doors_for(d, Rand.dget(:ent_doors))
         coupled = Rand.dget(:ent_coupled) == 1
         rng = Random.new(Rand.sub_seed(*seed_parts))
-        # Random start: picked once per seed; only for a game that hasn't got
-        # its Pokédex yet (the move happens when Oak hands it over)
+        # Random start: made at the hand-over (see handover_target), from the
+        # chosen Center, with exactly what the save has at that moment
         start_door = nil; start = nil; extra = []; cands = []
-        if Rand.dget(:ent_start) > 0 && !($Trainer && $Trainer.has_pokedex)
+        if random_start
           cands = start_candidates(d, Rand.dget(:ent_start) == 1).shuffle(random: rng)
           start_door = cands.first
           if start_door
             start = start_door[:in_node]
-            extra = pre_dex_flags(d)
+            extra = current_flags(d)
           end
         end
         RETRIES.times do |i|
@@ -399,10 +398,10 @@ module KIF
           # stand on the current map the end must be reachable too (every
           # region of that map the layout reaches, with everything gathered
           # so far assumed from scratch - conservative)
-          next unless beatable_from_here?(d, edges, res)
+          next unless start_door || beatable_from_here?(d, edges, res)
           return { in: map_in, out: map_out, sig: d[:signature], attempts: i + 1, seen: [],
                    shape: shape, doors: Rand.dget(:ent_doors), coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]),
-                   start_door: start_door && start_door[:id], start_done: false, progress: map_progress(res) }
+                   start_door: start_door && start_door[:id], start_done: !start_door.nil?, progress: map_progress(res) }
         end
         return nil
       end
@@ -446,12 +445,6 @@ module KIF
         }.sort_by { |o| o[:id] }
       end
 
-      # What the start of the game gives before the Pokédex (Pallet, Route 1,
-      # Viridian): a game that starts elsewhere has been through that
-      def self.pre_dex_flags(d)
-        res = sweep(d, edges_for(d, {}, {}), [], nil, nil, POKEDEX_FLAG)
-        return res[:have]
-      end
 
       # How far into the game each map is: the share of all reached nodes
       # that came before its first node, in PROGRESS_BINS steps (0 = the
@@ -487,6 +480,12 @@ module KIF
           Rand.data.delete(:ent_layout)
           return
         end
+        if waiting_for_handover?
+          # the layout is made when the starter is in hand (see handover_target)
+          Rand.data.delete(:ent_layout)
+          @targets = nil
+          return
+        end
         layout = generate
         Rand.progress_done if Rand.respond_to?(:progress_done)
         Rand.data[:ent_done] = true
@@ -511,8 +510,16 @@ module KIF
           pbMessage(_INTL("The entrance data changed since this save's doors were shuffled. Doors are back to normal until you Randomize now."))
           return
         end
+        # saves from the first version made a random-start layout before the
+        # Pokédex and waited for it; that layout assumed the errand was done
+        if s.is_a?(Hash) && s[:start_door] && !s[:start_done] && waiting_for_handover?
+          Rand.data.delete(:ent_layout)
+          @targets = nil
+          return
+        end
         return if Rand.data[:ent_done] || s
         return unless Rand.dget(:entrances) > 0 && available?
+        return if waiting_for_handover?
         Rand.data[:ent_done] = true
         randomize
       rescue => e
@@ -547,22 +554,76 @@ module KIF
         return targets[[map_id, event_id]]
       end
 
-      # Random start: Oak has handed over the Pokédex and the player leaves
-      # the lab - that door leads into the start town's Pokémon Center once
-      def self.start_target(map_id, params)
-        s = state
-        return nil unless active? && s[:start_door] && s[:start_pending] && !s[:start_done]
-        return nil unless OAK_LABS.include?(map_id) && params[1] == PALLET
-        o = dat[:door_by_id][s[:start_door]]
-        return nil unless o
-        s[:start_done] = true
-        s[:start_pending] = false
+      #-------------------------------------------------------------------------
+      # Random start. Oak's errand (the parcel from the Viridian Mart) can't be
+      # counted on once doors are shuffled, so it is skipped: with the starter
+      # in hand, the next door the player takes hands over the Pokédex and
+      # five Poké Balls the way Oak would, the layout is made from the start
+      # Center with exactly what the save has then, and the door leads there.
+      #-------------------------------------------------------------------------
+      def self.waiting_for_handover?
+        return false unless Rand.dget(:entrances) > 0 && Rand.dget(:ent_start) > 0
+        return false if Rand.data[:ent_start_done]
+        return false unless $Trainer && !$Trainer.has_pokedex
+        return true
+      end
+
+      # Oak's parcel scene, as its switches leave the game: parcel received
+      # (220), Pokédex given (988, 59), Oak on his after-Pokédex page (self B)
+      OAK_EVENT = 7
+      def self.give_pokedex
+        $game_switches[220] = true
+        $game_switches[988] = true
+        $game_switches[59] = true
+        OAK_LABS.each { |lab| $game_self_switches[[lab, OAK_EVENT, "B"]] = true }
+        $PokemonBag.pbDeleteItem(:OAKSPARCEL) if $PokemonBag.pbHasItem?(:OAKSPARCEL)
+        $PokemonBag.pbStoreItem(:POKEBALL, 5)
+        $Trainer.has_pokedex = true
+        pbUnlockDex rescue nil
+        $game_map.need_refresh = true if $game_map
+      end
+
+      def self.handover_target(params)
+        return nil unless params[0] == 0 && waiting_for_handover? && available?
+        return nil if $game_switches[SWITCH_DURING_INTRO]
+        return nil if $Trainer.party.empty?
+        give_pokedex
+        Rand.data[:ent_start_done] = true
+        Rand.data[:ent_done] = true
+        layout = generate([:entrances], random_start: true)
+        Rand.progress_done if Rand.respond_to?(:progress_done)
+        unless layout && layout[:start_door]
+          # no start Center worked: shuffle as usual from where the player is
+          layout = generate
+          Rand.progress_done if Rand.respond_to?(:progress_done)
+          if layout
+            Rand.data[:ent_layout] = layout
+            @targets = nil
+          end
+          @handover_msg = [:dex_only]
+          return nil
+        end
+        Rand.data[:ent_layout] = layout
+        @targets = nil
+        o = dat[:door_by_id][layout[:start_door]]
         @new_home = [o[:to][0], o[:to][1], o[:to][2], o[:to_dir]]
-        return [o[:to][0], o[:to][1], o[:to][2], o[:to_dir]]
+        @handover_msg = [:start, dat[:names][o[:map]]]
+        return [o[:to][0], o[:to][1], o[:to][2], o[:to_dir], nil, :start]
+      rescue => e
+        KIF.log("Random start hand-over failed (#{e.class}: #{e.message})")
+        return nil
+      end
+
+      def self.show_handover_message
+        m = @handover_msg
+        return unless m
+        @handover_msg = nil
+        pbMessage(_INTL("\\me[Key item get]Professor Oak sent you the Pokédex and 5 Poké Balls!"))
+        pbMessage(_INTL("Your journey starts in {1}.", m[1])) if m[0] == :start
       end
 
       class << self
-        attr_accessor :new_home
+        attr_accessor :new_home, :handover_msg
       end
 
       # After arriving: the Center becomes home (where you wake up after a loss)
@@ -574,8 +635,6 @@ module KIF
         $PokemonGlobal.pokecenterX = h[1]
         $PokemonGlobal.pokecenterY = h[2]
         $PokemonGlobal.pokecenterDirection = h[3] == 0 ? 2 : h[3]
-        o = dat[:door_by_id][state[:start_door]]
-        pbMessage(_INTL("Your journey starts in {1}.", dat[:names][o[:map]])) if o
       rescue => e
         KIF.log("Random start home failed (#{e.class}: #{e.message})")
       end
@@ -587,7 +646,34 @@ module KIF
       # progress and the vanilla level curve over progress.
       #-------------------------------------------------------------------------
       def self.scaling?
-        return active? && Rand.dget(:ent_levels) == 1 && state[:progress].is_a?(Hash) && dat[:level_curve]
+        return active? && Rand.dget(:ent_levels) >= 1 && state[:progress].is_a?(Hash) && dat[:level_curve]
+      end
+
+      def self.wild_scaling?
+        return scaling? && Rand.dget(:ent_levels) == 2
+      end
+
+      # One Pokémon to a new level by the map's factor; moves picked by level
+      # follow it unless `keep_moves`
+      def self.rescale(pkmn, f, keep_moves = false)
+        old = pkmn.level
+        lv = (old * f).round.clamp(1, GameData::GrowthRate.max_level)
+        return if lv == old
+        natural = keep_moves ? nil : (pkmn.getMoveList.select { |m| m[0] <= old }.map { |m| m[1] }.last(4) rescue nil)
+        pkmn.level = lv
+        pkmn.calc_stats
+        pkmn.reset_moves if natural && pkmn.moves.map(&:id).sort == natural.uniq.sort
+      end
+
+      def self.scale_wild(pkmn, map_id = nil)
+        return unless pkmn && wild_scaling?
+        map_id ||= $game_map ? $game_map.map_id : nil
+        return unless map_id
+        f = level_factor(map_id)
+        return if (f - 1.0).abs < 0.02
+        rescale(pkmn, f)
+      rescue => e
+        KIF.log("Wild level scaling failed (#{e.class}: #{e.message})")
       end
 
       def self.level_factor(map_id)
@@ -607,17 +693,8 @@ module KIF
         return trainer unless map_id
         f = level_factor(map_id)
         return trainer if (f - 1.0).abs < 0.02
-        max = GameData::GrowthRate.max_level
-        trainer.party.each do |pkmn|
-          old = pkmn.level
-          lv = (old * f).round.clamp(1, max)
-          next if lv == old
-          natural = pkmn.getMoveList.select { |m| m[0] <= old }.map { |m| m[1] }.last(4) rescue nil
-          pkmn.level = lv
-          pkmn.calc_stats
-          # moves picked by level follow it; a hand-written set stays
-          pkmn.reset_moves if natural && pkmn.moves.map(&:id).sort == natural.uniq.sort
-        end
+        # moves picked by level follow it; a hand-written set stays
+        trainer.party.each { |pkmn| rescale(pkmn, f) }
         return trainer
       rescue => e
         KIF.log("Level scaling failed (#{e.class}: #{e.message})")
@@ -695,9 +772,12 @@ class Interpreter
   alias kif_ent_command_201 command_201 unless method_defined?(:kif_ent_command_201)
 
   def command_201
-    KIF::Rand::ER.ensure_layout if @parameters[0] == 0 && $PokemonGlobal
-    return kif_ent_command_201 unless @parameters[0] == 0 && KIF::Rand::ER.active?
-    t = KIF::Rand::ER.start_target(@map_id, @parameters) || KIF::Rand::ER.target(@map_id, @event_id)
+    if @parameters[0] == 0 && $PokemonGlobal
+      t = KIF::Rand::ER.handover_target(@parameters)
+      KIF::Rand::ER.ensure_layout unless t
+    end
+    return kif_ent_command_201 unless t || (@parameters[0] == 0 && KIF::Rand::ER.active?)
+    t ||= KIF::Rand::ER.target(@map_id, @event_id)
     return kif_ent_command_201 unless t
     saved = @parameters
     @parameters = [0, t[0], t[1], t[2], t[3], saved[5]]
@@ -739,24 +819,6 @@ module KIF
 end
 
 #-------------------------------------------------------------------------------
-# Random start: the Pokédex is the signal
-#-------------------------------------------------------------------------------
-class Player
-  alias kif_ent_has_pokedex= has_pokedex= unless method_defined?(:"kif_ent_has_pokedex=")
-
-  def has_pokedex=(value)
-    before = @has_pokedex
-    self.kif_ent_has_pokedex = value
-    if value && !before && KIF::Rand::ER.active?
-      s = KIF::Rand::ER.state
-      s[:start_pending] = true if s[:start_door] && !s[:start_done]
-    end
-  rescue => e
-    KIF.log("Random start flag failed (#{e.class}: #{e.message})")
-  end
-end
-
-#-------------------------------------------------------------------------------
 # Level scaling: every trainer loaded for a battle
 #-------------------------------------------------------------------------------
 class Object
@@ -767,3 +829,10 @@ class Object
     return KIF::Rand::ER.scale_trainer(trainer)
   end
 end
+
+#-------------------------------------------------------------------------------
+# Level scaling: wild Pokémon (grass, water, statics - every wild battle)
+#-------------------------------------------------------------------------------
+Events.onWildPokemonCreate += proc { |_sender, e|
+  KIF::Rand::ER.scale_wild(e[0]) if e.is_a?(Array)
+}

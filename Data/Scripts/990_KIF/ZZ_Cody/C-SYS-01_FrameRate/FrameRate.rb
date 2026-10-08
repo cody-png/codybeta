@@ -470,6 +470,20 @@ module KIF
       end
     end
 
+    def self.note_sprite(sprite, m, took)
+      return unless @probes && took > 0.010
+      c = sprite.instance_variable_get(:@character)
+      who = if c.nil? then "?"
+            elsif defined?($game_player) && c.equal?($game_player) then "player"
+            else "event #{c.id rescue '?'} '#{(c.name rescue '')}'"
+            end
+      gfx = (c.character_name rescue "")
+      label = "slow #{m}: #{who} (#{gfx}) #{(took * 1000).round(1)} ms"
+      @probes[label] = [took, 1]
+    rescue
+      nil
+    end
+
     def self.log_path
       return File.join((RTP.getSaveFolder rescue "."), "KIF_framelog.txt")
     end
@@ -656,7 +670,9 @@ module KIF
       "Spriteset_Global" => [:update],
       "TilemapRenderer" => [:add_tileset, :remove_tileset, :add_autotile, :remove_autotile, :add_extra_autotiles, :remove_extra_autotiles, :kif_fps_update, :refresh],
       "PokemonMapFactory" => [:setMapChanged, :setSceneStarted, :setMapChanging, :setMapsInRange, :updateMaps],
-      "Sprite_Character" => [:initialize, :dispose, :update],
+      "Sprite_Character" => [:initialize, :dispose, :update, :updateCharacterBitmap, :setSpriteToAppearance, :checkModifySpriteGraphics],
+      "Sprite_Player"   => [:generateClothedBitmap],
+      "BushBitmap"      => [:bitmap],
       "Scene_Map"       => [:updateSpritesets]
     }
 
@@ -668,7 +684,19 @@ module KIF
         meths.each do |m|
           next unless k.method_defined?(m) || k.private_method_defined?(m)
           label = "#{klass}##{m}"
-          mod.send(:define_method, m) { |*args, &blk| KIF::FrameRate.probe(label) { super(*args, &blk) } }
+          if klass == "Sprite_Character" && (m == :update || m == :initialize)
+            # also name the one sprite that took long
+            mod.send(:define_method, m) do |*args, &blk|
+              t = KIF::FrameRate.clock if $DEBUG
+              begin
+                KIF::FrameRate.probe(label) { super(*args, &blk) }
+              ensure
+                KIF::FrameRate.note_sprite(self, m, KIF::FrameRate.clock - t) if t
+              end
+            end
+          else
+            mod.send(:define_method, m) { |*args, &blk| KIF::FrameRate.probe(label) { super(*args, &blk) } }
+          end
         end
         k.prepend(mod)
       end
@@ -677,6 +705,13 @@ module KIF
         ev = Module.new
         ev.send(:define_method, :trigger) { |*args, &blk| KIF::FrameRate.probe("Events.onMapUpdate") { super(*args, &blk) } }
         Events.onMapUpdate.singleton_class.prepend(ev)
+      end
+      [:generateNPCClothedBitmapStatic, :getClothedPlayerSprite, :pbBushDepthBitmap].each do |fn|
+        next unless Object.private_method_defined?(fn) || Object.method_defined?(fn)
+        Object.class_eval do
+          alias_method :"kif_probe_#{fn}", fn unless method_defined?(:"kif_probe_#{fn}") || private_method_defined?(:"kif_probe_#{fn}")
+          define_method(fn) { |*args, &blk| KIF::FrameRate.probe(fn.to_s) { send(:"kif_probe_#{fn}", *args, &blk) } }
+        end
       end
       if Object.private_method_defined?(:pbDayNightTint) || Object.method_defined?(:pbDayNightTint)
         Object.class_eval do

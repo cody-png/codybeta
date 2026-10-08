@@ -144,6 +144,7 @@ module KIF
             end
           end
           gained = false
+          key = false   # a badge or a key item: what makes a new sphere
           maps_now = {}
           now.each_key { |k| maps_now[k.split(":")[0]] = true }
           d[:providers].each do |flag, where, needs|
@@ -156,9 +157,13 @@ module KIF
             next unless needs.all? { |f| satisfied?(f, all, gates, badges) }
             have << flag
             gained = true
+            key = true if flag.to_s.start_with?(BADGE_PREFIX, "item_")
           end
           break unless gained
-          sphere += 1
+          # Spheres as in Archipelago: sphere 0 is what you reach with nothing;
+          # sphere N+1 opens with the badges/key items found in sphere N.
+          # Story events (talking to the right person) widen the same sphere.
+          sphere += 1 if key
         end
         badges = have.count { |f| f.to_s.start_with?(BADGE_PREFIX) }
         return { seen: seen, order: order, have: have, all: flag_hash(have, badges), badges: badges, spheres: sphere + 1 }

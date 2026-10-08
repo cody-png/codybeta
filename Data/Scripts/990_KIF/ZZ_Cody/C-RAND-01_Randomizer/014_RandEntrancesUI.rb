@@ -19,7 +19,7 @@ module KIF
                 _INTL("Going back the way you came returns you to where you were.")),
           onoff(:ent_hints, _INTL("Door hints"),
                 _INTL("Nothing is shown when you come out of a shuffled door."),
-                _INTL("A line names the door you came out of and the place it belongs to.")),
+                _INTL("The first time you use a shuffled door, a line names it and the place it belongs to.")),
           enum(:ent_start, _INTL("Start"), [_INTL("Pallet"), _INTL("Random town"), _INTL("Random map")],
                [_INTL("Your journey starts in Pallet Town as usual."),
                 _INTL("Oak's parcel errand is skipped: once you have your starter, the next door hands you the Pokédex and takes you to a random town's Pokémon Center, which becomes home. New games only."),
@@ -122,9 +122,13 @@ class Interpreter
 
   def command_201
     before = $game_temp.player_transferring
+    # hints only the first time a door is used (it's in the Entrance log after)
+    er = KIF::Rand::ER
+    t = er.active? ? er.targets[[@map_id, @event_id]] : nil
+    fresh = t && !((er.state[:seen] || []).include?([t[4], t[5]]))
     r = kif_enthint_command_201
-    if !before && $game_temp.player_transferring && KIF::Rand.dget(:ent_hints) == 1 && KIF::Rand::ER.active?
-      KIF::Rand::ER.pending_hint = KIF::Rand::ER.hint_for(@map_id, @event_id)
+    if fresh && !before && $game_temp.player_transferring && KIF::Rand.dget(:ent_hints) == 1
+      er.pending_hint = er.hint_for(@map_id, @event_id)
     end
     return r
   end

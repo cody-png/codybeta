@@ -411,6 +411,8 @@ module KIF
         elsif Input.repeat?(Input::RIGHT) || Input.repeat?(Input::JUMPDOWN) then top += per - 1
         elsif Input.repeat?(Input::LEFT) || Input.repeat?(Input::JUMPUP) then top -= per - 1
         elsif Input.trigger?(Input::ACTION)
+          # message windows sit at z 99999: drop the reader under them while asking
+          vp.z = 99990
           text = pbMessageFreeText(_INTL("Jump to (dex number or text):"), "", false, 24)
           if text && !text.strip.empty?
             i = find_row(rows, text, top)
@@ -420,6 +422,7 @@ module KIF
               pbMessage(_INTL("Nothing here matches {1}.", text.strip))
             end
           end
+          vp.z = 999999
         elsif Input.trigger?(Input::BACK) || Input.trigger?(Input::USE) then break
         end
         top = top.clamp(0, maxtop)

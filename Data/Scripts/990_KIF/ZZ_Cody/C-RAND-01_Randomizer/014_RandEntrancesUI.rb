@@ -63,7 +63,7 @@ module KIF
         lines = s[:seen].map { |door_id, kind| describe(door_id, kind) }.reject(&:empty?)
         lines << ""
         lines << _INTL("Doors not yet found: {1}", [s[:in].length - s[:seen].map(&:first).uniq.length, 0].max)
-        Rand.show_lines(_INTL("Entrance log ({1} found)", s[:seen].length), lines)
+        Rand.show_lines(_INTL("Entrance log ({1} found)", s[:seen].map(&:first).uniq.length), lines)
       end
 
       # The hint after a shuffled warp: where you came out, and whose door it is
@@ -124,11 +124,18 @@ class Interpreter
     before = $game_temp.player_transferring
     # hints only the first time a door is used (it's in the Entrance log after)
     er = KIF::Rand::ER
-    t = er.active? ? er.targets[[@map_id, @event_id]] : nil
-    fresh = t && !((er.state[:seen] || []).include?([t[4], t[5]]))
+    fresh = false
+    begin
+      if @parameters[0] == 0 && KIF::Rand.dget(:ent_hints) == 1
+        t = er.target(@map_id, @event_id, @parameters)
+        fresh = t && !((er.state[:seen] || []).include?([t[4], t[5]]))
+      end
+    rescue => e
+      KIF.log("Door hint lookup failed (#{e.class}: #{e.message})")
+    end
     r = kif_enthint_command_201
-    if fresh && !before && $game_temp.player_transferring && KIF::Rand.dget(:ent_hints) == 1
-      er.pending_hint = er.hint_for(@map_id, @event_id)
+    if fresh && !before && $game_temp.player_transferring
+      er.pending_hint = (er.hint_for(@map_id, @event_id) rescue nil)
     end
     return r
   end

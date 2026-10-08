@@ -13,7 +13,7 @@ module KIF
     ENT_SETTINGS = [
       [:entrances, :enum, 3],     # Off / Simple / Full
       [:ent_doors, :enum, 3],     # Dungeons / Buildings / Everything
-      [:ent_coupled, :enum, 2],   # Off / On (default On, see dget below)
+      [:ent_coupled, :enum, 2],   # Off / On (default On, DATA_DEFAULTS)
       [:ent_hints, :enum, 2],     # Off / On
       [:ent_start, :enum, 3],     # Pallet / Random town / Random map
       [:ent_levels, :enum, 3]     # Off / Trainers / Trainers + wild
@@ -31,25 +31,30 @@ module KIF
 
     module ER
       DATA_PATH = "Data/KIF/entrances.dat"
-      RETRIES = 40
+      RETRIES = 100   # a try takes ~0.05 s; Simple needs ~5 on average
       BADGE_PREFIX = "badge_"
-      OAK_LABS = [77, 551, 552, 593, 659, 724, 740, 847]
-      PALLET = 42
-      INDIGO = 303
+      OAK_LABS = [77, 551, 552, 593, 659, 724, 740, 847]   # every variant of Oak's Lab
       NO_START = [303, 167]   # Indigo Plateau, Crimson City (nowhere to go without 8 badges)
 
       class << self
-        attr_accessor :dat_cache
+        attr_accessor :dat_cache, :dat_failed
       end
 
       # The compiled world, loaded once per session
+      # (a missing or unreadable file is tried once per session: the feature
+      # just stays unavailable)
       def self.dat
         return @dat_cache if @dat_cache
+        return nil if @dat_failed
+        @dat_failed = true
         return nil unless FileTest.exist?(DATA_PATH)
-        @dat_cache = Marshal.load(File.binread(DATA_PATH))
-        @dat_cache[:door_by_id] = {}
-        @dat_cache[:doors].each { |d| @dat_cache[:door_by_id][d[:id]] = d }
-        return @dat_cache
+        d = Marshal.load(File.binread(DATA_PATH))
+        return nil unless d.is_a?(Hash) && d[:doors].is_a?(Array) && d[:edges].is_a?(Hash)
+        d[:door_by_id] = {}
+        d[:doors].each { |o| d[:door_by_id][o[:id]] = o }
+        @dat_failed = false
+        @dat_cache = d
+        return d
       rescue => e
         KIF.log("Entrances data couldn't be read (#{e.class}: #{e.message})")
         return nil
@@ -87,48 +92,98 @@ module KIF
         return a
       end
 
-      # `have` is a Hash of flags (fast lookups); badges = how many
+      # Requirements and gate conditions are parsed once, then looked up.
+      # `have` is a Hash of flags (fast lookups); badges = how many.
+      def self.req_kind(r)
+        (@req_kind ||= {})[r] ||= begin
+          str = r.to_s
+          if str =~ /\Abadges_(\d+)\z/ then [:badges, $1.to_i]
+          elsif str.start_with?("npc_") then [:npc]
+          else [:flag]
+          end
+        end
+      end
+
+      # One condition of a gate's lift set: a switch number, a flag, the
+      # badge count, "varN>=V" (variable N set), "selfX" (the event's own
+      # switch, set by the event itself) or :always
+      def self.lift_kind(c)
+        (@lift_kind ||= {})[c] ||= begin
+          case c
+          when Integer then [:flag, :"sw_#{c}"]
+          when Symbol
+            if c == :always then [:yes]
+            elsif c.to_s =~ /\Abadges_(\d+)\z/ then [:badges, $1.to_i]
+            else [:flag, c]
+            end
+          else
+            c.to_s =~ /\Avar(\d+)>=/ ? [:flag, :"var_#{$1}"] : (c.to_s.start_with?("self") ? [:yes] : [:no])
+          end
+        end
+      end
+
       def self.gate_open?(lifts, have, badges)
         return false unless lifts
-        return lifts.any? { |set| !set.empty? && set.all? { |s|
-          case s
-          when Integer then have.include?(:"sw_#{s}")
-          when Symbol then s == :always || have.include?(s) || (s.to_s =~ /\Abadges_(\d+)\z/ && badges >= $1.to_i)
-          else s.to_s =~ /\Avar(\d+)>=/ ? have.include?(:"var_#{$1}") : s.to_s.start_with?("self")
+        return lifts.any? { |set| !set.empty? && set.all? { |c|
+          k = lift_kind(c)
+          case k[0]
+          when :flag then have.include?(k[1])
+          when :badges then badges >= k[1]
+          when :yes then true
+          else false
           end } }
       end
 
       def self.satisfied?(req, have, gates, badges)
         return true if have.include?(req)
-        return badges >= $1.to_i if req.to_s =~ /\Abadges_(\d+)\z/
-        return gate_open?(gates[req], have, badges) if req.to_s.start_with?("npc_")
+        k = req_kind(req)
+        return badges >= k[1] if k[0] == :badges
+        return gate_open?(gates[req], have, badges) if k[0] == :npc
         return false
       end
 
       def self.flag_hash(have, badges)
         h = {}
         have.each { |f| h[f] = true }
-        abilities(have, badges).each { |f| h[f] = true }
+        abilities(h, badges).each { |f| h[f] = true }
         return h
       end
 
+      def self.badge_flag?(f)
+        (@badge_flag ||= {})[f] ||= (f.to_s.start_with?(BADGE_PREFIX) ? 1 : 0)
+        return @badge_flag[f] == 1
+      end
+
+      def self.key_flag?(f)
+        (@key_flag ||= {})[f] ||= (f.to_s.start_with?(BADGE_PREFIX, "item_") ? 1 : 0)
+        return @key_flag[f] == 1
+      end
+
+      def self.node_map(n)
+        (@node_map ||= {})[n] ||= n.split(":")[0]
+      end
+
       # Repeat: reach what you can, collect what it gives, until nothing new.
-      # Returns seen (node => sphere), have (flags), spheres count.
+      # Returns seen (node => sphere), order (node => reach order), have
+      # (flags), all (flags + abilities, as a Hash), badges, spheres count.
       # `from` continues an earlier sweep of a graph that has only gained
       # edges since (the shuffler adds doors one batch at a time): what was
       # reached stays reached, so only the new edges need following.
       def self.sweep(d, edges, extra = [], from = nil, start = nil, stop_at = nil)
         gates = d[:gates]
         have = from ? from[:have].dup : (d[:start_with] + extra).uniq
+        have_h = {}
+        have.each { |f| have_h[f] = true }
         seen = from ? from[:seen].dup : {}
         order = from ? from[:order].dup : {}   # node => how many nodes were reached before it
         sphere = from ? from[:spheres] - 1 : 0
         seen[start || d[:start]] ||= sphere
         order[start || d[:start]] ||= 0
+        badges = have.count { |f| badge_flag?(f) }
         loop do
-          break if stop_at && have.include?(stop_at)
-          badges = have.count { |f| f.to_s.start_with?(BADGE_PREFIX) }
-          all = flag_hash(have, badges)
+          break if stop_at && have_h[stop_at]
+          rb = badges   # what this round's checks see; gains count from the next round
+          all = flag_hash(have, rb)
           queue = seen.keys
           now = {}
           queue.each { |k| now[k] = true }
@@ -136,7 +191,7 @@ module KIF
             n = queue.shift
             (edges[n] || []).each do |to, req|
               next if now[to]
-              next unless req.all? { |r| satisfied?(r, all, gates, badges) }
+              next unless req.all? { |r| satisfied?(r, all, gates, rb) }
               now[to] = true
               seen[to] ||= sphere
               order[to] ||= order.length
@@ -146,18 +201,20 @@ module KIF
           gained = false
           key = false   # a badge or a key item: what makes a new sphere
           maps_now = {}
-          now.each_key { |k| maps_now[k.split(":")[0]] = true }
+          now.each_key { |k| maps_now[node_map(k)] = true }
           d[:providers].each do |flag, where, needs|
-            next if have.include?(flag)
+            next if have_h[flag]
             if where.is_a?(Symbol)
               next unless maps_now[where.to_s[1..-1]]
             else
               next unless where.any? { |n| now[n] }
             end
-            next unless needs.all? { |f| satisfied?(f, all, gates, badges) }
+            next unless needs.all? { |f| satisfied?(f, all, gates, rb) }
             have << flag
+            have_h[flag] = true
+            badges += 1 if badge_flag?(flag)
             gained = true
-            key = true if flag.to_s.start_with?(BADGE_PREFIX, "item_")
+            key = true if key_flag?(flag)
           end
           break unless gained
           # Spheres as in Archipelago: sphere 0 is what you reach with nothing;
@@ -165,7 +222,6 @@ module KIF
           # Story events (talking to the right person) widen the same sphere.
           sphere += 1 if key
         end
-        badges = have.count { |f| f.to_s.start_with?(BADGE_PREFIX) }
         return { seen: seen, order: order, have: have, all: flag_hash(have, badges), badges: badges, spheres: sphere + 1 }
       end
 
@@ -432,7 +488,9 @@ module KIF
           when /\Asw_(\d+)\z/ then out << f if $game_switches[$1.to_i]
           when /\Avar_(\d+)\z/ then v = $game_variables[$1.to_i]; out << f if v && v != 0 && v != ""
           when /\Abadge_(\d+)\z/ then out << f if $Trainer.badges[$1.to_i]
-          when /\Aitem_(\w+)\z/ then out << f if $PokemonBag && $PokemonBag.pbHasItem?($1.to_sym)
+          when /\Aitem_(\w+)\z/
+            sym = $1.to_sym
+            out << f if $PokemonBag && GameData::Item.exists?(sym) && $PokemonBag.pbHasItem?(sym)
           end
         end
         return out
@@ -542,21 +600,27 @@ module KIF
         return @targets unless active?
         d = dat; byid = d[:door_by_id]; s = state
         d[:doors].each do |o|
-          i = byid[s[:in][o[:id]] || o[:id]]
+          i = byid[s[:in][o[:id]] || o[:id]] || o
           if i[:id] != o[:id]
-            o[:events].each { |e| @targets[[o[:map], e]] = [i[:to][0], i[:to][1], i[:to][2], i[:to_dir], o[:id], :in] }
+            o[:events].each { |e| @targets[[o[:map], e]] = [i[:to][0], i[:to][1], i[:to][2], i[:to_dir], o[:id], :in, o[:to]] }
           end
-          back = byid[s[:out][o[:id]] || o[:id]]
+          back = byid[s[:out][o[:id]] || o[:id]] || o
           if back[:id] != o[:id]
-            o[:exit_events].each { |e| @targets[[o[:exit_map], e]] = [back[:exit_to][0], back[:exit_to][1], back[:exit_to][2], back[:exit_dir], o[:id], :out] }
+            o[:exit_events].each { |e| @targets[[o[:exit_map], e]] = [back[:exit_to][0], back[:exit_to][1], back[:exit_to][2], back[:exit_dir], o[:id], :out, o[:exit_to]] }
           end
         end
         return @targets
       end
 
-      def self.target(map_id, event_id)
+      # Only the door's own transfer is redirected: an event can hold other
+      # transfers too (a common event it calls, a page for a story scene),
+      # so the transfer must go where this door always went
+      def self.target(map_id, event_id, params = nil)
         return nil unless active?
-        return targets[[map_id, event_id]]
+        t = targets[[map_id, event_id]]
+        return nil unless t
+        return nil if params && params[1, 3] != t[6]
+        return t
       end
 
       #-------------------------------------------------------------------------
@@ -588,8 +652,8 @@ module KIF
         $game_map.need_refresh = true if $game_map
       end
 
-      def self.handover_target(params)
-        return nil unless params[0] == 0 && waiting_for_handover? && available?
+      def self.handover_target(map_id, params)
+        return nil unless params[0] == 0 && params[1] != map_id && waiting_for_handover? && available?
         return nil if $game_switches[SWITCH_DURING_INTRO]
         return nil if $Trainer.party.empty?
         give_pokedex
@@ -616,6 +680,9 @@ module KIF
         return [o[:to][0], o[:to][1], o[:to][2], o[:to_dir], nil, :start]
       rescue => e
         KIF.log("Random start hand-over failed (#{e.class}: #{e.message})")
+        # doors get shuffled the usual way at this warp instead
+        Rand.data[:ent_done] = nil
+        @handover_msg = [:dex_only] if $Trainer && $Trainer.has_pokedex
         return nil
       end
 
@@ -753,8 +820,9 @@ module KIF
         out << _INTL("Settings: {1}, {2}, {3}", LABELS[:entrances][1][s[:shape] || 2], LABELS[:ent_doors][1][s[:doors] || 2],
                      s[:coupled] ? _INTL("coupled") : _INTL("decoupled"))
         out << _INTL("Start: {1}", start_name) if start_name
-        out << _INTL("Level scaling: trainers follow how far into the game their map is") if scaling?
-        out << _INTL("Found so far: {1} of {2} doors", (s[:seen] || []).length, s[:in].length)
+        out << (wild_scaling? ? _INTL("Level scaling: trainers and wild Pokémon follow how far into the game their map is") :
+                                _INTL("Level scaling: trainers follow how far into the game their map is")) if scaling?
+        out << _INTL("Found so far: {1} of {2} doors", (s[:seen] || []).map(&:first).uniq.length, s[:in].length)
         sph = s[:spheres] || {}
         d[:doors].sort_by { |o| [sph[o[:id]] || 99, d[:names][o[:map]].to_s, o[:tiles][0][1], o[:tiles][0][0]] }.each do |o|
           next unless s[:in].key?(o[:id])
@@ -777,27 +845,31 @@ class Interpreter
   alias kif_ent_command_201 command_201 unless method_defined?(:kif_ent_command_201)
 
   def command_201
-    if @parameters[0] == 0 && $PokemonGlobal
-      t = KIF::Rand::ER.handover_target(@parameters)
-      KIF::Rand::ER.ensure_layout unless t
+    t = nil
+    begin
+      if @parameters[0] == 0 && $PokemonGlobal && !$game_temp.in_battle
+        t = KIF::Rand::ER.handover_target(@map_id, @parameters)
+        KIF::Rand::ER.ensure_layout unless t
+        t ||= KIF::Rand::ER.target(@map_id, @event_id, @parameters)
+      end
+    rescue => e
+      KIF.log("Entrance lookup failed (#{e.class}: #{e.message})")
+      t = nil
     end
-    return kif_ent_command_201 unless t || (@parameters[0] == 0 && KIF::Rand::ER.active?)
-    t ||= KIF::Rand::ER.target(@map_id, @event_id)
     return kif_ent_command_201 unless t
     saved = @parameters
     @parameters = [0, t[0], t[1], t[2], t[3], saved[5]]
     begin
       r = kif_ent_command_201
-      # @index moved on: the transfer is set up
-      KIF::Rand::ER.note(t[4], t[5]) if $game_temp.player_transferring && t[4]
-      return r
     ensure
       @parameters = saved
     end
-  rescue => e
-    KIF.log("Entrance warp failed (#{e.class}: #{e.message})")
-    @parameters = saved if saved
-    return kif_ent_command_201
+    begin
+      KIF::Rand::ER.note(t[4], t[5]) if $game_temp.player_transferring && t[4]
+    rescue => e
+      KIF.log("Entrance log note failed (#{e.class}: #{e.message})")
+    end
+    return r
   end
 end
 

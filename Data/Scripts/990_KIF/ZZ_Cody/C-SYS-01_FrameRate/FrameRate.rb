@@ -650,11 +650,13 @@ end
 module KIF
   module FrameRate
     PROBES = {
-      "Game_Map"        => [:setup, :refresh],
-      "Spriteset_Map"   => [:initialize, :dispose],
-      "TilemapRenderer" => [:add_tileset, :remove_tileset, :add_autotile, :remove_autotile, :add_extra_autotiles, :remove_extra_autotiles, :kif_fps_update],
-      "PokemonMapFactory" => [:setMapChanged, :setSceneStarted, :setMapChanging, :setMapsInRange],
-      "Sprite_Character" => [:initialize, :dispose],
+      "Game_Map"        => [:setup, :refresh, :update],
+      "Game_Player"     => [:update],
+      "Spriteset_Map"   => [:initialize, :dispose, :update],
+      "Spriteset_Global" => [:update],
+      "TilemapRenderer" => [:add_tileset, :remove_tileset, :add_autotile, :remove_autotile, :add_extra_autotiles, :remove_extra_autotiles, :kif_fps_update, :refresh],
+      "PokemonMapFactory" => [:setMapChanged, :setSceneStarted, :setMapChanging, :setMapsInRange, :updateMaps],
+      "Sprite_Character" => [:initialize, :dispose, :update],
       "Scene_Map"       => [:updateSpritesets]
     }
 
@@ -669,6 +671,18 @@ module KIF
           mod.send(:define_method, m) { |*args, &blk| KIF::FrameRate.probe(label) { super(*args, &blk) } }
         end
         k.prepend(mod)
+      end
+      # the map-update event and the day/night tint (plain methods, not classes)
+      if defined?(Events) && Events.respond_to?(:onMapUpdate) && Events.onMapUpdate.respond_to?(:trigger)
+        ev = Module.new
+        ev.send(:define_method, :trigger) { |*args, &blk| KIF::FrameRate.probe("Events.onMapUpdate") { super(*args, &blk) } }
+        Events.onMapUpdate.singleton_class.prepend(ev)
+      end
+      if Object.private_method_defined?(:pbDayNightTint) || Object.method_defined?(:pbDayNightTint)
+        Object.class_eval do
+          alias_method :kif_probe_pbDayNightTint, :pbDayNightTint unless method_defined?(:kif_probe_pbDayNightTint) || private_method_defined?(:kif_probe_pbDayNightTint)
+          define_method(:pbDayNightTint) { |*args| KIF::FrameRate.probe("pbDayNightTint") { kif_probe_pbDayNightTint(*args) } }
+        end
       end
     end
     install_probes

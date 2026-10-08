@@ -160,10 +160,15 @@ module KIF
       start = clock
       work = @step_end ? start - @step_end : 0.0   # the game's own work since the last step was shown
       watch_speed(work) if @logic == BASE && (@target > BASE || $DEBUG)
+      if $DEBUG
+        @probes = {}
+        @gc_count = GC.count
+      end
       unless drawing_between?
         @delta = nil
-        @step_end = nil
+        @ends = nil
         yield
+        @step_end = clock
         return
       end
       # where the drawn frames fall: at 60 that's 2/3 | 1/3, 1 | 2/3 | 1/3, 1 ...
@@ -433,17 +438,35 @@ module KIF
       return if @log_lines > 20_000
       ev = (pbMapInterpreterRunning? rescue false)
       msg = (($game_temp && $game_temp.message_window_showing) rescue false)
+      parts = (@probes || {}).sort_by { |_, v| -v[0] }.map { |k, v| sprintf("%s %.1f ms%s", k, v[0] * 1000, v[1] > 1 ? " x#{v[1]}" : "") }
+      gcs = @gc_count ? GC.count - @gc_count : 0
+      parts << "GC x#{gcs}" if gcs > 0
       line = sprintf("%s  game %5.1f ms  step %5.1f ms  map %s at %s,%s  maps loaded %s%s  rate %d/%d%s%s",
                      Time.now.strftime("%H:%M:%S"), work * 1000, took * 1000,
                      ($game_map ? $game_map.map_id : "-"), ($game_player ? $game_player.x : "-"),
                      ($game_player ? $game_player.y : "-"), maps.inspect,
                      (@maps_were && @maps_were != maps) ? " (was #{@maps_were.inspect})" : "",
                      @rate, @target, ev ? "  event running" : "", msg ? "  message" : "")
+      line += "\n      " + parts.join(", ") unless parts.empty?
       File.open(log_path, "a") { |f| f.puts(line) }
     rescue => e
       unless @log_failed
         @log_failed = true
         KIF.log("Frame log failed (#{e.class}: #{e.message})")
+      end
+    end
+
+    # With KIF debug on: time spent in the map-loading parts of the engine
+    # during the current step (the frame log prints them for slow steps)
+    def self.probe(name)
+      return yield unless $DEBUG && @probes
+      t = clock
+      begin
+        return yield
+      ensure
+        e = (@probes[name] ||= [0.0, 0])
+        e[0] += clock - t
+        e[1] += 1
       end
     end
 
@@ -621,4 +644,33 @@ SaveData.register(:kif_frame_rate) do
     end
   }
   new_game_value { KIF::FrameRate::BASE }
+end
+
+# Frame-log probes (only time anything with KIF debug on)
+module KIF
+  module FrameRate
+    PROBES = {
+      "Game_Map"        => [:setup, :refresh],
+      "Spriteset_Map"   => [:initialize, :dispose],
+      "TilemapRenderer" => [:add_tileset, :remove_tileset, :add_autotile, :remove_autotile, :add_extra_autotiles, :remove_extra_autotiles, :kif_fps_update],
+      "PokemonMapFactory" => [:setMapChanged, :setSceneStarted, :setMapChanging, :setMapsInRange],
+      "Sprite_Character" => [:initialize, :dispose],
+      "Scene_Map"       => [:updateSpritesets]
+    }
+
+    def self.install_probes
+      PROBES.each do |klass, meths|
+        next unless Object.const_defined?(klass)
+        k = Object.const_get(klass)
+        mod = Module.new
+        meths.each do |m|
+          next unless k.method_defined?(m) || k.private_method_defined?(m)
+          label = "#{klass}##{m}"
+          mod.send(:define_method, m) { |*args, &blk| KIF::FrameRate.probe(label) { super(*args, &blk) } }
+        end
+        k.prepend(mod)
+      end
+    end
+    install_probes
+  end
 end

@@ -42,7 +42,7 @@ module KIF
       NO_START = [303, 167]   # Indigo Plateau, Crimson City (nowhere to go without 8 badges)
 
       class << self
-        attr_accessor :dat_cache, :dat_failed
+        attr_accessor :dat_cache, :dat_failed, :seed_changed
       end
 
       # The compiled world, loaded once per session
@@ -623,7 +623,10 @@ module KIF
           return
         end
         old = state
-        if same_layout?(old)
+        new_seed = @seed_changed
+        @seed_changed = false
+        if !new_seed && same_layout?(old)
+          old[:seed] ||= Rand.seed
           # nothing about the doors changed: keep them (and what you found)
           Rand.data[:ent_done] = true
           return
@@ -888,16 +891,33 @@ module KIF
       end
 
       # Near the start nothing outlevels a fresh starter: on the maps you can
-      # reach with nothing, no Pokémon is above NEAR_LEVEL, plus NEAR_STEP for
-      # every door further from the start
-      NEAR_LEVEL = 7
-      NEAR_STEP  = 3
-      def self.level_cap(map_id)
+      # reach with nothing, no Pokémon is above NEAR_LEVEL at the start and one
+      # door out, plus NEAR_STEP for every door after that. Trainers there are
+      # also never above your strongest Pokémon (the start Center's way out
+      # can lead straight into a trainer who won't let you pass)
+      NEAR_LEVEL = 6
+      NEAR_STEP  = 2
+      NEAR_PARTY = 1   # doors from the start where your party's level caps trainers too
+      def self.near_hops(map_id)
         return nil unless scaling?
         layout_progress
-        h = (state[:near] || {})[map_id]
+        return (state[:near] || {})[map_id]
+      end
+
+      def self.level_cap(map_id)
+        h = near_hops(map_id)
         return nil unless h
-        return NEAR_LEVEL + NEAR_STEP * h
+        return NEAR_LEVEL + NEAR_STEP * [h - 1, 0].max
+      end
+
+      def self.trainer_cap(map_id)
+        cap = level_cap(map_id)
+        return nil unless cap
+        if near_hops(map_id) <= NEAR_PARTY && $Trainer
+          best = $Trainer.party.reject { |pk| pk.egg? rescue false }.map(&:level).max
+          cap = [cap, best].min if best
+        end
+        return cap
       end
 
       def self.scale_trainer(trainer, map_id = nil)
@@ -905,7 +925,7 @@ module KIF
         map_id ||= $game_map ? $game_map.map_id : nil
         return trainer unless map_id
         f = level_factor(map_id)
-        cap = level_cap(map_id)
+        cap = trainer_cap(map_id)
         return trainer if (f - 1.0).abs < 0.02 && !(cap && trainer.party.any? { |pk| pk.level > cap })
         # moves picked by level follow it; a hand-written set stays
         trainer.party.each { |pkmn| rescale(pkmn, f, false, cap) }
@@ -1025,6 +1045,7 @@ module KIF
     class << self
       alias kif_ent_randomize_now randomize_now unless method_defined?(:kif_ent_randomize_now)
       def randomize_now
+        ER.seed_changed = (changed?(:__seed) rescue false)
         kif_ent_randomize_now
       ensure
         begin

@@ -2,7 +2,9 @@
 # C-RAND-01 – Randomizer: the Entrance log map
 #   The Town Map with a line for every shuffled door you have used: from the
 #   door's own town or route to where the place behind it really belongs.
-#   Newest first; Up/Down (or Left/Right) walk the doors, A opens the list.
+#   Newest first; Up/Down walk the doors, Left/Right look at either end,
+#   A opens the list. With Entrances on, the Town Map opens this instead,
+#   and the Fly / Teleport map shows the same lines (flying works as usual).
 #===============================================================================
 module KIF
   module Rand
@@ -119,8 +121,10 @@ module KIF
 
         # The area to show for an entry: centred on the line, or on the door
         # when the line is longer than the window
-        def focus(e)
+        def focus(e, end_side = nil)
           ax, ay = e[:a]; bx, by = e[:b]
+          return [ax, ay + 16] if end_side == :door
+          return [bx, by + 16] if end_side == :place
           if (ax - bx).abs < VIEW_W - 64 && (ay - by).abs < VIEW_H - 96
             return [(ax + bx) / 2, (ay + by) / 2 + 16]
           end
@@ -199,17 +203,23 @@ module KIF
 
         def select(i, jump = false)
           @index = i
+          @side = nil
           e = @list[i]
           bmp = @sprites["sel"].bitmap
           bmp.clear
           draw_line(bmp, points(e), SELECTED, 3)
           draw_ends(bmp, e, SELECTED)
-          fx, fy = focus(e)
+          aim(e, jump)
+          draw_text
+        end
+
+        # Centre the window on the line (or one end of it)
+        def aim(e, jump = false)
+          fx, fy = focus(e, @side)
           @target = [[[fx - VIEW_W / 2, 0].max, @max_ox].min, [[fy - VIEW_H / 2, 0].max, @max_oy].min]
           if jump
             @mapvp.ox = @target[0]; @mapvp.oy = @target[1]
           end
-          draw_text
         end
 
         def draw_text
@@ -222,7 +232,7 @@ module KIF
           pbDrawShadowText(t, 16, 0, 300, 32, _INTL("Entrance log"), WHITE, SHADOW)
           pbDrawShadowText(t, Graphics.width - 316, 0, 300, 32, _INTL("{1} found, {2} to go", found, left), WHITE, SHADOW, 1)
           pbDrawShadowText(t, 16, Graphics.height - 32, Graphics.width - 32, 32,
-                           _INTL("{1}/{2}   Up/Down: next door   A: list   B: back", @index + 1, @list.length), WHITE, SHADOW)
+                           _INTL("{1}/{2}  Up/Down: door  Left/Right: ends  A: list", @index + 1, @list.length), WHITE, SHADOW)
           i = @sprites["info"].bitmap
           i.clear
           i.fill_rect(0, 0, VIEW_W, 52, Color.new(16, 16, 24, 190))
@@ -259,16 +269,21 @@ module KIF
             elsif Input.trigger?(Input::USE)
               pbPlayDecisionSE
               ER.show_list
-            elsif Input.repeat?(Input::DOWN) || Input.repeat?(Input::RIGHT)
+            elsif Input.repeat?(Input::DOWN)
               if @list.length > 1
                 pbPlayCursorSE
                 select((@index + 1) % @list.length)
               end
-            elsif Input.repeat?(Input::UP) || Input.repeat?(Input::LEFT)
+            elsif Input.repeat?(Input::UP)
               if @list.length > 1
                 pbPlayCursorSE
                 select((@index - 1) % @list.length)
               end
+            elsif Input.trigger?(Input::LEFT) || Input.trigger?(Input::RIGHT)
+              # the door's end, then where it led, then the whole line
+              pbPlayCursorSE
+              @side = { nil => :door, :door => :place, :place => nil }[@side]
+              aim(@list[@index])
             end
           end
         end
@@ -314,4 +329,89 @@ module KIF
       end
     end
   end
+end
+
+#-------------------------------------------------------------------------------
+# With Entrances on: the Town Map is the Entrance log, and the Fly / Teleport
+# map draws the same lines under the usual fly points (choosing where to fly
+# is untouched; the lines at the cursor's town light up)
+#-------------------------------------------------------------------------------
+module KIF
+  module Rand
+    module ER
+      class << self
+        # Town Map: the Entrance log when there's something in it
+        def town_map_log?
+          return false unless active?
+          s = state
+          return false unless s[:seen] && !s[:seen].empty?
+          return !LogMap.entries.empty?
+        rescue => e
+          KIF.log("Entrance log check failed (#{e.class}: #{e.message})")
+          return false
+        end
+      end
+
+      module RegionMapLines
+        include LogMap
+
+        def after_init_graphics
+          super
+          kif_er_lines
+        end
+
+        def on_hover(x, y)
+          super
+          kif_er_hover(x, y)
+        end
+
+        def kif_er_lines
+          return if @show_weather || !ER.active?
+          @kif_er_list = LogMap.entries
+          return if @kif_er_list.empty?
+          mb = @window["map"].bitmap
+          lines = BitmapSprite.new(mb.width, mb.height, @mapvp)
+          lines.opacity = 150
+          @kif_er_list.reverse_each { |e| draw_line(lines.bitmap, points(e), COLORS[e[:pool]] || COLORS[:building], 2, false) }
+          @kif_er_list.reverse_each { |e| draw_ends(lines.bitmap, e, COLORS[e[:pool]] || COLORS[:building]) }
+          @window["kif_er_lines"] = lines
+          @window["kif_er_sel"] = BitmapSprite.new(mb.width, mb.height, @mapvp)
+          @kif_er_at = nil
+        rescue => e
+          @kif_er_list = nil
+          KIF.log("Entrance lines on the map failed (#{e.class}: #{e.message})")
+        end
+
+        # Lines that start or end at the cursor's town light up
+        def kif_er_hover(x, y)
+          return unless @kif_er_list && !@kif_er_list.empty? && @window["kif_er_sel"]
+          return if @kif_er_at == [x, y]
+          @kif_er_at = [x, y]
+          px = x * TILE + TILE / 2; py = y * TILE + TILE / 2
+          bmp = @window["kif_er_sel"].bitmap
+          bmp.clear
+          @kif_er_list.each do |e|
+            next unless e[:a] == [px, py] || e[:b] == [px, py]
+            draw_line(bmp, points(e), SELECTED, 2)
+            draw_ends(bmp, e, SELECTED)
+          end
+        rescue => e
+          @kif_er_list = nil
+          KIF.log("Entrance lines on the map failed (#{e.class}: #{e.message})")
+        end
+      end
+    end
+  end
+end
+
+BetterRegionMap.prepend(KIF::Rand::ER::RegionMapLines) if defined?(BetterRegionMap)
+
+alias kif_er_pbBetterRegionMap pbBetterRegionMap unless defined?(kif_er_pbBetterRegionMap)
+def pbBetterRegionMap(region = -1, show_player = true, can_fly = false, wallmap = false, species = nil, fly_anywhere = false)
+  # the Town Map (not Fly, Teleport or a wall map) opens the Entrance log
+  if !can_fly && !wallmap && species.nil? && KIF::Rand::ER.town_map_log?
+    KIF::Rand::ER.show_log
+    return nil
+  end
+  return kif_er_pbBetterRegionMap(region, show_player, can_fly, wallmap, species, fly_anywhere)
 end

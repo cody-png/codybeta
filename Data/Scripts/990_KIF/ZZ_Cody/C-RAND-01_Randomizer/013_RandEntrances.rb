@@ -1,7 +1,8 @@
 #===============================================================================
 # C-RAND-01 – Randomizer: Entrances (Cody, 2026-10-07)
 #   Doors between Kanto's outdoor maps and the places behind them are
-#   shuffled (Johto's too with "And Johto?", mixed with Kanto's). The layout is built at Randomize now from Data/KIF/entrances.dat
+#   shuffled (Johto's and the Sevii Islands' too with "And Johto?" / "And
+#   Sevii?", mixed with Kanto's). The layout is built at Randomize now from Data/KIF/entrances.dat
 #   (made by the KIF Test Kit's map tool: the world as regions and edges, the
 #   switches/items/badges each place gives, and every shufflable door) and
 #   only kept when the Hall of Fame can be reached from Pallet Town with what
@@ -17,7 +18,8 @@ module KIF
       [:ent_hints, :enum, 2],     # Off / On
       [:ent_start, :enum, 3],     # Pallet / Random town / Random map
       [:ent_levels, :enum, 3],    # Off / Trainers / Trainers + wild
-      [:ent_johto, :enum, 2]      # Off / On: Johto's doors join the shuffle
+      [:ent_johto, :enum, 2],     # Off / On: Johto's doors join the shuffle
+      [:ent_sevii, :enum, 2]      # Off / On: the Sevii Islands' doors too
     ]
     ENT_SETTINGS.each { |st| DATA_SETTINGS << st unless DATA_KEYS.include?(st[0]) }
     ENT_SETTINGS.each { |st| DATA_KEYS << st[0] unless DATA_KEYS.include?(st[0]) }
@@ -28,6 +30,7 @@ module KIF
     LABELS[:ent_start] = ["Start", ["Pallet", "Random town", "Random map"]]
     LABELS[:ent_levels] = ["Level scaling", ["Off", "Trainers", "Trainers + wild"]]
     LABELS[:ent_johto] = ["And Johto?", ["Off", "On"]]
+    LABELS[:ent_sevii] = ["And Sevii?", ["Off", "On"]]
 
     DATA_DEFAULTS[:ent_coupled] = 1   # Coupled unless switched off
 
@@ -72,6 +75,7 @@ module KIF
       def self.regions_on
         r = [0]
         r << 1 if Rand.dget(:ent_johto) == 1
+        r << 2 if Rand.dget(:ent_sevii) == 1
         return r
       end
 
@@ -109,6 +113,7 @@ module KIF
         a << :surf if (have.include?(:item_HM03) && badges >= 6) || have.include?(:item_SURFBOARD)
         a << :waterfall if (have.include?(:item_HM05) && badges >= 9) || have.include?(:item_JETPACK)
         a << :rockclimb if have.include?(:item_CLIMBINGGEAR)
+        a << :dive if (have.include?(:item_HM08) && badges >= 9) || have.include?(:item_SCUBAGEAR)
         a << :pokeflute if have.include?(:item_POKEFLUTE)
         a << :bike if have.include?(:item_BICYCLE)
         return a
@@ -488,7 +493,7 @@ module KIF
           regions.each { |r| rsig[r] = (d[:region_sigs] || {})[r] if r != 0 }
           return { in: map_in, out: map_out, sig: d[:signature], rsig: rsig, regions: regions, attempts: i + 1, seen: [],
                    shape: shape, doors: Rand.dget(:ent_doors), coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]),
-                   start_door: start_door && start_door[:id], start_done: !start_door.nil?, progress: map_progress(res) }
+                   start_door: start_door && start_door[:id], start_done: !start_door.nil?, progress: map_progress(res), pv: d[:progress_version] }
         end
         return nil
       end
@@ -776,10 +781,30 @@ module KIF
         KIF.log("Wild level scaling failed (#{e.class}: #{e.message})")
       end
 
+      # How far into the game each map sits in this layout. The bins depend on
+      # the data file's model of the world; a layout made with an older one
+      # gets them worked out again, once, so its levels match the new curve
+      def self.layout_progress
+        s = state; d = dat
+        return s[:progress] if d[:progress_version].nil? || s[:pv] == d[:progress_version]
+        start = nil; extra = []
+        if s[:start_door] && (o = d[:door_by_id][s[:start_door]])
+          start = o[:in_node]
+          extra = current_flags(d)
+        end
+        res = sweep(d, edges_for(d, s[:in], s[:out]), extra, nil, start)
+        s[:progress] = map_progress(res)
+        s[:pv] = d[:progress_version]
+        return s[:progress]
+      rescue => e
+        KIF.log("Entrance level bins couldn't be updated (#{e.class}: #{e.message})")
+        return s[:progress] || {}
+      end
+
       def self.level_factor(map_id)
         return 1.0 unless scaling?
         van = dat[:map_progress][map_id]
-        now = state[:progress][map_id]
+        now = layout_progress[map_id]
         return 1.0 unless van && now && van != now
         curve = dat[:level_curve]
         a = curve[van]; b = curve[now]

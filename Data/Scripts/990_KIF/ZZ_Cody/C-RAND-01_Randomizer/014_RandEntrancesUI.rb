@@ -4,7 +4,7 @@
 module KIF
   module Rand
     def self.page_entrances
-      open_page(_INTL("Randomizer: Entrances"), _INTL("Doors between Kanto's outdoor maps and the places behind them."), nil) {
+      open_page(_INTL("Randomizer: Entrances"), _INTL("Doors between the outdoor maps and the places behind them."), nil) {
         rows = [
           enum(:entrances, _INTL("Entrances"), [_INTL("Off"), _INTL("Simple"), _INTL("Full")],
                [_INTL("Doors lead where they always did."),
@@ -14,6 +14,9 @@ module KIF
                [_INTL("Caves, towers, forests, the Mansion, gates and tunnels."),
                 _INTL("Pokémon Centers, gyms, marts and houses."),
                 _INTL("Both.")]),
+          onoff(:ent_johto, _INTL("And Johto?"),
+                _INTL("Only Kanto's doors are shuffled; Johto's stay as they are."),
+                _INTL("Johto's doors join the shuffle too, mixed with Kanto's: a Kanto door can lead into Johto and back.")),
           onoff(:ent_coupled, _INTL("Coupled"),
                 _INTL("Going back through a door may lead somewhere else again."),
                 _INTL("Going back the way you came returns you to where you were.")),
@@ -23,7 +26,7 @@ module KIF
           enum(:ent_start, _INTL("Start"), [_INTL("Pallet"), _INTL("Random town"), _INTL("Random map")],
                [_INTL("Your journey starts in Pallet Town as usual."),
                 _INTL("Oak's parcel errand is skipped: once you have your starter, the next door hands you the Pokédex and takes you to a random town's Pokémon Center, which becomes home. New games only."),
-                _INTL("Like Random town, but any Pokémon Center in Kanto, routes included. New games only.")]),
+                _INTL("Like Random town, but any Pokémon Center whose doors are shuffled, routes included. New games only.")]),
           enum(:ent_levels, _INTL("Level scaling"), [_INTL("Off"), _INTL("Trainers"), _INTL("Trainers + wild")],
                [_INTL("Levels stay as usual, wherever a map ends up."),
                 _INTL("Trainers are as strong as the ones you'd normally meet at that point of the game: a gym reached first has low levels, the Elite Four reached early is weaker."),

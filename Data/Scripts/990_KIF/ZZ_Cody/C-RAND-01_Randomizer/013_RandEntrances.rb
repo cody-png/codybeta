@@ -1,7 +1,7 @@
 #===============================================================================
 # C-RAND-01 – Randomizer: Entrances (Cody, 2026-10-07)
 #   Doors between Kanto's outdoor maps and the places behind them are
-#   shuffled. The layout is built at Randomize now from Data/KIF/entrances.dat
+#   shuffled (Johto's too with "And Johto?", mixed with Kanto's). The layout is built at Randomize now from Data/KIF/entrances.dat
 #   (made by the KIF Test Kit's map tool: the world as regions and edges, the
 #   switches/items/badges each place gives, and every shufflable door) and
 #   only kept when the Hall of Fame can be reached from Pallet Town with what
@@ -16,7 +16,8 @@ module KIF
       [:ent_coupled, :enum, 2],   # Off / On (default On, DATA_DEFAULTS)
       [:ent_hints, :enum, 2],     # Off / On
       [:ent_start, :enum, 3],     # Pallet / Random town / Random map
-      [:ent_levels, :enum, 3]     # Off / Trainers / Trainers + wild
+      [:ent_levels, :enum, 3],    # Off / Trainers / Trainers + wild
+      [:ent_johto, :enum, 2]      # Off / On: Johto's doors join the shuffle
     ]
     ENT_SETTINGS.each { |st| DATA_SETTINGS << st unless DATA_KEYS.include?(st[0]) }
     ENT_SETTINGS.each { |st| DATA_KEYS << st[0] unless DATA_KEYS.include?(st[0]) }
@@ -26,6 +27,7 @@ module KIF
     LABELS[:ent_hints] = ["Door hints", ["Off", "On"]]
     LABELS[:ent_start] = ["Start", ["Pallet", "Random town", "Random map"]]
     LABELS[:ent_levels] = ["Level scaling", ["Off", "Trainers", "Trainers + wild"]]
+    LABELS[:ent_johto] = ["And Johto?", ["Off", "On"]]
 
     DATA_DEFAULTS[:ent_coupled] = 1   # Coupled unless switched off
 
@@ -64,6 +66,27 @@ module KIF
         return !dat.nil?
       end
 
+      # Town-map regions whose doors take part: Kanto always, Johto when
+      # "And Johto?" is on (data files before Johto have Kanto doors only)
+      REGION_NAMES = { 0 => "Kanto", 1 => "Johto", 2 => "Sevii" }
+      def self.regions_on
+        r = [0]
+        r << 1 if Rand.dget(:ent_johto) == 1
+        return r
+      end
+
+      def self.door_region(o)
+        return o[:region] || 0
+      end
+
+      # Does a layout belong to this data file? Kanto's doors (and the maps)
+      # have one signature, every other region its own
+      def self.layout_current?(s, d = dat)
+        return false unless s.is_a?(Hash) && d && s[:sig] == d[:signature]
+        rs = d[:region_sigs] || {}
+        return (s[:rsig] || {}).all? { |r, v| rs[r] == v }
+      end
+
       def self.state
         return Rand.data[:ent_layout]
       end
@@ -72,8 +95,7 @@ module KIF
       def self.active?
         s = state
         return false unless s.is_a?(Hash) && s[:in].is_a?(Hash) && !s[:in].empty?
-        return false unless dat && s[:sig] == dat[:signature]
-        return true
+        return layout_current?(s)
       end
 
       #-------------------------------------------------------------------------
@@ -255,11 +277,12 @@ module KIF
       #-------------------------------------------------------------------------
       # Shuffler
       #-------------------------------------------------------------------------
-      def self.doors_for(d, which)
+      def self.doors_for(d, which, regions = regions_on)
+        list = d[:doors].select { |x| regions.include?(door_region(x)) }
         case which
-        when 0 then d[:doors].select { |x| x[:pool] == :dungeon }
-        when 1 then d[:doors].select { |x| x[:pool] == :building }
-        else d[:doors]
+        when 0 then list.select { |x| x[:pool] == :dungeon }
+        when 1 then list.select { |x| x[:pool] == :building }
+        else list
         end
       end
 
@@ -460,7 +483,10 @@ module KIF
           # region of that map the layout reaches, with everything gathered
           # so far assumed from scratch - conservative)
           next unless start_door || beatable_from_here?(d, edges, res)
-          return { in: map_in, out: map_out, sig: d[:signature], attempts: i + 1, seen: [],
+          regions = regions_on
+          rsig = {}
+          regions.each { |r| rsig[r] = (d[:region_sigs] || {})[r] if r != 0 }
+          return { in: map_in, out: map_out, sig: d[:signature], rsig: rsig, regions: regions, attempts: i + 1, seen: [],
                    shape: shape, doors: Rand.dget(:ent_doors), coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]),
                    start_door: start_door && start_door[:id], start_done: !start_door.nil?, progress: map_progress(res) }
         end
@@ -501,8 +527,10 @@ module KIF
 
       # Pokémon Center doors to start from: in a town, or on any outdoor map
       def self.start_candidates(d, towns_only)
+        regions = regions_on
         d[:doors].select { |o|
           next false unless o[:pool] == :building && !NO_START.include?(o[:map])
+          next false unless regions.include?(door_region(o))
           next false unless d[:names][o[:to][0]].to_s =~ /Pok[eé]mon Center/i
           !towns_only || d[:names][o[:map]].to_s =~ /City|Town|Island/
         }.sort_by { |o| o[:id] }
@@ -568,7 +596,7 @@ module KIF
       def self.ensure_layout
         return if !$game_switches || $game_switches[SWITCH_DURING_INTRO]
         s = Rand.data[:ent_layout]
-        if s.is_a?(Hash) && dat && s[:sig] != dat[:signature] && !@sig_warned
+        if s.is_a?(Hash) && dat && !layout_current?(s) && !@sig_warned
           @sig_warned = true
           pbMessage(_INTL("The entrance data changed since this save's doors were shuffled. Doors are back to normal until you Randomize now."))
           return
@@ -819,6 +847,8 @@ module KIF
         out = []
         out << _INTL("Settings: {1}, {2}, {3}", LABELS[:entrances][1][s[:shape] || 2], LABELS[:ent_doors][1][s[:doors] || 2],
                      s[:coupled] ? _INTL("coupled") : _INTL("decoupled"))
+        regions = (s[:regions] || [0]).map { |r| REGION_NAMES[r] || r.to_s }
+        out << _INTL("Regions: {1}", regions.join(" + ")) if regions.length > 1
         out << _INTL("Start: {1}", start_name) if start_name
         out << (wild_scaling? ? _INTL("Level scaling: trainers and wild Pokémon follow how far into the game their map is") :
                                 _INTL("Level scaling: trainers follow how far into the game their map is")) if scaling?

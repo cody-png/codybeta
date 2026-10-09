@@ -3,7 +3,9 @@
 #   Shuffled doors can drop you somewhere the normal game never would (below
 #   a one-way ledge, inside a gym puzzle before you have Strength). With
 #   Entrances on, the pause menu offers a free trip back to the last Pokémon
-#   Center you used, so a bad spot is never the end of a run.
+#   Center you used, so a bad spot is never the end of a run. Before the
+#   first Center (a fresh run from Pallet) it goes home instead, the same
+#   place the game sends you after a defeat then.
 #   Every use is written to KIF_entrance_returns.txt in the save folder (where
 #   you were, the doors you took last), so stuck spots can be found and fixed.
 #===============================================================================
@@ -17,16 +19,24 @@ module KIF
         attr_accessor :pending_return
       end
 
-      # [map, x, y, direction] of the last Pokémon Center, or nil
+      # [map, x, y, direction, :center / :home] of the last Pokémon Center,
+      # or home before any Center was used (PIF's pbStartOver does the same)
       def self.return_target
         g = $PokemonGlobal
-        return nil unless g && g.pokecenterMapId.to_i > 0
-        dir = g.pokecenterDirection.to_i
-        return [g.pokecenterMapId, g.pokecenterX, g.pokecenterY, dir > 0 ? dir : 2]
+        if g && g.pokecenterMapId.to_i > 0
+          dir = g.pokecenterDirection.to_i
+          return [g.pokecenterMapId, g.pokecenterX, g.pokecenterY, dir > 0 ? dir : 2, :center]
+        end
+        home = (GameData::Metadata.get.home rescue nil)
+        return nil unless home && home[0].to_i > 0
+        return [home[0], home[1], home[2], home[3].to_i > 0 ? home[3] : 2, :home]
       end
 
       def self.can_return?
-        return false unless active? && mid_run?
+        return false unless active?
+        # from the starter on (Oak's errand before the Pokédex can strand you
+        # too); never during the intro
+        return false unless $game_map && $Trainer && !$Trainer.party.empty? && !$game_switches[SWITCH_DURING_INTRO]
         return false if KIF::PauseMenu.restricted?
         # the Safari Zone and the Bug-Catching Contest end through their own gates
         return false if (pbInSafari? rescue false) || (pbInBugContest? rescue false)
@@ -72,7 +82,8 @@ module KIF
   end
 end
 
-KIF::PauseMenu.add(:kif_er_return, "Return to Pokémon Center", icon: "menuIcons/POKEMON", order: 60,
+KIF::PauseMenu.add(:kif_er_return,
+  proc { (KIF::Rand::ER.return_target || [])[4] == :home ? "Return home" : "Return to Pokémon Center" }, icon: "menuIcons/POKEMON", order: 60,
   condition: proc { KIF::Rand::ER.can_return? },
   handler: proc { |scene|
     er = KIF::Rand::ER
@@ -84,7 +95,8 @@ KIF::PauseMenu.add(:kif_er_return, "Return to Pokémon Center", icon: "menuIcons
     t = er.return_target
     name = (pbGetMapNameFromId(t[0]) rescue "")
     scene.pbHideMenu
-    if pbConfirmMessage(_INTL("Go back to the Pokémon Center in {1}?", name))
+    question = t[4] == :home ? _INTL("Go back home to {1}?", name) : _INTL("Go back to the Pokémon Center in {1}?", name)
+    if pbConfirmMessage(question)
       er.log_return
       er.pending_return = true
       next :close

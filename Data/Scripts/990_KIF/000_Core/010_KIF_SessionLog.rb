@@ -126,7 +126,7 @@ module KIF
               "#{count.call('Graphics/CustomBattlers/spritesheets/spritesheets_custom')} custom sheets, " \
               "#{count.call('Graphics/Battlers/spritesheets_autogen')} autogen sheets; " \
               "Download data #{dl.nil? ? '?' : (dl == 0 ? 'off' : 'on')}")
-        waiting = Dir.exist?("Import Sprites") ? Dir.children("Import Sprites").reject { |c| c.start_with?("_") }.length : 0
+        waiting = Dir.exist?("Import Sprites") ? Dir.children("Import Sprites").reject { |c| c.start_with?("_") || c =~ /\.txt\z/i }.length : 0
         write("Import Sprites folder: #{waiting} item(s) waiting") if waiting > 0
       rescue => e
         write("Sprite report failed (#{e.class}: #{e.message})")
@@ -184,17 +184,16 @@ def pbPrintException(e)
   kif_session_pbPrintException(e)
 end
 
-# The maps you visit (kept in memory; only written with a crash)
-module KIF
-  module SessionLog
-    module Transfers
-      def transfer_player(*args)
-        r = super
-        KIF::SessionLog.note_map($game_map.map_id) if $game_map
-        return r
-      end
-    end
+# The maps you visit (kept in memory; only written with a crash).
+# An alias, not a prepend: other KIF files alias transfer_player too, and an
+# alias taken after a prepend of the same method calls itself for ever
+# (SystemStackError on New Game, 2026-10-09).
+class Scene_Map
+  alias kif_session_transfer_player transfer_player unless method_defined?(:kif_session_transfer_player)
+
+  def transfer_player(*args)
+    r = kif_session_transfer_player(*args)
+    KIF::SessionLog.note_map($game_map.map_id) if $game_map
+    return r
   end
 end
-
-Scene_Map.prepend(KIF::SessionLog::Transfers) if defined?(Scene_Map)

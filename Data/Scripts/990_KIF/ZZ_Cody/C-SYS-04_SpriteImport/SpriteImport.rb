@@ -287,7 +287,7 @@ module KIF
           next if path.include?("/#{DONE_DIR}/")
           dest = destination(path.sub(root, ""))
           unless dest
-            skipped += 1 unless ARCHIVES.include?(File.extname(path).downcase)
+            skipped += 1 unless ARCHIVES.include?(File.extname(path).downcase) || path =~ /\.txt\z/i
             next
           end
           if placed[dest]

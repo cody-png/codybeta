@@ -48,7 +48,7 @@ def load_scripts_from_folder(path)
     code = File.open(path + "/" + f, "r") { |file| file.read }
     begin
       eval(code, nil, f)
-    rescue ScriptError, StandardError => e
+    rescue ScriptError, StandardError, SystemStackError, NoMemoryError => e
       KIF::CrashLog.write(KIF::CrashLog.describe(e, path + "/" + f))
       if e.is_a?(ScriptError)
         raise ScriptError.new(e.message + "\n\n(also logged in #{KIF::CrashLog::FILE})")

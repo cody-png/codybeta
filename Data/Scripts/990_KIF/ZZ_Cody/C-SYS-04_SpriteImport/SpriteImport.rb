@@ -520,7 +520,8 @@ module KIF
       # is an import to show, and freeze it again for PIF afterwards
       thaw = work_waiting? && defined?(Graphics) && Graphics.respond_to?(:transition)
       (Graphics.transition(0) rescue nil) if thaw
-      moved, conflicts, skipped, failed, leftovers = run
+      moved, conflicts, skipped, failed, leftovers =
+        defined?(KIF::FrameRate) && KIF::FrameRate.respond_to?(:hold) ? KIF::FrameRate.hold { run } : run
       forget_lookups
       @result = [moved, conflicts, failed]
       if defined?(KIF.log) && (moved + conflicts.length + skipped + failed.length + leftovers) > 0

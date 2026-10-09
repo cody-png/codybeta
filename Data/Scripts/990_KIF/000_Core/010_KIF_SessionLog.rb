@@ -45,6 +45,12 @@ module KIF
         @started = Time.now
         begin
           if File.exist?(path)
+            # a session that never wrote its end line was cut off (a crash
+            # the error log has, a forced close, power loss): say so
+            old = File.binread(path)
+            unless old.include?("Session ended") || old.include?("Log full")
+              File.open(path, "ab") { |f| f.write("[--] No end line: the game didn't exit normally (see KIF_errorlog.txt if it crashed)\r\n") }
+            end
             File.delete(path(PREVIOUS)) if File.exist?(path(PREVIOUS))
             File.rename(path, path(PREVIOUS))
           end
@@ -161,9 +167,10 @@ end
 PokemonLoadScreen.prepend(KIF::SessionLog::LoadScreen) if defined?(PokemonLoadScreen)
 BattleSpriteLoader.prepend(KIF::SessionLog::MissingSprite) if defined?(BattleSpriteLoader)
 
-# Closing the window: mkxp ends the game by raising SystemExit out of
-# Graphics.update (at_exit doesn't get a turn), so the counts and "Session
-# ended" are written here
+# Closing the window: mkxp ends the game by raising SystemExit out of the
+# next engine call. Graphics.update is one; 000_CrashLog.rb catches the rest
+# (Input.update, transitions) where the game's main loop is run. PIF's
+# at_exit only runs on Kernel#exit, so it can't be relied on.
 module Graphics
   class << self
     alias kif_session_update update unless method_defined?(:kif_session_update)

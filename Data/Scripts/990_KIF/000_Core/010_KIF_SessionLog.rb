@@ -125,7 +125,7 @@ module KIF
               "#{count.call('Graphics/CustomBattlers/spritesheets/spritesheets_base')} base sheets, " \
               "#{count.call('Graphics/CustomBattlers/spritesheets/spritesheets_custom')} custom sheets, " \
               "#{count.call('Graphics/Battlers/spritesheets_autogen')} autogen sheets; " \
-              "Download data #{dl.nil? ? '?' : (dl == 0 ? 'off' : 'on')}")
+              "Download data #{dl.nil? ? '?' : (dl == 0 ? 'on' : 'off')}")   # PIF's Download data: 0 = On
         waiting = Dir.exist?("Import Sprites") ? Dir.children("Import Sprites").reject { |c| c.start_with?("_") || c =~ /\.txt\z/i }.length : 0
         write("Import Sprites folder: #{waiting} item(s) waiting") if waiting > 0
       rescue => e

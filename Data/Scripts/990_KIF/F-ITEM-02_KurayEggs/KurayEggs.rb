@@ -365,10 +365,23 @@ class PokemonMart_Scene
 
   def pbStartBuyOrSellScene(*args)
     ret = kif_eggs_pbStartBuyOrSellScene(*args)
+    hidden = []
     begin
-      KIF::KurayEggs.unlock(self) if KIF::KurayShop.open?
+      if KIF::KurayShop.open?
+        # the item description shows through the message box: hide it (and
+        # the item icon) while the unlock messages are up
+        ["itemtextwindow", "icon"].each do |k|
+          sp = @sprites && @sprites[k]
+          next unless sp && !sp.disposed? && sp.visible
+          sp.visible = false
+          hidden << sp
+        end
+        KIF::KurayEggs.unlock(self)
+      end
     rescue => e
       KIF.log("K-Eggs unlock failed: #{e.message}")
+    ensure
+      hidden.each { |sp| sp.visible = true unless sp.disposed? }
     end
     return ret
   end

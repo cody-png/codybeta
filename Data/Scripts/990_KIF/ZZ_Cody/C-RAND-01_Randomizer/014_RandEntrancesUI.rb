@@ -147,10 +147,60 @@ class Scene_Map
       hint = KIF::Rand::ER.pending_hint
       return unless hint
       KIF::Rand::ER.pending_hint = nil
-      pbMessage(hint)
+      # shown once the new map is on screen (door events fade in after the
+      # transfer), see the map update below
+      KIF::Rand::ER.hint_waiting = [hint, $game_map.map_id, 0]
     rescue => e
       KIF::Rand::ER.pending_hint = nil
       KIF.log("Door hint failed (#{e.class}: #{e.message})")
     end
   end
 end
+
+module KIF
+  module Rand
+    module ER
+      HINT_WAIT_MAX = 200   # frames: past this a dark map gets its hint anyway
+
+      class << self
+        attr_accessor :hint_waiting
+
+        # The map can be seen: no fade or tone change running or dark, no
+        # transition, transfer, event or message in progress
+        def hint_can_show?(waited)
+          return false if $game_temp.player_transferring || $game_temp.transition_processing
+          return false if $game_temp.message_window_showing || $game_temp.in_menu
+          return false if pbMapInterpreterRunning?
+          return true if waited >= HINT_WAIT_MAX
+          scr = $game_screen
+          return false if scr.instance_variable_get(:@tone_duration).to_i > 0
+          return false if scr.instance_variable_get(:@fadein_duration).to_i > 0
+          t = scr.tone
+          return false if t.red < -100 && t.green < -100 && t.blue < -100
+          return false if scr.brightness < 255
+          b = (Graphics.brightness rescue nil)
+          return false if b.is_a?(Numeric) && b < 255
+          return true
+        end
+
+        def show_waiting_hint
+          w = hint_waiting
+          return unless w
+          if !$game_map || $game_map.map_id != w[1]
+            self.hint_waiting = nil     # moved on before it could be shown
+            return
+          end
+          w[2] += 1
+          return unless hint_can_show?(w[2])
+          self.hint_waiting = nil
+          pbMessage(w[0])
+        rescue => e
+          self.hint_waiting = nil
+          KIF.log("Door hint failed (#{e.class}: #{e.message})")
+        end
+      end
+    end
+  end
+end
+
+Events.onMapUpdate += proc { |_sender, _e| KIF::Rand::ER.show_waiting_hint if KIF::Rand::ER.hint_waiting }

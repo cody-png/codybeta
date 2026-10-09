@@ -223,15 +223,21 @@ module KIF
     # Placing one sprite (a file on disk, or a zip entry still in memory)
     #   new          -> written/moved to where the game reads it
     #   same bytes   -> dropped (already installed as it is)
-    #   other bytes  -> held in Import Sprites/_replace for the player's answer
+    #   other bytes  -> held in Import Sprites/_replace for the player's answer,
+    #                   except eggs: the game's own egg sprites are newer than
+    #                   the ones in sprite packs, so a differing egg is dropped
     #   second copy  -> left (the first one of a name wins)
     #---------------------------------------------------------------------------
     def reset_tally
-      @tally = { moved: 0, same: 0, skipped: 0, conflicts: {}, placed: {} }
+      @tally = { moved: 0, same: 0, eggs: 0, skipped: 0, conflicts: {}, placed: {} }
       @dirs_made = {}
     end
 
     def tally; @tally ||= (reset_tally; @tally); end
+
+    def egg_dest?(dest)
+      return dest.tr("\\", "/").downcase.start_with?(EGGS_DIR.downcase + "/")
+    end
 
     def place(dest, held, data: nil, from: nil)
       t = tally
@@ -243,6 +249,11 @@ module KIF
         if data ? (File.size(dest) == data.bytesize && File.binread(dest) == data) : same_file?(from, dest)
           (File.delete(from) rescue nil) if from
           t[:same] += 1
+          return
+        end
+        if egg_dest?(dest)
+          (File.delete(from) rescue nil) if from
+          t[:eggs] += 1
           return
         end
         unless from && from == held
@@ -376,6 +387,7 @@ module KIF
       end
       t = tally
       @same = t[:same]
+      @eggs = t[:eggs]
       # archive files that were never written (not sprites) count as discarded too
       return [t[:moved], t[:conflicts], t[:skipped], failed.map { |f| File.basename(f) }, @leftovers.to_i + not_written]
     ensure
@@ -556,7 +568,7 @@ module KIF
       forget_lookups
       @result = [moved, conflicts, failed]
       if defined?(KIF.log) && (moved + conflicts.length + skipped + failed.length + leftovers) > 0
-        KIF.log("Sprite import: #{moved} moved, #{@same.to_i} already installed (dropped), #{conflicts.length} differ from installed ones (held for the player), #{skipped} not sprites or duplicates, #{leftovers} other files from archives discarded, archives not opened: #{failed.inspect}")
+        KIF.log("Sprite import: #{moved} moved, #{@same.to_i} already installed (dropped), #{@eggs.to_i} older egg sprites (dropped, the game's are kept), #{conflicts.length} differ from installed ones (held for the player), #{skipped} not sprites or duplicates, #{leftovers} other files from archives discarded, archives not opened: #{failed.inspect}")
       end
     rescue => e
       KIF.log("Sprite import failed (#{e.class}: #{e.message})") if defined?(KIF.log)

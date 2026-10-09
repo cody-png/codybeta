@@ -161,6 +161,22 @@ end
 PokemonLoadScreen.prepend(KIF::SessionLog::LoadScreen) if defined?(PokemonLoadScreen)
 BattleSpriteLoader.prepend(KIF::SessionLog::MissingSprite) if defined?(BattleSpriteLoader)
 
+# Closing the window: mkxp ends the game by raising SystemExit out of
+# Graphics.update (at_exit doesn't get a turn), so the counts and "Session
+# ended" are written here
+module Graphics
+  class << self
+    alias kif_session_update update unless method_defined?(:kif_session_update)
+
+    def update(*args)
+      kif_session_update(*args)
+    rescue SystemExit
+      KIF::SessionLog.finish rescue nil
+      raise
+    end
+  end
+end
+
 # Crashes: a short note here (the full text stays in the error logs)
 alias kif_session_pbPrintException pbPrintException unless defined?(kif_session_pbPrintException)
 def pbPrintException(e)

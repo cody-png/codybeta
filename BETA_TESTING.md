@@ -2,7 +2,7 @@
 
 ## Install (fresh)
 1. Unzip the release into a **new, empty folder**. Don't unzip over an old KIF or PIF folder.
-2. Get the sprite pack (`Full Sprite pack ... .zip`) and drop the **zip itself** into the `Import Sprites` folder next to `Game.exe`. Don't unzip it.
+2. Get the sprite pack (`Full Sprite pack ... .zip`) and drop the **zip itself** into the `Import Sprites` folder next to `Game.exe`. Don't unzip it. **The zip is deleted once its sprites are installed** - keep your own copy elsewhere, or set Options > Others > Imported Archives to Keep first (it then goes to an `Imported archives` folder).
 3. Start `Game.exe`. The first start sorts the pack into place (a few minutes for the full pack) and tells you how many sprites it imported. The zip is deleted once it's unpacked – the installed sprites are the only copy.
 4. If you had saves in old KIF, the game offers once to copy them over. Say yes or no; you can copy them yourself later from the `Old Savefile location` shortcut.
 

@@ -1,0 +1,8 @@
+Drop sprites here: loose .png files, a sprite pack folder, or the pack's .zip / .rar - any layout.
+The next time the game starts, every sprite is moved to where the game reads it.
+
+ZIP AND RAR FILES ARE DELETED once their sprites are installed, so keep your own copy
+somewhere else if you want one. Or turn on Options > Others > Imported Archives: Keep,
+and the archive is moved to the "Imported archives" folder next to Game.exe instead.
+
+Sprites you already have are not overwritten without asking.

@@ -12,6 +12,9 @@
 #      An archive is unpacked into a work folder, its sprites moved the same
 #      way, and the archive and whatever else it held (icons, outfits,
 #      credits) are deleted: the installed sprites are the only copy kept.
+#      Options > Others > "Imported Archives: Keep" moves the archive to an
+#      "Imported archives" folder next to Game.exe instead (stored as the
+#      KeepImportedArchives.krs marker, so it is known before anything loads).
 #      PIF's own "Sprites to import" folder works the same way. A sprite
 #      that is already installed, byte for byte, is just dropped; one that
 #      differs is held in Import Sprites/_replace until the player answers
@@ -27,6 +30,37 @@ module KIF
     DONE_DIR    = "_done"        # (older builds put archives here; left alone)
     WORK_DIR    = "_unpacking"
     HOLD_DIR    = "_replace"     # differing sprites waiting for the player's answer
+    KEEP_DIR    = "Imported archives"
+    KEEP_MARKER = "KeepImportedArchives.krs"
+
+    def self.keep_archives?
+      return File.exist?(File.join(KIF.save_dir, KEEP_MARKER))
+    rescue
+      return false
+    end
+
+    def self.keep_archives=(on)
+      path = File.join(KIF.save_dir, KEEP_MARKER)
+      if on
+        File.binwrite(path, "Sprite import: archives are moved to \"#{KEEP_DIR}\" instead of deleted\n") unless File.exist?(path)
+      else
+        File.delete(path) if File.exist?(path)
+      end
+    rescue
+      nil
+    end
+
+    # An unpacked archive: deleted, or kept in "Imported archives"
+    def self.finish_archive(path)
+      if keep_archives?
+        mkdir_p(KEEP_DIR)
+        File.rename(path, file_after(KEEP_DIR, File.basename(path)))
+      else
+        File.delete(path)
+      end
+    rescue
+      nil
+    end
     ARCHIVES    = %w[.zip .rar .7z .tar .gz .tgz]
     BASE_DIR    = "Graphics/CustomBattlers/local_sprites/BaseSprites"
     INDEXED_DIR = "Graphics/CustomBattlers/local_sprites/indexed"
@@ -83,6 +117,7 @@ module KIF
       b.draw_text(0, mid - 16, b.width, 28, line, 1)
       b.font.color = Color.new(160, 160, 176)
       b.draw_text(0, mid + 24, b.width, 28, "A full sprite pack takes a few minutes. Only once per pack.", 1)
+      b.draw_text(0, mid + 52, b.width, 28, keep_archives? ? "The archive will be kept in \"#{KEEP_DIR}\"." : "The archive is deleted after unpacking (Options > Others to keep it).", 1)
     rescue
       @status = nil
     end
@@ -238,7 +273,7 @@ module KIF
             status("Unpacking #{File.basename(path)}...", 0)
             work = file_after(File.join(root, WORK_DIR), File.basename(path, ".*"))
             if unpack(path, work)
-              File.delete(path) rescue nil   # unpacked: the sprites are what matters, not a second copy
+              finish_archive(path)   # unpacked: deleted (or kept, if the player asked)
             else
               failed << path
             end
@@ -512,6 +547,14 @@ module KIF
 end
 
 PokemonLoadScreen.prepend(KIF::SpriteImport::LoadScreen) if defined?(PokemonLoadScreen)
+
+KIF::Options.add(:others, :global) {
+  EnumOption.new(_INTL("Imported Archives"), [_INTL("Delete"), _INTL("Keep")],
+                 proc { KIF::SpriteImport.keep_archives? ? 1 : 0 },
+                 proc { |value| KIF::SpriteImport.keep_archives = (value == 1) },
+                 [_INTL("A sprite pack .zip/.rar is deleted once its sprites are installed"),
+                  _INTL("A sprite pack .zip/.rar is moved to the Imported archives folder")])
+} if defined?(KIF::Options)
 
 #-------------------------------------------------------------------------------
 # Single sprite files first

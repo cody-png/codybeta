@@ -1,3 +1,0 @@
-Drop sprites here: loose .png files, a sprite pack folder, or the pack's .zip - any layout.
-The next time the game starts, every sprite is moved to where the game reads it.
-The zip is deleted once unpacked; files that are not sprites are left here or discarded.

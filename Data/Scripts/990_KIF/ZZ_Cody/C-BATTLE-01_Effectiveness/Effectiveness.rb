@@ -242,11 +242,13 @@ class FightMenuDisplay
 
   def update
     cody_eff_update
-    return unless @cody_lines && @cody_lines.any? { |l| l[:fit] < l[:name].length }
-    cody_eff_draw_lines
-  rescue => e
-    KIF.log("Effectiveness scroll failed: #{e.message}")
-    @cody_lines = nil
+    begin
+      return unless @cody_lines && @cody_lines.any? { |l| l[:fit] < l[:name].length }
+      cody_eff_draw_lines
+    rescue => e
+      KIF.log("Effectiveness scroll failed: #{e.message}")
+      @cody_lines = nil
+    end
   end
 end
 

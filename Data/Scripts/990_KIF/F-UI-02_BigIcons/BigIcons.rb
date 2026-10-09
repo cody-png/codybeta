@@ -234,13 +234,15 @@ class PokemonPartyPanel
   def refresh
     redraw = @refreshBitmap
     kif_big_refresh
-    return if disposed?
-    if @ballsprite && !@ballsprite.disposed? && @pokemon && KIF::BigIcons.mode >= 1
-      @ballsprite.visible = false
+    begin
+      return if disposed?
+      if @ballsprite && !@ballsprite.disposed? && @pokemon && KIF::BigIcons.mode >= 1
+        @ballsprite.visible = false
+      end
+      kif_big_layout_refresh(redraw) if KIF::BigIcons.party_layout?(@pokemon, @text)
+    rescue => e
+      KIF.log("Big icon party layout failed: #{e.message}")
     end
-    kif_big_layout_refresh(redraw) if KIF::BigIcons.party_layout?(@pokemon, @text)
-  rescue => e
-    KIF.log("Big icon party layout failed: #{e.message}")
   end
 
   def kif_big_layout_refresh(redraw)

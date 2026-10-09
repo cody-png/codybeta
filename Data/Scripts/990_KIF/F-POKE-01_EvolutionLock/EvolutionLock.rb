@@ -124,10 +124,12 @@ class PokemonSummary_Scene
 
   def drawPage(page)
     kif_evolock_drawPage(page)
-    return if @pokemon.nil? || @pokemon.egg? || !@pokemon.kif_evo_locked?
-    KIF.draw_evolock_icon(@sprites["overlay"].bitmap, 106, 101)
-  rescue => e
-    KIF.log("EvoLock icon failed: #{e.message}")
+    begin
+      return if @pokemon.nil? || @pokemon.egg? || !@pokemon.kif_evo_locked?
+      KIF.draw_evolock_icon(@sprites["overlay"].bitmap, 106, 101)
+    rescue => e
+      KIF.log("EvoLock icon failed: #{e.message}")
+    end
   end
 end
 
@@ -140,15 +142,17 @@ class PokemonPartyPanel
   def refresh
     redraw = @refreshBitmap
     kif_evolock_refresh
-    return unless redraw && @pokemon && !@pokemon.egg? && @pokemon.kif_evo_locked?
-    return if @text && @text.length > 0   # "ABLE"/"NOT ABLE" annotations use this spot
-    return unless @overlaysprite && !@overlaysprite.disposed? && @overlaysprite.bitmap
-    pos = [130, 64]
-    if defined?(KIF::BigIcons) && KIF::BigIcons.party_layout?(@pokemon, @text)
-      pos = KIF::BigIcons::PARTY_LOCK_POS   # big icons: over the icon (Cody)
+    begin
+      return unless redraw && @pokemon && !@pokemon.egg? && @pokemon.kif_evo_locked?
+      return if @text && @text.length > 0   # "ABLE"/"NOT ABLE" annotations use this spot
+      return unless @overlaysprite && !@overlaysprite.disposed? && @overlaysprite.bitmap
+      pos = [130, 64]
+      if defined?(KIF::BigIcons) && KIF::BigIcons.party_layout?(@pokemon, @text)
+        pos = KIF::BigIcons::PARTY_LOCK_POS   # big icons: over the icon (Cody)
+      end
+      KIF.draw_evolock_icon(@overlaysprite.bitmap, pos[0], pos[1])
+    rescue => e
+      KIF.log("EvoLock party icon failed: #{e.message}")
     end
-    KIF.draw_evolock_icon(@overlaysprite.bitmap, pos[0], pos[1])
-  rescue => e
-    KIF.log("EvoLock party icon failed: #{e.message}")
   end
 end

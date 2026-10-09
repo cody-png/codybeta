@@ -141,14 +141,16 @@ class Scene_Map
 
   def transfer_player(cancel_swimming = true)
     kif_enthint_transfer_player(cancel_swimming)
-    KIF::Rand::ER.settle_home if KIF::Rand::ER.new_home
-    KIF::Rand::ER.show_handover_message if KIF::Rand::ER.handover_msg
-    hint = KIF::Rand::ER.pending_hint
-    return unless hint
-    KIF::Rand::ER.pending_hint = nil
-    pbMessage(hint)
-  rescue => e
-    KIF::Rand::ER.pending_hint = nil
-    KIF.log("Door hint failed (#{e.class}: #{e.message})")
+    begin
+      KIF::Rand::ER.settle_home if KIF::Rand::ER.new_home
+      KIF::Rand::ER.show_handover_message if KIF::Rand::ER.handover_msg
+      hint = KIF::Rand::ER.pending_hint
+      return unless hint
+      KIF::Rand::ER.pending_hint = nil
+      pbMessage(hint)
+    rescue => e
+      KIF::Rand::ER.pending_hint = nil
+      KIF.log("Door hint failed (#{e.class}: #{e.message})")
+    end
   end
 end

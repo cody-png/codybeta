@@ -146,24 +146,26 @@ class PokemonBoxSprite
   def refresh
     redraw = @refreshBox
     kif_pc_refresh
-    return unless redraw
-    box = @storage[@boxnumber]
-    return if box.nil? || box.is_a?(StorageTransferBox) || !@boxbitmap
-    @contents.blt(0, 0, @boxbitmap.bitmap, Rect.new(0, 0, 324, 40))
-    pbSetSystemFont(@contents)
-    boxname = box.name
-    widthval = @contents.text_size(boxname).width
-    xval = 162 - ((widthval + 32) / 2)
-    shadow = Color.new(40, 48, 48)
-    color = box.sortlock? ? Color.new(200, 15, 15) : Color.new(0, 200, 0)
-    pbDrawShadowText(@contents, xval, 8, 32, 32, "S", color, shadow)
-    xval += 16
-    color = box.exportlock? ? Color.new(200, 15, 15) : Color.new(0, 200, 0)
-    pbDrawShadowText(@contents, xval, 8, 32, 32, "E", color, shadow)
-    xval += 16
-    pbDrawShadowText(@contents, xval, 8, widthval, 32, boxname, Color.new(248, 248, 248), shadow)
-  rescue => e
-    KIF.log("Box header failed: #{e.message}")
+    begin
+      return unless redraw
+      box = @storage[@boxnumber]
+      return if box.nil? || box.is_a?(StorageTransferBox) || !@boxbitmap
+      @contents.blt(0, 0, @boxbitmap.bitmap, Rect.new(0, 0, 324, 40))
+      pbSetSystemFont(@contents)
+      boxname = box.name
+      widthval = @contents.text_size(boxname).width
+      xval = 162 - ((widthval + 32) / 2)
+      shadow = Color.new(40, 48, 48)
+      color = box.sortlock? ? Color.new(200, 15, 15) : Color.new(0, 200, 0)
+      pbDrawShadowText(@contents, xval, 8, 32, 32, "S", color, shadow)
+      xval += 16
+      color = box.exportlock? ? Color.new(200, 15, 15) : Color.new(0, 200, 0)
+      pbDrawShadowText(@contents, xval, 8, 32, 32, "E", color, shadow)
+      xval += 16
+      pbDrawShadowText(@contents, xval, 8, widthval, 32, boxname, Color.new(248, 248, 248), shadow)
+    rescue => e
+      KIF.log("Box header failed: #{e.message}")
+    end
   end
 end
 

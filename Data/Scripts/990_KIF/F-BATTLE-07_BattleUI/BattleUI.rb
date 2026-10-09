@@ -330,18 +330,20 @@ class PokeBattle_Scene
 
   def pbInitSprites
     kif_bui_pbInitSprites
-    art = KIF::BattleUI.message_box
-    @sprites["messageBox"].setBitmap(art) if art && @sprites["messageBox"]
-    win = @sprites["messageWindow"]
-    return unless win
-    if KIF::BattleUI.dark?
-      win.baseColor   = KIF::BattleUI::DARK_TEXT_BASE
-      win.shadowColor = PokeBattle_SceneConstants::MESSAGE_SHADOW_COLOR
-    elsif KIF::BattleUI.gui == 2
-      win.baseColor = KIF::BattleUI::GUI2_TEXT_BASE
+    begin
+      art = KIF::BattleUI.message_box
+      @sprites["messageBox"].setBitmap(art) if art && @sprites["messageBox"]
+      win = @sprites["messageWindow"]
+      return unless win
+      if KIF::BattleUI.dark?
+        win.baseColor   = KIF::BattleUI::DARK_TEXT_BASE
+        win.shadowColor = PokeBattle_SceneConstants::MESSAGE_SHADOW_COLOR
+      elsif KIF::BattleUI.gui == 2
+        win.baseColor = KIF::BattleUI::GUI2_TEXT_BASE
+      end
+    rescue => e
+      KIF.log("Battle message box art failed: #{e.message}")
     end
-  rescue => e
-    KIF.log("Battle message box art failed: #{e.message}")
   end
 end
 
@@ -353,25 +355,27 @@ class CommandMenuDisplay
 
   def initialize(*args)
     kif_bui_initialize(*args)
-    if KIF::BattleUI.dark?
-      @msgBox.baseColor   = KIF::BattleUI::DARK_TEXT_BASE
-      @msgBox.shadowColor = PokeBattle_SceneConstants::MESSAGE_SHADOW_COLOR
-    end
-    return unless USE_GRAPHICS
-    bg = KIF::BattleUI.command_background
-    @sprites["background"].setBitmap(bg) if bg && @sprites["background"]
-    buttons = KIF::BattleUI.command_buttons
-    if buttons && @buttons
-      @buttonBitmap.dispose if @buttonBitmap
-      @buttonBitmap = AnimatedBitmap.new(buttons)
-      @buttons.each do |button|
-        button.bitmap = @buttonBitmap.bitmap
-        button.src_rect.width  = @buttonBitmap.width / 2
-        button.src_rect.height = BUTTON_HEIGHT
+    begin
+      if KIF::BattleUI.dark?
+        @msgBox.baseColor   = KIF::BattleUI::DARK_TEXT_BASE
+        @msgBox.shadowColor = PokeBattle_SceneConstants::MESSAGE_SHADOW_COLOR
       end
-      refreshButtons
+      return unless USE_GRAPHICS
+      bg = KIF::BattleUI.command_background
+      @sprites["background"].setBitmap(bg) if bg && @sprites["background"]
+      buttons = KIF::BattleUI.command_buttons
+      if buttons && @buttons
+        @buttonBitmap.dispose if @buttonBitmap
+        @buttonBitmap = AnimatedBitmap.new(buttons)
+        @buttons.each do |button|
+          button.bitmap = @buttonBitmap.bitmap
+          button.src_rect.width  = @buttonBitmap.width / 2
+          button.src_rect.height = BUTTON_HEIGHT
+        end
+        refreshButtons
+      end
+    rescue => e
+      KIF.log("Battle command menu art failed: #{e.message}")
     end
-  rescue => e
-    KIF.log("Battle command menu art failed: #{e.message}")
   end
 end

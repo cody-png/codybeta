@@ -24,8 +24,11 @@ module KIF
     return $scene.is_a?(Scene_Map) && !$game_switches.nil?
   end
 
+  # The console (debug mode) and KIF_log.txt in the save folder (see
+  # 010_KIF_SessionLog.rb)
   def self.log(msg)
     echoln("[KIF] #{msg}") if defined?(echoln)
+    KIF::SessionLog.write(msg) if defined?(KIF::SessionLog)
   end
 end
 

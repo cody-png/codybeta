@@ -36,7 +36,8 @@ module KIF
 
     module ER
       DATA_PATH = "Data/KIF/entrances.dat"
-      RETRIES = 100   # a try takes ~0.05 s; Simple needs ~5 on average
+      RETRIES = 100      # most layouts are found in 1-3 tries (~0.2 s each)
+      RETRIES_HERE = 40  # Randomize now mid-run: if nothing works from where you stand by then, the old doors stay
       BADGE_PREFIX = "badge_"
       OAK_LABS = [77, 551, 552, 593, 659, 724, 740, 847]   # every variant of Oak's Lab
       NO_START = [303, 167]   # Indigo Plateau, Crimson City (nowhere to go without 8 badges)
@@ -195,46 +196,87 @@ module KIF
       # (flags), all (flags + abilities, as a Hash), badges, spheres count.
       # `from` continues an earlier sweep of a graph that has only gained
       # edges since (the shuffler adds doors one batch at a time): what was
-      # reached stays reached, so only the new edges need following.
-      def self.sweep(d, edges, extra = [], from = nil, start = nil, stop_at = nil)
+      # reached stays reached, and only the edges out of `touched` (the spots
+      # that got new edges) and the ones that were waiting on flags are looked
+      # at again. `record` keeps, per round, its flags and the spots first
+      # reached in it.
+      def self.sweep(d, edges, extra = [], from = nil, start = nil, stop_at = nil, record = false, touched = nil)
         gates = d[:gates]
         have = from ? from[:have].dup : (d[:start_with] + extra).uniq
         have_h = {}
         have.each { |f| have_h[f] = true }
         seen = from ? from[:seen].dup : {}
         order = from ? from[:order].dup : {}   # node => how many nodes were reached before it
+        maps = {}                              # map => reached
+        if from
+          if from[:maps] then maps = from[:maps].dup
+          else from[:seen].each_key { |k| maps[node_map(k)] = true }
+          end
+        end
+        # edges out of reached spots still waiting on a flag: to => [[from, req], ...]
+        waiting = {}
+        ((from && from[:waiting]) || {}).each { |k, v| waiting[k] = v.dup }
         sphere = from ? from[:spheres] - 1 : 0
-        seen[start || d[:start]] ||= sphere
-        order[start || d[:start]] ||= 0
+        first = start || d[:start]
+        queue = []
+        unless seen[first]
+          seen[first] = sphere
+          order[first] = order.length
+          maps[node_map(first)] = true
+        end
+        queue = from ? ((from[:waiting] && touched) ? touched.select { |n| seen[n] } : seen.keys) : [first]
         badges = have.count { |f| badge_flag?(f) }
+        rounds = record ? [] : nil   # [flags this round, badges, nodes first reached in it]
+        fresh = record ? (from ? [] : [first]) : nil
+        recheck = from ? true : false
         loop do
           break if stop_at && have_h[stop_at]
           rb = badges   # what this round's checks see; gains count from the next round
           all = flag_hash(have, rb)
-          queue = seen.keys
-          now = {}
-          queue.each { |k| now[k] = true }
-          until queue.empty?
-            n = queue.shift
-            (edges[n] || []).each do |to, req|
-              next if now[to]
-              next unless req.all? { |r| satisfied?(r, all, gates, rb) }
-              now[to] = true
-              seen[to] ||= sphere
-              order[to] ||= order.length
+          if recheck
+            waiting.keys.each do |to|
+              if seen[to]
+                waiting.delete(to)
+                next
+              end
+              next unless waiting[to].any? { |_n, req| req.all? { |r| satisfied?(r, all, gates, rb) } }
+              waiting.delete(to)
+              seen[to] = sphere
+              order[to] = order.length
+              maps[node_map(to)] = true
+              fresh << to if record
               queue << to
             end
           end
+          until queue.empty?
+            n = queue.shift
+            (edges[n] || []).each do |to, req|
+              next if seen[to]
+              if req.all? { |r| satisfied?(r, all, gates, rb) }
+                seen[to] = sphere
+                order[to] = order.length
+                maps[node_map(to)] = true
+                fresh << to if record
+                waiting.delete(to)
+                queue << to
+              else
+                w = (waiting[to] ||= [])
+                w << [n, req] unless w.any? { |a, b| a == n && b.equal?(req) }
+              end
+            end
+          end
+          if record
+            rounds << [all, rb, fresh]
+            fresh = []
+          end
           gained = false
           key = false   # a badge or a key item: what makes a new sphere
-          maps_now = {}
-          now.each_key { |k| maps_now[node_map(k)] = true }
           d[:providers].each do |flag, where, needs|
             next if have_h[flag]
             if where.is_a?(Symbol)
-              next unless maps_now[where.to_s[1..-1]]
+              next unless maps[where.to_s[1..-1]]
             else
-              next unless where.any? { |n| now[n] }
+              next unless where.any? { |x| seen[x] }
             end
             next unless needs.all? { |f| satisfied?(f, all, gates, rb) }
             have << flag
@@ -248,8 +290,12 @@ module KIF
           # sphere N+1 opens with the badges/key items found in sphere N.
           # Story events (talking to the right person) widen the same sphere.
           sphere += 1 if key
+          recheck = true
         end
-        return { seen: seen, order: order, have: have, all: flag_hash(have, badges), badges: badges, spheres: sphere + 1 }
+        out = { seen: seen, order: order, have: have, all: flag_hash(have, badges), badges: badges, spheres: sphere + 1,
+                maps: maps, waiting: waiting }
+        out[:rounds] = rounds if record
+        return out
       end
 
       # The graph for a layout: map_in (door => door whose place it leads
@@ -345,8 +391,12 @@ module KIF
       # not yet reached, or a reached exit out to a doorstep not yet reached;
       # sweep; repeat. Coupled: the exit of the place you entered leads back
       # to the door you came through. Leftovers pair at random.
-      def self.grow(d, doors, rng, coupled, map_in = {}, map_out = {}, start = nil, extra = [])
+      # `groups` (Simple): door id => the doors of its place (a gate, a cave
+      # with two ends), in tile order. A group only trades with a group of the
+      # same size, all its doors at once; single doors trade with single doors.
+      def self.grow(d, doors, rng, coupled, map_in = {}, map_out = {}, start = nil, extra = [], groups = nil)
         ids = doors.map { |x| x[:id] }
+        groups ||= {}
         free_doors = ids - map_in.keys                   # doors without a place
         free_places = ids - map_in.values                # places nobody leads into
         free_exits = ids - map_out.keys                  # exits without a doorstep
@@ -356,69 +406,109 @@ module KIF
         ids.each { |id| pending[id] = true }
         batch = 6
         res = nil
+        size = ->(id) { (g = groups[id]) ? g.length : 1 }
+        # pair a (door / exit) unit with a (place / doorstep) unit of the same size
+        added_in = []; added_out = []   # links since the last sweep
+        link_in = lambda do |o, p|
+          go = groups[o] || [o]; gp = groups[p] || [p]
+          go.zip(gp) do |x, y|
+            map_in[x] = y
+            added_in << x
+            free_doors.delete(x); free_places.delete(y)
+            if coupled
+              map_out[y] = x
+              added_out << y
+              free_exits.delete(y); free_steps.delete(x)
+            end
+          end
+        end
+        link_out = lambda do |e, st|
+          ge = groups[e] || [e]; gs = groups[st] || [st]
+          ge.zip(gs) do |x, y|
+            map_out[x] = y
+            added_out << x
+            free_exits.delete(x); free_steps.delete(y)
+          end
+        end
+        # the graph, built once and given each new link's edges as it comes
+        edges = edges_for(d, map_in, map_out, pending)
+        # one id per unit (a group counts once, by its first door)
+        heads = ->(list) { list.select { |id| (g = groups[id]).nil? || g[0] == id } }
         loop do
           break if free_doors.empty? && free_exits.empty?
-          edges = edges_for(d, map_in, map_out, pending)
-          res = sweep(d, edges, extra, res, start)
+          touched = []
+          added_in.each do |o|
+            i = byid[map_in[o]]
+            byid[o][:out_edges].each { |src, needs| (edges[src] ||= []) << [i[:in_node], needs, 1]; touched << src }
+          end
+          added_out.each do |o|
+            back = byid[map_out[o]]
+            byid[o][:exit_edges].each { |src, needs| (edges[src] ||= []) << [back[:exit_node], needs, 1]; touched << src }
+          end
+          added_in.clear; added_out.clear
+          res = sweep(d, edges, extra, res, start, nil, false, touched.uniq)
           seen = res[:seen]
           want = nil
-          open_doors = free_doors.select { |id| door_reached?(byid[id], res) }
-          open_exits = free_exits.select { |id| inside_reached?(byid[id], seen) }
-          far_places = free_places.reject { |id| inside_reached?(byid[id], seen) }
-          far_steps = free_steps.reject { |id| door_reached?(byid[id], res) }
+          # a group is open when any of its doors / exits is reached, far while
+          # none of its places / doorsteps is
+          reached_door = ->(id) { (groups[id] || [id]).any? { |x| door_reached?(byid[x], res) } }
+          reached_in = ->(id) { (groups[id] || [id]).any? { |x| inside_reached?(byid[x], seen) } }
+          open_doors = heads.call(free_doors).select { |id| reached_door.call(id) }
+          open_exits = heads.call(free_exits).select { |id| reached_in.call(id) }
+          far_places = heads.call(free_places).reject { |id| reached_in.call(id) }
+          far_steps = heads.call(free_steps).reject { |id| reached_door.call(id) }
           moves = open_doors.map { |id| [:door, id] } + open_exits.map { |id| [:exit, id] }
           # dead end: reached doors all used up, places still out of reach
           return nil if moves.empty? && !(far_places.empty? && far_steps.empty?)
           if far_places.empty? && far_steps.empty?
-            # everything reached: the rest can go anywhere
-            free_doors.shuffle(random: rng).zip(free_places.shuffle(random: rng)) do |o, p|
-              map_in[o] = p
-              map_out[p] = o if coupled
+            # everything reached: the rest can go anywhere (same sizes together)
+            heads.call(free_doors).group_by { |id| size.call(id) }.each do |n, list|
+              places = heads.call(free_places).select { |id| size.call(id) == n }.shuffle(random: rng)
+              list.shuffle(random: rng).zip(places) { |o, p| link_in.call(o, p) if p }
             end
             unless coupled
-              free_exits.shuffle(random: rng).zip(free_steps.shuffle(random: rng)) { |e, s| map_out[e] = s }
+              heads.call(free_exits).group_by { |id| size.call(id) }.each do |n, list|
+                steps = heads.call(free_steps).select { |id| size.call(id) == n }.shuffle(random: rng)
+                list.shuffle(random: rng).zip(steps) { |e, st| link_out.call(e, st) if st }
+              end
             end
+            return nil unless free_doors.empty? && free_exits.empty?
             break
           end
           moves.shuffle(random: rng).first(batch).each do |kind, id|
+            n = size.call(id)
             if kind == :door
               next unless free_doors.include?(id)
-              pool = far_places.empty? ? free_places : far_places
+              free_p = heads.call(free_places).select { |pid| size.call(pid) == n }
+              far_p = far_places.select { |pid| size.call(pid) == n && free_places.include?(pid) }
+              pool = far_p.empty? ? free_p : far_p
               # few doors open: spend them on places that give something or
               # lead on (a mart with the parcel, a gate), not on dead ends
-              if open_doors.length <= 4 && !far_places.empty?
+              if open_doors.length <= 4 && !far_p.empty?
                 want ||= wanted(d, edges, res)
-                useful = pool.select { |pid| (byid[pid][:flags] || []).any? { |f| want[f] } }
-                rich = useful.empty? ? pool.select { |pid| byid[pid][:gives].to_i > 0 || byid[pid][:siblings].to_i > 0 } : useful
+                useful = pool.select { |pid| (groups[pid] || [pid]).any? { |x| (byid[x][:flags] || []).any? { |f| want[f] } } }
+                rich = useful.empty? ? pool.select { |pid| (groups[pid] || [pid]).any? { |x| byid[x][:gives].to_i > 0 || byid[x][:siblings].to_i > 0 } } : useful
                 pool = rich unless rich.empty?
               end
               next if pool.empty?
-              p = pool[rng.rand(pool.length)]
-              map_in[id] = p
-              free_doors.delete(id); free_places.delete(p); far_places.delete(p)
-              if coupled
-                map_out[p] = id
-                free_exits.delete(p); free_steps.delete(id); far_steps.delete(id)
-              end
+              link_in.call(id, pool[rng.rand(pool.length)])
             else
               next unless free_exits.include?(id)
               if coupled
                 # a reached exit's doorstep is fixed by whoever leads in; with
                 # nobody yet, pick the door for this place instead
                 next unless free_places.include?(id)
-                pool = far_steps.empty? ? free_doors : (far_steps & free_doors)
-                pool = free_doors if pool.empty?
+                free_o = heads.call(free_doors).select { |o| size.call(o) == n }
+                pool = far_steps.select { |o| size.call(o) == n && free_doors.include?(o) }
+                pool = free_o if pool.empty?
                 next if pool.empty?
-                o = pool[rng.rand(pool.length)]
-                map_in[o] = id; map_out[id] = o
-                free_doors.delete(o); free_places.delete(id); far_places.delete(id)
-                free_exits.delete(id); free_steps.delete(o); far_steps.delete(o)
+                link_in.call(pool[rng.rand(pool.length)], id)
               else
-                pool = far_steps.empty? ? free_steps : far_steps
+                free_s = heads.call(free_steps).select { |st| size.call(st) == n }
+                far_s = far_steps.select { |st| size.call(st) == n && free_steps.include?(st) }
+                pool = far_s.empty? ? free_s : far_s
                 next if pool.empty?
-                s = pool[rng.rand(pool.length)]
-                map_out[id] = s
-                free_exits.delete(id); free_steps.delete(s); far_steps.delete(s)
+                link_out.call(id, pool[rng.rand(pool.length)])
               end
             end
           end
@@ -426,28 +516,35 @@ module KIF
         return [map_in, map_out]
       end
 
-      # Simple: a place with several doors (a gate, a cave with two ends)
-      # trades all its doors with another place that has as many. These are
-      # fixed first, at random; the single doors then grow around them.
-      def self.simple_places(d, doors, rng, coupled)
-        map_in = {}; map_out = {}
-        places = doors.group_by { |x| x[:to][0] }.values.select { |ds| ds.length > 1 }
-        places.group_by(&:length).each_value do |same|
-          perm = same.shuffle(random: rng)
-          same.zip(perm) do |from, to|
-            from = from.sort_by { |x| [x[:tiles][0][1], x[:tiles][0][0]] }
-            to = to.sort_by { |x| [x[:tiles][0][1], x[:tiles][0][0]] }
-            from.zip(to) do |o, p|
-              map_in[o[:id]] = p[:id]
-              map_out[p[:id]] = o[:id] if coupled
-            end
-          end
-          unless coupled
-            exits = same.flatten.map { |x| x[:id] }
-            exits.zip(exits.shuffle(random: rng)) { |e, s| map_out[e] = s }
-          end
+      # Simple: the doors of a place with several (a gate, a cave with two
+      # ends) move together, onto another such place with as many doors
+      def self.simple_groups(doors)
+        groups = {}
+        doors.group_by { |x| x[:to][0] }.each_value do |ds|
+          next if ds.length < 2
+          g = ds.sort_by { |x| [x[:tiles][0][1], x[:tiles][0][0]] }.map { |x| x[:id] }
+          g.each { |id| groups[id] = g }
         end
-        return [map_in, map_out]
+        return groups
+      end
+
+      # Everything the unshuffled game reaches is reached, and every shuffled
+      # door has both its doorstep and its place in reach: no door is cut off
+      def self.complete?(d, doors, res)
+        seen = res[:seen]
+        return false unless doors.all? { |o| o[:out_edges].any? { |src, _| seen[src] } && seen[o[:in_node]] }
+        reached = {}
+        seen.each_key { |k| reached[node_map(k)] = true }
+        return vanilla_maps(d).all? { |m| reached[m] }
+      end
+
+      def self.vanilla_maps(d)
+        return d[:vanilla_maps] if d[:vanilla_maps]
+        res = sweep(d, edges_for(d, {}, {}))
+        maps = {}
+        res[:seen].each_key { |k| maps[node_map(k)] = true }
+        d[:vanilla_maps] = maps.keys
+        return d[:vanilla_maps]
       end
 
       # A layout for the current settings, or nil when none was found
@@ -476,24 +573,26 @@ module KIF
           start = origin_door[:in_node]
           extra = current_flags(d)
         end
-        RETRIES.times do |i|
-          Rand.progress(_INTL("Shuffling entrances... (try {1})", i + 1), 0.1 + 0.8 * i / RETRIES) if Rand.respond_to?(:progress)
+        tries = (start_door.nil? && mid_run?) ? RETRIES_HERE : RETRIES
+        tries.times do |i|
+          Rand.progress(_INTL("Shuffling entrances... (try {1})", i + 1), 0.1 + 0.8 * i / tries) if Rand.respond_to?(:progress)
           # a start that keeps failing gives way to the next candidate
           if start_door && i > 0 && i % 5 == 0 && cands.length > 1
             start_door = cands[(i / 5) % cands.length]
             start = start_door[:in_node]
           end
-          map_in, map_out = shape == 1 ? simple_places(d, doors, rng, coupled) : [{}, {}]
-          next unless grow(d, doors, rng, coupled, map_in, map_out, start, extra)   # nil: dead end, try again
+          map_in = {}; map_out = {}
+          groups = shape == 1 ? simple_groups(doors) : nil
+          next unless grow(d, doors, rng, coupled, map_in, map_out, start, extra, groups)   # nil: dead end, try again
           next unless map_in.length == doors.length && map_out.length == doors.length
           edges = edges_for(d, map_in, map_out)
           res = sweep(d, edges, extra, nil, start)
           next unless beatable?(d, res[:seen])
+          next unless complete?(d, doors, res)
           # mid-game: the player isn't in Pallet Town; from wherever they
-          # stand on the current map the end must be reachable too (every
-          # region of that map the layout reaches, with everything gathered
-          # so far assumed from scratch - conservative)
-          next unless start_door || beatable_from_here?(d, edges, res)
+          # may stand on the current map the end, and every place, must be
+          # reachable too, with what the save really has
+          next unless start_door || beatable_from_here?(d, edges, res, doors)
           regions = regions_on
           rsig = {}
           regions.each { |r| rsig[r] = (d[:region_sigs] || {})[r] if r != 0 }
@@ -501,20 +600,108 @@ module KIF
           return { in: map_in, out: map_out, sig: d[:signature], rsig: rsig, regions: regions, attempts: i + 1, seen: [],
                    shape: shape, doors: Rand.dget(:ent_doors), coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]),
                    start_door: first && first[:id], start_done: !first.nil?, progress: map_progress(res), pv: d[:progress_version],
-                   near: near_start(d, edges, res, start), nv: NEAR_VERSION, seed: Rand.seed }
+                   nv: NEAR_VERSION, seed: Rand.seed }.merge(near_for(d, edges, res, start, start_door.nil?))
         end
         return nil
       end
 
-      def self.beatable_from_here?(d, edges, res)
-        return true unless $game_map && $Trainer && $Trainer.has_pokedex && !$game_switches[SWITCH_DURING_INTRO]
-        here = "#{$game_map.map_id}:"
-        nodes = res[:seen].keys.select { |k| k.start_with?(here) && !k.include?(":g") }.first(12)
+      # Where the player stands, as nodes of the model (mid-run only: once the
+      # Pokédex is in hand and the intro is over)
+      def self.mid_run?
+        return $game_map && $Trainer && $Trainer.has_pokedex && !$game_switches[SWITCH_DURING_INTRO]
+      end
+
+      # Every region of the current map the model knows (not only the ones the
+      # layout reaches from the start: you may be standing in another one)
+      def self.here_nodes
+        return [] unless mid_run?
+        return (map_nodes(dat)[$game_map.map_id.to_s] || []).reject { |k| k.include?(":g") }
+      end
+
+      def self.map_nodes(d)
+        return d[:map_nodes] if d[:map_nodes]
+        idx = Hash.new { |h, k| h[k] = [] }
+        add = ->(n) { m = node_map(n); idx[m] << n unless idx[m].include?(n) }
+        d[:edges].each { |k, v| add.call(k); v.each { |to, _| add.call(to) } }
+        d[:doors].each { |o| add.call(o[:in_node]); add.call(o[:exit_node]) if o[:exit_node] }
+        d[:map_nodes] = {}.merge(idx)
+        return d[:map_nodes]
+      end
+
+      # The near-start counts for a new layout. Mid-run (Randomize now while
+      # playing) "near" is measured from where you stand, with what you have,
+      # and starts at your strongest Pokémon's level: everything you can walk
+      # to right away is sized to your party, rising with every door
+      def self.near_for(d, edges, res, start, may_be_here)
+        best = ($Trainer.party.reject { |pk| pk.egg? rescue false }.map(&:level).max rescue nil) if $Trainer
+        if may_be_here && mid_run?
+          base = [NEAR_LEVEL, best || 0].max
+          nodes = here_strict(d)
+          unless nodes.empty?
+            mine = current_flags(d)
+            near = {}
+            nodes.each do |n|
+              r = sweep(d, edges, mine, nil, n)
+              near_start(d, edges, r, n).each { |m, h| near[m] = h if near[m].nil? || h < near[m] }
+            end
+            return { near: near, near_base: base, near_here: true } unless near.empty?
+          end
+          return { near: near_start(d, edges, res, start), near_base: base }
+        end
+        return { near: near_start(d, edges, res, start), near_base: NEAR_LEVEL }
+      end
+
+      # The regions of this map you could be standing in: the ones with real
+      # room around them in the doors you have now (tiny pockets - a tile
+      # behind a ledge, an NPC's spot - aren't where a player stands). Worked
+      # out once per Randomize now.
+      def self.here_strict(d)
+        key = [$game_map.map_id, state.object_id]
+        return @here_strict[1] if @here_strict && @here_strict[0] == key
+        s = state
+        edges = (s.is_a?(Hash) && layout_current?(s)) ? edges_for(d, s[:in], s[:out]) : edges_for(d, {}, {})
+        mine = current_flags(d)
+        list = here_nodes.select { |n| sweep(d, edges, mine, nil, n)[:seen].length >= 20 }
+        @here_strict = [key, list]
+        return list
+      end
+
+      def self.beatable_from_here?(d, edges, res, doors = nil)
+        return true unless mid_run?
+        nodes = here_strict(d)
         return true if nodes.empty?   # not a place the model knows (an interior stair, a cutscene map)
         mine = current_flags(d)
-        # tiny pockets (a tile behind a ledge, an NPC's spot) aren't where the
-        # player is; every region with some reach of its own must get there
-        return nodes.all? { |n| r = sweep(d, edges, mine, nil, n); r[:seen].length < 20 || beatable?(d, r[:seen]) }
+        nb = mine.count { |f| badge_flag?(f) }
+        all = flag_hash((d[:start_with] + mine).uniq, nb)
+        home = res[:order].keys.first
+        # Walking back to where the layout's own check started is enough
+        # (from there the world was already checked, with no more than you
+        # have); otherwise a sweep from that spot has to finish the game and
+        # reach every place
+        return nodes.all? { |n|
+          next true if walks_to?(d, edges, n, home, all, nb)
+          r = sweep(d, edges, mine, nil, n)
+          beatable?(d, r[:seen]) && (doors.nil? || complete?(d, doors, r))
+        }
+      end
+
+      # Can you walk from a to b with these flags (no new ones picked up)?
+      def self.walks_to?(d, edges, a, b, all, badges)
+        return true if a == b
+        gates = d[:gates]
+        seen = { a => true }
+        queue = [a]
+        until queue.empty?
+          n = queue.shift
+          (edges[n] || []).each do |to, req|
+            next if seen[to]
+            next unless req.all? { |r| satisfied?(r, all, gates, badges) }
+            return true if to == b
+            seen[to] = true
+            queue << to
+          end
+        end
+        return false
       end
 
       # The flags this save really has, read from the game state
@@ -548,7 +735,6 @@ module KIF
           !towns_only || d[:names][o[:map]].to_s =~ /City|Town|Island/
         }.sort_by { |o| o[:id] }
       end
-
 
       # How far into the game each map is: the share of all reached nodes
       # that came before its first node, in PROGRESS_BINS steps (0 = the
@@ -613,6 +799,16 @@ module KIF
       #-------------------------------------------------------------------------
       def self.randomize
         if Rand.dget(:entrances) == 0 || !available?
+          # turning Entrances off mid-run: only where the normal doors can
+          # still take you to the end
+          if available? && active? && mid_run?
+            d = dat
+            edges = edges_for(d, {}, {})
+            unless beatable_from_here?(d, edges, sweep(d, edges))
+              pbMessage(_INTL("The normal doors can't get you to the end from here, so your doors stay shuffled. Try again somewhere else.")) if defined?(pbMessage)
+              return
+            end
+          end
           Rand.data.delete(:ent_layout)
           return
         end
@@ -638,6 +834,20 @@ module KIF
         if layout
           Rand.data[:ent_layout] = layout
           @targets = nil
+        elsif mid_run? && old.is_a?(Hash) && layout_current?(old)
+          # nothing works from where you stand: keep the doors you have
+          # (levels around you sized to your party all the same)
+          begin
+            d = dat
+            e = edges_for(d, old[:in], old[:out])
+            o = start_origin(old)
+            st = o && o[:in_node]
+            old.merge!(near_for(d, e, sweep(d, e, current_flags(d), nil, st), st, true))
+          rescue => ex
+            KIF.log("Entrance levels around you couldn't be redone (#{ex.class}: #{ex.message})")
+          end
+          pbMessage(_INTL("No new door layout works from where you're standing, so your doors stay as they are. Try again somewhere else.")) if defined?(pbMessage)
+          KIF.log("Entrances: no layout from here after #{RETRIES_HERE} tries (seed #{Rand.seed}); kept the old one")
         else
           Rand.data.delete(:ent_layout)
           pbMessage(_INTL("No beatable entrance layout was found for this seed; entrances stay as they are.")) if defined?(pbMessage)
@@ -870,7 +1080,7 @@ module KIF
         edges = edges_for(d, s[:in], s[:out])
         res = sweep(d, edges, extra, nil, start)
         s[:progress] = map_progress(res)
-        s[:near] = near_start(d, edges, res, start)
+        s[:near] = near_start(d, edges, res, start) unless s[:near_here]
         s[:pv] = d[:progress_version]
         s[:nv] = NEAR_VERSION
         return s[:progress]
@@ -907,7 +1117,7 @@ module KIF
       def self.level_cap(map_id)
         h = near_hops(map_id)
         return nil unless h
-        return NEAR_LEVEL + NEAR_STEP * [h - 1, 0].max
+        return (state[:near_base] || NEAR_LEVEL) + NEAR_STEP * [h - 1, 0].max
       end
 
       def self.trainer_cap(map_id)

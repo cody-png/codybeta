@@ -1,0 +1,5 @@
+# Repo tools, not part of the game: left out of release zips (git archive)
+build_release.cmd export-ignore
+push_branches.cmd export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore

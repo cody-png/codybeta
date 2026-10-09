@@ -23,7 +23,6 @@ module KIF
     DONE_DIR    = "_done"
     WORK_DIR    = "_unpacking"
     ARCHIVES    = %w[.zip .rar .7z .tar .gz .tgz]
-    BIG_ZIP     = 150 * 1024 * 1024
     BASE_DIR    = "Graphics/CustomBattlers/local_sprites/BaseSprites"
     INDEXED_DIR = "Graphics/CustomBattlers/local_sprites/indexed"
     SPECIAL_DIR = "Graphics/Battlers/special"
@@ -46,24 +45,42 @@ module KIF
       Graphics.update rescue nil
     end
 
-    # Where a sprite goes, from its name and the folders it sits in; nil = not a sprite we know
+    EGGS_DIR = "Graphics/Battlers/Eggs"
+    # Folders whose pictures are not battle sprites, whatever they are named
+    # (the full sprite pack has eggs, player outfits, icons, tilesets... all
+    # numbered like sprites)
+    NOT_SPRITES = /\A(player|characters?|misc|pictures?|icons?|assets?|tilesets?|overworld|footprints?|trainers?|items?|ui|backups?)\z|assets|96x96/i
+
+    # Where a sprite goes, from its name and the folders it sits in; nil = not
+    # a sprite we know. A "4.7b.png" fusion is taken from any folder that isn't
+    # a NOT_SPRITES one; a bare "4a.png" counts as a base sprite only in a
+    # BaseSprites folder or loose near the top (where a player drops it) -
+    # eggs, icons and outfits are numbered the same way.
     def destination(path)
       name = File.basename(path)
       return nil unless name =~ /\.png\z/i
-      parts = path.tr("\\", "/").split("/")
-      if (i = parts.index { |p| p.downcase == "spritesheets_base" })
-        return File.join(SHEETS_DIR, "spritesheets_base", *parts[(i + 1)..-1])
+      parts = path.tr("\\", "/").split("/").reject(&:empty?)
+      folders = parts[0..-2].map(&:downcase)
+      folders = folders[2..-1] if folders[0] == WORK_DIR.downcase   # inside an unpacked archive
+      folders ||= []
+      return nil if folders.any? { |f| f =~ NOT_SPRITES && f != "basesprites" }
+      if (i = folders.index("spritesheets_base"))
+        return File.join(SHEETS_DIR, "spritesheets_base", *parts[-(folders.length - i)..-1])
       end
-      if (i = parts.index { |p| p.downcase == "spritesheets_custom" })
-        return File.join(SHEETS_DIR, "spritesheets_custom", *parts[(i + 1)..-1])
+      if (i = folders.index("spritesheets_custom"))
+        return File.join(SHEETS_DIR, "spritesheets_custom", *parts[-(folders.length - i)..-1])
       end
+      parent = folders.last
+      return File.join(EGGS_DIR, name) if parent == "eggs" && name =~ /\A\d+\.png\z/i
       case name
-      when /\A\d+\.\d+\.\d+\.png\z/i
+      when /\A\d+\.\d+\.\d+[a-z]*\.png\z/i
         return File.join(SPECIAL_DIR, name)
       when /\A(\d+)\.(\d+)[a-z]*\.png\z/i
         return File.join(INDEXED_DIR, $1, name)
       when /\A\d+[a-z]*\.png\z/i
-        return File.join(BASE_DIR, name)
+        return File.join(BASE_DIR, name) if parent == "basesprites"
+        return File.join(BASE_DIR, name) if folders.length <= 1 && parent !~ /\A(eggs|triples|other)\z/
+        return nil
       end
       return nil
     end
@@ -89,13 +106,14 @@ module KIF
 
     # Remove folders left empty once their sprites have moved out
     def prune(dir, top = true)
+      return unless Dir.exist?(dir)
       Dir.children(dir).each do |c|
         path = File.join(dir, c)
         next unless File.directory?(path)
         next if top && c == DONE_DIR
         prune(path, false)
       end
-      Dir.rmdir(dir) if !top && Dir.children(dir).empty?
+      Dir.rmdir(dir) if !top && Dir.children(dir).reject { |c| c == ".DS_Store" || c == "desktop.ini" || c == "Thumbs.db" }.empty? && (Dir.children(dir).each { |c| File.delete(File.join(dir, c)) rescue nil }; true)
     rescue
     end
 
@@ -104,19 +122,14 @@ module KIF
     #---------------------------------------------------------------------------
     def unpack(archive, into)
       mkdir_p(into)
-      # a small .zip is read here (no console window flashes up); a big one
-      # (a whole sprite pack) and every other kind go to Windows' tar, which
-      # is much faster; a .zip tar can't open falls back to the reader here
-      big = (File.size(archive) rescue 0) > BIG_ZIP
-      return true if archive =~ /\.zip\z/i && !big && Zip.extract(archive, into)
-      ok = begin
-        system("tar", "-xf", archive, "-C", into) ? true : false
+      # .zip: read here (no console window); anything else, or a .zip this
+      # reader can't handle: Windows' tar
+      return true if archive =~ /\.zip\z/i && Zip.extract(archive, into)
+      begin
+        return system("tar", "-xf", archive, "-C", into) ? true : false
       rescue
-        false
+        return false
       end
-      return true if ok
-      return Zip.extract(archive, into) if archive =~ /\.zip\z/i && big
-      return false
     end
 
     def file_after(dir, name)
@@ -183,6 +196,18 @@ module KIF
             end
           end
           tick
+        end
+        # what an archive left (icons, outfits, credits...) is put away with it
+        work = File.join(root, WORK_DIR)
+        if Dir.exist?(work)
+          Dir.children(work).each do |c|
+            src = File.join(work, c)
+            prune(src, false) rescue nil
+            next unless File.exist?(src)
+            mkdir_p(File.join(root, DONE_DIR))
+            File.rename(src, file_after(File.join(root, DONE_DIR), "#{c} (leftovers)")) rescue nil
+          end
+          Dir.rmdir(work) rescue nil
         end
         prune(root)
       end
@@ -375,3 +400,32 @@ module KIF
 end
 
 PIFSpriteExtracter.prepend(KIF::SpriteImport::LocalFirst) if defined?(PIFSpriteExtracter)
+
+#-------------------------------------------------------------------------------
+# Pokédex sprites page: a sprite that is both on a sheet and a file was listed
+# twice (once with its artist, once as "Imported sprite"). The file copy is
+# listed only for letters the sheets don't have.
+#-------------------------------------------------------------------------------
+module KIF
+  module SpriteImport
+    module DexAlts
+      def pbGetAvailableAlts(dex_number, includeAutogens = false)
+        list = super
+        return list unless list.is_a?(Array)
+        letters = {}
+        list.each { |a| letters[a.to_s] = true if a.is_a?(String) && !a.start_with?("local_") }
+        return list.reject do |a|
+          next false unless a.is_a?(String) && a.start_with?("local_")
+          base = File.basename(a.split("_", 2)[1].to_s, ".*")
+          letter = base =~ /\A\d+(?:\.\d+)?([a-z]*)\z/i ? $1.downcase : nil
+          letter && letters[letter]
+        end
+      rescue => e
+        KIF.log("Dex sprite list tidy failed (#{e.class}: #{e.message})") if defined?(KIF.log)
+        return list
+      end
+    end
+  end
+end
+
+PokedexUtils.prepend(KIF::SpriteImport::DexAlts) if defined?(PokedexUtils)

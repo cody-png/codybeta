@@ -51,6 +51,9 @@ All options in this menu are per-save.
 - **Format Applies To** – Wild / Trainers / Both *(Wild)*. Which battles Battle Format affects.
 - **Auto-Battle** – Off / On *(Off)*. Trapstarr's Auto-Battler: an ally AI picks your moves for you.
 - **Auto-Battle Shiny Stop** – Off / On *(Off)*. Turns Auto-Battle off as soon as a shiny wild Pokémon appears.
+- **Auto-Battle Switching** – Ask / AI decides / Stay in *(AI decides)*. When a trainer is about to send in a Pokémon: with AI decides, the battle AI (PIF's or DemICE's, whichever is set) looks at the new Pokémon and decides whether yours switches out, and into whom.
+- **Auto-Battle Level Up** – Show stats / Continue *(Continue)*. Whether the level-up stat windows wait for you.
+- **Auto-Battle New Moves** – Ask / AI picks / Skip *(AI picks)*. When a Pokémon with four moves wants a new one: the battle AI keeps the four it rates best against the opposing team (the new move may not make the cut), or new moves are skipped. Picks are noted in KIF_log.txt.
 - **Damage Variance** – Off / On *(On)*. Off removes the random damage roll, so a move always does the same damage.
 - **Battle AI** – PIF / DemICE *(DemICE)*. Which brain opponents use. DemICE's AI (from the community hard-mode mods) plays smarter and focuses on its best move. PIF is PIF 6.8.2's own AI.
 

@@ -9,8 +9,9 @@
 #        144.145.146.png            -> Graphics/Battlers/special/
 #        .../spritesheets_base/...  -> Graphics/CustomBattlers/spritesheets/spritesheets_base/
 #        .../spritesheets_custom/...-> Graphics/CustomBattlers/spritesheets/spritesheets_custom/
-#      An archive is unpacked straight into a work folder, its sprites moved
-#      the same way, and the archive itself is put in "Import Sprites/_done".
+#      An archive is unpacked into a work folder, its sprites moved the same
+#      way, and the archive and whatever else it held (icons, outfits,
+#      credits) are deleted: the installed sprites are the only copy kept.
 #      PIF's own "Sprites to import" folder works the same way. Sprites that
 #      already exist are left for PIF's "replace them?" question, as before.
 #   2. PIF 6.8.2 reads base sprites only from sprite sheets, and picks a
@@ -20,7 +21,7 @@
 module KIF
   module SpriteImport
     IMPORT_DIR  = "Import Sprites"
-    DONE_DIR    = "_done"
+    DONE_DIR    = "_done"        # (older builds put archives here; left alone)
     WORK_DIR    = "_unpacking"
     ARCHIVES    = %w[.zip .rar .7z .tar .gz .tgz]
     BASE_DIR    = "Graphics/CustomBattlers/local_sprites/BaseSprites"
@@ -83,6 +84,16 @@ module KIF
         return nil
       end
       return nil
+    end
+
+    def remove_tree(dir)
+      return unless Dir.exist?(dir)
+      Dir.children(dir).each do |c|
+        path = File.join(dir, c)
+        File.directory?(path) ? remove_tree(path) : (File.delete(path) rescue nil)
+        tick
+      end
+      Dir.rmdir(dir) rescue nil
     end
 
     def mkdir_p(dir)
@@ -164,8 +175,7 @@ module KIF
             found = true
             work = file_after(File.join(root, WORK_DIR), File.basename(path, ".*"))
             if unpack(path, work)
-              mkdir_p(File.join(root, DONE_DIR))
-              File.rename(path, file_after(File.join(root, DONE_DIR), File.basename(path))) rescue nil
+              File.delete(path) rescue nil   # unpacked: the sprites are what matters, not a second copy
             else
               failed << path
             end
@@ -197,21 +207,18 @@ module KIF
           end
           tick
         end
-        # what an archive left (icons, outfits, credits...) is put away with it
+        # what an archive left (icons, outfits, credits, assets) is not kept:
+        # the game has no use for it and nobody wants a second copy of a pack
         work = File.join(root, WORK_DIR)
         if Dir.exist?(work)
-          Dir.children(work).each do |c|
-            src = File.join(work, c)
-            prune(src, false) rescue nil
-            next unless File.exist?(src)
-            mkdir_p(File.join(root, DONE_DIR))
-            File.rename(src, file_after(File.join(root, DONE_DIR), "#{c} (leftovers)")) rescue nil
-          end
-          Dir.rmdir(work) rescue nil
+          leftovers = 0
+          each_file(work, false) { |_f| leftovers += 1 }
+          remove_tree(work)
+          @leftovers = leftovers
         end
         prune(root)
       end
-      return [moved, conflicts, skipped, failed.map { |f| File.basename(f) }]
+      return [moved, conflicts, skipped, failed.map { |f| File.basename(f) }, @leftovers.to_i]
     end
 
     #---------------------------------------------------------------------------
@@ -337,11 +344,11 @@ module KIF
     end
 
     def self.startup
-      moved, conflicts, skipped, failed = run
+      moved, conflicts, skipped, failed, leftovers = run
       forget_lookups
       @result = [moved, conflicts, failed]
-      if defined?(KIF.log) && (moved + conflicts.length + skipped + failed.length) > 0
-        KIF.log("Sprite import: #{moved} moved, #{conflicts.length} already there, #{skipped} other files left, archives not opened: #{failed.inspect}")
+      if defined?(KIF.log) && (moved + conflicts.length + skipped + failed.length + leftovers) > 0
+        KIF.log("Sprite import: #{moved} moved, #{conflicts.length} already there, #{skipped} other files left in the folder, #{leftovers} non-sprite files from archives discarded, archives not opened: #{failed.inspect}")
       end
     rescue => e
       KIF.log("Sprite import failed (#{e.class}: #{e.message})") if defined?(KIF.log)

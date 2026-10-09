@@ -209,9 +209,56 @@ module KIF
     end
 
     def mkdir_p(dir)
-      return if dir.nil? || dir.empty? || Dir.exist?(dir)
-      mkdir_p(File.dirname(dir))
-      Dir.mkdir(dir) rescue nil
+      return if dir.nil? || dir.empty?
+      @dirs_made ||= {}
+      return if @dirs_made[dir]
+      unless Dir.exist?(dir)
+        mkdir_p(File.dirname(dir))
+        Dir.mkdir(dir) rescue nil
+      end
+      @dirs_made[dir] = true
+    end
+
+    #---------------------------------------------------------------------------
+    # Placing one sprite (a file on disk, or a zip entry still in memory)
+    #   new          -> written/moved to where the game reads it
+    #   same bytes   -> dropped (already installed as it is)
+    #   other bytes  -> held in Import Sprites/_replace for the player's answer
+    #   second copy  -> left (the first one of a name wins)
+    #---------------------------------------------------------------------------
+    def reset_tally
+      @tally = { moved: 0, same: 0, skipped: 0, conflicts: {}, placed: {} }
+      @dirs_made = {}
+    end
+
+    def tally; @tally ||= (reset_tally; @tally); end
+
+    def place(dest, held, data: nil, from: nil)
+      t = tally
+      if t[:placed][dest]
+        t[:skipped] += 1
+        return
+      end
+      if File.exist?(dest)
+        if data ? (File.size(dest) == data.bytesize && File.binread(dest) == data) : same_file?(from, dest)
+          (File.delete(from) rescue nil) if from
+          t[:same] += 1
+          return
+        end
+        unless from && from == held
+          mkdir_p(File.dirname(held))
+          data ? File.binwrite(held, data) : File.rename(from, held)
+        end
+        t[:conflicts][held] = dest
+        return
+      end
+      mkdir_p(File.dirname(dest))
+      data ? File.binwrite(dest, data) : File.rename(from, dest)
+      t[:placed][dest] = true
+      t[:moved] += 1
+      bump
+    rescue SystemCallError, IOError
+      t[:skipped] += 1
     end
 
     # Every file under a folder (skipping our own _done / _unpacking)
@@ -243,11 +290,12 @@ module KIF
     #---------------------------------------------------------------------------
     # Archives: the built-in .zip reader, else Windows' tar (bsdtar)
     #---------------------------------------------------------------------------
-    def unpack(archive, into)
+    def unpack(archive, into, root = nil)
       mkdir_p(into)
-      # .zip: read here (no console window); anything else, or a .zip this
-      # reader can't handle: Windows' tar
-      return true if archive =~ /\.zip\z/i && Zip.extract(archive, into)
+      # .zip: read here (no console window), each sprite written straight to
+      # where the game reads it; anything else, or a .zip this reader can't
+      # handle: Windows' tar into the work folder, then the moving pass
+      return true if archive =~ /\.zip\z/i && Zip.extract(archive, into, direct: root)
       remove_tree(into)   # whatever the built-in reader got through before it gave up
       mkdir_p(into)
       begin
@@ -271,8 +319,9 @@ module KIF
     #---------------------------------------------------------------------------
     def run
       mkdir_p(IMPORT_DIR)
-      moved = 0; conflicts = {}; skipped = 0; failed = []; same = 0
+      failed = []
       self.not_written = 0; @leftovers = 0
+      reset_tally
       import_dirs.each do |root|
         next unless Dir.exist?(root)
         # unpack archives first (each into its own work folder; an archive
@@ -290,7 +339,7 @@ module KIF
             found = true
             status("Unpacking #{File.basename(path)}...", 0)
             work = file_after(File.join(root, WORK_DIR), File.basename(path, ".*"))
-            if unpack(path, work)
+            if unpack(path, work, root)
               finish_archive(path)   # unpacked: deleted (or kept, if the player asked)
             else
               failed << path
@@ -299,49 +348,19 @@ module KIF
           end
           break unless found
         end
-        placed = {}   # sprites moved in this run: a second file with the same name is left alone
         status("Moving sprites into place...", 0) if Dir.exist?(File.join(root, WORK_DIR))
+        hold_root = File.join(root, HOLD_DIR)
         each_file(root, false) do |path|
           next if path.include?("/#{DONE_DIR}/")
           dest = destination(path.sub(root, ""))
           unless dest
-            skipped += 1 unless ARCHIVES.include?(File.extname(path).downcase) || path =~ /\.txt\z/i
+            tally[:skipped] += 1 unless ARCHIVES.include?(File.extname(path).downcase) || path =~ /\.txt\z/i || File.basename(path).start_with?(".")
             next
           end
-          if placed[dest]
-            skipped += 1
-          elsif File.exist?(dest)
-            if same_file?(path, dest)
-              File.delete(path) rescue nil   # already installed as it is
-              same += 1
-            else
-              # held outside the work folder (which is deleted below) until
-              # the player answers on the load screen
-              held = path
-              hold_root = File.join(root, HOLD_DIR)
-              unless path.start_with?(hold_root + "/")
-                held = File.join(hold_root, path.sub(root, "").sub(%r{\A/+}, "").sub(%r{\A#{WORK_DIR}/}, ""))
-                mkdir_p(File.dirname(held))
-                begin
-                  File.rename(path, held)
-                rescue
-                  held = nil
-                  skipped += 1
-                end
-              end
-              conflicts[held] = dest if held
-            end
-          else
-            mkdir_p(File.dirname(dest))
-            begin
-              File.rename(path, dest)
-              placed[dest] = true
-              moved += 1
-              bump
-            rescue
-              skipped += 1
-            end
-          end
+          # held outside the work folder (deleted below) until the player answers
+          held = path.start_with?(hold_root + "/") ? path :
+                 File.join(hold_root, path.sub(root, "").sub(%r{\A/+}, "").sub(%r{\A#{WORK_DIR}/}, ""))
+          place(dest, held, from: path)
           tick
         end
         # what an archive left (icons, outfits, credits, assets) is not kept:
@@ -355,9 +374,10 @@ module KIF
         end
         prune(root)
       end
-      @same = same
+      t = tally
+      @same = t[:same]
       # archive files that were never written (not sprites) count as discarded too
-      return [moved, conflicts, skipped, failed.map { |f| File.basename(f) }, @leftovers.to_i + not_written]
+      return [t[:moved], t[:conflicts], t[:skipped], failed.map { |f| File.basename(f) }, @leftovers.to_i + not_written]
     ensure
       hide_status
     end
@@ -394,7 +414,10 @@ module KIF
     module Zip
       module_function
 
-      def extract(archive, into)
+      # direct: the import folder the archive came from. Then each sprite goes
+      # straight to where the game reads it (no copy in a work folder to move
+      # afterwards); archives inside it are still written to `into`.
+      def extract(archive, into, direct: nil)
         require "zlib"
         File.open(archive, "rb") do |f|
           entries(f).each do |name, method, csize, offset|
@@ -405,7 +428,9 @@ module KIF
             # outfits, tilesets) would be deleted anyway, and some of it has
             # names past Windows' 260-character path limit
             rel = File.join(KIF::SpriteImport::WORK_DIR, "x", *safe)
-            unless KIF::SpriteImport::ARCHIVES.include?(File.extname(rel).downcase) || KIF::SpriteImport.destination(rel)
+            nested = KIF::SpriteImport::ARCHIVES.include?(File.extname(rel).downcase)
+            dest = nested ? nil : KIF::SpriteImport.destination(rel)
+            unless nested || dest
               KIF::SpriteImport.not_written += 1
               next
             end
@@ -417,6 +442,12 @@ module KIF
             data = f.read(csize)
             data = Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(data) if method == 8
             next unless method == 0 || method == 8
+            if direct && dest
+              held = File.join(direct, KIF::SpriteImport::HOLD_DIR, File.basename(into), *safe)
+              KIF::SpriteImport.place(dest, held, data: data)
+              KIF::SpriteImport.tick
+              next
+            end
             out = File.join(into, *safe)
             begin
               KIF::SpriteImport.mkdir_p(File.dirname(out))
@@ -508,7 +539,7 @@ module KIF
     # Anything waiting in the import folders (the READ ME doesn't count)?
     def self.work_waiting?
       return import_dirs.any? do |d|
-        Dir.exist?(d) && Dir.children(d).any? { |c| c !~ /\.txt\z/i && c != WORK_DIR }
+        Dir.exist?(d) && Dir.children(d).any? { |c| c !~ /\.txt\z/i && c != WORK_DIR && !c.start_with?(".") }
       end
     rescue
       return false

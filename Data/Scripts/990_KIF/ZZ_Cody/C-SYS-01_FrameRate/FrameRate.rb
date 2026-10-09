@@ -163,6 +163,7 @@ module KIF
       if $DEBUG
         @probes = {}
         @gc_count = GC.count
+        @gc_time = (GC.stat(:time) rescue nil)   # ms spent in GC so far (Ruby 3.1+)
       end
       unless drawing_between?
         @delta = nil
@@ -452,7 +453,10 @@ module KIF
       msg = (($game_temp && $game_temp.message_window_showing) rescue false)
       parts = (@probes || {}).sort_by { |_, v| -v[0] }.map { |k, v| sprintf("%s %.1f ms%s", k, v[0] * 1000, v[1] > 1 ? " x#{v[1]}" : "") }
       gcs = @gc_count ? GC.count - @gc_count : 0
-      parts << "GC x#{gcs}" if gcs > 0
+      if gcs > 0
+        gct = (@gc_time ? (GC.stat(:time) rescue nil) : nil)
+        parts << (gct ? "GC x#{gcs} #{gct - @gc_time} ms" : "GC x#{gcs}")
+      end
       line = sprintf("%s  game %5.1f ms  step %5.1f ms  map %s at %s,%s  maps loaded %s%s  rate %d/%d%s%s",
                      Time.now.strftime("%H:%M:%S"), work * 1000, took * 1000,
                      ($game_map ? $game_map.map_id : "-"), ($game_player ? $game_player.x : "-"),
@@ -718,7 +722,7 @@ module KIF
         ev.send(:define_method, :trigger) { |*args, &blk| KIF::FrameRate.probe("Events.onMapUpdate") { super(*args, &blk) } }
         Events.onMapUpdate.singleton_class.prepend(ev)
       end
-      [:generateNPCClothedBitmapStatic, :getClothedPlayerSprite, :pbBushDepthBitmap].each do |fn|
+      [:generateNPCClothedBitmapStatic, :getClothedPlayerSprite, :pbBushDepthBitmap, :pbGetTileBitmap].each do |fn|
         next unless Object.private_method_defined?(fn) || Object.method_defined?(fn)
         Object.class_eval do
           alias_method :"kif_probe_#{fn}", fn unless method_defined?(:"kif_probe_#{fn}") || private_method_defined?(:"kif_probe_#{fn}")

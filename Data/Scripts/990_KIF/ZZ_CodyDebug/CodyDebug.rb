@@ -59,6 +59,10 @@ module KIF
         rows << [_INTL("Entrances"), _INTL("Where this map's doors lead, level numbers here, found doors."), :entrances] if er_active?
         rows << [_INTL("Cheats ({1})", cheat_summary), _INTL("No wild encounters, trainers don't spot you, walk through walls."), :cheats]
         rows << [_INTL("Save now"), _INTL("Save the game right here."), :save]
+        if defined?(KIF::AICompare)
+          rows << [_INTL("AI compare log ({1})", KIF::AICompare.on? ? _INTL("on") : _INTL("off")),
+                   _INTL("Every AI decision also asks the other AI (PIF / DemICE) and writes both to KIF_ai_compare.txt."), :aicompare]
+        end
         rows << [_INTL("Fetch missing base sprite sheets"), _INTL("Download every base Pokémon's sprite sheet the game folder lacks (gently, one every 2 s)."), :sheets]
         pick = choose(_INTL("Cody Debug"), rows)
         break unless pick
@@ -72,6 +76,9 @@ module KIF
                  when :cheats then cheats_menu
                  when :save then pbMessage(Game.save ? _INTL("Saved.") : _INTL("Saving failed.")); nil
                  when :sheets then fetch_base_sheets
+                 when :aicompare
+                   KIF::AICompare.on = !KIF::AICompare.on?
+                   pbMessage(KIF::AICompare.on? ? _INTL("AI compare log on: KIF_ai_compare.txt in the save folder.") : _INTL("AI compare log off.")); nil
                  end
         }
         break if done == :close

@@ -33,6 +33,11 @@ module KIF
     KEEP_DIR    = "Imported archives"
     KEEP_MARKER = "KeepImportedArchives.krs"
 
+    class << self
+      attr_writer :not_written
+      def not_written; @not_written ||= 0; end
+    end
+
     def self.keep_archives?
       return File.exist?(File.join(KIF.save_dir, KEEP_MARKER))
     rescue
@@ -185,10 +190,22 @@ module KIF
       return unless Dir.exist?(dir)
       Dir.children(dir).each do |c|
         path = File.join(dir, c)
-        File.directory?(path) ? remove_tree(path) : (File.delete(path) rescue nil)
+        File.directory?(path) ? remove_tree(path) : delete_file(path)
         tick
       end
       Dir.rmdir(dir) rescue nil
+    end
+
+    # File.delete, and for a path past Windows' 260-character limit the same
+    # through the \\?\ long-path form
+    def delete_file(path)
+      File.delete(path)
+    rescue SystemCallError
+      begin
+        File.delete("\\\\?\\" + File.expand_path(path).tr("/", "\\")) if File::ALT_SEPARATOR
+      rescue SystemCallError
+        nil
+      end
     end
 
     def mkdir_p(dir)
@@ -255,6 +272,7 @@ module KIF
     def run
       mkdir_p(IMPORT_DIR)
       moved = 0; conflicts = {}; skipped = 0; failed = []; same = 0
+      self.not_written = 0; @leftovers = 0
       import_dirs.each do |root|
         next unless Dir.exist?(root)
         # unpack archives first (each into its own work folder; an archive
@@ -333,12 +351,13 @@ module KIF
           leftovers = 0
           each_file(work, false) { |_f| leftovers += 1 }
           remove_tree(work)
-          @leftovers = leftovers
+          @leftovers += leftovers
         end
         prune(root)
       end
       @same = same
-      return [moved, conflicts, skipped, failed.map { |f| File.basename(f) }, @leftovers.to_i]
+      # archive files that were never written (not sprites) count as discarded too
+      return [moved, conflicts, skipped, failed.map { |f| File.basename(f) }, @leftovers.to_i + not_written]
     ensure
       hide_status
     end
@@ -382,6 +401,14 @@ module KIF
             next if name.end_with?("/")
             safe = name.tr("\\", "/").split("/").reject { |p| p.empty? || p == "." || p == ".." }
             next if safe.empty?
+            # only sprites and archives are written: the rest (credits, icons,
+            # outfits, tilesets) would be deleted anyway, and some of it has
+            # names past Windows' 260-character path limit
+            rel = File.join(KIF::SpriteImport::WORK_DIR, "x", *safe)
+            unless KIF::SpriteImport::ARCHIVES.include?(File.extname(rel).downcase) || KIF::SpriteImport.destination(rel)
+              KIF::SpriteImport.not_written += 1
+              next
+            end
             f.seek(offset)
             h = f.read(30)
             next unless h && h[0, 4] == "PK\x03\x04".b
@@ -391,8 +418,16 @@ module KIF
             data = Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(data) if method == 8
             next unless method == 0 || method == 8
             out = File.join(into, *safe)
-            KIF::SpriteImport.mkdir_p(File.dirname(out))
-            File.binwrite(out, data)
+            begin
+              KIF::SpriteImport.mkdir_p(File.dirname(out))
+              File.binwrite(out, data)
+            rescue SystemCallError, IOError => e
+              # one file that can't be written (path too long, odd name)
+              # doesn't stop the rest of the pack
+              KIF::SpriteImport.not_written += 1
+              KIF.log("Sprite import: skipped #{safe.last} (#{e.class})") if defined?(KIF.log)
+              next
+            end
             KIF::SpriteImport.bump
             KIF::SpriteImport.tick
           end
@@ -470,7 +505,21 @@ module KIF
       attr_accessor :result
     end
 
+    # Anything waiting in the import folders (the READ ME doesn't count)?
+    def self.work_waiting?
+      return import_dirs.any? do |d|
+        Dir.exist?(d) && Dir.children(d).any? { |c| c !~ /\.txt\z/i && c != WORK_DIR }
+      end
+    rescue
+      return false
+    end
+
     def self.startup
+      # PIF freezes the screen (Graphics.freeze) just before this runs, so
+      # nothing drawn shows until its title transition: thaw it while there
+      # is an import to show, and freeze it again for PIF afterwards
+      thaw = work_waiting? && defined?(Graphics) && Graphics.respond_to?(:transition)
+      (Graphics.transition(0) rescue nil) if thaw
       moved, conflicts, skipped, failed, leftovers = run
       forget_lookups
       @result = [moved, conflicts, failed]
@@ -479,6 +528,8 @@ module KIF
       end
     rescue => e
       KIF.log("Sprite import failed (#{e.class}: #{e.message})") if defined?(KIF.log)
+    ensure
+      (Graphics.freeze rescue nil) if thaw
     end
   end
 end

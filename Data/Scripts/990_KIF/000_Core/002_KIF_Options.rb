@@ -201,9 +201,20 @@ class KifOptionsBaseScene < PokemonOption_Scene
       _INTL(kif_title), 0, 0, Graphics.width, 64, @viewport)
   end
 
+  # The randomizer's option window (004_RandScreen.rb) sizes the name column
+  # to the page's longest name and shows "< value >" when a row's values
+  # don't fit, so long names ("PIF's Improved Shinies", "Self-Fusion Stat
+  # Boost") no longer run into their values (seen 2026-10-09).
   def initOptionsWindow
-    win = super
-    win.height = Graphics.height - @sprites["title"].height - @sprites["textbox"].height
+    height = Graphics.height - @sprites["title"].height - @sprites["textbox"].height
+    unless defined?(KifRandOptionWindow)
+      win = super
+      win.height = height
+      return win
+    end
+    win = KifRandOptionWindow.new(@PokemonOptions, 0, @sprites["title"].height, Graphics.width, height)
+    win.viewport = @viewport
+    win.visible = true
     return win
   end
 end

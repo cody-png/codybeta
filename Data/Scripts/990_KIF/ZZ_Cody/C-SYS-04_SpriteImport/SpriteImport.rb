@@ -12,8 +12,11 @@
 #      An archive is unpacked into a work folder, its sprites moved the same
 #      way, and the archive and whatever else it held (icons, outfits,
 #      credits) are deleted: the installed sprites are the only copy kept.
-#      PIF's own "Sprites to import" folder works the same way. Sprites that
-#      already exist are left for PIF's "replace them?" question, as before.
+#      PIF's own "Sprites to import" folder works the same way. A sprite
+#      that is already installed, byte for byte, is just dropped; one that
+#      differs is held in Import Sprites/_replace until the player answers
+#      "keep yours or use the new ones?" on the load screen. A progress
+#      screen shows while this runs (a full pack takes a few minutes).
 #   2. PIF 6.8.2 reads base sprites only from sprite sheets, and picks a
 #      fusion's sprite once and remembers it. Single sprite files (old packs,
 #      KIF 0.20.x installs, the import above) are now read first, every time.
@@ -23,6 +26,7 @@ module KIF
     IMPORT_DIR  = "Import Sprites"
     DONE_DIR    = "_done"        # (older builds put archives here; left alone)
     WORK_DIR    = "_unpacking"
+    HOLD_DIR    = "_replace"     # differing sprites waiting for the player's answer
     ARCHIVES    = %w[.zip .rar .7z .tar .gz .tgz]
     BASE_DIR    = "Graphics/CustomBattlers/local_sprites/BaseSprites"
     INDEXED_DIR = "Graphics/CustomBattlers/local_sprites/indexed"
@@ -38,12 +42,68 @@ module KIF
       return list
     end
 
-    # Keep the window alive during a long import
+    # Keep the window alive during a long import, with a progress screen
     def tick
       @last_tick ||= Time.now
       return if Time.now - @last_tick < 0.25
       @last_tick = Time.now
+      draw_status
       Graphics.update rescue nil
+    end
+
+    def status(line, count = nil)
+      @status = [line, count]
+      @last_tick = Time.now
+      draw_status
+      Graphics.update rescue nil
+    end
+
+    # one more file done (the count on the progress screen)
+    def bump
+      @status[1] += 1 if @status && @status[1]
+    end
+
+    def draw_status
+      return unless @status
+      unless @status_sprite
+        vp = Viewport.new(0, 0, Graphics.width, Graphics.height)
+        vp.z = 999_999
+        @status_sprite = Sprite.new(vp)
+        @status_sprite.bitmap = Bitmap.new(Graphics.width, Graphics.height)
+      end
+      b = @status_sprite.bitmap
+      b.fill_rect(0, 0, b.width, b.height, Color.new(16, 16, 24))
+      b.font.size = 26
+      b.font.color = Color.new(248, 248, 248)
+      mid = b.height / 2
+      b.draw_text(0, mid - 60, b.width, 32, "Importing sprites", 1)
+      b.font.size = 22
+      line, count = @status
+      line += " #{count.to_s.reverse.scan(/\d{1,3}/).join(',').reverse} files" if count
+      b.draw_text(0, mid - 16, b.width, 28, line, 1)
+      b.font.color = Color.new(160, 160, 176)
+      b.draw_text(0, mid + 24, b.width, 28, "A full sprite pack takes a few minutes. Only once per pack.", 1)
+    rescue
+      @status = nil
+    end
+
+    def hide_status
+      if @status_sprite
+        vp = @status_sprite.viewport
+        @status_sprite.bitmap.dispose rescue nil
+        @status_sprite.dispose rescue nil
+        vp.dispose rescue nil
+        Graphics.update rescue nil
+      end
+      @status_sprite = nil
+      @status = nil
+    end
+
+    def same_file?(a, b)
+      return false unless File.size(a) == File.size(b)
+      return File.binread(a) == File.binread(b)
+    rescue
+      return false
     end
 
     EGGS_DIR = "Graphics/Battlers/Eggs"
@@ -136,6 +196,8 @@ module KIF
       # .zip: read here (no console window); anything else, or a .zip this
       # reader can't handle: Windows' tar
       return true if archive =~ /\.zip\z/i && Zip.extract(archive, into)
+      remove_tree(into)   # whatever the built-in reader got through before it gave up
+      mkdir_p(into)
       begin
         return system("tar", "-xf", archive, "-C", into) ? true : false
       rescue
@@ -157,7 +219,7 @@ module KIF
     #---------------------------------------------------------------------------
     def run
       mkdir_p(IMPORT_DIR)
-      moved = 0; conflicts = {}; skipped = 0; failed = []
+      moved = 0; conflicts = {}; skipped = 0; failed = []; same = 0
       import_dirs.each do |root|
         next unless Dir.exist?(root)
         # unpack archives first (each into its own work folder; an archive
@@ -173,6 +235,7 @@ module KIF
           end
           archives.each do |path|
             found = true
+            status("Unpacking #{File.basename(path)}...", 0)
             work = file_after(File.join(root, WORK_DIR), File.basename(path, ".*"))
             if unpack(path, work)
               File.delete(path) rescue nil   # unpacked: the sprites are what matters, not a second copy
@@ -184,6 +247,7 @@ module KIF
           break unless found
         end
         placed = {}   # sprites moved in this run: a second file with the same name is left alone
+        status("Moving sprites into place...", 0) if Dir.exist?(File.join(root, WORK_DIR))
         each_file(root, false) do |path|
           next if path.include?("/#{DONE_DIR}/")
           dest = destination(path.sub(root, ""))
@@ -194,13 +258,33 @@ module KIF
           if placed[dest]
             skipped += 1
           elsif File.exist?(dest)
-            conflicts[path] = dest
+            if same_file?(path, dest)
+              File.delete(path) rescue nil   # already installed as it is
+              same += 1
+            else
+              # held outside the work folder (which is deleted below) until
+              # the player answers on the load screen
+              held = path
+              hold_root = File.join(root, HOLD_DIR)
+              unless path.start_with?(hold_root + "/")
+                held = File.join(hold_root, path.sub(root, "").sub(%r{\A/+}, "").sub(%r{\A#{WORK_DIR}/}, ""))
+                mkdir_p(File.dirname(held))
+                begin
+                  File.rename(path, held)
+                rescue
+                  held = nil
+                  skipped += 1
+                end
+              end
+              conflicts[held] = dest if held
+            end
           else
             mkdir_p(File.dirname(dest))
             begin
               File.rename(path, dest)
               placed[dest] = true
               moved += 1
+              bump
             rescue
               skipped += 1
             end
@@ -218,7 +302,10 @@ module KIF
         end
         prune(root)
       end
+      @same = same
       return [moved, conflicts, skipped, failed.map { |f| File.basename(f) }, @leftovers.to_i]
+    ensure
+      hide_status
     end
 
     #---------------------------------------------------------------------------
@@ -271,6 +358,7 @@ module KIF
             out = File.join(into, *safe)
             KIF::SpriteImport.mkdir_p(File.dirname(out))
             File.binwrite(out, data)
+            KIF::SpriteImport.bump
             KIF::SpriteImport.tick
           end
         end
@@ -307,7 +395,11 @@ module KIF
           csize, usize = cd[pos + 20, 8].unpack("VV")
           nlen, xlen, clen = cd[pos + 28, 6].unpack("vvv")
           offset = cd[pos + 42, 4].unpack1("V")
+          flags = cd[pos + 8, 2].unpack1("v")
           name = cd[pos + 46, nlen].force_encoding("UTF-8")
+          # names without the UTF-8 flag are old DOS code page 437
+          name = name.force_encoding("IBM437").encode("UTF-8") if flags & 0x800 == 0 && !name.valid_encoding?
+          name = name.scrub("_") unless name.valid_encoding?
           extra = cd[pos + 46 + nlen, xlen]
           if usize == 0xFFFFFFFF || csize == 0xFFFFFFFF || offset == 0xFFFFFFFF
             e = 0
@@ -348,7 +440,7 @@ module KIF
       forget_lookups
       @result = [moved, conflicts, failed]
       if defined?(KIF.log) && (moved + conflicts.length + skipped + failed.length + leftovers) > 0
-        KIF.log("Sprite import: #{moved} moved, #{conflicts.length} already there, #{skipped} other files left in the folder, #{leftovers} non-sprite files from archives discarded, archives not opened: #{failed.inspect}")
+        KIF.log("Sprite import: #{moved} moved, #{@same.to_i} already installed (dropped), #{conflicts.length} differ from installed ones (held for the player), #{skipped} not sprites or duplicates, #{leftovers} other files from archives discarded, archives not opened: #{failed.inspect}")
       end
     rescue => e
       KIF.log("Sprite import failed (#{e.class}: #{e.message})") if defined?(KIF.log)
@@ -371,14 +463,50 @@ module KIF
         if res
           KIF::SpriteImport.result = nil
           moved, conflicts, failed = res
+          moved += KIF::SpriteImport.ask_replace(conflicts || {})
           $game_temp.nb_imported_sprites = ($game_temp.nb_imported_sprites || 0) + moved
-          $game_temp.unimportedSprites = (conflicts || {}).merge($game_temp.unimportedSprites || {})
           unless failed.empty?
             pbMessage(_INTL("These files in the Import Sprites folder couldn't be unpacked: {1}. Unpack them yourself and put the folder there instead.", failed.join(", ")))
           end
         end
         return super
       end
+    end
+  end
+end
+
+module KIF
+  module SpriteImport
+    # Sprites that differ from installed ones: the player picks, once for all.
+    # Returns how many were installed.
+    def self.ask_replace(conflicts)
+      return 0 if conflicts.empty?
+      conflicts = conflicts.select { |held, _| File.exist?(held) }
+      return 0 if conflicts.empty?
+      n = conflicts.length
+      pbMessage(_INTL("{1} imported sprites are different from sprites you already have.", n))
+      cmd = pbMessage(_INTL("Which ones should the game use?"),
+                      [_INTL("Keep the ones I have"), _INTL("Use the new ones")], 0)
+      done = 0
+      conflicts.each do |held, dest|
+        begin
+          if cmd == 1
+            File.delete(dest) if File.exist?(dest)
+            File.rename(held, dest)
+            done += 1
+          else
+            File.delete(held)
+          end
+        rescue => e
+          KIF.log("Sprite import: #{File.basename(held)} (#{e.class}: #{e.message})") if defined?(KIF.log)
+        end
+      end
+      import_dirs.each { |d| prune(d) }   # empty _replace folders go
+      KIF.log("Sprite import: #{n} differing sprites - #{cmd == 1 ? "#{done} new ones used" : 'kept the installed ones'}") if defined?(KIF.log)
+      return done
+    rescue => e
+      KIF.log("Sprite import: replace question failed (#{e.class}: #{e.message})") if defined?(KIF.log)
+      return 0
     end
   end
 end

@@ -47,8 +47,13 @@ module KIF
   def self.guard_base(path, crc, what)
     full = File.join("Data/Scripts", path)
     return unless File.exist?(full)
-    actual = Zlib.crc32(File.binread(full))
+    data = File.binread(full)
+    actual = Zlib.crc32(data)
     return if actual == crc
+    # the same file with other line endings (a release zip has LF, a
+    # Windows checkout CRLF) is not a change
+    lf = data.gsub("\r\n", "\n")
+    return if Zlib.crc32(lf) == crc || Zlib.crc32(lf.gsub("\n", "\r\n")) == crc
     @drift << "#{path} (#{what}): expected CRC #{crc}, found #{actual}"
     log("BASE FILE CHANGED since port – re-check override of #{what} in #{path}")
   rescue

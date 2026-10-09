@@ -229,12 +229,14 @@ class TutorNetPartyPanel < SpriteWrapper
     @comp = comp
     @selmon=index
     @refreshing = true
+    # Port: columns centred in the background's party panel (x 404-508);
+    # KIF's 440/500 put the right column's icons past the screen edge.
     case index
     when 0,2,4
-      self.x=440
+      self.x=430
     when 1,3,5
-      self.x=500
-    end  
+      self.x=482
+    end
     case index
     when 0
       self.y=130

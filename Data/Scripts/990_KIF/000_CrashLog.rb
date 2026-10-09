@@ -48,6 +48,15 @@ def load_scripts_from_folder(path)
     code = File.open(path + "/" + f, "r") { |file| file.read }
     begin
       eval(code, nil, f)
+      # 999_Main.rb is the game itself: when it returns, the player quit
+      KIF::SessionLog.finish if f == "999_Main.rb" && defined?(KIF::SessionLog)
+    rescue SystemExit
+      # Closing the window: mkxp raises SystemExit out of whichever engine
+      # call comes next (Graphics.update, Input.update, a transition...), and
+      # PIF's own at_exit only runs on Kernel#exit - this is the one place
+      # every way out of the game passes through
+      (KIF::SessionLog.finish rescue nil) if defined?(KIF::SessionLog)
+      raise
     rescue ScriptError, StandardError, SystemStackError, NoMemoryError => e
       KIF::CrashLog.write(KIF::CrashLog.describe(e, path + "/" + f))
       if e.is_a?(ScriptError)

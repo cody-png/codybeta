@@ -397,7 +397,19 @@ module KIF
       return Process.clock_gettime(Process::CLOCK_MONOTONIC)
     end
 
+    # A long job that draws its own progress (the sprite import) makes every
+    # step slow on purpose: those steps say nothing about this computer
+    def self.hold
+      @held = (@held || 0) + 1
+      yield
+    ensure
+      @held -= 1
+      @last_at = nil
+      @window = @slow = 0
+    end
+
     def self.watch_speed(work = 0.0)
+      return if @held.to_i > 0
       now = clock
       last = @last_at
       @last_at = now

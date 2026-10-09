@@ -1,8 +1,12 @@
 Graphics/CustomBattlers/local_sprites/*
 Graphics/Battlers/Shiny/*
 
-Graphics/CustomBattlers/spritesheets/*
+# KIF Beta ships PIF's base sprite sheets (a fresh install would otherwise
+# show "?" for every Pokémon until they are downloaded, 15 per 2 minutes)
 Graphics/CustomBattlers/*
+!Graphics/CustomBattlers/spritesheets/
+Graphics/CustomBattlers/spritesheets/*
+!Graphics/CustomBattlers/spritesheets/spritesheets_base/
 Data/VERSION
 infinitefusion.sh
 .gitignore

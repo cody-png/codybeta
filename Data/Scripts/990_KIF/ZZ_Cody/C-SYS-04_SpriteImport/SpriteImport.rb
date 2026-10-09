@@ -23,6 +23,7 @@ module KIF
     DONE_DIR    = "_done"
     WORK_DIR    = "_unpacking"
     ARCHIVES    = %w[.zip .rar .7z .tar .gz .tgz]
+    BIG_ZIP     = 150 * 1024 * 1024
     BASE_DIR    = "Graphics/CustomBattlers/local_sprites/BaseSprites"
     INDEXED_DIR = "Graphics/CustomBattlers/local_sprites/indexed"
     SPECIAL_DIR = "Graphics/Battlers/special"
@@ -103,14 +104,19 @@ module KIF
     #---------------------------------------------------------------------------
     def unpack(archive, into)
       mkdir_p(into)
-      # .zip: read here (no console window); anything else, or a .zip this
-      # reader can't handle: Windows' tar
-      return true if archive =~ /\.zip\z/i && Zip.extract(archive, into)
-      begin
-        return system("tar", "-xf", archive, "-C", into) ? true : false
+      # a small .zip is read here (no console window flashes up); a big one
+      # (a whole sprite pack) and every other kind go to Windows' tar, which
+      # is much faster; a .zip tar can't open falls back to the reader here
+      big = (File.size(archive) rescue 0) > BIG_ZIP
+      return true if archive =~ /\.zip\z/i && !big && Zip.extract(archive, into)
+      ok = begin
+        system("tar", "-xf", archive, "-C", into) ? true : false
       rescue
-        return false
+        false
       end
+      return true if ok
+      return Zip.extract(archive, into) if archive =~ /\.zip\z/i && big
+      return false
     end
 
     def file_after(dir, name)

@@ -122,3 +122,97 @@ class PokemonPokedex_Scene
     return ret
   end
 end
+
+#===============================================================================
+# Sprite credits lookups. 6.8.2 reads the whole Sprite_Credits.csv (~236,000
+# lines) every time it picks a sprite letter (FusionSprites.rb:499,
+# map_alt_sprite_letters_for_pokemon) or looks up an artist
+# (SpriteCreditsUtils.rb:453, getSpriteCredits): ~90 ms each. With Random
+# sprites on that happens for every Pokémon drawn (each Pokédex step, each
+# battler, each fusion preview), and once per new species otherwise.
+# Here the file is read once into lines grouped by sprite name without its
+# letters ("25", "25a", "25b" -> "25"); each lookup then runs PIF's own
+# per-line code over that group only, so the results are the same. The group
+# is re-read when the file changes (size/time), e.g. after a credits download.
+#===============================================================================
+module KIF
+  module Perf
+    module Credits
+      @lines = nil
+      @stamp = nil
+
+      def self.stamp
+        st = File.stat(Settings::CREDITS_FILE_PATH)
+        return [st.size, st.mtime.to_f]
+      rescue SystemCallError
+        return nil
+      end
+
+      # Lines (with their newline) whose sprite name is base + letters.
+      def self.group(base)
+        s = stamp
+        return nil unless s
+        if !@lines || @stamp != s
+          @lines = nil
+          idx = {}
+          File.foreach(Settings::CREDITS_FILE_PATH) do |line|
+            name = line[/\A[^,\r\n]*/].strip
+            next if name.empty?
+            key = name.sub(/[a-zA-Z]+\z/, "")
+            (idx[key] ||= +"") << line
+          end
+          @lines = idx
+          @stamp = s
+        end
+        return @lines[base] || ""
+      rescue StandardError
+        @lines = nil
+        return nil
+      end
+
+      def self.reset
+        @lines = nil
+        @stamp = nil
+      end
+    end
+  end
+end
+
+class Object
+  unless private_method_defined?(:kif_perf_map_alt_sprite_letters_for_pokemon)
+    alias kif_perf_map_alt_sprite_letters_for_pokemon map_alt_sprite_letters_for_pokemon
+    alias kif_perf_getSpriteCredits getSpriteCredits
+  end
+  private
+
+  def map_alt_sprite_letters_for_pokemon(spriteName)
+    name = spriteName.to_s
+    lines = name =~ /[a-zA-Z]\z/ ? nil : KIF::Perf::Credits.group(name)
+    return kif_perf_map_alt_sprite_letters_for_pokemon(spriteName) unless lines
+    alt_sprites = {}
+    lines.each_line do |line|
+      row = line.strip.split(',')
+      sprite_name = row[0]
+      next unless sprite_name && sprite_name.start_with?(name)
+      suffix = sprite_name[name.length..-1] || ""
+      if suffix.empty?
+        alt_sprites[""] = row[2]
+        next
+      end
+      next unless suffix.match?(/\A[a-zA-Z]+\z/)
+      alt_sprites[suffix] = row[2]
+    end
+    return alt_sprites
+  end
+
+  def getSpriteCredits(spriteName)
+    name = spriteName.to_s
+    lines = KIF::Perf::Credits.group(name.sub(/[a-zA-Z]+\z/, ""))
+    return kif_perf_getSpriteCredits(spriteName) unless lines
+    lines.each_line do |line|
+      row = line.split(',')
+      return row[1] if row[0] == spriteName
+    end
+    return nil
+  end
+end

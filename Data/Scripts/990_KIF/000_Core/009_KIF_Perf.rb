@@ -216,3 +216,54 @@ class Object
     return nil
   end
 end
+
+#===============================================================================
+# Game text tables: empty entries as nil. The species / kind / Pokédex entry
+# / form tables (001_Technical/003_Intl_Messages.rb) have a slot for every
+# possible fusion number - 1,000,034 each - and almost all of them hold a
+# separate empty string: ~4 million objects (~160 MB) that every full
+# garbage collection walks through. Messages#get already answers "" for a
+# nil entry (a fresh one each time), so storing nil changes nothing for the
+# game; the count (getCount) stays the same.
+#===============================================================================
+module KIF
+  module Perf
+    def self.compact_messages(msgs)
+      return 0 unless msgs.is_a?(Array)
+      n = 0
+      msgs.each do |arr|
+        next unless arr.is_a?(Array) && arr.length > 10_000
+        arr.each_index do |i|
+          s = arr[i]
+          next unless s.is_a?(String) && s.empty?
+          arr[i] = nil
+          n += 1
+        end
+      end
+      return n
+    rescue StandardError
+      return 0
+    end
+  end
+end
+
+class Messages
+  alias kif_perf_loadMessageFile loadMessageFile unless method_defined?(:kif_perf_loadMessageFile)
+
+  def loadMessageFile(*args)
+    ret = kif_perf_loadMessageFile(*args)
+    KIF::Perf.compact_messages(@messages)
+    return ret
+  end
+end
+
+# already loaded before this file (the fallback tables load at start-up)
+begin
+  [:@@messages, :@@messagesFallback].each do |cv|
+    next unless defined?(MessageTypes) && MessageTypes.class_variable_defined?(cv)
+    m = MessageTypes.class_variable_get(cv)
+    KIF::Perf.compact_messages(m.instance_variable_get(:@messages)) if m
+  end
+rescue StandardError
+  nil
+end

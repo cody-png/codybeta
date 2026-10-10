@@ -15,11 +15,17 @@
 #     the five moves with the AI in use (its pbGetMoveScore) against every
 #     Pokémon left in the opposing party and forgets the lowest - which may
 #     be the new move; "Skip" never learns. Each pick goes to KIF_log.txt.
+#   * Auto-Battle Evolutions – Watch / Automatic. The evolutions right after
+#     a battle (pbEvolutionCheck, 001_Overworld_BattleStarting.rb:962) play
+#     without waiting; a move the new form wants follows Auto-Battle New
+#     Moves (AI picks scores against the party of the battle just fought).
+#     B still stops an evolution, as always.
 #   Only while Auto-Battle is on; with it off everything asks as before.
 #===============================================================================
 KIF::Options.define(:autobattle_switch, 1, :save)
 KIF::Options.define(:autobattle_levelup, 1, :save)
 KIF::Options.define(:autobattle_moves, 1, :save)
+KIF::Options.define(:autobattle_evolve, 1, :save)
 
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Auto-Battle Switching"), [_INTL("Ask"), _INTL("AI decides"), _INTL("Stay in")],
@@ -45,9 +51,19 @@ KIF::Options.add(:battles, :save) {
                   _INTL("New moves aren't learned while Auto-Battle is on")])
 }
 
+KIF::Options.add(:battles, :save) {
+  EnumOption.new(_INTL("Auto-Battle Evolutions"), [_INTL("Watch"), _INTL("Automatic")],
+                 proc { $PokemonSystem.autobattle_evolve },
+                 proc { |value| $PokemonSystem.autobattle_evolve = value },
+                 [_INTL("Evolutions after a battle wait for you, as usual"),
+                  _INTL("Evolutions after a battle play by themselves (B still stops one)")])
+}
+
 module KIF
   module AutoBattle
     class << self
+      attr_accessor :last_battle, :evolving
+
       def setting(key)
         return ($PokemonSystem.send(key) rescue 0).to_i
       end
@@ -66,7 +82,8 @@ module KIF
       # full health) and averages.
       def rate_moves(battle, pkmn, idxParty, new_move)
         ai = battle.battleAI
-        user = battle.pbFindBattler(idxParty) || fake_battler(battle, pkmn, 0, idxParty)
+        user = (idxParty && battle.pbFindBattler(idxParty)) ||
+               fake_battler(battle, pkmn, 0, idxParty || ($Trainer.party.index(pkmn) || 0))
         foes = battle.pbParty(1).each_with_index.select { |p, _| p && !p.egg? && p.hp > 0 }
         if foes.empty?
           foes = battle.pbParty(1).each_with_index.select { |p, _| p && !p.egg? }.map { |p, i|
@@ -104,6 +121,13 @@ class PokeBattle_Battle
   alias kif_autoch_pbDisplayConfirm pbDisplayConfirm unless method_defined?(:kif_autoch_pbDisplayConfirm)
   alias kif_autoch_pbRecallAndReplace pbRecallAndReplace unless method_defined?(:kif_autoch_pbRecallAndReplace)
   alias kif_autoch_pbLearnMove pbLearnMove unless method_defined?(:kif_autoch_pbLearnMove)
+
+  alias kif_autoch_pbStartBattle pbStartBattle unless method_defined?(:kif_autoch_pbStartBattle)
+
+  def pbStartBattle(*args)
+    KIF::AutoBattle.last_battle = self
+    return kif_autoch_pbStartBattle(*args)
+  end
 
   def pbEORSwitch(*args)
     @kif_in_eor = true
@@ -209,5 +233,68 @@ class PokeBattle_Scene
     ensure
       KIF::AutoBattle.confirming = old
     end
+  end
+end
+
+# Evolutions right after a battle (Auto-Battle Evolutions: Automatic)
+class Object
+  unless private_method_defined?(:kif_autoch_pbEvolutionCheck)
+    alias kif_autoch_pbEvolutionCheck pbEvolutionCheck
+    alias kif_autoch_pbLearnMove pbLearnMove
+  end
+  private
+
+  def pbEvolutionCheck(*args)
+    ab = KIF::AutoBattle
+    return kif_autoch_pbEvolutionCheck(*args) unless ab.on? && ab.setting(:autobattle_evolve) == 1
+    old = [ab.confirming, ab.evolving]
+    ab.confirming = true
+    ab.evolving = true
+    begin
+      return kif_autoch_pbEvolutionCheck(*args)
+    ensure
+      ab.confirming, ab.evolving = old
+    end
+  end
+
+  # A move the evolved form wants: Auto-Battle New Moves decides
+  def pbLearnMove(pkmn, move, *args, &block)
+    ab = KIF::AutoBattle
+    return kif_autoch_pbLearnMove(pkmn, move, *args, &block) unless ab.evolving && pkmn
+    mode = ab.setting(:autobattle_moves)
+    id = (GameData::Move.get(move).id rescue nil)
+    full = id && pkmn.numMoves >= Pokemon::MAX_MOVES && !pkmn.hasMove?(id)
+    if mode == 0 || !full
+      old = ab.confirming
+      ab.confirming = false if mode == 0 && full   # the player picks: no self-confirming
+      begin
+        return kif_autoch_pbLearnMove(pkmn, move, *args, &block)
+      ensure
+        ab.confirming = old
+      end
+    end
+    name = GameData::Move.get(id).name
+    battle = ab.last_battle
+    if mode == 1 && battle
+      begin
+        kept, worst, scores = ab.rate_moves(battle, pkmn, nil, id)
+        KIF.log("Auto-Battle evolution (#{KIF::PowerfulAI.on? ? 'DemICE' : 'PIF'} AI): #{pkmn.name} #{name}? " +
+                scores.map { |m, sc| "#{GameData::Move.get(m).name} #{sc.round}" }.join(", ") +
+                " -> forgets #{GameData::Move.get(worst).name}") if defined?(KIF.log)
+        if worst != id
+          slot = pkmn.moves.index { |m| m && m.id == worst }
+          oldName = pkmn.moves[slot].name
+          pkmn.moves[slot] = Pokemon::Move.new(id)
+          pkmn.add_learned_move(id)
+          pbMessage(_INTL("{1} forgot how to use {2}.\\nAnd...\1", pkmn.name, oldName), &block)
+          pbMessage(_INTL("\\se[]{1} learned {2}!\\se[Pkmn move learnt]", pkmn.name, name), &block)
+          return true
+        end
+      rescue StandardError => e
+        KIF.log("Auto-Battle evolution move pick failed (#{e.class}: #{e.message})") if defined?(KIF.log)
+      end
+    end
+    pbMessage(_INTL("{1} did not learn {2}.", pkmn.name, name), &block)
+    return false
   end
 end

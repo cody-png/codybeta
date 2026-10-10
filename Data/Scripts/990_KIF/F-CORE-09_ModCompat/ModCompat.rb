@@ -29,6 +29,13 @@
 #                       walks it while waiting for move routes. 6.8.2 has no
 #                       such list (its followers are dependent events), so
 #                       an empty one is given: nothing to wait for.
+#   Pokémon / battler   KIF 0.20.7 fields mods read: fakeshiny(?)
+#                       (014_Pokemon/001_Pokemon.rb:45, :1348; Battler :217,
+#                       Alpha Encounters' data boxes), head_nickname,
+#                       kuraycustomfile (individual custom sprites, not in KIF
+#                       Beta: always none), level_simple (:876),
+#                       PokemonIconSprite#icon_offset_x/y, the MessageConfig
+#                       font size setters, GameData.kurayeggs_loadsystem.
 #   Data/VERSION        mods tell KIF from PIF by its major number (KIF < 5).
 #                       6.8.2 doesn't use the file; KIF writes its own
 #                       version there before mods load (6 Pokémon Gym
@@ -228,6 +235,80 @@ class Game_Temp
   unless method_defined?(:followers)
     def followers
       @kif_no_followers ||= KIF::ModCompat::NoFollowers.new
+    end
+  end
+end
+
+#-------------------------------------------------------------------------------
+# Pokémon / battler fields of KIF 0.20.7
+#-------------------------------------------------------------------------------
+class Pokemon
+  attr_writer :fakeshiny unless method_defined?(:fakeshiny=)
+  unless method_defined?(:fakeshiny?)
+    def fakeshiny?; return !!@fakeshiny; end
+  end
+  unless method_defined?(:fakeshiny)
+    def fakeshiny; return !!@fakeshiny; end
+  end
+  attr_writer :head_nickname unless method_defined?(:head_nickname=)
+  unless method_defined?(:head_nickname)
+    def head_nickname; return @head_nickname; end
+  end
+  unless method_defined?(:head_nickname?)
+    def head_nickname?; return @head_nickname; end
+  end
+  # KIF's individual custom sprite files: replaced by PIF's own sprite choice
+  attr_writer :kuraycustomfile unless method_defined?(:kuraycustomfile=)
+  unless method_defined?(:kuraycustomfile)
+    def kuraycustomfile; return nil; end
+  end
+  unless method_defined?(:kuraycustomfile?)
+    def kuraycustomfile?; return nil; end
+  end
+  unless method_defined?(:level_simple)
+    def level_simple
+      @level = growth_rate.level_from_exp(@exp)
+      return @level
+    end
+  end
+end
+
+class PokeBattle_Battler
+  unless method_defined?(:fakeshiny?)
+    def fakeshiny?
+      ill = (@effects[PBEffects::Illusion] rescue nil)
+      return ill.fakeshiny? if ill && ill.respond_to?(:fakeshiny?)
+      return !!(@pokemon && @pokemon.fakeshiny?)
+    end
+    alias isFakeShiny? fakeshiny?
+  end
+end
+
+if defined?(PokeBattle_FakeBattler)
+  class PokeBattle_FakeBattler
+    unless method_defined?(:fakeshiny?)
+      def fakeshiny?; return !!(@pokemon && @pokemon.fakeshiny?); end
+    end
+  end
+end
+
+class PokemonIconSprite
+  attr_accessor :icon_offset_x unless method_defined?(:icon_offset_x)
+  attr_accessor :icon_offset_y unless method_defined?(:icon_offset_y)
+end
+
+module MessageConfig
+  [:pbGetNarrowFontSizeset, :pbGetSmallFontSizeset, :pbGetSystemFontSizeset].each do |m|
+    next if respond_to?(m)
+    define_singleton_method(m) { |value| (@kif_font_sizes ||= {})[m] = value }
+  end
+end
+
+module GameData
+  # Mods called this to (re)add the K-Eggs after adding their own items
+  unless respond_to?(:kurayeggs_loadsystem)
+    def self.kurayeggs_loadsystem(*_args)
+      KIF::KurayEggs.register_items if defined?(KIF::KurayEggs) && KIF::KurayEggs.respond_to?(:register_items)
     end
   end
 end

@@ -20,6 +20,15 @@
 #                       methods are back with KIF's logic; the battle side
 #                       of double abilities is not (nothing in KIF Beta
 #                       turns the switch on).
+#   PokemonSystem       17 KIF 0.20.7 options/flags 6.8.2 doesn't have
+#                       (016_UI/015_UI_Options.rb:1-290), with KIF's
+#                       defaults; is_in_battle is true while a battle runs
+#                       (KIF 001_Overworld_BattleStarting.rb:268, 003_Battle_
+#                       StartAndEnd.rb:357). Alpha Encounters' raids set it.
+#   $game_temp.followers  Essentials v21's follower list; Overworld Encounters
+#                       walks it while waiting for move routes. 6.8.2 has no
+#                       such list (its followers are dependent events), so
+#                       an empty one is given: nothing to wait for.
 #   Data/VERSION        mods tell KIF from PIF by its major number (KIF < 5).
 #                       6.8.2 doesn't use the file; KIF writes its own
 #                       version there before mods load (6 Pokémon Gym
@@ -158,6 +167,67 @@ class PokeBattle_Battler
     def ability2Name
       a = ability2
       return a ? a.name : ""
+    end
+  end
+end
+
+#-------------------------------------------------------------------------------
+# KIF 0.20.7 PokemonSystem attributes that 6.8.2 / KIF Beta don't define
+#-------------------------------------------------------------------------------
+class PokemonSystem
+  {
+    :autobattleshortcut => 0, :darkmode => 1, :globalvalues => 0, :is_in_battle => false,
+    :kurayindividcustomsprite => 1, :kuraynormalshiny => 0, :playerage_temp => 0,
+    :quicksurf => 0, :raiser => 1, :savefolder => 0, :sb_loopbreaker => 0,
+    :sb_soullinked => 0, :skipcaughtnickname => 0, :speedtoggle => 0, :speedvalue => 2,
+    :speedvaluedef => 0, :optionsnames => nil
+  }.each do |name, default|
+    next if method_defined?(name)
+    ivar = :"@#{name}"
+    define_method(name) do
+      v = instance_variable_get(ivar)
+      if v.nil?
+        v = (name == :optionsnames) ? Array.new(12) { |i| "Slot #{i + 1}" } : default
+        instance_variable_set(ivar, v)
+      end
+      v
+    end
+    define_method(:"#{name}=") { |v| instance_variable_set(ivar, v) }
+  end
+end
+
+class PokeBattle_Battle
+  alias kif_compat_pbStartBattle pbStartBattle unless method_defined?(:kif_compat_pbStartBattle)
+
+  def pbStartBattle(*args)
+    $PokemonSystem.is_in_battle = true if $PokemonSystem
+    begin
+      return kif_compat_pbStartBattle(*args)
+    ensure
+      $PokemonSystem.is_in_battle = false if $PokemonSystem
+    end
+  end
+end
+
+#-------------------------------------------------------------------------------
+# $game_temp.followers (Essentials v21) - empty
+#-------------------------------------------------------------------------------
+module KIF
+  module ModCompat
+    class NoFollowers
+      include Enumerable
+      def each_follower; end
+      def each; end
+      def length; 0; end
+      def empty?; true; end
+    end
+  end
+end
+
+class Game_Temp
+  unless method_defined?(:followers)
+    def followers
+      @kif_no_followers ||= KIF::ModCompat::NoFollowers.new
     end
   end
 end

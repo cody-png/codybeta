@@ -32,30 +32,48 @@ module KIF
           @pos_cache[map_id] = (p.is_a?(Array) && p.length >= 3) ? [p[1], p[2]] : nil
         end
 
-        # The doors used so far, newest first. Each entry:
-        # {from: door, to: door it led to, kind: :in/:out, pool:, a: [px, py], b: [px, py]}
-        # In a coupled layout going back out the way you came isn't a new line
-        # (the line is shown the way in, dated by when either way was first used).
-        def entries
+        # The doors used so far, newest first: [order, door, partner, kind].
+        # One per shuffled door found (coupled: going back out the way you
+        # came is the same door, shown the way in; decoupled: each way out is
+        # its own). The header's "found / to go" counts these too, so the
+        # numbers always agree with the list.
+        def keyed
           d = ER.dat; s = ER.state
           return [] unless d && s && s[:seen]
           found = {}       # key => [order, door, partner, kind]
           s[:seen].each_with_index do |(door_id, kind), n|
+            if s[:coupled] && kind == :out && (in_id = (s[:out] || {})[door_id]) && s[:in].key?(in_id)
+              door_id = in_id
+              kind = :in
+            end
             o = d[:door_by_id][door_id]
             next unless o
             partner_id = (kind == :in ? s[:in][door_id] : (s[:out] || {})[door_id]) || door_id
             t = d[:door_by_id][partner_id]
             next unless t
-            key = s[:coupled] ? [[o[:id], t[:id]].sort] : [door_id, kind]
-            if found[key]
-              found[key][1, 3] = [o, t, kind] if kind == :in && found[key][3] != :in
-              next
-            end
+            key = [door_id, kind]
+            next if found[key]
             found[key] = [n, o, t, kind]
           end
+          return found.values.sort_by { |v| -v[0] }
+        end
+
+        # [found, still to find] in the same units as keyed
+        def counts
+          s = ER.state
+          return [0, 0] unless s && s[:in]
+          total = s[:in].length + (s[:coupled] ? 0 : (s[:out] || {}).length)
+          n = keyed.length
+          return [n, [total - n, 0].max]
+        end
+
+        # keyed, with town-map points: {from:, to:, kind:, pool:, a: [px, py], b:}.
+        # A place the Town Map doesn't show is drawn at the other end.
+        def entries
           out = []
-          found.values.sort_by { |v| -v[0] }.each do |_, o, t, kind|
+          keyed.each do |_, o, t, kind|
             a = pos_of(o[:map]); b = pos_of(t[:map])
+            a ||= b; b ||= a
             next unless a && b
             out << { from: o, to: t, kind: kind, pool: o[:pool],
                      a: [a[0] * TILE + TILE / 2, a[1] * TILE + TILE / 2],
@@ -227,8 +245,7 @@ module KIF
           t = @sprites["text"].bitmap
           t.clear
           s = ER.state
-          found = s[:seen].map(&:first).uniq.length
-          left = [s[:in].length - found, 0].max
+          found, left = LogMap.counts
           pbDrawShadowText(t, 16, 0, 300, 32, _INTL("Entrance log"), WHITE, SHADOW)
           pbDrawShadowText(t, Graphics.width - 316, 0, 300, 32, _INTL("{1} found, {2} to go", found, left), WHITE, SHADOW, 1)
           pbDrawShadowText(t, 16, Graphics.height - 32, Graphics.width - 32, 32,
@@ -323,8 +340,9 @@ module KIF
           return unless active? && s[:seen] && !s[:seen].empty?
           lines = s[:seen].reverse.map { |door_id, kind| describe(door_id, kind) }.reject(&:empty?)
           lines << ""
-          lines << _INTL("Doors not yet found: {1}", [s[:in].length - s[:seen].map(&:first).uniq.length, 0].max)
-          Rand.show_lines(_INTL("Entrance log ({1} found, newest first)", s[:seen].map(&:first).uniq.length), lines)
+          found, left = LogMap.counts
+          lines << _INTL("Doors not yet found: {1}", left)
+          Rand.show_lines(_INTL("Entrance log ({1} found, newest first)", found), lines)
         end
       end
     end

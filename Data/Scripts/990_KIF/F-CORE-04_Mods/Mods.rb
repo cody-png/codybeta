@@ -43,6 +43,7 @@ module KIF
       KIF::DataLoad.after_load_all("Modded Pokémon (Mods folder)") { KIF::Mods.apply_species }
       KIF::ModCompat.patch_mod_manager if defined?(KIF::ModCompat)
       Dir.mkdir(FOLDER) unless File.directory?(FOLDER)
+      KIF::ModSettings.install(FOLDER) if defined?(KIF::ModSettings)
       Dir[File.join(".", FOLDER, "*.rb")].sort.each do |file|
         begin
           load File.expand_path(file)

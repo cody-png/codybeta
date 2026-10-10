@@ -42,6 +42,7 @@ module KIF
       # applied after the port's own data changes.
       KIF::DataLoad.after_load_all("Modded Pokémon (Mods folder)") { KIF::Mods.apply_species }
       KIF::ModCompat.patch_mod_manager if defined?(KIF::ModCompat)
+      KIF::ModCompat.before_mods_load if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:before_mods_load)
       Dir.mkdir(FOLDER) unless File.directory?(FOLDER)
       KIF::ModSettings.install(FOLDER) if defined?(KIF::ModSettings)
       Dir[File.join(".", FOLDER, "*.rb")].sort.each do |file|

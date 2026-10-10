@@ -479,6 +479,8 @@ module KIF
     # after every file in the Mods folder has loaded
     def self.after_mods_loaded
       patch_kanto_reloaded
+      bridge_arity if respond_to?(:bridge_arity)
+      register_crafting_items if respond_to?(:register_crafting_items)
       KIF::ModSettings.drain_pending if defined?(KIF::ModSettings)
     end
   end
@@ -539,4 +541,177 @@ PokemonDataBox.prepend(KIF::ModCompat::DataBoxSideSize)
 
 class PokemonBattlerSprite
   def isSub; return @isSub; end unless method_defined?(:isSub)
+end
+
+#===============================================================================
+# Mods round 1, second pass (2026-10-10): crashes found by reading the mods
+#===============================================================================
+module KIF
+  module ModCompat
+    #---------------------------------------------------------------------------
+    # Older argument lists. A mod that re-defines a game method with KIF
+    # 0.20.7's shorter argument list (Counterfeit Shinies' pbFuse(3), GhostItem
+    # Splicers' PokemonFusionScene#pbStartScreen(4)) crashed when the game
+    # called it with 6.8.2's extra argument (the chosen fusion sprite). The
+    # extra arguments are held while the mod's version runs and handed back
+    # when it calls the original under its alias, so nothing is lost.
+    #---------------------------------------------------------------------------
+    ARITY = {}
+
+    def self.remember_arity(owner, name, want)
+      return unless owner.method_defined?(name) || owner.private_method_defined?(name)
+      ARITY[[owner, name]] = [owner.instance_method(name), want]
+    end
+
+    def self.positional_max(um)
+      ps = um.parameters
+      return 99 if ps.any? { |t, _| t == :rest }
+      return ps.count { |t, _| t == :req || t == :opt }
+    end
+
+    def self.bridge_arity
+      ARITY.each do |(owner, name), (base, want)|
+        cur = (owner.instance_method(name) rescue nil)
+        next if cur.nil? || cur == base
+        max = positional_max(cur)
+        next if max >= want
+        key = :"kif_arity_#{owner.object_id}_#{name}"
+        priv = owner.private_method_defined?(name)
+        owner.send(:define_method, name) do |*args, &blk|
+          if args.length > max
+            Thread.current[key] = args[max..-1]
+            begin
+              cur.bind(self).call(*args[0, max], &blk)
+            ensure
+              Thread.current[key] = nil
+            end
+          else
+            cur.bind(self).call(*args, &blk)
+          end
+        end
+        owner.send(:private, name) if priv
+        (owner.instance_methods(false) + owner.private_instance_methods(false)).each do |m|
+          next if m == name
+          um = (owner.instance_method(m) rescue nil)
+          next unless um == base
+          mpriv = owner.private_method_defined?(m)
+          owner.send(:define_method, m) do |*args, &blk|
+            extra = Thread.current[key]
+            Thread.current[key] = nil
+            args += extra if extra && args.length == max
+            base.bind(self).call(*args, &blk)
+          end
+          owner.send(:private, m) if mpriv
+        end
+        KIF.log("Mod compat: #{owner}##{name} takes #{max} arguments, game passes #{want} - bridged") if KIF.respond_to?(:log)
+      end
+    rescue StandardError => e
+      KIF.log("Mod compat: argument bridge failed: #{e.class}: #{e.message}") if KIF.respond_to?(:log)
+    end
+
+    # before the Mods folder loads
+    def self.before_mods_load
+      remember_arity(Object, :pbFuse, 4)
+      remember_arity(::PokemonFusionScene, :pbStartScreen, 5) if defined?(::PokemonFusionScene)
+    end
+
+    #---------------------------------------------------------------------------
+    # Crafting System registers its material items the first time the Bag
+    # opens, but the Bag's own filters (in battle, Give, Sell) look them up
+    # before that ("Unknown ID" crash with materials in the bag). They are
+    # registered as soon as the mods have loaded and again after data reloads.
+    #---------------------------------------------------------------------------
+    def self.register_crafting_items
+      return unless defined?(::CraftingMaterialItems) && ::CraftingMaterialItems.respond_to?(:register_once!)
+      missing = (defined?(::CRAFTING_MATERIALS) ? ::CRAFTING_MATERIALS : []).any? do |m|
+        !(GameData::Item.exists?(m[:id]) rescue true)
+      end
+      ::CraftingMaterialItems.instance_variable_set(:@registered, false) if missing
+      ::CraftingMaterialItems.register_once!
+    rescue StandardError => e
+      KIF.log("Mod compat: crafting items failed: #{e.class}: #{e.message}") if KIF.respond_to?(:log)
+    end
+  end
+end
+
+if defined?(KIF::DataLoad)
+  KIF::DataLoad.after_load_all("Crafting System items (mod)") { KIF::ModCompat.register_crafting_items }
+end
+
+# GhostItem Splicers closes its party screen with scene.dispose (KIF 0.20.7
+# had it); after pbEndScene there's nothing left, so it only cleans up.
+class PokemonParty_Scene
+  unless method_defined?(:dispose)
+    def dispose
+      pbDisposeSpriteHash(@sprites) if @sprites
+      @viewport.dispose if @viewport && !@viewport.disposed?
+    end
+  end
+end
+
+# GhostItem Splicers' dual-ability splicers open the fusion options with no
+# ability list (only a nature to pick); KIF 0.20.7 left the Ability row out.
+module KIF
+  module ModCompat
+    module FusionOptionsNoAbility
+      def pbGetOptions(*args)
+        return super unless @abilityList.nil?
+        a = (@pokemon1.ability rescue nil)
+        @abilityList = [a, a]
+        begin
+          options = super
+        ensure
+          @abilityList = nil
+        end
+        return options.reject { |o| o.respond_to?(:name) && o.name == _INTL("Ability") }
+      end
+    end
+  end
+end
+FusionSelectOptionsScene.prepend(KIF::ModCompat::FusionOptionsNoAbility) if defined?(FusionSelectOptionsScene)
+
+# Ghost QoL's disguise calls getDefaultClothes() with no gender (KIF 0.20.7's
+# form); 6.8.2's last definition needs one.
+if defined?(getDefaultClothes) || Object.private_method_defined?(:getDefaultClothes)
+  if Object.instance_method(:getDefaultClothes).arity == 1
+    alias kif_compat_getDefaultClothes getDefaultClothes unless defined?(kif_compat_getDefaultClothes)
+    def getDefaultClothes(gender = nil)
+      gender = (getPlayerGenderId rescue pbGet(VAR_TRAINER_GENDER)) if gender.nil?
+      return kif_compat_getDefaultClothes(gender)
+    end
+  end
+end
+
+# Overworld Encounters asks super_shiny? of any Pokémon that has superHue
+# (Counterfeit Shinies adds superHue); KIF Beta has no super shinies.
+class Pokemon
+  def super_shiny?; return false; end unless method_defined?(:super_shiny?)
+end
+
+# Kanto Reloaded's Reloaded PC calls KIF 0.20.7's storage commands by name.
+class PokemonStorageScreen
+  unless method_defined?(:pbKurayAct)
+    def pbKurayAct(selected, heldpoke = nil)
+      pkmn = heldpoke || (@storage[selected[0], selected[1]] rescue nil)
+      return unless pkmn
+      kif_kuray_actions(selected, pkmn, heldpoke)
+    end
+  end
+end
+
+class PokemonStorageScene
+  unless method_defined?(:pbExport)
+    def pbExport(selected, heldpoke = nil, _mode = 0)
+      storage = @storage || $PokemonStorage
+      box, index = selected
+      pkmn = heldpoke || (storage[box, index] rescue nil)
+      return false unless pkmn && KIF::PokeIO.export(pkmn)
+      if KIF::PokeIO.delete_on_export? && !heldpoke
+        party = (box == -1)
+        last = party && ($Trainer.able_pokemon_count <= 1 && pkmn.able? rescue true)
+        storage.pbDelete(box, index) unless last
+      end
+      return true
+    end
+  end
 end

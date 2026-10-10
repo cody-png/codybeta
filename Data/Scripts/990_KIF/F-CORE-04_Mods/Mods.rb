@@ -54,6 +54,7 @@ module KIF
           KIF.log("Mod failed: #{File.basename(file)}: #{e.class}: #{e.message}")
         end
       end
+      KIF::ModCompat.after_mods_loaded if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:after_mods_loaded)
     rescue => e
       KIF.log("Mods folder failed: #{e.message}")
     end

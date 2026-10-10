@@ -449,3 +449,36 @@ module KIF
 end
 
 KIF::ModCompat.write_version
+
+#===============================================================================
+# Kanto Reloaded's settings in the Options menu (Cody, 2026-10-10)
+#   KR adds "Kanto Reloaded" and "Mod Settings" buttons to the root Options
+#   menu, which it recognises as KIF 0.20.7's PokemonOption_Scene. On PIF
+#   6.8.2 the root menu is PokemonGameOption_Scene, so KR skipped it and its
+#   settings (PokeVial refill mode etc.) could not be reached. KIF tells KR
+#   that 6.8.2's root menu is the root menu; KR then adds its own buttons.
+#===============================================================================
+module KIF
+  module ModCompat
+    module KRRootOptions
+      def root_options_scene?(scene)
+        return true if defined?(::PokemonGameOption_Scene) && scene && scene.class == ::PokemonGameOption_Scene
+        return super
+      end
+    end
+
+    def self.patch_kanto_reloaded
+      return unless defined?(::KantoReloaded::KIFOptionsIntegration)
+      k = ::KantoReloaded::KIFOptionsIntegration
+      return unless k.respond_to?(:root_options_scene?, true)
+      k.singleton_class.send(:prepend, KRRootOptions) unless k.singleton_class.ancestors.include?(KRRootOptions)
+    rescue StandardError => e
+      KIF.log("Kanto Reloaded options patch failed: #{e.class}: #{e.message}")
+    end
+
+    # after every file in the Mods folder has loaded
+    def self.after_mods_loaded
+      patch_kanto_reloaded
+    end
+  end
+end

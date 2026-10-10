@@ -1132,6 +1132,8 @@ module KIF
 
       def self.scale_trainer(trainer, map_id = nil)
         return trainer unless trainer && scaling?
+        # Endgame Challenge teams are already tuned to your party (Lv100)
+        return trainer if defined?(KIF::Endgame) && KIF::Endgame.on? && KIF::Endgame.challenge_map?
         map_id ||= $game_map ? $game_map.map_id : nil
         return trainer unless map_id
         f = level_factor(map_id)

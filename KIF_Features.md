@@ -225,6 +225,7 @@ All options in this menu are per-save.
 
 ## Bottom of KIF Settings
 
+- **Settings Presets** – 12 named slots. *Save* puts this save file's per-save settings (KIF and Cody Settings) into a slot, *Load* puts a slot's settings into the save you're playing, *Rename* names it. Set up a run once, then load it on every new game. Global settings are shared by all saves already; Randomizer settings have their own presets. Needs a loaded save.
 - **Increment Slider by** – 1 / 10 / 100 / 1000 / 10000 *(1)*. How far big sliders (like Wild Shiny Odds) move per press.
 - **DEBUG** – Off / On *(Off)*. Turns on PIF's debug mode, with the Debug menu and debug options in the PC and party.
 

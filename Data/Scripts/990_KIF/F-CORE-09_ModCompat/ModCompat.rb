@@ -482,3 +482,54 @@ module KIF
     end
   end
 end
+
+#===============================================================================
+# Options added by mods to the root Options menu (mods round 2, 2026-10-10)
+#   KIF 0.20.7's root Options menu was PokemonOption_Scene itself, so mods add
+#   their rows by wrapping PokemonOption_Scene#pbGetOptions (Diagonal
+#   Movement, Mouse UI, GhostBattle Classic+). PIF 6.8.2's root menu is
+#   PokemonGameOption_Scene, whose pbGetOptions never calls that method, so
+#   those rows never showed. The root menu now also lists whatever the
+#   PokemonOption_Scene#pbGetOptions chain returns (nothing without mods).
+#===============================================================================
+module KIF
+  module ModCompat
+    # rows the PokemonOption_Scene#pbGetOptions chain adds (mods), appended
+    # to the root list (called from 002_KIF_Options after "KIF Settings")
+    def self.add_root_mod_options(scene, options, inloadscreen = false)
+      extra = ::PokemonOption_Scene.instance_method(:pbGetOptions).bind(scene).call(inloadscreen)
+      names = options.map { |o| o.respond_to?(:name) ? o.name.to_s : nil }
+      Array(extra).each do |o|
+        next if o.nil?
+        next if o.respond_to?(:name) && names.include?(o.name.to_s)
+        options << o
+      end
+      return options
+    rescue StandardError => e
+      KIF.log("Mod options for the Options menu failed: #{e.class}: #{e.message}") if KIF.respond_to?(:log)
+      return options
+    end
+  end
+end
+
+#===============================================================================
+# KIF 0.20.7 battle scene fields some battle mods read (mods round 2)
+#   PokemonDataBox#@sideSize: KIF 0.20.7's data box kept the side size
+#     (GhostBattle Classic+ positions boxes with it; nil crashed every battle).
+#   PokemonBattlerSprite#isSub: the substitute flag mods keep on the sprite.
+#===============================================================================
+module KIF
+  module ModCompat
+    module DataBoxSideSize
+      def initialize(battler, sideSize, *rest)
+        @sideSize = sideSize
+        super
+      end
+    end
+  end
+end
+PokemonDataBox.prepend(KIF::ModCompat::DataBoxSideSize)
+
+class PokemonBattlerSprite
+  def isSub; return @isSub; end unless method_defined?(:isSub)
+end

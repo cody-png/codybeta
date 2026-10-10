@@ -247,6 +247,58 @@ module KIF
   end
 end
 
+#-------------------------------------------------------------------------------
+# Party menus copied from older game versions (mods round 2, 2026-10-10)
+#   Some mods replace PokemonPartyScreen#pbPokemonScreen with an older copy
+#   of the party menu (GhostNPC Buddy), which has no "Evolve!", "Change
+#   moves", "Fuse" or "Unfuse". When the "Do what with X?" list lacks one
+#   that PIF 6.8.2 would show for that Pokémon, it is added back before
+#   "Cancel" and runs PIF's own handler. The vanilla menu always has them,
+#   so nothing changes without such a mod.
+#-------------------------------------------------------------------------------
+module KIF
+  module PartyMenuCompat
+    def self.missing(pkmn, commands)
+      out = []
+      evolve = _INTL("Evolve!")
+      if !commands.include?(evolve) && pkmn.respond_to?(:evolve_from_party) && pkmn.evolve_from_party &&
+         (!defined?(pokemonAllowedToEvolve) || pokemonAllowedToEvolve(pkmn))
+        out << [:evolve, evolve]
+      end
+      moves = _INTL("Change moves")
+      out << [:moves, moves] if !pkmn.egg? && !commands.include?(moves)
+      if defined?(playerHasFusionItems) && playerHasFusionItems
+        if pkmn.isFusion?
+          out << [:unfuse, _INTL("Unfuse")] unless commands.include?(_INTL("Unfuse"))
+        else
+          out << [:fuse, _INTL("Fuse")] unless commands.include?(_INTL("Fuse"))
+        end
+      end
+      return out
+    rescue StandardError
+      return []
+    end
+
+    def self.run(screen, kind, pkmn, idx)
+      case kind
+      when :evolve then screen.evolvePokemon(pkmn)
+      when :moves  then screen.pbRememberMoves(pkmn)
+      when :fuse   then screen.fuseFromParty(pkmn, idx)
+      when :unfuse then screen.unfuseFromParty(pkmn, idx)
+      end
+      screen.pbRefresh rescue nil
+    end
+
+    module ScreenHook
+      def pbPokemonScreen(*args)
+        @scene.instance_variable_set(:@kif_party_screen, self) if @scene
+        super
+      end
+    end
+  end
+end
+PokemonPartyScreen.prepend(KIF::PartyMenuCompat::ScreenHook)
+
 class PokemonParty_Scene
   alias kif_party_pbChoosePokemon pbChoosePokemon unless method_defined?(:kif_party_pbChoosePokemon)
 
@@ -259,22 +311,33 @@ class PokemonParty_Scene
   alias kif_party_raw_commands pbShowCommands unless method_defined?(:kif_party_raw_commands)
 
   def pbShowCommands(helptext, commands, index = 0)
-    idx = @kif_last_choice
+    # a mod may replace pbChoosePokemon (Mouse UI): fall back to the cursor
+    idx = @kif_last_choice.is_a?(Integer) ? @kif_last_choice : @activecmd
     pkmn = (idx.is_a?(Integer) && idx >= 0 && @party) ? @party[idx] : nil
     cancel = _INTL("Cancel")
     if pkmn.nil? || commands.last != cancel || !commands.include?(_INTL("Summary")) ||
-       helptext != _INTL("Do what with {1}?", pkmn.name) || KIF::PCActions.available(pkmn).empty?
+       helptext != _INTL("Do what with {1}?", pkmn.name)
       return kif_party_raw_commands(helptext, commands, index)
     end
+    extras = @kif_party_screen ? KIF::PartyMenuCompat.missing(pkmn, commands) : []
+    # field party menu only (the battle party list has the same header)
+    kuray = !($game_temp && $game_temp.in_battle) && !KIF::PCActions.available(pkmn).empty?
+    return kif_party_raw_commands(helptext, commands, index) if extras.empty? && !kuray
     pos = commands.length - 1
-    shown = commands.dup
-    shown.insert(pos, _INTL("Kuray Actions"))
+    added = extras.map { |_, label| label }
+    added << _INTL("Kuray Actions") if kuray
+    shown = commands[0...pos] + added + [cancel]
     ret = kif_party_raw_commands(helptext, shown, index)
-    if ret == pos
+    return ret if ret < pos
+    if ret < pos + extras.length
+      KIF::PartyMenuCompat.run(@kif_party_screen, extras[ret - pos][0], pkmn, idx)
+      return pos   # "Cancel" in the base list
+    end
+    if kuray && ret == pos + extras.length
       KIF::PartyActionHost.new(self, idx).run(pkmn)
       pbRefresh rescue nil
       return pos   # "Cancel" in the base list
     end
-    return (ret > pos) ? ret - 1 : ret
+    return pos     # "Cancel"
   end
 end

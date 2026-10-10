@@ -501,7 +501,7 @@ module KIF
     end
 
     def self.log_path
-      return File.join((RTP.getSaveFolder rescue "."), "KIF_framelog.txt")
+      return KIF::Paths.log("KIF_framelog.txt")
     end
 
     def self.rates

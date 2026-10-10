@@ -10,12 +10,12 @@ Saves live in `%APPDATA%\KIF` (the `KIF Savefiles` shortcut). Old KIF's saves ar
 
 ## Reporting a bug
 Send, in this order of usefulness:
-1. **`KIF_log.txt`** from the save folder (`KIF Savefiles` shortcut). One file per play session; `KIF_log_previous.txt` is the session before. It says what the game could see (sprites, settings), what KIF did, any "?" sprites, and any crash with the last maps you were on.
+1. **The `Logs` folder** (next to `Game.exe`) - zip it and send it whole. Inside: **`KIF_log.txt`**, one file per play session; `KIF_log_previous.txt` is the session before. It says what the game could see (sprites, settings), what KIF did, any "?" sprites, and any crash with the last maps you were on.
 2. A screenshot or short video.
 3. Your save file, if the bug is tied to it (`File X.rxdata` from the save folder).
-4. If the game crashed: `KIF_errorlog.txt` (next to `Game.exe`) or `errorlog.txt` (save folder).
+4. If the game crashed, the crash is in `KIF_errorlog.txt` in the same `Logs` folder.
 
 ## Things worth knowing
 - **Pokédex "?" sprites:** PIF 6.8.2 reads base sprites from sprite sheets it downloads (15 per 2 minutes with *Download data* on). This build ships the base sheets and reads single sprite files first, so with the pack imported everything should show. If something still shows "?", the log lists it.
-- **Entrance Randomizer:** if a shuffle ever leaves you somewhere you can't get out of, use **Return to Pokémon Center** in the pause menu. Each use is noted in `KIF_entrance_returns.txt` in the save folder – send that file too, it shows exactly where you were stuck.
+- **Entrance Randomizer:** if a shuffle ever leaves you somewhere you can't get out of, use **Return to Pokémon Center** in the pause menu. Each use is noted in `KIF_entrance_returns.txt` in the `Logs` folder – send that too, it shows exactly where you were stuck.
 - **Debug mode (this branch only):** `F7` on the map opens a testing menu: warp anywhere, give items/badges, party tools, Entrances helpers, cheats. Press `F9` for PIF's own debug menu.

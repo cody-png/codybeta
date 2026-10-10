@@ -15,7 +15,7 @@ This GitHub lets you see the game (open-source), contribute to its development w
 KIF 0.20.7 was built on PIF 6.4.5. **KIF Beta** brings KIF's features to **PIF 6.8.2**, including its new content and the Hoenn additions.
 
 - **Old KIF saves** load directly. Your settings, Pokémon and items carry over.
-- **Bug reports:** if the game crashes, send the `KIF_errorlog.txt` file from the game folder. Report KIF problems to the KIF community, **not** to the PIF developers.
+- **Bug reports:** if the game crashes, send the `Logs` folder from the game folder (`KIF_errorlog.txt` in it has the crash). Report KIF problems to the KIF community, **not** to the PIF developers.
 - **Not carried over from 0.20.7**, because PIF 6.8.2 now does these itself or they no longer work:
   - the auto-updater and the sprite installer;
   - Shiny Finder.exe;

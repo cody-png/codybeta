@@ -110,7 +110,7 @@ module KIF
                  " | badges #{$Trainer.badge_count} | party #{$Trainer.party.map(&:level).inspect}" \
                  " | settings #{s[:shape]}/#{s[:doors]}/#{s[:coupled] ? 1 : 0} regions #{(s[:regions] || [0]).inspect}"
         (s[:seen] || []).last(10).each { |id, kind| lines << "    #{describe(id, kind)}" }
-        path = File.join(KIF.save_dir, RETURN_LOG)
+        path = KIF::Paths.log(RETURN_LOG)
         old = File.exist?(path) ? File.readlines(path, chomp: true) : []
         all = (old + lines).last(RETURN_LOG_MAX)
         File.open(path, "wb") { |f| f.write(all.join("\n") + "\n") }

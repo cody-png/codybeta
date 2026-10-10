@@ -68,28 +68,39 @@ module KIF
   end
 end
 
-class PokemonPauseMenu_Scene
-  alias kif_pbShowCommands pbShowCommands unless method_defined?(:kif_pbShowCommands)
-
-  def pbShowCommands(commands)
-    entries = KIF::PauseMenu.active_entries
-    return kif_pbShowCommands(commands) if entries.empty?
-    pos = KIF::PauseMenu.insert_position(commands)
-    shown = commands.dup
-    shown.insert(pos, *entries.map { |e| KIF::PauseMenu.label_for(e) })
-    loop do
-      ret = kif_pbShowCommands(shown)
-      return ret if ret < 0 || ret < pos
-      return ret - entries.length if ret >= pos + entries.length
-      entry = entries[ret - pos]
-      result = entry.handler.call(self)
-      if result == :close
-        return -1
+# A prepended module, not an alias: mods that hook pbShowCommands themselves
+# (alias + def; Kanto Reloaded's PokeVial looks for KIF's "Heal Pokémon" row
+# to replace it) then run inside this one and see KIF's rows, as they did in
+# KIF 0.20.7 where those rows were part of the command list. (An alias would
+# have put KIF inside the mod's hook: PokeVial never saw the Heal row.)
+module KIF
+  module PauseMenu
+    module SceneHook
+      def pbShowCommands(commands)
+        KIF::PauseMenu.show_commands(self, commands) { |list| super(list) }
       end
-      pbShowMenu
+    end
+
+    def self.show_commands(scene, commands)
+      entries = active_entries
+      return yield(commands) if entries.empty?
+      pos = insert_position(commands)
+      shown = commands.dup
+      shown.insert(pos, *entries.map { |e| label_for(e) })
+      loop do
+        ret = yield(shown)
+        return ret if ret < 0 || ret < pos
+        return ret - entries.length if ret >= pos + entries.length
+        entry = entries[ret - pos]
+        result = entry.handler.call(scene)
+        return -1 if result == :close
+        scene.pbShowMenu
+      end
     end
   end
 end
+
+PokemonPauseMenu_Scene.prepend(KIF::PauseMenu::SceneHook)
 
 class Game_Temp
   attr_accessor :fromkurayshop   # KIF: storage/mart opened from the pause menu

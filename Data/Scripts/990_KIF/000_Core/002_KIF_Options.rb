@@ -309,6 +309,7 @@ class PokemonGameOption_Scene < PokemonOption_Scene
     options << ButtonOption.new(_INTL("KIF Settings"),
                                 proc { kif_open_settings },
                                 _INTL("Customize modded features"))
+    KIF::ModCompat.add_root_mod_options(self, options, inloadscreen) if defined?(KIF::ModCompat)
     return options
   end
 

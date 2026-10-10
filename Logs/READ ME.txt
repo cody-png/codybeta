@@ -1,0 +1,3 @@
+Send this whole folder (zipped) with a bug report.
+KIF_log.txt is the last play session, KIF_log_previous.txt the one before,
+KIF_errorlog.txt has any crash.

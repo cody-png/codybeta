@@ -42,6 +42,10 @@
 #                       SceneElements.rb:542-578). They run KIF Beta's own
 #                       status icon and Type Display (F-BATTLE-07), or draw the
 #                       status like 6.8.2 when that isn't set up.
+#   sprite_bitmap_from_pokemon  KIF 0.20.7 had a 4th argument, makeShiny
+#                       (009_Species_Files.rb:113); Counterfeit Shinies passes
+#                       it on. Accepted again; false draws the Pokémon without
+#                       its shiny colours, like KIF.
 #   Data/VERSION        mods tell KIF from PIF by its major number (KIF < 5).
 #                       6.8.2 doesn't use the file; KIF writes its own
 #                       version there before mods load (6 Pokémon Gym
@@ -352,6 +356,27 @@ class PokemonDataBox
   unless method_defined?(:drawtypeDisplay)
     def drawtypeDisplay
       refreshtypeDisplay
+    end
+  end
+end
+
+#-------------------------------------------------------------------------------
+# GameData::Species.sprite_bitmap_from_pokemon(pkmn, back, species, makeShiny)
+#-------------------------------------------------------------------------------
+module GameData
+  class Species
+    class << self
+      if method_defined?(:sprite_bitmap_from_pokemon) &&
+         instance_method(:sprite_bitmap_from_pokemon).arity.between?(-4, -2)
+        alias kif_compat_sprite_bitmap_from_pokemon sprite_bitmap_from_pokemon
+
+        def sprite_bitmap_from_pokemon(pkmn, back = false, species = nil, makeShiny = true, *_more)
+          if !makeShiny && pkmn && defined?(KIF::Shiny) && KIF::Shiny.respond_to?(:without_shiny)
+            return KIF::Shiny.without_shiny(pkmn) { kif_compat_sprite_bitmap_from_pokemon(pkmn, back, species) }
+          end
+          return kif_compat_sprite_bitmap_from_pokemon(pkmn, back, species)
+        end
+      end
     end
   end
 end

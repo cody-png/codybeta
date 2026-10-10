@@ -46,6 +46,15 @@
 #                       (009_Species_Files.rb:113); Counterfeit Shinies passes
 #                       it on. Accepted again; false draws the Pokémon without
 #                       its shiny colours, like KIF.
+#   Mod Manager typing  Mod Manager 2.0 reads the keyboard with Windows'
+#                       GetAsyncKeyState, which sees keys pressed in ANY
+#                       window. Its own focus check is switched off for
+#                       everyone by its Linux patch (008_LinuxInputs.rb:
+#                       _window_active? always true), so its search box kept
+#                       typing after tabbing out. KIF (without touching its
+#                       files) puts a focus check in front of its key reads:
+#                       on Windows only keys pressed while the game window is
+#                       in front count; under Wine its Linux behaviour stays.
 #   Data/VERSION        mods tell KIF from PIF by its major number (KIF < 5).
 #                       6.8.2 doesn't use the file; KIF writes its own
 #                       version there before mods load (6 Pokémon Gym
@@ -377,6 +386,64 @@ module GameData
           return kif_compat_sprite_bitmap_from_pokemon(pkmn, back, species)
         end
       end
+    end
+  end
+end
+
+#-------------------------------------------------------------------------------
+# Mod Manager: keys only while the game window is in front
+#-------------------------------------------------------------------------------
+module KIF
+  module ModCompat
+    MM_SCENES = ["Scene_Installed", "Scene_Browser", "Scene_ModderTools"]
+
+    def self.wine?
+      return @wine unless @wine.nil?
+      @wine = (File.exist?("Z:/etc") || File.exist?("Z:/proc")) rescue false
+    end
+
+    # true when this game's window is the foreground window (Windows);
+    # true when it can't be told (Wine, no Win32API), like Mod Manager
+    def self.game_focused?
+      return true if wine?
+      @gfw ||= (Win32API.new('user32', 'GetForegroundWindow', [], 'l') rescue false)
+      @gwtpi ||= (Win32API.new('user32', 'GetWindowThreadProcessId', ['l', 'p'], 'l') rescue false)
+      return true unless @gfw && @gwtpi
+      hwnd = @gfw.call
+      return false if hwnd == 0
+      buf = [0].pack('L')
+      @gwtpi.call(hwnd, buf)
+      return buf.unpack('L')[0] == Process.pid
+    rescue StandardError
+      return true
+    end
+
+    module MMFocus
+      def _window_active?
+        return KIF::ModCompat.game_focused?
+      end
+
+      def _key_trigger?(vk_code)
+        return false unless KIF::ModCompat.game_focused?
+        return super
+      end
+
+      def _key_pressed?(vk_code)
+        return false unless KIF::ModCompat.game_focused?
+        return super
+      end
+    end
+
+    def self.patch_mod_manager
+      return unless defined?(::ModManager)
+      MM_SCENES.each do |name|
+        next unless ::ModManager.const_defined?(name, false)
+        k = ::ModManager.const_get(name, false)
+        next unless k.is_a?(Class) && (k.method_defined?(:_key_trigger?) || k.private_method_defined?(:_key_trigger?))
+        k.send(:prepend, MMFocus) unless k.ancestors.include?(MMFocus)
+      end
+    rescue StandardError => e
+      KIF.log("Mod Manager focus patch failed: #{e.class}: #{e.message}")
     end
   end
 end

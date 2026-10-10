@@ -525,6 +525,7 @@ module KIF
       max = fusions ? PBSpecies.maxValue : NB_POKEMON
       legend = sw(SWITCH_RANDOM_WILD_LEGENDARIES)
       old_dex = getDexNumberForSpecies(old_species) rescue nil
+      old_dex = nil if old_dex && old_dex >= Settings::ZAPMOLCUNO_NB   # triple fusions can't be measured
       # Strength range applies to Dynamic too (Cody): the pick stays within
       # range of the usual Pokémon, widening a little when nothing fits
       bst = get(:wild_bst)

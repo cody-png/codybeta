@@ -385,6 +385,29 @@ module KIF
       Kernel.pbShuffleDex($game_variables[VAR_RANDOMIZER_WILD_POKE_BST])
     end
 
+    # The Pokémon an extra team member (Team size) is rolled against. A triple
+    # fusion can't be measured (strength, legendary) like other Pokémon, so
+    # one of its parts stands in (Giovanni's lone Zapmolcuno crashed the
+    # shuffle with a bigger team size).
+    def self.extra_base(olds)
+      safe = olds.select { |o| o.is_a?(Integer) && o > 0 && o < Settings::ZAPMOLCUNO_NB }
+      return safe[rand(safe.length)] unless safe.empty?
+      parts = olds.flat_map { |o| (get_triple_fusion_components(triple_ids[o]) rescue nil) || [] }
+      parts = parts.select { |d| d.is_a?(Integer) && d.between?(1, NB_POKEMON) }
+      return parts[rand(parts.length)] unless parts.empty?
+      return rand(NB_POKEMON) + 1
+    end
+
+    # Triple fusion number -> species id (getting one by its number builds a
+    # broken two-part fusion and shows PIF's "species with error" box)
+    def self.triple_ids
+      @triple_ids ||= begin
+        h = {}
+        GameData::Species.each { |sp| h[sp.id_number] = sp.id if sp.id_number >= Settings::ZAPMOLCUNO_NB }
+        h
+      end
+    end
+
     def self.shuffle_trainers(customs = nil)
       customs = customs.map { |c| dex_of(c) }.select { |d| d > 0 } if customs
       customs = nil if customs && customs.empty?
@@ -406,7 +429,7 @@ module KIF
         n = olds.length + team_extra_count(tr.trainer_type, olds.length)
         team = []
         n.times do |i|
-          old = olds[i] || olds[rand(olds.length)] || 1
+          old = olds[i] || extra_base(olds)
           if rival
             map = (rival_maps[tr.real_name] ||= {})
             if i >= olds.length

@@ -26,11 +26,11 @@ KIF 0.20.7 was built on PIF 6.4.5. **KIF Beta** brings KIF's features to **PIF 6
 
 1. Click **Code → Download ZIP** on this page, or use this link: https://github.com/cody-png/codybeta/archive/refs/heads/kif-beta.zip
 2. Unzip it anywhere.
-3. Run **Game.exe**.
+3. Run **InfiniteFusion.exe**.
 
 # Features
 
-**Every feature and option is explained in [KIF_Features.md](KIF_Features.md).** The guide follows the in-game menu order: Options → KIF Settings. It also ships with the game, next to Game.exe.
+**Every feature and option is explained in [KIF_Features.md](KIF_Features.md).** The guide follows the in-game menu order: Options → KIF Settings. It also ships with the game, next to InfiniteFusion.exe.
 
 Highlights:
 

@@ -1,5 +1,5 @@
 #===============================================================================
-# C-RAND-01 – spoiler log: "Randomizer Log - <seed>.txt" next to Game.exe,
+# C-RAND-01 – spoiler log: "Randomizer Log - <seed>.txt" next to InfiniteFusion.exe,
 # rewritten after every shuffle (when Spoiler log is On), and an in-game
 # viewer (Randomizer > View spoiler log, asks first).
 #===============================================================================

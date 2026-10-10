@@ -7,7 +7,7 @@
 #   201_Kuray/003_KurayPokemonRevamp.rb:2-9  kuray_modqueue (Species.register)
 #   ChallengeMode.rb:457           queue applied in GameData.load_all
 #
-# Every .rb file in the game's Mods folder (next to Game.exe) is loaded once
+# Every .rb file in the game's Mods folder (next to InfiniteFusion.exe) is loaded once
 # at boot, in name order, after all game and port scripts and before the
 # game data loads – same moment as KIF. A mod can add or replace species with
 #   passModdedPokemon({ :id => ..., :id_number => ..., ... })   # Species hash

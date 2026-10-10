@@ -2,15 +2,15 @@
 
 ## Install (fresh)
 1. Unzip the release into a **new, empty folder**. Don't unzip over an old KIF or PIF folder.
-2. Get the sprite pack (`Full Sprite pack ... .zip`) and drop the **zip itself** into the `Import Sprites` folder next to `Game.exe`. Don't unzip it. **The zip is deleted once its sprites are installed** - keep your own copy elsewhere, or set Options > Others > Imported Archives to Keep first (it then goes to an `Imported archives` folder).
-3. Start `Game.exe`. The first start sorts the pack into place (a few minutes for the full pack) and tells you how many sprites it imported. The zip is deleted once it's unpacked – the installed sprites are the only copy.
+2. Get the sprite pack (`Full Sprite pack ... .zip`) and drop the **zip itself** into the `Import Sprites` folder next to `InfiniteFusion.exe`. Don't unzip it. **The zip is deleted once its sprites are installed** - keep your own copy elsewhere, or set Options > Others > Imported Archives to Keep first (it then goes to an `Imported archives` folder).
+3. Start `InfiniteFusion.exe`. The first start sorts the pack into place (a few minutes for the full pack) and tells you how many sprites it imported. The zip is deleted once it's unpacked – the installed sprites are the only copy.
 4. If you had saves in old KIF, the game offers once to copy them over. Say yes or no; you can copy them yourself later from the `Old Savefile location` shortcut.
 
 Saves live in `%APPDATA%\KIF` (the `KIF Savefiles` shortcut). Old KIF's saves are untouched in `%APPDATA%\kurayinfinitefusion`.
 
 ## Reporting a bug
 Send, in this order of usefulness:
-1. **The `Logs` folder** (next to `Game.exe`) - zip it and send it whole. Inside: **`KIF_log.txt`**, one file per play session; `KIF_log_previous.txt` is the session before. It says what the game could see (sprites, settings), what KIF did, any "?" sprites, and any crash with the last maps you were on.
+1. **The `Logs` folder** (next to `InfiniteFusion.exe`) - zip it and send it whole. Inside: **`KIF_log.txt`**, one file per play session; `KIF_log_previous.txt` is the session before. It says what the game could see (sprites, settings), what KIF did, any "?" sprites, and any crash with the last maps you were on.
 2. A screenshot or short video.
 3. Your save file, if the bug is tied to it (`File X.rxdata` from the save folder).
 4. If the game crashed, the crash is in `KIF_errorlog.txt` in the same `Logs` folder.

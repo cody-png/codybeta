@@ -13,7 +13,7 @@
 #      way, and the archive and whatever else it held (icons, outfits,
 #      credits) are deleted: the installed sprites are the only copy kept.
 #      Options > Others > "Imported Archives: Keep" moves the archive to an
-#      "Imported archives" folder next to Game.exe instead (stored as the
+#      "Imported archives" folder next to InfiniteFusion.exe instead (stored as the
 #      KeepImportedArchives.krs marker, so it is known before anything loads).
 #      PIF's own "Sprites to import" folder works the same way. A sprite
 #      that is already installed, byte for byte, is just dropped; one that

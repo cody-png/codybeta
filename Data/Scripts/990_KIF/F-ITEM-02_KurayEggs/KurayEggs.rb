@@ -242,7 +242,7 @@ module KIF
       pkmn.form          = 0 if pkmn.isSpecies?(:SHAYMIN)
       pkmn.heal
       pkmn.obtain_text = item_name
-      return 0 unless pbAddPokemon(pkmn, 1, true, true)
+      return 0 unless add_like_caught(pkmn)
       if $Trainer.pokedex.respond_to?(:register_unfused_pkmn)
         $Trainer.pokedex.register_unfused_pkmn(pkmn).each do |unfused|
           pbMessage(_INTL("{1}'s data was added to the Pokédex", GameData::Species.get(unfused).name))
@@ -252,6 +252,35 @@ module KIF
     rescue => e
       KIF.log("K-Egg failed: #{e.class}: #{e.message}")
       return 0
+    end
+
+    # pbAddPokemon, plus what catching a new species does (Cody, 2026-10-10,
+    # tester request): "data was added to the Pokédex" and the Pokédex entry,
+    # which opens the sprite picker when Dex Sprite Select is on - before the
+    # nickname question, the same order as a catch. An egg skips it (hatching
+    # shows the entry itself).
+    def self.add_like_caught(pkmn)
+      if pbBoxesFull?
+        pbMessage(_INTL("There's no more room for Pokémon!\1"))
+        pbMessage(_INTL("The Pokémon Boxes are full and can't accept any more!"))
+        return false
+      end
+      pbMessage(_INTL("{1} obtained {2}!\\me[Pkmn get]\\wtnp[20]\1", $Trainer.name, pkmn.speciesName))
+      show_new_dex(pkmn)
+      pbNicknameAndStore(pkmn)
+      $Trainer.pokedex.register(pkmn)
+      return true
+    end
+
+    def self.show_new_dex(pkmn)
+      return if pkmn.egg? || !$Trainer.has_pokedex || $Trainer.owned?(pkmn.species)
+      $Trainer.pokedex.register(pkmn)
+      $Trainer.pokedex.set_owned(pkmn.species)
+      pbMessage(_INTL("{1}'s data was added to the Pokédex.", pkmn.speciesName))
+      $Trainer.pokedex.register_last_seen(pkmn) if $Trainer.pokedex.respond_to?(:register_last_seen)
+      pbShowPokedex(pkmn)
+    rescue => e
+      KIF.log("K-Egg Pokédex entry failed: #{e.class}: #{e.message}")
     end
 
     #---------------------------------------------------------------------------

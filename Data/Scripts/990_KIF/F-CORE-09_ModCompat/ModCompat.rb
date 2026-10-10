@@ -479,6 +479,7 @@ module KIF
     # after every file in the Mods folder has loaded
     def self.after_mods_loaded
       patch_kanto_reloaded
+      KIF::ModSettings.drain_pending if defined?(KIF::ModSettings)
     end
   end
 end
@@ -503,6 +504,12 @@ module KIF
         next if o.nil?
         next if o.respond_to?(:name) && names.include?(o.name.to_s)
         options << o
+      end
+      # Mod settings kept by KIF (no Kanto Reloaded installed)
+      if defined?(KIF::ModSettings) && KIF::ModSettings.active? && !KIF::ModSettings.registry.empty?
+        options << ButtonOption.new(_INTL("Mod Settings"),
+                                    proc { pbFadeOutIn { PokemonOptionScreen.new(KifModSettingsScene.new).pbStartScreen } },
+                                    _INTL("Settings added by your mods"))
       end
       return options
     rescue StandardError => e

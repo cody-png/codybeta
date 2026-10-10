@@ -15,7 +15,8 @@
 # (016_UI/014_UI_Save.rb:124, 6.8.2 MultiSaves slot screen). Only the working
 # part is ported.
 # Added guards (not in KIF): not while an event runs, a message is showing,
-# the player is moving, saving is disabled, or Hoenn furniture is being moved.
+# the player is moving, saving is disabled, the menu is disabled (intro
+# cutscenes), during the intro, or Hoenn furniture is being moved.
 #===============================================================================
 KIF::Options.define(:quicksave, 1, :global)
 
@@ -37,6 +38,11 @@ class Scene_Map
     return if $game_temp.message_window_showing || pbMapInterpreterRunning?
     return if $game_player.moving?
     return if $game_system && $game_system.save_disabled
+    # Not while the game itself has the menu off or the intro runs: the Silph
+    # Co. TV cutscene is a parallel event (so no map interpreter "runs") and
+    # S / L3 opened the save screen mid-cutscene
+    return if $game_system && $game_system.menu_disabled
+    return if $game_switches && $game_switches[SWITCH_DURING_INTRO]
     return if $game_temp.respond_to?(:moving_furniture) && $game_temp.moving_furniture
     pbSaveScreen
   end

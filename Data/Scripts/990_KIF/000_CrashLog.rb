@@ -36,14 +36,24 @@ module KIF
   end
 end
 
-# Same as PIF's loader (Data/Scripts.rxdata "Main"), plus the log
+# Same as PIF's loader (Data/Scripts.rxdata "Main"), plus the log.
+# Mod compatibility (F-CORE-09): old mods call this on Mods/ to load their
+# folders. Only .rb files are run (PIF's loader ran every file, so a mod's
+# images crashed it), and a folder with a mod.json is left to Mod Manager
+# (it loads those itself; loading twice ran a mod twice).
 def load_scripts_from_folder(path)
+  return if File.file?(path + "/mod.json")   # a Mod Manager mod (see above)
   files   = []
   folders = []
   ignored = ['.', '..', '.git', '.idea', '.gitignore']
   Dir.foreach(path) do |f|
     next if ignored.include?(f)
-    (File.directory?(path + "/" + f)) ? folders.push(f) : files.push(f)
+    full = path + "/" + f
+    if File.directory?(full)
+      folders.push(f) unless File.file?(full + "/mod.json")
+    elsif f =~ /\.rb\z/i
+      files.push(f)
+    end
   end
   files.sort!
   files.each do |f|
@@ -65,6 +75,7 @@ def load_scripts_from_folder(path)
         raise ScriptError.new(e.message + "\n\n(also logged in #{KIF::CrashLog::FILE})")
       end
       $!.message.sub!($!.message, traceback_report) rescue nil
+      raise unless respond_to?(:raise_traceback_error, true)   # (PIF's Main defines it)
       raise_traceback_error
     end
   end

@@ -34,11 +34,43 @@ module KIF
 
       # the hidden lists the engine keeps on the viewport (Arrays only it holds)
       # (Ruby-side @variables of a Viewport subclass are left alone)
+      # (a tester's game logged "wrong number of arguments (given 0, expected
+      # 1..4)" here - Kernel#select's message - so the result is checked to be
+      # an Array and walked without .select; failures now log where they were)
       def lists(vp)
+        found = ObjectSpace.reachable_objects_from(vp)
+        return [] unless found.is_a?(Array)
         named = vp.instance_variables.map { |iv| vp.instance_variable_get(iv) }
-        return ObjectSpace.reachable_objects_from(vp).select { |x|
-          x.is_a?(Array) && named.none? { |v| v.equal?(x) }
-        }
+        ret = []
+        found.each do |x|
+          next unless x.is_a?(Array)
+          next if named.any? { |v| v.equal?(x) }
+          ret << x
+        end
+        return ret
+      end
+
+      # One viewport's lists; a problem with one viewport doesn't stop the others
+      def prune_viewport(vp)
+        n = 0
+        lists(vp).each do |l|
+          next if l.frozen? || l.empty?
+          before = l.length
+          l.reject! { |s| s.respond_to?(:disposed?) && s.disposed? }
+          n += before - l.length
+        end
+        return n
+      rescue StandardError => e
+        failed(e, vp)
+        return 0
+      end
+
+      def failed(e, vp = nil)
+        @failures = (@failures || 0) + 1
+        return if @failures > 3
+        where = (e.backtrace || [])[0, 3].map { |l| l.to_s.sub(/\A.*[\/\\]/, "") }.join(" < ")
+        what = vp ? " on #{vp.class}" : ""
+        KIF.log("Viewport cleanup failed#{what} (#{e.class}: #{e.message}) at #{where}") if defined?(KIF.log)
       end
 
       # Removes disposed sprites from every live viewport's list; returns how many
@@ -51,19 +83,11 @@ module KIF
         n = 0
         @viewports.each_key do |vp|
           next if vp.disposed?
-          lists(vp).each do |l|
-            next if l.frozen? || l.empty?
-            before = l.length
-            l.reject! { |s| s.respond_to?(:disposed?) && s.disposed? }
-            n += before - l.length
-          end
+          n += prune_viewport(vp)
         end
         return n
       rescue StandardError => e
-        unless @failed
-          @failed = true
-          KIF.log("Viewport cleanup failed (#{e.class}: #{e.message})") if defined?(KIF.log)
-        end
+        failed(e)
         return 0
       end
     end

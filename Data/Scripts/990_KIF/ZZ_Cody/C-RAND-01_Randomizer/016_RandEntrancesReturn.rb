@@ -25,6 +25,19 @@ module KIF
         attr_accessor :pending_return
       end
 
+      # The town a Pokémon Center map belongs to (its own map is just called
+      # "Pokémon Center", so the question read "...Pokémon Center in Pokémon
+      # Center?"): the outside of its usual door, before any shuffle
+      def self.center_town(map_id)
+        d = (dat rescue nil)
+        if d && d[:door_by_id]
+          o = d[:door_by_id].values.find { |x| x[:to] && x[:to][0] == map_id }
+          name = o && d[:names][o[:map]]
+          return name.to_s if name && !name.to_s.empty?
+        end
+        return (pbGetMapNameFromId(map_id) rescue "").to_s
+      end
+
       # [map, x, y, direction, :center / :home] of the last Pokémon Center,
       # or home before any Center was used (PIF's pbStartOver does the same)
       # or when that Center is no way out (:home_unsafe)
@@ -134,10 +147,10 @@ KIF::PauseMenu.add(:kif_er_return,
       next :close
     end
     t = er.return_target
-    name = (pbGetMapNameFromId(t[0]) rescue "")
+    name = t[4] == :center ? er.center_town(t[0]) : (pbGetMapNameFromId(t[0]) rescue "")
     scene.pbHideMenu
     if t[4] == :home_unsafe
-      center = (pbGetMapNameFromId($PokemonGlobal.pokecenterMapId) rescue "")
+      center = er.center_town($PokemonGlobal.pokecenterMapId)
       pbMessage(_INTL("From the Pokémon Center in {1} there's no way on yet with what you have.", center))
     end
     question = t[4] == :center ? _INTL("Go back to the Pokémon Center in {1}?", name) : _INTL("Go back home to {1}?", name)

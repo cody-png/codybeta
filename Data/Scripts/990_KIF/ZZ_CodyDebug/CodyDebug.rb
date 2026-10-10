@@ -78,7 +78,7 @@ module KIF
                  when :sheets then fetch_base_sheets
                  when :aicompare
                    KIF::AICompare.on = !KIF::AICompare.on?
-                   pbMessage(KIF::AICompare.on? ? _INTL("AI compare log on: KIF_ai_compare.txt in the save folder.") : _INTL("AI compare log off.")); nil
+                   pbMessage(KIF::AICompare.on? ? _INTL("AI compare log on: KIF_ai_compare.txt in the Logs folder.") : _INTL("AI compare log off.")); nil
                  end
         }
         break if done == :close

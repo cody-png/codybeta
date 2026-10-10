@@ -1,6 +1,6 @@
 #===============================================================================
 # C-SYS-04 – Sprite import (Cody, 2026-10-08)
-#   1. Drop sprites into the "Import Sprites" folder (next to Game.exe) in any
+#   1. Drop sprites into the "Import Sprites" folder (next to the game's .exe) in any
 #      shape: loose .png files, a sprite pack folder, folders inside folders,
 #      a .zip (or .rar / .7z, unpacked by Windows' own tar when it can). At
 #      start-up every sprite found is MOVED to where the game reads it:
@@ -13,7 +13,7 @@
 #      way, and the archive and whatever else it held (icons, outfits,
 #      credits) are deleted: the installed sprites are the only copy kept.
 #      Options > Others > "Imported Archives: Keep" moves the archive to an
-#      "Imported archives" folder next to Game.exe instead (stored as the
+#      "Imported archives" folder next to InfiniteFusion.exe instead (stored as the
 #      KeepImportedArchives.krs marker, so it is known before anything loads).
 #      PIF's own "Sprites to import" folder works the same way. A sprite
 #      that is already installed, byte for byte, is just dropped; one that
@@ -26,7 +26,6 @@
 #===============================================================================
 module KIF
   module SpriteImport
-    IMPORT_DIR  = "Import Sprites"
     DONE_DIR    = "_done"        # (older builds put archives here; left alone)
     WORK_DIR    = "_unpacking"
     HOLD_DIR    = "_replace"     # differing sprites waiting for the player's answer
@@ -75,8 +74,13 @@ module KIF
 
     module_function
 
+    # "Import Sprites" next to the game's .exe (KIF::Paths.root)
+    def import_dir
+      return KIF::Paths.import_sprites
+    end
+
     def import_dirs
-      list = [IMPORT_DIR]
+      list = [import_dir]
       list << PIF_IMPORT.chomp("/") if Dir.exist?(PIF_IMPORT)
       return list
     end
@@ -329,7 +333,7 @@ module KIF
     # The import itself: returns [moved, conflicts (old => new), skipped, failed archives]
     #---------------------------------------------------------------------------
     def run
-      mkdir_p(IMPORT_DIR)
+      mkdir_p(import_dir)
       failed = []
       self.not_written = 0; @leftovers = 0
       reset_tally

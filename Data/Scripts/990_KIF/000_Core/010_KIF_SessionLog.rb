@@ -32,7 +32,7 @@ module KIF
       attr_reader :started
 
       def path(name = FILE)
-        return File.join(KIF.save_dir, name)
+        return KIF::Paths.log(name)
       end
 
       def stamp
@@ -61,6 +61,7 @@ module KIF
             "#{$DEBUG ? ' - debug mode' : ''}")
         raw("Game folder: #{Dir.pwd}")
         raw("Save folder: #{KIF.save_dir}")
+        raw("Logs: #{KIF::Paths.logs}")
         at_exit { finish }
       end
 
@@ -132,7 +133,7 @@ module KIF
               "#{count.call('Graphics/CustomBattlers/spritesheets/spritesheets_custom')} custom sheets, " \
               "#{count.call('Graphics/Battlers/spritesheets_autogen')} autogen sheets; " \
               "Download data #{dl.nil? ? '?' : (dl == 0 ? 'on' : 'off')}")   # PIF's Download data: 0 = On
-        waiting = Dir.exist?("Import Sprites") ? Dir.children("Import Sprites").reject { |c| c.start_with?("_") || c =~ /\.txt\z/i }.length : 0
+        waiting = Dir.exist?(KIF::Paths.import_sprites) ? Dir.children(KIF::Paths.import_sprites).reject { |c| c.start_with?("_") || c =~ /\.txt\z/i }.length : 0
         write("Import Sprites folder: #{waiting} item(s) waiting") if waiting > 0
       rescue => e
         write("Sprite report failed (#{e.class}: #{e.message})")

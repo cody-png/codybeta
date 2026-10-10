@@ -21,7 +21,7 @@ module KIF
       attr_accessor :busy
 
       def marker_path; File.join(KIF.save_dir, MARKER); end
-      def log_path;    File.join(KIF.save_dir, LOG);    end
+      def log_path;    KIF::Paths.log(LOG);             end
 
       def on?
         @on = File.exist?(marker_path) if @on.nil?

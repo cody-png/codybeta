@@ -9,14 +9,16 @@
 # 2. Crashes in game: PIF writes them to errorlog.txt in the save folder
 #    (%APPDATA%\<game>\errorlog.txt); the same text is now also appended to
 #    KIF_errorlog.txt.
-# KIF_errorlog.txt is in the game folder (next to Game.exe).
+# KIF_errorlog.txt is in the Logs folder (000_Paths.rb; the game folder
+# itself if a crash comes before that file loads).
 #===============================================================================
 module KIF
   module CrashLog
     FILE = "KIF_errorlog.txt"
 
     def self.write(text)
-      File.open(FILE, "ab") do |f|
+      path = defined?(KIF::Paths) ? KIF::Paths.log(FILE) : FILE
+      File.open(path, "ab") do |f|
         f.write("\r\n=================\r\n\r\n[#{Time.now}]\r\n")
         f.write(text.to_s)
         f.write("\r\n")

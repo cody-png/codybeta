@@ -73,6 +73,10 @@ end
 alias kif_star_addShinyStarsToGraphicsArray addShinyStarsToGraphicsArray unless defined?(kif_star_addShinyStarsToGraphicsArray)
 
 def addShinyStarsToGraphicsArray(imageArray, *args)
+  # KIF 0.20.7's argument list (mods: Alpha Encounters, Counterfeit
+  # Shinies): no radar flag after debugShiny, and fakeshiny + RGB at the end
+  # (13 after the array; 6.8.2 takes at most 12). Turned into 6.8.2's.
+  args = args[0, 5] + [false] + args[5, 6] if args.length > 12
   pkmn = KIF::Shiny.star_pokemon
   KIF::Shiny.star_pokemon = nil
   before = imageArray.length

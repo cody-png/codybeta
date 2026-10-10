@@ -36,6 +36,12 @@
 #                       Beta: always none), level_simple (:876),
 #                       PokemonIconSprite#icon_offset_x/y, the MessageConfig
 #                       font size setters, GameData.kurayeggs_loadsystem.
+#   PokemonDataBox      Alpha Encounters replaces the battle data box's
+#                       refresh with KIF 0.20.7's, which ends with
+#                       refreshStatus / refreshtypeDisplay (KIF 004_PokeBattle_
+#                       SceneElements.rb:542-578). They run KIF Beta's own
+#                       status icon and Type Display (F-BATTLE-07), or draw the
+#                       status like 6.8.2 when that isn't set up.
 #   Data/VERSION        mods tell KIF from PIF by its major number (KIF < 5).
 #                       6.8.2 doesn't use the file; KIF writes its own
 #                       version there before mods load (6 Pokémon Gym
@@ -309,6 +315,43 @@ module GameData
   unless respond_to?(:kurayeggs_loadsystem)
     def self.kurayeggs_loadsystem(*_args)
       KIF::KurayEggs.register_items if defined?(KIF::KurayEggs) && KIF::KurayEggs.respond_to?(:register_items)
+    end
+  end
+end
+
+#-------------------------------------------------------------------------------
+# PokemonDataBox helpers of KIF 0.20.7
+#-------------------------------------------------------------------------------
+class PokemonDataBox
+  unless method_defined?(:refreshStatus)
+    def refreshStatus
+      if respond_to?(:kif_refresh_status, true) && @kif_statusIcon
+        kif_refresh_status
+        return
+      end
+      return if !@battler || !@battler.respond_to?(:status) || @battler.status == :NONE
+      s = GameData::Status.get(@battler.status).id_number
+      s = GameData::Status::DATA.keys.length / 2 if s == :POISON && @battler.statusCount > 0
+      pbDrawImagePositions(self.bitmap, [["Graphics/Pictures/Battle/icon_statuses", @spriteBaseX + 24, 56,
+                                          0, (s - 1) * STATUS_ICON_HEIGHT, -1, STATUS_ICON_HEIGHT]])
+    end
+  end
+
+  unless method_defined?(:refreshtypeDisplay)
+    def refreshtypeDisplay
+      kif_draw_type_display if respond_to?(:kif_draw_type_display, true)
+    end
+  end
+
+  unless method_defined?(:updatetypeDisplay)
+    def updatetypeDisplay
+      refreshtypeDisplay
+    end
+  end
+
+  unless method_defined?(:drawtypeDisplay)
+    def drawtypeDisplay
+      refreshtypeDisplay
     end
   end
 end

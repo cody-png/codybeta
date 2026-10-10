@@ -6,6 +6,12 @@
 #   Center you used, so a bad spot is never the end of a run. Before the
 #   first Center (a fresh run from Pallet) it goes home instead, the same
 #   place the game sends you after a defeat then.
+#   The last Center isn't always a way out: a shuffle can put a Center inside
+#   a pocket you can't leave yet (entered by a ledge, needing Surf to get
+#   out). Before going there it is checked with the Entrances logic and what
+#   you have now; if the game can't be finished from it, Return goes home
+#   instead (Pallet, or a random start's first Center), which every layout is
+#   checked from.
 #   Every use is written to KIF_entrance_returns.txt in the save folder (where
 #   you were, the doors you took last), so stuck spots can be found and fixed.
 #===============================================================================
@@ -21,15 +27,50 @@ module KIF
 
       # [map, x, y, direction, :center / :home] of the last Pokémon Center,
       # or home before any Center was used (PIF's pbStartOver does the same)
+      # or when that Center is no way out (:home_unsafe)
       def self.return_target
         g = $PokemonGlobal
         if g && g.pokecenterMapId.to_i > 0
           dir = g.pokecenterDirection.to_i
-          return [g.pokecenterMapId, g.pokecenterX, g.pokecenterY, dir > 0 ? dir : 2, :center]
+          center = [g.pokecenterMapId, g.pokecenterX, g.pokecenterY, dir > 0 ? dir : 2, :center]
+          h = home_spot
+          return center if h.nil? || h[0] == center[0] || place_safe?(center[0])
+          return h[0, 4] + [:home_unsafe]
+        end
+        return home_spot
+      end
+
+      # Home: a random start's first Center, otherwise the game's home spot
+      def self.home_spot
+        s = state
+        if s.is_a?(Hash) && Rand.dget(:ent_start).to_i >= 1 && (o = start_origin(s)) && o[:to]
+          dir = o[:to_dir].to_i
+          return [o[:to][0], o[:to][1], o[:to][2], dir > 0 ? dir : 2, :home]
         end
         home = (GameData::Metadata.get.home rescue nil)
         return nil unless home && home[0].to_i > 0
         return [home[0], home[1], home[2], home[3].to_i > 0 ? home[3] : 2, :home]
+      end
+
+      # Can the game still be finished from this map, with what you have now?
+      # (Entrances logic; a map it doesn't model counts as safe.) Remembered
+      # until a flag, badge or item changes.
+      def self.place_safe?(map_id)
+        d = dat
+        s = state
+        return true unless d && s.is_a?(Hash) && layout_current?(s)
+        nodes = (map_nodes(d)[map_id.to_s] || []).reject { |k| k.include?(":g") }
+        return true if nodes.empty?
+        mine = current_flags(d)
+        key = [map_id, s.object_id, mine.sort_by(&:to_s)]
+        return @safe_cache[1] if @safe_cache && @safe_cache[0] == key
+        edges = edges_for(d, s[:in], s[:out])
+        ok = nodes.any? { |n| beatable?(d, sweep(d, edges, mine, nil, n)[:seen]) }
+        @safe_cache = [key, ok]
+        return ok
+      rescue => e
+        KIF.log("Return safety check failed (#{e.class}: #{e.message})")
+        return true
       end
 
       def self.can_return?
@@ -83,7 +124,7 @@ module KIF
 end
 
 KIF::PauseMenu.add(:kif_er_return,
-  proc { (KIF::Rand::ER.return_target || [])[4] == :home ? "Return home" : "Return to Pokémon Center" }, icon: "menuIcons/POKEMON", order: 60,
+  proc { (KIF::Rand::ER.return_target || [])[4] == :center ? "Return to Pokémon Center" : "Return home" }, icon: "menuIcons/POKEMON", order: 60,
   condition: proc { KIF::Rand::ER.can_return? },
   handler: proc { |scene|
     er = KIF::Rand::ER
@@ -95,7 +136,11 @@ KIF::PauseMenu.add(:kif_er_return,
     t = er.return_target
     name = (pbGetMapNameFromId(t[0]) rescue "")
     scene.pbHideMenu
-    question = t[4] == :home ? _INTL("Go back home to {1}?", name) : _INTL("Go back to the Pokémon Center in {1}?", name)
+    if t[4] == :home_unsafe
+      center = (pbGetMapNameFromId($PokemonGlobal.pokecenterMapId) rescue "")
+      pbMessage(_INTL("From the Pokémon Center in {1} there's no way on yet with what you have.", center))
+    end
+    question = t[4] == :center ? _INTL("Go back to the Pokémon Center in {1}?", name) : _INTL("Go back home to {1}?", name)
     if pbConfirmMessage(question)
       er.log_return
       er.pending_return = true

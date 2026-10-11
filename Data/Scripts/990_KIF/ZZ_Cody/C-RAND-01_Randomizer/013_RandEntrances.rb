@@ -798,10 +798,11 @@ module KIF
       # Randomize now
       #-------------------------------------------------------------------------
       def self.randomize
-        if Rand.dget(:entrances) == 0 || !available?
+        return unless available?   # no door data: never touch a stored layout
+        if Rand.dget(:entrances) == 0
           # turning Entrances off mid-run: only where the normal doors can
           # still take you to the end
-          if available? && active? && mid_run?
+          if active? && mid_run?
             d = dat
             edges = edges_for(d, {}, {})
             unless beatable_from_here?(d, edges, sweep(d, edges))

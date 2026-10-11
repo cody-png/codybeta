@@ -35,6 +35,9 @@ module KIF
       attr_reader :failed
     end
 
+    # file names loaded straight from the Mods folder this session
+    def self.loaded_root; @loaded_root || []; end
+
     def self.load_all
       return if @loaded
       @loaded = true
@@ -45,9 +48,11 @@ module KIF
       KIF::ModCompat.before_mods_load if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:before_mods_load)
       Dir.mkdir(FOLDER) unless File.directory?(FOLDER)
       KIF::ModSettings.install(FOLDER) if defined?(KIF::ModSettings)
+      @loaded_root = []
       Dir[File.join(".", FOLDER, "*.rb")].sort.each do |file|
         begin
           load File.expand_path(file)
+          @loaded_root << File.basename(file)
           KIF.log("Mod loaded: #{File.basename(file)}")
         rescue Exception => e
           raise if e.is_a?(SystemExit) || (defined?(Reset) && e.is_a?(Reset))

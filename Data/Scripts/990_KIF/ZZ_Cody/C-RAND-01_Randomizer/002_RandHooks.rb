@@ -145,10 +145,14 @@ class Object
     statics = $game_switches && $game_switches[SWITCH_RANDOM_STATIC_ENCOUNTERS]
     return kif_rand_pbWildBattle(*args) unless statics
     if KIF::Rand.in_encounter > 0
+      # the switch is only off until PIF's swap check has run (onStartBattle
+      # puts it back before any autosave inside the battle can store it)
       $game_switches[SWITCH_RANDOM_STATIC_ENCOUNTERS] = false
+      KIF::Rand.statics_off = true
       begin
         return kif_rand_pbWildBattle(*args)
       ensure
+        KIF::Rand.statics_off = false
         $game_switches[SWITCH_RANDOM_STATIC_ENCOUNTERS] = true
       end
     end
@@ -281,3 +285,18 @@ module KIF
     end
   end
 end
+
+module KIF
+  module Rand
+    class << self
+      attr_accessor :statics_off
+    end
+  end
+end
+
+Events.onStartBattle += proc { |_sender, _e|
+  if KIF::Rand.statics_off && $game_switches
+    $game_switches[SWITCH_RANDOM_STATIC_ENCOUNTERS] = true
+    KIF::Rand.statics_off = false
+  end
+}

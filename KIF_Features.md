@@ -20,17 +20,21 @@ Settings pages appear after you close and reopen Modules.
 | Shinies | Shinies: custom colours, odds, gamble, selling, Poké Radar chains |
 | Graphical Changes | EBDX battles (when installed), battle box extras, Move Effectiveness, big icons, game font, dark mode |
 | Information | Fusion preview and fusion screen, the improved Pokédex (evolutions, sprites), IVs and EVs in the summary |
-| Battles & Challenges | Battle format, damage variance, Battle AI, Challenges, battle mechanics, level caps, EXP/EV/IV modes, Rocket mode, catching extras |
+| Battles & Challenges | Battle format, damage variance, Battle AI, Challenges, battle mechanics, level caps, EXP/EV/IV modes, Rocket mode, catching extras, Gym Leader teams, trainers keeping their rolled teams |
 | Randomizer | The randomizer (incl. Entrances) and gym leader teams. Off plays a randomized save without the randomizer until it's turned back on |
 | Pokémon & Fusion | Fusion rules and base stats, breeding, evolution lock, item effects, gender, move learning, Tutor.net, type overrides |
-| Items & Shop | Kuray Shop and K-Eggs |
-| PC & Saves | PC extras (Kuray Actions), import and export, quicksave, save backups, eggs hatching into the PC |
-| Quality of Life | Pause menu extras, quick field moves, speed-up, intro skip, title screen links, frame rate, Wonder Trade names, shenanigans |
+| Kuray Shop | The Kuray Shop in the pause menu, Streamer's Dream |
+| K-Eggs | K-Eggs (sold in the Kuray Shop) |
+| PC & Saves | PC extras (Kuray Actions), quicksave, save backups, eggs hatching into the PC |
+| Import & Export | Exporting Pokémon to files and importing them back |
+| Quality of Life | Pause menu extras, quick field moves, speed-up, intro skip, title screen links, Wonder Trade names, shenanigans |
 | Mod Settings | Shows the settings of mods installed with Mod Manager (the **Mod Settings** button) |
 
 Things a module changes while the game starts (some data tables) stay in place until the next start. Pokémon & Fusion's base stat rules apply the next time a Pokémon's stats are worked out (level up, evolving...).
 
-**General settings** holds settings that are always available (Settings Presets, sprite import, save folder). Below the settings buttons: **Increment Slider by** and **DEBUG**.
+**General settings** holds settings that are always available (frame rate, sprite import, save folder). Below the settings buttons: **Settings Presets**, **Increment Slider by** and **DEBUG**.
+
+Players who were already playing KIF Beta before Modules existed get every module turned On once, so nothing they had set up stops working.
 
 Inside each settings page:
 
@@ -268,7 +272,8 @@ New features made for KIF Beta that were never part of the original KIF. They si
 ### Battles
 
 - **Move Effectiveness** – Off / On *(On, all saves)*. The Fight menu shows how well each damaging move works against the foe: a green ▲ (super effective), orange ▼ (resisted) or grey ✕ (no effect) on each move button, and "Super eff." / "Resisted" / "No effect" under the PP of the highlighted move. With several foes, the info box lists each one with its multiplier (e.g. "Gyarados x4", "Onix x0") and names too long for the box scroll like a car radio display. The button marker shows the best result. Uses the battle's real type rules (including KIF's type buffs). Abilities stay hidden until the battle reveals them: once a foe's Levitate, Flash Fire, Volt Absorb, Water Absorb, Wonder Guard (and similar) has popped up, its immunity shows as "No effect" for the rest of that battle (not against Mold Breaker). Air Balloon and Magnet Rise also show Ground moves as "No effect".
-- **Gym Leader teams** – Normal / +1 / +2 / Full *(Normal, per save)*. Gym Leaders bring extra Pokémon to every battle with them (gym, rematch or story battle). The extras have the gym's type (randomized gym types count), are fusions about as often as the rest of the team, are about as strong as the team, are evolved as far as their level allows and join at the team's average level. Never legendaries, repeats or banned Pokémon, and the same every time for a save. On randomized saves with random trainers, the Randomizer's *Leader team size* decides instead.
+- **Gym Leader teams** – Normal / +1 / +2 / Full *(Normal, per save)*. Gym Leaders bring extra Pokémon to every battle with them (gym, rematch or story battle). The extras have the gym's type (in Remix and Expert, the type the leader's own team uses most; randomized gym types count), are fusions about as often as the rest of the team, are about as strong as the team, are evolved as far as their level allows and join at the team's average level. Never legendaries, repeats or banned Pokémon, and the same every time for a save. On randomized saves with random trainers, the Randomizer's *Leader team size* decides instead.
+- **Trainers keep their teams** *(always, Battles module)*. A trainer's Pokémon are rolled on the first fight (which ability a fusion gets, shininess) and kept for every rematch, so a Ralts fusion with Synchronize still has it later. Each trainer's rolls are saved with the save file.
 - **Your Pokémon in gyms** – Normal / +1 / +2 / Full *(Normal, per save)*. Raises how many Pokémon you may pick before a Kanto Gym Leader battle (Full = your whole party). The picker still shows.
 - With either setting on, the Kanto Gym Leaders say the real numbers ("I will be using three Pokémon, and you may use two."). At six they say "my full team" / "your whole team" instead of a number.
 
@@ -278,7 +283,7 @@ New features made for KIF Beta that were never part of the original KIF. They si
 
 ### Randomizer
 
-Only on saves started as randomized saves: **Modules → Randomizer settings** (Randomizer module On). The same screen also replaces PIF's randomizer menu when you make a randomized save, and the Update Man's *Advanced options → Randomizer options* opens it too. In Oak's Lab, *Re-randomize Pokémon?* opens it as well, so you can pick a new seed before choosing your starter (the same seed always gives the same starters).
+Only on saves started as randomized saves: **Modules → Randomizer settings → Randomizer** (Randomizer module On). The same screen also replaces PIF's randomizer menu when you make a randomized save, and the Update Man's *Advanced options → Randomizer options* opens it too. In Oak's Lab, *Re-randomize Pokémon?* opens it as well, so you can pick a new seed before choosing your starter (the same seed always gives the same starters).
 
 - **Seed** – an 8-character code (like `K7Q2-9XMA`). The same seed with the same settings gives the same randomized game (on the same KIF Beta version and sprite pack). New random seed, type one in, or copy it.
 - **Presets & sharing** – *Copy settings code* puts the seed and every setting on your clipboard as one line (paste it into Discord); *Paste settings code* loads someone else's. *Save as preset* / *Load preset* use files in the `Randomizer/Presets` folder (saving over an existing name asks first; presets from earlier KIF Beta versions still load).

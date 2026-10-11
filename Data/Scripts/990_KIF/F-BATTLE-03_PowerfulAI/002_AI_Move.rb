@@ -1586,7 +1586,7 @@ class PokeBattle_AI
 									if ((aspeed<ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>1)) && ((aspeed*4>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>1))
 										statusitemscore += 100
 										if attacker.pbHasMoveFunction?("175") && attacker.hasActiveAbility?(:SERENEGRACE) &&
-											((!target.hasActiveAbility?(:INNERFOCUS) && !target.hasActiveAbility?(:SHIELDDUST)) || mold_broken) &&
+											((!target.hasActiveAbility?(:INNERFOCUS) && !target.hasActiveAbility?(:SHIELDDUST)) || moldbroken(attacker,target,"175")) &&
 											target.effects[PBEffects::Substitute]==0
 											statusitemscore +=140
 										end
@@ -1877,7 +1877,7 @@ class PokeBattle_AI
 									if ((aspeed<ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>1)) && ((aspeed*4>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>1))
 										statusitemscore += 100
 										if attacker.pbHasMoveFunction?("175") && attacker.hasActiveAbility?(:SERENEGRACE) &&
-											((!target.hasActiveAbility?(:INNERFOCUS) && !target.hasActiveAbility?(:SHIELDDUST)) || mold_broken) &&
+											((!target.hasActiveAbility?(:INNERFOCUS) && !target.hasActiveAbility?(:SHIELDDUST)) || moldbroken(attacker,target,"175")) &&
 											target.effects[PBEffects::Substitute]==0
 											statusitemscore +=140
 										end
@@ -2203,7 +2203,7 @@ class PokeBattle_AI
 								if ((aspeed<ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>1)) && ((aspeed*2>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>1))
 									xitemscore += 100
 									if attacker.pbHasMoveFunction?("175") && attacker.hasActiveAbility?(:SERENEGRACE) &&
-										((!target.hasActiveAbility?(:INNERFOCUS) && !target.hasActiveAbility?(:SHIELDDUST)) || mold_broken) &&
+										((!target.hasActiveAbility?(:INNERFOCUS) && !target.hasActiveAbility?(:SHIELDDUST)) || moldbroken(attacker,target,"175")) &&
 										target.effects[PBEffects::Substitute]==0
 										xitemscore +=140
 									end

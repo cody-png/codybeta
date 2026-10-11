@@ -31,13 +31,13 @@ KIF::Options.add(:battles, :save) {
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("No-EVs Mode"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.noevsmode },
-                 proc { |value| $PokemonSystem.noevsmode = value },
+                 proc { |value| $PokemonSystem.noevsmode = value; KIF.recalc_all_stats },
                  [_INTL("Pokemon EVs exist."), _INTL("Pokemon EVs are disabled.")])
 }
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Max IVs Mode"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.maxivsmode },
-                 proc { |value| $PokemonSystem.maxivsmode = value },
+                 proc { |value| $PokemonSystem.maxivsmode = value; KIF.recalc_all_stats },
                  [_INTL("Disabled."), _INTL("Pokemon IVs are always at max.")])
 }
 KIF::Options.add(:battles, :save) {

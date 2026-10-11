@@ -44,23 +44,29 @@ module KIF
                         "Fusion preview and screen, Pokédex evolutions, IVs and EVs.",
                         %w[F-FUSION-03 C-FUSION-02 F-POKE-06 F-UI-04]],
       :battles      => ["Battles & Challenges",
-                        "Battle format, AI, challenges, level caps, EXP/EV/IV modes.",
-                        %w[F-BATTLE-01 F-BATTLE-03 F-BATTLE-04 F-BATTLE-05 F-BATTLE-06 F-BATTLE-08 F-BATTLE-09 F-BATTLE-10 F-BATTLE-11]],
+                        "Battle format, AI, challenges, level caps, EXP modes, gym teams.",
+                        %w[F-BATTLE-01 F-BATTLE-03 F-BATTLE-04 F-BATTLE-05 F-BATTLE-06 F-BATTLE-08 F-BATTLE-09 F-BATTLE-10 F-BATTLE-11 C-GYM-01 C-BATTLE-02]],
       :randomizer   => ["Randomizer",
                         "The randomizer and gym leader teams.",
                         %w[C-RAND-01 C-GYM-01]],
       :pokemon      => ["Pokémon & Fusion",
                         "Fusion rules, breeding, evolution lock, gender, moves, types.",
                         %w[F-FUSION-01 F-FUSION-02 C-FUSION-01 F-POKE-01 F-POKE-02 F-POKE-03 F-POKE-04 F-POKE-05 F-POKE-08 F-DATA-01]],
-      :items        => ["Items & Shop",
-                        "Kuray Shop and K-Eggs.",
-                        %w[F-ITEM-01 F-ITEM-02]],
+      :items        => ["Kuray Shop",
+                        "The Kuray Shop in the pause menu (and Streamer's Dream).",
+                        %w[F-ITEM-01]],
+      :keggs        => ["K-Eggs",
+                        "K-Eggs: typed, badge, legendary and fusion eggs from the Kuray Shop.",
+                        %w[F-ITEM-02]],
       :pc           => ["PC & Saves",
-                        "PC extras, import/export, quicksave, backups, PC egg hatching.",
-                        %w[F-PC-01 F-PC-02 F-UI-06 F-CORE-03 F-UI-08]],
+                        "PC extras, quicksave, save backups, eggs hatching into the PC.",
+                        %w[F-PC-01 F-UI-06 F-CORE-03 F-UI-08]],
+      :import       => ["Import & Export",
+                        "Export Pokémon to files and import them back (PC and party).",
+                        %w[F-PC-02]],
       :qol          => ["Quality of Life",
-                        "Pause menu extras, field moves, speed-up, frame rate, intro skip.",
-                        %w[F-UI-01 F-UI-05 F-UI-07 F-UI-09 F-UI-10 SCOPE-04 C-SYS-01 C-SYS-02]],
+                        "Pause menu extras, field moves, speed-up, intro skip, shenanigans.",
+                        %w[F-UI-01 F-UI-05 F-UI-07 F-UI-09 F-UI-10 SCOPE-04 C-SYS-02]],
       :mod_settings => ["Mod Settings",
                         "Shows the settings of your Mod Manager mods here.",
                         []]
@@ -133,6 +139,7 @@ module KIF
       h = states
       return unless h
       h[id] = value
+      poll   # watchers (frame rate, species data...) follow at once
     end
 
     def self.active?(id);  return id.nil? || state(id) != OFF; end
@@ -194,7 +201,16 @@ module KIF
       return um
     end
 
+    @handler_snapshot = {}
+
     def self.take_snapshot
+      # PIF's own item / move / battle handlers, for the ones a module replaces
+      [HandlerHash, HandlerHash2, HandlerHashBasic].each do |k|
+        ObjectSpace.each_object(k) do |o|
+          h = o.instance_variable_get(:@hash)
+          @handler_snapshot[o] = h.dup if h.is_a?(Hash)
+        end
+      end
       ObjectSpace.each_object(Module) do |mod|
         next if mod.singleton_class? rescue next
         [mod, mod.singleton_class].each do |m|
@@ -212,14 +228,19 @@ module KIF
     # while that module is active.
     #---------------------------------------------------------------------------
     class GatedCallback
-      attr_reader :mod_id, :callback
-      def initialize(mod_id, callback)
+      attr_reader :mod_id, :callback, :fallback
+      # fallback: what ran before the module's code replaced it (PIF's
+      # handler), called while the module is Off; nil = nothing
+      def initialize(mod_id, callback, fallback = nil)
         @mod_id = mod_id
         @callback = callback
+        @fallback = fallback
       end
       def arity; @callback.arity; end
       def call(*args, &blk)
-        return nil unless KIF::Modules.active?(@mod_id)
+        unless KIF::Modules.active?(@mod_id)
+          return @fallback ? @fallback.call(*args, &blk) : nil
+        end
         @callback.call(*args, &blk)
       end
       def ==(other)
@@ -231,15 +252,41 @@ module KIF
       def to_proc; method(:call).to_proc; end
     end
 
-    def self.gate_callback(cb)
+    def self.gate_callback(cb, fallback = nil)
       return cb if cb.is_a?(GatedCallback)
       id = for_proc(cb)
-      return id ? GatedCallback.new(id, cb) : cb
+      return id ? GatedCallback.new(id, cb, fallback) : cb
+    end
+
+    # PIF's handler for a key before any module replaced it (nil if none)
+    def self.pif_handler(hash_obj, key)
+      snap = @handler_snapshot[hash_obj]
+      return snap ? snap[key] : nil
     end
   end
 end
 
 KIF::Options.define(:kif_modules, {}, :global)
+
+# Players who were already playing KIF Beta before Modules existed keep their
+# features: a save from before Modules turns every module On once. New
+# players (no save yet) start with everything Off.
+module Game
+  class << self
+    alias kif_modules_set_up_system set_up_system unless method_defined?(:kif_modules_set_up_system)
+    def set_up_system
+      kif_modules_set_up_system
+      begin
+        if $PokemonSystem && !$PokemonSystem.instance_variable_defined?(:@kif_modules) && SaveData.exists?
+          KIF::Modules.all_on!
+          KIF.log("Modules: save from before Modules - every module turned On")
+        end
+      rescue => e
+        KIF.log("Modules: migration failed (#{e.class}: #{e.message})")
+      end
+    end
+  end
+end
 
 class Event
   alias kif_mod_event_add + unless method_defined?(:kif_mod_event_add)
@@ -262,14 +309,17 @@ module KIF
       objs.uniq.each do |obj|
         h = obj.instance_variable_get(:@hash)
         next unless h.is_a?(Hash)
+        snap = @handler_snapshot[obj] || {}
         h.each do |k, v|
           next unless v.respond_to?(:call) && v.respond_to?(:source_location)
-          g = gate_callback(v)
+          fb = snap[k]
+          fb = nil if fb.equal?(v)
+          g = gate_callback(v, fb)
           next if g.equal?(v)
           h[k] = g
           n += 1
         end
-        ifs = obj.instance_variable_get(:@addIfs)
+        ifs = obj.instance_variable_get(:@addIfs) || obj.instance_variable_get(:@add_ifs)
         if ifs.is_a?(Array)
           ifs.each do |entry|
             next unless entry.is_a?(Array)
@@ -284,6 +334,18 @@ module KIF
         end
       end
       return n
+    end
+  end
+end
+
+# Watchers run before a save is loaded too (data a module changes must be in
+# its right state before anything reads it), then once per map frame.
+module Game
+  class << self
+    alias kif_modules_load load unless method_defined?(:kif_modules_load)
+    def load(*args, &blk)
+      KIF::Modules.poll
+      kif_modules_load(*args, &blk)
     end
   end
 end

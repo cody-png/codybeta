@@ -48,12 +48,27 @@ module KIF
     # [:send, name] or [:um, UnboundMethod] or nil (new method)
     def self.fallback_for(mod, name, um, file)
       orig = um.original_name
-      file_aliases(file)[orig].each do |nm|
-        next if nm == name
-        next unless has_method?(mod, nm)
-        other = own_method(mod, nm) || (mod.instance_method(nm) rescue nil)
-        next if other.nil? || other == um
-        return [:send, nm]
+      id = for_file(file)
+      # the alias this file made; when it points at another layer of the SAME
+      # module (two files of one feature on one method), keep walking down
+      cur_file = file
+      cur_um = um
+      10.times do
+        found = nil
+        file_aliases(cur_file)[orig].each do |nm|
+          next if nm == name
+          next unless has_method?(mod, nm)
+          other = own_method(mod, nm) || (mod.instance_method(nm) rescue nil)
+          next if other.nil? || other == cur_um
+          found = [nm, other]
+          break
+        end
+        break unless found
+        nm, other = found
+        loc = other.source_location
+        return [:send, nm] unless loc && for_file(loc[0]) == id
+        cur_file = loc[0]
+        cur_um = other
       end
       snap = @snapshot[[mod, name]]
       if snap && snap.source_location != um.source_location

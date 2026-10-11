@@ -109,6 +109,7 @@ module KIF
           n = import
           pbMessage(_INTL("Copied {1} files. Your old KIF keeps its own copies, and the old save backups stay in the old folder.", n))
           KIF.log("Save folder: copied #{n} files from #{old_dir}")
+          show_copied_saves if n > 0
         else
           pbMessage(_INTL("Okay. You can still copy them yourself later: the old saves are in {1}.", old_dir))
           KIF.log("Save folder: old saves not copied (player said no)")
@@ -117,6 +118,27 @@ module KIF
       mark_done
     rescue => e
       KIF.log("Save folder first launch failed (#{e.class}: #{e.message})")
+    end
+
+    # The load menu was built before the copy (no Continue entry) and the
+    # global settings came from an empty save: point the menu at the newest
+    # copied save and read the boot values from it.
+    def show_copied_saves
+      scr = self.screen
+      newest = (SaveData.get_newest_save_slot rescue nil)
+      return unless scr && newest
+      scr.instance_variable_set(:@selected_file, newest)
+      begin
+        data = SaveData.read_from_file(SaveData.get_full_path(newest))
+        vals = SaveData.instance_variable_get(:@values) || []
+        vals.each { |v| v.mark_as_unloaded if v.load_in_bootup? }
+        SaveData.load_bootup_values(data)
+        KIF.log("Save folder: boot values read from #{newest}")
+      rescue => e
+        KIF.log("Save folder: boot values not reloaded (#{e.class}: #{e.message})")
+      end
+    rescue => e
+      KIF.log("Save folder: copied saves not shown (#{e.class}: #{e.message})")
     end
 
     #---------------------------------------------------------------------------
@@ -181,9 +203,9 @@ module KIF
 
     module LoadScreen
       def pbStartLoadScreen(*args)
+        KIF::SaveFolder.screen = self
         KIF::SaveFolder.first_launch
         KIF::SaveFolder.update_menu
-        KIF::SaveFolder.screen = self
         KIF::SaveFolder.reload = false
         return super
       ensure

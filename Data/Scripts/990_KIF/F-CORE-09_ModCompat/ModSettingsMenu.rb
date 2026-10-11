@@ -46,25 +46,32 @@ module KIF
     end
 
     # Kanto Reloaded installed and not switched off in Mod Manager?
-    def self.kanto_reloaded_installed?(dir = "Mods")
-      found = Dir[File.join(dir, "*", "mod.json")].any? do |f|
-        (File.read(f) rescue "") =~ /"id"\s*:\s*"KantoReloaded"/
+    # A Mod Manager mod (Mods/<x>/mod.json or Mods/ModDev/<x>/mod.json) with
+    # this id, unless Mod Manager has it disabled
+    def self.mm_mod_installed?(id, dir = "Mods")
+      found = (Dir[File.join(dir, "*", "mod.json")] + Dir[File.join(dir, "ModDev", "*", "mod.json")]).any? do |f|
+        (File.read(f) rescue "") =~ /"id"\s*:\s*"#{Regexp.escape(id)}"/
       end
       return false unless found
       state = File.join(dir, "mod_manager_state.json")
       if File.exist?(state)
         s = (File.read(state) rescue "")
-        return false if s =~ /"KantoReloaded"\s*:\s*\{[^}]*"enabled"\s*:\s*false/
+        return false if s =~ /"#{Regexp.escape(id)}"\s*:\s*\{[^}]*"enabled"\s*:\s*false/
       end
       return true
     rescue StandardError
-      return true   # when unsure, leave the API to Kanto Reloaded
+      return true   # when unsure, leave the API to the mod
+    end
+
+    def self.kanto_reloaded_installed?(dir = "Mods")
+      return mm_mod_installed?("KantoReloaded", dir)
     end
 
     # Called before the Mods folder loads
     def self.install(dir = "Mods")
       return false if defined?(::ModSettingsMenu)
       return false if kanto_reloaded_installed?(dir)
+      return false if mm_mod_installed?("mod_settings_menu", dir)   # the original Mod Settings Menu mod
       Object.const_set(:ModSettingsMenu, Module.new)
       ::ModSettingsMenu.const_set(:NOCATEGORY, "__nocategory__")
       ::ModSettingsMenu.extend(API)
@@ -101,13 +108,19 @@ module KIF
         d = File.open(path, "rb") { |f| Marshal.load(f) } if File.exist?(path)
         @values = d if d.is_a?(Hash)
       rescue StandardError => e
-        KIF.log("Mod settings file unreadable (#{e.class}: #{e.message})") if KIF.respond_to?(:log)
+        KIF.log("Mod settings file unreadable (#{e.class}: #{e.message}) - kept as #{File.basename(path)}.bad") if KIF.respond_to?(:log)
+        begin
+          File.rename(path, path + ".bad")   # never overwrite a damaged file quietly
+        rescue StandardError
+        end
       end
       return @values
     end
 
     def self.write
-      File.open(path, "wb") { |f| Marshal.dump(values, f) }
+      tmp = path + ".tmp"
+      File.open(tmp, "wb") { |f| Marshal.dump(values, f) }   # whole file or nothing
+      File.rename(tmp, path)
     rescue StandardError => e
       KIF.log("Mod settings file not written (#{e.class}: #{e.message})") if KIF.respond_to?(:log)
     end
@@ -128,10 +141,13 @@ module KIF
 
     def self.set(k, v)
       kk = key(k)
-      old = values[kk]
+      stored = values.has_key?(kk)
+      old = stored ? values[kk] : get(kk)   # what the mod saw before (its default when unsaved)
+      return v if stored && old == v
       values[kk] = v
-      write if old != v || !File.exist?(path)
-      invoke(kk, v) if old != v
+      changed = (old != v)
+      write if changed || !stored
+      invoke(kk, v) if changed
       return v
     end
 
@@ -208,6 +224,11 @@ module KIF
       end
       def register_pending(key, options = {})
         register(key, options)
+      end
+      # Kanto Reloaded's shim form: an Option object with a key
+      def register_option(option, key = nil, category = nil, _scene = nil)
+        k = key || "legacy_option_#{option.object_id}"
+        register(k, :name => (option.respond_to?(:name) ? option.name : k.to_s), :category => category)
       end
       def get(key); KIF::ModSettings.get(key); end
       def set(key, value); KIF::ModSettings.set(key, value); end

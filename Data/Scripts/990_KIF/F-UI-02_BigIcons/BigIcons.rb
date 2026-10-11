@@ -106,6 +106,7 @@ module KIF
       h = [(src.height * scale).floor, 1].max
       small = Bitmap.new(w, h)
       small.stretch_blt(Rect.new(0, 0, w, h), src, Rect.new(0, 0, src.width, src.height))
+      anim.dispose if anim.respond_to?(:dispose) && !(anim.respond_to?(:disposed?) && anim.disposed?)
       if key
         if @cache.length >= CACHE_LIMIT
           old_key, old = @cache.first
@@ -169,26 +170,55 @@ end
 
 # Summary and naming screens: no offset (KIF 006_UI_Summary.rb:137-138,
 # :200-201; 024_UI_TextEntry.rb:143-145, :451-453)
-{ :PokemonEntryScene    => [["subject"], [:pbStartScene]],
-  :PokemonEntryScene2   => [["subject"], [:pbStartScene]],
-  :PokemonSummary_Scene => [["pokeicon"], [:pbStartScene, :pbStartForgetScene]]
-}.each do |cls, (keys, methods)|
-  next unless Object.const_defined?(cls)
-  Object.const_get(cls).class_eval do
-    methods.each do |m|
-      next unless method_defined?(m)
-      orig = "kif_big_#{m}".to_sym
-      alias_method orig, m unless method_defined?(orig)
-      define_method(m) do |*args, &block|
-        ret = send(orig, *args, &block)
-        keys.each do |k|
-          s = @sprites && @sprites[k]
-          next unless s.is_a?(PokemonIconSprite)
-          s.kif_big_offset = false
-          s.x = s.x
-        end
-        ret
+module KIF
+  module BigIcons
+    def self.no_offset(scene, keys)
+      sprites = scene.instance_variable_get(:@sprites)
+      return unless sprites
+      keys.each do |k|
+        s = sprites[k]
+        next unless s.is_a?(PokemonIconSprite)
+        s.kif_big_offset = false
+        s.x = s.x
       end
+    end
+  end
+end
+
+# (literal alias names, so the module gate can find the layer below)
+if Object.const_defined?(:PokemonEntryScene)
+  class PokemonEntryScene
+    alias kif_big_pbStartScene pbStartScene unless method_defined?(:kif_big_pbStartScene)
+    def pbStartScene(*args, &block)
+      ret = kif_big_pbStartScene(*args, &block)
+      KIF::BigIcons.no_offset(self, ["subject"])
+      ret
+    end
+  end
+end
+if Object.const_defined?(:PokemonEntryScene2)
+  class PokemonEntryScene2
+    alias kif_big_pbStartScene pbStartScene unless method_defined?(:kif_big_pbStartScene)
+    def pbStartScene(*args, &block)
+      ret = kif_big_pbStartScene(*args, &block)
+      KIF::BigIcons.no_offset(self, ["subject"])
+      ret
+    end
+  end
+end
+class PokemonSummary_Scene
+  alias kif_big_pbStartScene pbStartScene unless method_defined?(:kif_big_pbStartScene)
+  def pbStartScene(*args, &block)
+    ret = kif_big_pbStartScene(*args, &block)
+    KIF::BigIcons.no_offset(self, ["pokeicon"])
+    ret
+  end
+  if method_defined?(:pbStartForgetScene)
+    alias kif_big_pbStartForgetScene pbStartForgetScene unless method_defined?(:kif_big_pbStartForgetScene)
+    def pbStartForgetScene(*args, &block)
+      ret = kif_big_pbStartForgetScene(*args, &block)
+      KIF::BigIcons.no_offset(self, ["pokeicon"])
+      ret
     end
   end
 end

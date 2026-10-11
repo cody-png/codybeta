@@ -31,6 +31,7 @@ module KIF
     @applied = nil
 
     def self.choice
+      return 0 if defined?(KIF::Modules) && !KIF::Modules.active?(:graphics)   # PIF's font
       v = $PokemonSystem ? $PokemonSystem.kurayfonts.to_i : 0
       return (0...FONTS.length).include?(v) ? v : 0
     end
@@ -92,3 +93,6 @@ def pbSetNarrowFont(bitmap)
   kif_font_pbSetNarrowFont(bitmap)
   bitmap.font.size = KIF::GameFont.size(:narrow) if KIF::GameFont.choice != 0 && !KIF::GameFont.chinese?
 end
+
+# Module toggled: the font names follow (watchers are never switched off)
+KIF::Modules.watch(:graphics) { |_active| KIF::GameFont.sync } if defined?(KIF::Modules)

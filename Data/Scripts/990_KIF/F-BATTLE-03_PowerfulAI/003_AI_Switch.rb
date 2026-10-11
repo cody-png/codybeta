@@ -15,7 +15,7 @@ class PokeBattle_AI
 		moveType = nil
 		skill = 100#@battle.pbGetOwnerFromBattlerIndex(idxBattler).skill_level || 0
 		battler = @battle.battlers[idxBattler]
-		if $PokemonSystem.autobattler && $PokemonSystem.autobattler != 0 && @battle.turnCount>0
+		if defined?(KIF::AutoBattle) && KIF::AutoBattle.on? && @battle.pbOwnedByPlayerSerious?(idxBattler) && @battle.turnCount>0   # KIF port: the player's own side only
 			if battler.turnCount == 0
 				echo("\nSwitch prevented due to the battler being on its first turn out, during auto-battling.\n")
 				return false 
@@ -513,7 +513,7 @@ class PokeBattle_AI
 						tempdam*=0.67 if b.hasActiveItem?(:PSYCHICSEED) && m.specialMove?
 					end
 					if pokmon.hasActiveAbility?(:MISTYSURGE) && @battle.field.terrain != :Misty
-						if m.type == :DRAGON && newenemy.affectedByTerrain?
+						if m.type == :DRAGON && b.affectedByTerrain?
 							tempdam*=0.5 
 						end
 						tempdam*=0.67 if b.hasActiveItem?(:MISTYSEED) && m.specialMove?
@@ -591,7 +591,7 @@ class PokeBattle_AI
 			#if $consoleenabled
 				echo("\nScore after factoring defense: "+sum.to_s+" (Maximum expected damage taken: "+damagetakenPercent.to_s+" percent)")
 			#end	
-			ownparty = @battle.pbParty(1)
+			ownparty = @battle.pbParty(idxBattler)   # KIF port: the side being chosen for
 			ownparty.each_with_index do |pkmn, idxParty|
 				next if !pkmn || !pkmn.able?
 				next if pkmn==pokmon
@@ -694,11 +694,11 @@ class PokeBattle_AI
 			end	
 			hazarddamage=0
 			if pokmon.takesIndirectDamage?
-				if !pokmon.airborne?
+				if !pokmon.airborne? && pokmon.pbOwnSide.effects[PBEffects::Spikes] > 0   # KIF port: only when Spikes are down
 					spikesDiv = [8, 6, 4][pokmon.pbOwnSide.effects[PBEffects::Spikes] - 1]
 					hazarddamage += pokmon.totalhp/spikesDiv
 				end
-				if GameData::Type.exists?(:ROCK)
+				if GameData::Type.exists?(:ROCK) && pokmon.pbOwnSide.effects[PBEffects::StealthRock]   # KIF port: only with Stealth Rock
 					bTypes = pokmon.pbTypes(true)
 					eff = Effectiveness.calculate(:ROCK, bTypes[0], bTypes[1], bTypes[2])
 					if !Effectiveness.ineffective?(eff)
@@ -725,4 +725,4 @@ class PokeBattle_AI
 		return best
 	end
 	
-end
+end

@@ -57,6 +57,7 @@ module KIF
     }
 
     def self.on?
+      return false if defined?(KIF::Modules) && !KIF::Modules.active?(:battles)
       return true unless $PokemonSystem && $PokemonSystem.respond_to?(:powerfulai)
       return $PokemonSystem.powerfulai.to_i != 0
     end
@@ -87,15 +88,7 @@ module KIF
           next unless cls.method_defined?(pif)
           next if cls.method_defined?(demi)
           cls.send(:alias_method, demi, m)
-          cls.send(:define_method, m) do |*args, &block|
-            if KIF::PowerfulAI.on?
-              send(demi, *args, &block)
-            elsif Thread.current[:kif_mod_ai]
-              KIF::PowerfulAI.mod_adapt(self, m, pif, args, block)
-            else
-              send(pif, *args, &block)
-            end
-          end
+          KIF.define_ai_dispatch(cls, m, pif, demi)   # core, never gated
         end
       end
     end

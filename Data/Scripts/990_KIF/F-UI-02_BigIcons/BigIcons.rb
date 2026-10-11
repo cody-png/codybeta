@@ -64,9 +64,12 @@ module KIF
       def pbSetColor(*args); end   # IconSprite#setColor (unused for icons)
     end
 
+    @failed = {}
+
     def self.clear_cache
       @cache.each_value { |b| b.dispose if b && !b.disposed? }
       @cache.clear
+      @failed.clear
     end
 
     def self.cache_key(pkmn)
@@ -87,6 +90,10 @@ module KIF
     # Battle sprite scaled down to icon size (a private copy)
     def self.bitmap_for(pkmn)
       key = cache_key(pkmn) rescue nil
+      # a sprite that couldn't be loaded (missing file, a download that
+      # failed) is not tried again on every refresh: that made the PC and
+      # party pause for a moment on each such Pokémon (tester report)
+      return nil if key && @failed[key]
       if key && (hit = @cache[key]) && !hit.disposed?
         @cache.delete(key); @cache[key] = hit
         copy = Bitmap.new(hit.width, hit.height)
@@ -99,7 +106,10 @@ module KIF
              else
                GameData::Species.sprite_bitmap_from_pokemon(pkmn)
              end
-      return nil unless anim
+      unless anim
+        @failed[key] = true if key
+        return nil
+      end
       scale = pkmn.egg? ? 0.5 : 1.0 / 3
       src = anim.bitmap
       w = [(src.width * scale).floor, 1].max
@@ -119,6 +129,7 @@ module KIF
       end
       return Icon.new(small)
     rescue => e
+      @failed[key] = true if key
       KIF.log("Big icon failed: #{e.message}")
       return nil
     end

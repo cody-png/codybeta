@@ -11,7 +11,9 @@
 #     PokemonSystem (camera zoom, own trainer animation, stat stage icons);
 #     a save made before EBDX was installed also gets EBDX's own on/off
 #     setting (EBDX only sets it for brand-new games);
-#   * rows in Options > KIF Settings > Battles instead of Multiplayer's menu.
+#   * rows in Options > Modules > Graphical Changes settings instead of
+#     Multiplayer's menu;
+#   * EBDX battles only while the Graphical Changes module is on.
 # Nothing here runs when EBDX isn't installed.
 # Not usable without Multiplayer: 661_BossUIHooks/001-002 (boss battles call
 # Pokemon#is_boss?, a Multiplayer method) - leave those two files out.
@@ -25,6 +27,19 @@ module KIF
 end
 
 if KIF::EBDX.installed?
+  # EBDX battles follow the Graphical Changes module (Off = PIF's battles)
+  module KIF
+    module EBDX
+      module ToggleModule
+        def enabled?
+          return false if defined?(KIF::Modules) && !KIF::Modules.active?(:graphics)
+          return super
+        end
+      end
+    end
+  end
+  ::EBDXToggle.singleton_class.prepend(KIF::EBDX::ToggleModule)
+  KIF::Modules.no_gate(KIF::EBDX::ToggleModule) if defined?(KIF::Modules)
   KIF::Options.define(:mp_ebdx_enabled, 1, :global)
   KIF::Options.define(:mp_ebdx_zoom_disabled, 1, :global)
   KIF::Options.define(:mp_skip_trainer_anim, 0, :global)
@@ -107,5 +122,5 @@ if KIF::EBDX.installed?
     PokemonEvolutionSceneEBDX.prepend(KIF::EBDX::EvolutionSprites)
   end
 
-  KIF.log("EBDX found: battle visuals available (Options > KIF Settings > Battles)") if KIF.respond_to?(:log)
+  KIF.log("EBDX found: battle visuals available (Options > Modules > Graphical Changes)") if KIF.respond_to?(:log)
 end

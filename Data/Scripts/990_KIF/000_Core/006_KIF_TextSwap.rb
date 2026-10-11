@@ -24,6 +24,7 @@ module KIF
       list = @swaps[text]
       return nil unless list
       list.each do |block|
+        next if defined?(KIF::Modules) && !KIF::Modules.proc_active?(block)
         ret = (block.call rescue nil)
         return ret if ret
       end

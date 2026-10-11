@@ -482,7 +482,29 @@ module KIF
       load_unlisted_mod_scripts if respond_to?(:load_unlisted_mod_scripts)
       bridge_arity if respond_to?(:bridge_arity)
       register_crafting_items if respond_to?(:register_crafting_items)
+      mark_mod_ai if respond_to?(:mark_mod_ai)
       KIF::ModSettings.drain_pending if defined?(KIF::ModSettings)
+    end
+
+    # Alpha Encounters replaces PokeBattle_AI#pbChooseMoves with KIF 0.20.7's
+    # (DemICE-style) version. While it runs, the Battle AI switch gives PIF's
+    # answers in the shape that code expects (see PowerfulAI.mod_adapt).
+    def self.mark_mod_ai
+      return unless defined?(::PokeBattle_AI)
+      return if ::PokeBattle_AI.method_defined?(:kif_mod_pbChooseMoves)
+      loc = (::PokeBattle_AI.instance_method(:pbChooseMoves).source_location rescue nil)
+      return unless loc && loc[0].to_s =~ %r{(\A|[/\\])Mods[/\\]}
+      ::PokeBattle_AI.send(:alias_method, :kif_mod_pbChooseMoves, :pbChooseMoves)
+      ::PokeBattle_AI.send(:define_method, :pbChooseMoves) do |*args, &block|
+        prev = Thread.current[:kif_mod_ai]
+        Thread.current[:kif_mod_ai] = true
+        begin
+          kif_mod_pbChooseMoves(*args, &block)
+        ensure
+          Thread.current[:kif_mod_ai] = prev
+        end
+      end
+      KIF.log("Mod compat: pbChooseMoves from #{File.basename(loc[0].to_s)} - PIF AI answers adapted for it")
     end
   end
 end

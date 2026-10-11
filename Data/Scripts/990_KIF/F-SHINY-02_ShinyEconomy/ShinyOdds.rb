@@ -8,8 +8,11 @@
 #   Wild Shiny Odds (shinyodds, per-save, 0-65536, default
 #     Settings::SHINY_POKEMON_CHANCE = 16): a Pokémon is shiny when
 #     ((pid ^ ownerId) low16 XOR high16) < shinyodds, i.e. shinyodds / 65536.
-#     Applies only to Pokémon generated after the port started (flag
-#     @kif_new_odds); older Pokémon keep PIF's 16/65536 check. As in PIF, any shiny made while the odds differ from 16
+#     Each Pokémon keeps the odds that were set when it was generated
+#     (@kif_odds): changing the setting only affects Pokémon met afterwards,
+#     never ones already caught (Cody, 2026-10-10). Pokémon from before the
+#     port, or from 0.21.21 and earlier (@kif_new_odds only), use PIF's
+#     16/65536. As in PIF, any shiny made with odds other than 16
 #     (S_CHANCE_VALIDATOR) is flagged debug_shiny (different star icon).
 #   Shiny Trainer Pokemon (shiny_trainer_pkmn):
 #     0 Off      – each trainer Pokémon rolls shinyodds/65536 again
@@ -81,22 +84,22 @@ end
 KIF.guard_base("014_Pokemon/001_Pokemon.rb", 212896005, "Pokemon#shiny?")
 
 class Pokemon
-  # Marks Pokémon generated while this overlay runs. Only these use the KIF
-  # odds: Pokémon that already existed (in any save) keep PIF's 16/65536
-  # check. Without this, a Pokémon whose shininess hadn't been evaluated yet
-  # (@shiny nil – e.g. never displayed) was re-rolled at the new odds, which
-  # turned most of a test save shiny at 65536/65536 (bug found 2026-10-04).
+  # Each Pokémon remembers the odds set when it was generated. A non-shiny
+  # Pokémon's shininess is worked out again on every shiny? call (@shiny
+  # stays nil, as in PIF), so with the current setting instead, raising the
+  # odds later turned caught Pokémon shiny (bug found 2026-10-04 for old
+  # saves, 2026-10-10 for Pokémon caught under KIF).
   alias kif_odds_initialize initialize unless method_defined?(:kif_odds_initialize)
 
   def initialize(*args)
     kif_odds_initialize(*args)
-    @kif_new_odds = true
+    @kif_odds = KIF.shiny_odds
   end
 
   # Copy of PIF 6.8.2 Pokemon#shiny? using KIF's adjustable odds for new
   # Pokémon, plus fusion shiny parts.
   def shiny?
-    odds = @kif_new_odds ? KIF.shiny_odds : Settings::SHINY_POKEMON_CHANCE   # KIF
+    odds = @kif_odds || Settings::SHINY_POKEMON_CHANCE   # KIF
     if @shiny.nil?
       a = @personalID ^ @owner.id
       b = a & 0xFFFF

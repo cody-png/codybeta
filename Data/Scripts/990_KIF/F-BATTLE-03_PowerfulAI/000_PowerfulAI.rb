@@ -88,10 +88,39 @@ module KIF
           next if cls.method_defined?(demi)
           cls.send(:alias_method, demi, m)
           cls.send(:define_method, m) do |*args, &block|
-            send(KIF::PowerfulAI.on? ? demi : pif, *args, &block)
+            if KIF::PowerfulAI.on?
+              send(demi, *args, &block)
+            elsif Thread.current[:kif_mod_ai]
+              KIF::PowerfulAI.mod_adapt(self, m, pif, args, block)
+            else
+              send(pif, *args, &block)
+            end
           end
         end
       end
+    end
+
+    # A mod's own pbChooseMoves written for KIF 0.20.7 (Alpha Encounters)
+    # expects DemICE's answers: move choices as [index, score, target, name]
+    # and pbEnemyItemToUse as [[item, score], target]. With Battle AI = PIF,
+    # PIF's answers are adapted while that mod code runs (ModCompat sets
+    # Thread.current[:kif_mod_ai]). PIF's own item choice already ran this
+    # turn before pbChooseMoves, so no second item answer is given.
+    def self.mod_adapt(ai, m, pif, args, block)
+      case m
+      when :pbRegisterMoveTrainer
+        user, _idx, choices = args
+        n = choices.length
+        ret = ai.send(pif, *args, &block)
+        choices[n..-1].each do |c|
+          next unless c.is_a?(Array) && c.length == 3
+          c[3] = (user.moves[c[0]].name rescue "")
+        end
+        return ret
+      when :pbEnemyItemToUse
+        return nil
+      end
+      return ai.send(pif, *args, &block)
     end
   end
 end

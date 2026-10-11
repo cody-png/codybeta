@@ -136,7 +136,12 @@ module KIF
         item.instance_variable_set(:@kif_name, name)
         item.instance_variable_set(:@kif_name_plural, name + "s")
         item.instance_variable_set(:@kif_description, desc)
-        ItemHandlers::UseInField.add(sym, proc { |it| next KIF::KurayEggs.use(effect, it) })
+        # registered after the module gate ran (data load), so gated here
+        # (a plain proc: HandlerHash.add only takes Procs)
+        ItemHandlers::UseInField.add(sym, proc { |it|
+          next nil if defined?(KIF::Modules) && !KIF::Modules.active?(:keggs)
+          next KIF::KurayEggs.use(effect, it)
+        })
       end
       @pools = {}
     end
@@ -243,7 +248,7 @@ module KIF
       pkmn.heal
       pkmn.obtain_text = item_name
       return 0 unless add_like_caught(pkmn)
-      if $Trainer.pokedex.respond_to?(:register_unfused_pkmn)
+      if !pkmn.egg? && $Trainer.pokedex.respond_to?(:register_unfused_pkmn)
         $Trainer.pokedex.register_unfused_pkmn(pkmn).each do |unfused|
           pbMessage(_INTL("{1}'s data was added to the Pokédex", GameData::Species.get(unfused).name))
         end
@@ -264,6 +269,12 @@ module KIF
         pbMessage(_INTL("There's no more room for Pokémon!\1"))
         pbMessage(_INTL("The Pokémon Boxes are full and can't accept any more!"))
         return false
+      end
+      if pkmn.egg?
+        # an Egg gives nothing away: no species name, no Pokédex, no nickname
+        pbMessage(_INTL("{1} received an Egg!\\me[Pkmn get]\\wtnp[20]\1", $Trainer.name))
+        pbStorePokemon(pkmn)
+        return true
       end
       pbMessage(_INTL("{1} obtained {2}!\\me[Pkmn get]\\wtnp[20]\1", $Trainer.name, pkmn.speciesName))
       show_new_dex(pkmn)

@@ -352,7 +352,7 @@ class PokemonDataBox
 
   unless method_defined?(:refreshtypeDisplay)
     def refreshtypeDisplay
-      kif_draw_type_display if respond_to?(:kif_draw_type_display, true)
+      kif_draw_type_display if respond_to?(:kif_draw_type_display, true) && (!defined?(KIF::Modules) || KIF::Modules.active?(:graphics))
     end
   end
 
@@ -753,6 +753,10 @@ module KIF
         listed = info.scripts.map { |s| File.join(folder, s) }
         next if listed.any? { |f| File.exist?(f) }
         found = Dir[File.join(folder, "**", "*.rb")].sort
+        # the same script dropped loose into Mods/ by hand is already loaded
+        # (loading it twice makes its aliases recurse)
+        root = defined?(KIF::Mods) && KIF::Mods.respond_to?(:loaded_root) ? KIF::Mods.loaded_root : []
+        found = found.reject { |f| root.include?(File.basename(f)) }
         next if found.empty?
         found.each do |f|
           begin

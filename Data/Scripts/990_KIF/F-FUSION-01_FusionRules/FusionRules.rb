@@ -92,7 +92,7 @@ end unless defined?(pbDominantFusionTypes?)
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Self-Fusion Stat Boost"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.self_fusion_boost },
-                 proc { |value| $PokemonSystem.self_fusion_boost = value },
+                 proc { |value| $PokemonSystem.self_fusion_boost = value; KIF.recalc_all_stats },
                  [_INTL("Stat boost for self-fusions is disabled."),
                   _INTL("Stat boost for self-fusions is enabled.")])
 }
@@ -102,7 +102,7 @@ KIF::Options.add(:battles, :save) {
   KIF::Options.add(:battles, :save) {
     EnumOption.new(_INTL(title), [_INTL("Off"), _INTL("Head"), _INTL("Better")],
                    proc { $PokemonSystem.send(key) },
-                   proc { |value| $PokemonSystem.send("#{key}=", value) },
+                   proc { |value| $PokemonSystem.send("#{key}=", value); KIF.recalc_all_stats },
                    [_INTL(offtext),
                     _INTL("Sliders determine what % of each stat comes from the head pokemon."),
                     _INTL("Sliders determine what % of each stat comes from the better base stat.")])
@@ -115,6 +115,7 @@ KIF::Options.add(:battles, :save) {
                          s = KIF::FusionRules.sliders(skey)
                          s[stat] = value
                          $PokemonSystem.send("#{skey}=", s)
+                         KIF.recalc_all_stats
                        },
                        _INTL("Percentage of base {1} contributed.", name))
     }

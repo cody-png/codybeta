@@ -378,7 +378,7 @@ module KIF
     def self.repeated?(b)
       return false unless @repeating && button(b) == @repeating
       return @repeat_count == 0 ||
-             (@repeat_count >= REPEAT_START && ((@repeat_count + 1) & REPEAT_DELAY) == 0)
+             (@repeat_count >= REPEAT_START && ((@repeat_count + 1) % REPEAT_DELAY) == 0)
     end
 
     def self.repeated_raw?(k)

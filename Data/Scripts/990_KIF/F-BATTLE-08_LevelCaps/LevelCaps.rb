@@ -109,6 +109,8 @@ module KIF
       pkmn.kif_banked_exp -= give
       old_level = pkmn.level
       pkmn.exp = pkmn.exp + give   # 6.8.2 exp= recomputes the level
+      # a fusion shares what it gained with both parts when unfused
+      pkmn.exp_gained_since_fused = pkmn.exp_gained_since_fused.to_i + give if pkmn.isFusion?
       pkmn.calc_stats
       new_level = pkmn.level
       return unless show
@@ -271,11 +273,54 @@ class PokeBattle_Battle
   end
 end
 
-# KIF 002_Item_Effects.rb:792 – no Rare Candy at or above the cap
+# KIF 002_Item_Effects.rb:792 – no Rare Candy at or above the cap. While the
+# KIF cap is on, PIF's own cap rule is not stacked on top (same as battles).
 alias kif_cap_can_use_rare_candy can_use_rare_candy unless defined?(kif_cap_can_use_rare_candy)
 
 def can_use_rare_candy(pkmn)
   cap = KIF::LevelCap.cap_for(pkmn)
-  return false if cap && pkmn.level >= cap
-  return kif_cap_can_use_rare_candy(pkmn)
+  return kif_cap_can_use_rare_candy(pkmn) unless cap
+  return false if pkmn.level >= cap || pkmn.level >= GameData::GrowthRate.max_level || pkmn.shadowPokemon?
+  return true
+end
+
+# Exp. Candy: whatever goes past the cap is saved like battle Exp (Smart) –
+# PIF's candy only checks the level before use.
+if ItemHandlers::UseOnPokemon[:EXPCANDY]
+  KIF::LevelCap::PIF_EXPCANDY = ItemHandlers::UseOnPokemon[:EXPCANDY] unless defined?(KIF::LevelCap::PIF_EXPCANDY)
+  ItemHandlers::UseOnPokemon.add(:EXPCANDY, proc { |item, pkmn, scene|
+    ret = KIF::LevelCap::PIF_EXPCANDY.call(item, pkmn, scene)
+    if ret && KIF::LevelCap.clamp(pkmn)
+      scene.pbRefresh if scene.respond_to?(:pbRefresh)
+      scene.pbDisplay(_INTL("{1} is at the level cap. The extra Exp. Points are saved.", pkmn.name)) if scene.respond_to?(:pbDisplay)
+    end
+    next ret
+  })
+end
+
+# Fusing and unfusing: the fused Pokémon starts with no saved Exp (each part
+# keeps its own), and Exp saved while fused goes to both parts on unfusing
+# (PIF gives both parts everything gained while fused).
+class PokemonFusionScene
+  alias kif_cap_pbFusionScreen pbFusionScreen unless method_defined?(:kif_cap_pbFusionScreen)
+  def pbFusionScreen(*args)
+    ret = kif_cap_pbFusionScreen(*args)
+    fused = @pokemon1
+    if fused && fused.respond_to?(:original_body) && fused.original_body && fused.kif_banked_exp.to_i > 0
+      fused.kif_banked_exp = 0
+    end
+    return ret
+  end
+end
+
+alias kif_cap_unfuseCore unfuseCore unless defined?(kif_cap_unfuseCore)
+def unfuseCore(fused_pokemon)
+  bank = fused_pokemon.respond_to?(:kif_banked_exp) ? fused_pokemon.kif_banked_exp.to_i : 0
+  head = fused_pokemon.original_head
+  body = fused_pokemon.original_body
+  ret = kif_cap_unfuseCore(fused_pokemon)
+  if bank > 0
+    [head, body].each { |p| p.kif_banked_exp = p.kif_banked_exp.to_i + bank if p }
+  end
+  return ret
 end

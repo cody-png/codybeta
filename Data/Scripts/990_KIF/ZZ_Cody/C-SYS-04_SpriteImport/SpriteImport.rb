@@ -167,6 +167,7 @@ module KIF
       parts = path.tr("\\", "/").split("/").reject(&:empty?)
       folders = parts[0..-2].map(&:downcase)
       folders = folders[2..-1] if folders[0] == WORK_DIR.downcase   # inside an unpacked archive
+      folders = folders[2..-1] if folders && folders[0] == HOLD_DIR.downcase   # held for the replace question
       folders ||= []
       return nil if folders.any? { |f| f =~ NOT_SPRITES && f != "basesprites" }
       if (i = folders.index("spritesheets_base"))
@@ -419,7 +420,9 @@ module KIF
     end
 
     def load_local(path)
-      bmp = AnimatedBitmap.new(path)
+      # a private copy: PIF's shiny code recolours the bitmap it gets in place,
+      # and RPG::Cache would hand the same one to the next Pokémon
+      bmp = AnimatedBitmap.from_bitmap(Bitmap.new(path))
       bmp.scale_bitmap(3) if bmp.bitmap.width < 150   # a 96 px sprite: game size is 288
       return bmp
     end
@@ -687,8 +690,12 @@ module KIF
   module SpriteImport
     module DexAlts
       def pbGetAvailableAlts(dex_number, includeAutogens = false)
-        list = super
+        list = super   # PIF's own errors stay PIF's (outside the rescue)
         return list unless list.is_a?(Array)
+        return kif_tidy_alts(list)
+      end
+
+      def kif_tidy_alts(list)
         letters = {}
         list.each { |a| letters[a.to_s] = true if a.is_a?(String) && !a.start_with?("local_") }
         return list.reject do |a|

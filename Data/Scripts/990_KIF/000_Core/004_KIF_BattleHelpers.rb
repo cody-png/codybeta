@@ -23,3 +23,39 @@ module KIF
     return false
   end
 end
+
+# Battle AI dispatch (F-BATTLE-03 PowerfulAI). The switch itself lives here,
+# outside every module, so the mod adapter (Alpha Encounters' own AI written
+# for KIF 0.20.7) still gets its answers when the Battles module is Off.
+module KIF
+  def self.define_ai_dispatch(cls, m, pif, demi)
+    cls.send(:define_method, m) do |*args, &block|
+      if KIF::PowerfulAI.on?
+        send(demi, *args, &block)
+      elsif Thread.current[:kif_mod_ai]
+        KIF::PowerfulAI.mod_adapt(self, m, pif, args, block)
+      else
+        send(pif, *args, &block)
+      end
+    end
+  end
+end
+
+# Stats follow a rule change at once (Max IVs, No-EVs, fusion stat rules):
+# every party and boxed Pokémon is recalculated. PIF only recalculates on a
+# level up, so the Summary and battles would show the old numbers until then.
+module KIF
+  def self.recalc_all_stats
+    return unless $Trainer
+    begin
+      $Trainer.party.each { |p| p.calc_stats if p && !p.egg? }
+      if $PokemonStorage
+        $PokemonStorage.boxes.each do |box|
+          box.pokemon.each { |p| p.calc_stats if p && !p.egg? }
+        end
+      end
+    rescue => e
+      KIF.log("recalc_all_stats failed: #{e.class}: #{e.message}")
+    end
+  end
+end

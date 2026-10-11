@@ -16,6 +16,7 @@ module KIF
   def self.sync_speedup_stages
     return unless defined?(SPEEDUP_STAGES) && $PokemonSystem
     limit = ($PokemonSystem.speeduplimit || 2) + 1
+    limit = 3 if defined?(KIF::Modules) && !KIF::Modules.active?(:qol)   # PIF's 1x/2x/3x
     limit = limit.clamp(1, 10)
     return if SPEEDUP_STAGES.length == limit
     SPEEDUP_STAGES.replace((1..limit).to_a)
@@ -40,3 +41,6 @@ class Scene_Map
     kif_speedup_update
   end
 end
+
+# Module Off: back to PIF's three stages at once (not gated: watchers run anyway)
+KIF::Modules.watch(:qol) { |_active| KIF.sync_speedup_stages } if defined?(KIF::Modules)

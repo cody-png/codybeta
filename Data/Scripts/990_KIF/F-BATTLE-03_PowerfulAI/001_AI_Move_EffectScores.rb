@@ -1013,7 +1013,7 @@ class PokeBattle_AI
 							if ((aspeed<ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>1)) && ((aspeed*2>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>1))
 								score += 100
 								if attacker.pbHasMoveFunction?("175") && attacker.hasActiveAbility?(:SERENEGRACE) &&
-									((!target.hasActiveAbility?(:INNERFOCUS) && !target.hasActiveAbility?(:SHIELDDUST)) || mold_broken) &&
+									((!target.hasActiveAbility?(:INNERFOCUS) && !target.hasActiveAbility?(:SHIELDDUST)) || moldbroken(attacker,target,"175")) &&
 									target.effects[PBEffects::Substitute]==0
 									score +=140
 								end
@@ -2660,7 +2660,7 @@ class PokeBattle_AI
 						stagemult+=2
 						case attacker.status
 						when :BURN
-							stagemult+=5 if maxmove.physicalMove? && !attacker.hasActiveAbility?(:GUTS)
+							stagemult+=5 if maxmove && maxmove.physicalMove? && !attacker.hasActiveAbility?(:GUTS)
 						when :POISON
 							stagemult+=5 if !attacker.hasActiveAbility?(:POISONHEAL) && !attacker.hasActiveAbility?(:GUTS)
 						when :PARALYSIS

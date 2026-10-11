@@ -73,10 +73,6 @@ end
 # Transgender Stone: choose female / genderless / male
 #-------------------------------------------------------------------------------
 ItemHandlers::UseOnPokemon.add(:TRANSGENDERSTONE, proc { |item, pokemon, scene|
-  if pokemon.respond_to?(:pizza?) && pokemon.pizza?
-    scene.pbDisplay(_INTL("It won't have any effect."))
-    next false
-  end
   commands = []
   cmdFemale = cmdGenderless = cmdMale = -1
   commands[cmdFemale = commands.length] = _INTL("Make female") if pokemon.gender != 1
@@ -149,11 +145,12 @@ def pbForceDevo(pokemon, scene = nil)
   evolution = kif_devolution_target(pokemon, scene)
   return nil if evolution == :cancel
   return false if evolution.nil? || evolution == pokemon.species
+  old_species = pokemon.species
   evo = PokemonEvolutionScene.new
   evo.pbStartScreen(pokemon, evolution)
-  evo.pbEvolution
+  evo.pbEvolution(false, true)   # like PIF's DNA Reverser: can't be cancelled, no "evolved" after-effects
   evo.pbEndScreen
-  return true
+  return pokemon.species != old_species   # the Spray is only used up when something changed
 end
 
 ItemHandlers::UseOnPokemon.add(:DEVOLUTIONSPRAY, proc { |item, pokemon, scene|
@@ -233,10 +230,11 @@ ItemHandlers::UseOnPokemon.add(:MISTSTONE, proc { |item, pokemon, scene|
     scene.pbDisplay(_INTL("It won't have any effect."))
     next false
   end
+  old_species = pokemon.species
   evo = PokemonEvolutionScene.new
   evo.pbStartScreen(pokemon, target)
   evo.pbEvolution
   evo.pbEndScreen
   scene.pbRefresh if scene.respond_to?(:pbRefresh)
-  next true
+  next pokemon.species != old_species   # cancelled with B: the stone is kept
 })

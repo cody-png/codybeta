@@ -738,20 +738,14 @@ class RandomizerOptionsScene < PokemonOption_Scene
 end
 
 #-------------------------------------------------------------------------------
-# Cody Settings button (randomized saves only)
+# Options > Modules > Randomizer settings: the Randomizer button (randomized
+# saves only; the builder lives in this folder, so it lands in that module)
 #-------------------------------------------------------------------------------
-class CodyOptionsScene < KifOptionsScene
-  alias kif_rand_pbGetOptions pbGetOptions unless method_defined?(:kif_rand_pbGetOptions)
-
-  def pbGetOptions(inloadscreen = false)
-    options = kif_rand_pbGetOptions(inloadscreen)
-    if !inloadscreen && KIF::Rand.available?
-      options << ButtonOption.new(_INTL("Randomizer"), proc {
-        pbFadeOutIn {
-          PokemonOptionScreen.new(RandomizerOptionsScene.new).pbStartScreen
-        }
-      }, _INTL("Seed, presets, spoiler log and every randomizer setting."))
-    end
-    return options
-  end
-end
+KIF::Options.add(:challenges, :save) {
+  next nil unless KIF::Rand.available?
+  ButtonOption.new(_INTL("Randomizer"), proc {
+    pbFadeOutIn {
+      PokemonOptionScreen.new(RandomizerOptionsScene.new).pbStartScreen
+    }
+  }, _INTL("Seed, presets, spoiler log and every randomizer setting."))
+}

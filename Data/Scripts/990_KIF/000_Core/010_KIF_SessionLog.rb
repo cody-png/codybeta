@@ -149,17 +149,20 @@ module KIF
 
     module MissingSprite
       def handle_unloaded_sprites(extractor, pif_sprite)
-        r = super
+        r = super   # PIF's own errors stay PIF's (outside the rescue)
+        kif_note_missing(extractor, pif_sprite)
+        return r
+      end
+
+      def kif_note_missing(extractor, pif_sprite)
         unless extractor.is_a?(CustomSpriteExtracter)
           s = pif_sprite
           what = s.type == :BASE ? "##{s.head_id}#{s.alt_letter}" : "#{s.head_id}.#{s.body_id}#{s.alt_letter} (#{s.type})"
           sheet = (extractor.getSpritesheetPath(s) rescue nil)
           KIF::SessionLog.missing_sprite("#{what} - no sprite file#{sheet ? ", no sheet #{sheet}" : ''}")
         end
-        return r
       rescue => e
         KIF::SessionLog.write("Missing-sprite note failed (#{e.class}: #{e.message})")
-        return r
       end
     end
   end

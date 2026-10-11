@@ -183,10 +183,12 @@ class PokemonStorageScene
     end
     return kif_gender_pbUpdateOverlay(selection, party) if pokemon.nil?
     ret = KIF::Gender.drawing(pokemon) { kif_gender_pbUpdateOverlay(selection, party) }
-    KIF::Gender.draw_icon(@sprites["overlay"].bitmap, pokemon, 148, 2)
+    begin
+      KIF::Gender.draw_icon(@sprites["overlay"].bitmap, pokemon, 148, 2)
+    rescue => e
+      KIF.log("PC gender icon failed: #{e.message}")
+    end
     return ret
-  rescue => e
-    KIF.log("PC gender icon failed: #{e.message}")
   end
 end
 
@@ -209,13 +211,15 @@ class PokemonDataBox
     x = @spriteBaseX + 126
     # Databox refreshes while the HP bar animates: the two icons are loaded
     # once and blitted, instead of resolved + loaded from disk each time.
-    if pizza
-      KIF::Gender.blt_icon(self.bitmap, KIF::Gender::ICON_PIZZA, x - 18, 5)
-    elsif @battler.displayGender == 2
-      KIF::Gender.blt_icon(self.bitmap, KIF::Gender::ICON_GENDERLESS, x - 14, 14)
+    begin
+      if pizza
+        KIF::Gender.blt_icon(self.bitmap, KIF::Gender::ICON_PIZZA, x - 18, 5)
+      elsif @battler.displayGender == 2
+        KIF::Gender.blt_icon(self.bitmap, KIF::Gender::ICON_GENDERLESS, x - 14, 14)
+      end
+    rescue => e
+      KIF.log("Databox gender icon failed: #{e.message}")
     end
-  rescue => e
-    KIF.log("Databox gender icon failed: #{e.message}")
   end
 end
 

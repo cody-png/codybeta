@@ -35,7 +35,8 @@ module KIF
     # Money helper used by several actions (KIF "Streamer's Dream" makes
     # everything free; that option comes with the Kuray Shop).
     def self.price(base)
-      return 0 if $PokemonSystem.respond_to?(:kuraystreamerdream) && $PokemonSystem.kuraystreamerdream.to_i != 0
+      return 0 if $PokemonSystem.respond_to?(:kuraystreamerdream) && $PokemonSystem.kuraystreamerdream.to_i != 0 &&
+                  (!defined?(KIF::Modules) || KIF::Modules.active?(:items))
       return base
     end
   end
@@ -149,7 +150,13 @@ class PokemonStorageScreen
     pkmn = heldpoke || pokemon
     release_idx = commands.index(_INTL("Release"))
     cancel_idx = commands.index(_INTL("Cancel"))
-    return kif_pc_pbShowCommands(msg, commands, index) if !pkmn || isTransferBox || !release_idx || !cancel_idx
+    in_transfer = isTransferBox
+    begin
+      box = @storage[@storage.currentBox]
+      in_transfer = true if defined?(StorageTransferBox) && box.is_a?(StorageTransferBox)
+    rescue
+    end
+    return kif_pc_pbShowCommands(msg, commands, index) if !pkmn || in_transfer || !release_idx || !cancel_idx
     return kif_pc_pbShowCommands(msg, commands, index) if KIF::PCActions.available(pkmn).empty?
     shown = commands.dup
     pos = release_idx + 1
@@ -322,7 +329,9 @@ class PokemonParty_Scene
     end
     extras = @kif_party_screen ? KIF::PartyMenuCompat.missing(pkmn, commands) : []
     # field party menu only (the battle party list has the same header)
-    kuray = !($game_temp && $game_temp.in_battle) && !KIF::PCActions.available(pkmn).empty?
+    kuray = @kif_party_screen && !($game_temp && $game_temp.in_battle) &&
+            !(defined?(KIF::SelfBattle) && KIF::SelfBattle.active) &&
+            !KIF::PCActions.available(pkmn).empty?
     return kif_party_raw_commands(helptext, commands, index) if extras.empty? && !kuray
     pos = commands.length - 1
     added = extras.map { |_, label| label }

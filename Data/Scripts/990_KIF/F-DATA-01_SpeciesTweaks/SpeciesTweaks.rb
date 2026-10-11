@@ -33,15 +33,18 @@ module KIF
       MOVE_SWAP.each_key { |id| sp = data[id] and @saved[:moves][id] = Marshal.load(Marshal.dump(sp.instance_variable_get(:@moves))) }
     end
 
+    # Only a field that still holds the other side's value is written, so
+    # the Randomizer's own changes to these species are left alone.
     def self.apply
       data = GameData::Species::DATA
       save_originals if @saved.nil?
       CATCH_RATE.each do |id, rate|
         sp = data[id] or next
-        sp.instance_variable_set(:@catch_rate, rate)
+        sp.instance_variable_set(:@catch_rate, rate) if sp.instance_variable_get(:@catch_rate) == @saved[:catch][id]
       end
       TYPES.each do |id, (t1, t2)|
         sp = data[id] or next
+        next unless [sp.instance_variable_get(:@type1), sp.instance_variable_get(:@type2)] == @saved[:types][id]
         sp.instance_variable_set(:@type1, t1)
         sp.instance_variable_set(:@type2, t2)
       end
@@ -52,18 +55,39 @@ module KIF
         moves.each { |m| m[1] = new_move if m[0] == lvl && m[1] == old_move }
       end
       @applied = true
+      KIF::Perf.bump_token if defined?(KIF::Perf)   # cached fusions pick the types up
     end
 
     def self.revert
       return unless @saved && @applied
       data = GameData::Species::DATA
-      @saved[:catch].each { |id, v| sp = data[id] and sp.instance_variable_set(:@catch_rate, v) }
-      @saved[:types].each { |id, (t1, t2)| sp = data[id] and (sp.instance_variable_set(:@type1, t1); sp.instance_variable_set(:@type2, t2)) }
-      @saved[:moves].each { |id, v| sp = data[id] and sp.instance_variable_set(:@moves, Marshal.load(Marshal.dump(v))) }
+      CATCH_RATE.each do |id, rate|
+        sp = data[id] or next
+        sp.instance_variable_set(:@catch_rate, @saved[:catch][id]) if sp.instance_variable_get(:@catch_rate) == rate
+      end
+      TYPES.each do |id, (t1, t2)|
+        sp = data[id] or next
+        next unless [sp.instance_variable_get(:@type1), sp.instance_variable_get(:@type2)] == [t1, t2]
+        sp.instance_variable_set(:@type1, @saved[:types][id][0])
+        sp.instance_variable_set(:@type2, @saved[:types][id][1])
+      end
+      MOVE_SWAP.each do |id, (lvl, old_move, new_move)|
+        sp = data[id] or next
+        moves = sp.instance_variable_get(:@moves)
+        next unless moves.is_a?(Array)
+        moves.each { |m| m[1] = old_move if m[0] == lvl && m[1] == new_move }
+      end
       @applied = false
+      KIF::Perf.bump_token if defined?(KIF::Perf)
     end
 
     def self.applied?; @applied; end
+
+    def self.data_reloaded
+      @saved = nil
+      @applied = false
+      save_originals
+    end
 
     # Module Pokémon & Fusion: applied while it is active, undone while Off
     def self.sync(active)
@@ -73,5 +97,8 @@ module KIF
   end
 end
 
-KIF::DataLoad.after_load_all("KIF species tweaks") { KIF::SpeciesTweaks.apply }
+KIF::DataLoad.after_load_all("KIF species tweaks") {
+  KIF::SpeciesTweaks.data_reloaded   # fresh data from the files: PIF's values
+  KIF::SpeciesTweaks.sync(!defined?(KIF::Modules) || KIF::Modules.active?(:pokemon))
+}
 KIF::Modules.watch(:pokemon) { |active| KIF::SpeciesTweaks.sync(active) } if defined?(KIF::Modules)

@@ -50,7 +50,7 @@ class PokeBattle_Battler
     @effects[PBEffects::Unburden]   = true if self.item
 
     if permanent && self.item == self.initialItem
-      if !self.opposes? && $PokemonBag.pbQuantity(self.initialItem) >= 1   # KIF
+      if !self.opposes? && !(defined?(KIF::SelfBattle) && KIF::SelfBattle.active) && $PokemonBag.pbQuantity(self.initialItem) >= 1   # KIF (not in a Self-Battle: copies)
         $PokemonBag.pbDeleteItem(self.initialItem)
       else
         setInitialItem(nil)

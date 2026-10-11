@@ -572,7 +572,24 @@ KIF::DataLoad.after_load_all("Randomizer Pokémon data") do
   KIF::Rand.instance_variable_set(:@orig, nil)
   KIF::Rand.instance_variable_set(:@move_pool, nil)
   KIF::Rand.instance_variable_set(:@bound, nil)
-  KIF::Rand.apply_data if $PokemonGlobal && $PokemonGlobal.kif_rand[:species]
+  if $PokemonGlobal && $PokemonGlobal.kif_rand[:species] && (!defined?(KIF::Modules) || KIF::Modules.active?(:randomizer))
+    KIF::Rand.apply_data
+  end
+end
+
+# Randomizer module Off: the save's Pokémon data changes are taken out of
+# memory (PIF's data back); On again: put back. Watchers run on every toggle
+# and before a save loads.
+if defined?(KIF::Modules)
+  KIF::Modules.watch(:randomizer) do |active|
+    begin
+      if KIF::Rand.instance_variable_get(:@orig)
+        KIF::Rand.apply_data(active ? nil : {}) if !active || ($PokemonGlobal && $PokemonGlobal.kif_rand[:species])
+      end
+    rescue => e
+      KIF.log("Randomizer data toggle failed: #{e.class}: #{e.message}")
+    end
+  end
 end
 
 # Banned Pokémon are never picked: every PIF pick (swaps, routes, trainers,

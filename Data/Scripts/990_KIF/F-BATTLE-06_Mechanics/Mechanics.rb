@@ -336,7 +336,7 @@ module KIF
 
         def trigger(*args)
           mode = KIF::Mechanics.walkingpoison
-          return kif_mech_trigger(*args) if mode == 0
+          return kif_mech_trigger(*args) if mode == 0 || (defined?(KIF::Modules) && !KIF::Modules.active?(:battles))
           handled = args[1]
           old = KIF::Mechanics.walking
           KIF::Mechanics.walking = true

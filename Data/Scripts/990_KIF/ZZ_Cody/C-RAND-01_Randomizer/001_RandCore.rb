@@ -455,13 +455,20 @@ module KIF
         f.write("# paste it in Randomizer > Presets & sharing > Paste settings code.\r\n")
       end
       return true
+    rescue => e
+      KIF.log("Randomizer preset not saved: #{e.class}: #{e.message}")
+      return false
     end
 
     def self.load_preset(name)
       path = "#{PRESET_DIR}/#{name}.txt"
       return false unless File.exist?(path)
-      line = File.readlines(path).map(&:strip).find { |l| l.start_with?(CODE_PREFIX) || l.start_with?(CODE_PREFIX_V1) }
+      lines = File.read(path, :mode => "rb").force_encoding("UTF-8").scrub.split(/\r?\n/)
+      line = lines.map(&:strip).find { |l| l.start_with?(CODE_PREFIX) || l.start_with?(CODE_PREFIX_V1) }
       return line ? apply_code(line) : false
+    rescue => e
+      KIF.log("Randomizer preset not read: #{e.class}: #{e.message}")
+      return false
     end
 
     #---------------------------------------------------------------------------

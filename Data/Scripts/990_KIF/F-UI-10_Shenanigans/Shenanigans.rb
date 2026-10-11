@@ -113,7 +113,14 @@ end
 KIF::Shenanigans::OLD_TRANSGENDER = ItemHandlers::UseOnPokemon[:TRANSGENDERSTONE] unless defined?(KIF::Shenanigans::OLD_TRANSGENDER)
 
 ItemHandlers::UseOnPokemon.add(:TRANSGENDERSTONE, proc { |item, pokemon, scene|
-  next KIF::Shenanigans::OLD_TRANSGENDER.call(item, pokemon, scene) unless KIF::Shenanigans.on?
+  unless KIF::Shenanigans.on?
+    # F-POKE-02's menu (Pokémon & Fusion module), else PIF's own stone
+    prev = KIF::Shenanigans::OLD_TRANSGENDER
+    if defined?(KIF::Modules) && !KIF::Modules.active?(:pokemon)
+      prev = KIF::Modules.pif_handler(ItemHandlers::UseOnPokemon, :TRANSGENDERSTONE) || prev
+    end
+    next prev.call(item, pokemon, scene)
+  end
   pizza = KIF::Shenanigans.pizza?(pokemon)
   choices = []
   choices << [:female, _INTL("Make female")] if pizza || pokemon.gender != 1

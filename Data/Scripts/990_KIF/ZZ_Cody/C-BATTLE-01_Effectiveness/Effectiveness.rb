@@ -152,7 +152,11 @@ class FightMenuDisplay
   alias cody_eff_refreshMoveData refreshMoveData unless method_defined?(:cody_eff_refreshMoveData)
 
   def refreshButtonNames
-    cody_eff_refreshButtonNames
+    cody_eff_refreshButtonNames   # PIF's errors stay PIF's
+    cody_eff_markers
+  end
+
+  def cody_eff_markers
     return unless USE_GRAPHICS && KIF::MoveEffect.on? && @battler && @buttons
     foes = KIF::MoveEffect.foes(@battler)
     return if foes.empty?
@@ -172,8 +176,12 @@ class FightMenuDisplay
 
   def refreshMoveData(move)
     @typeIcon.y = self.y + 20 if USE_GRAPHICS && @typeIcon
-    cody_eff_refreshMoveData(move)
+    cody_eff_refreshMoveData(move)   # PIF's errors stay PIF's
     @cody_lines = nil
+    cody_eff_move_info(move)
+  end
+
+  def cody_eff_move_info(move)
     return unless USE_GRAPHICS && move && KIF::MoveEffect.on? && @battler
     foes = KIF::MoveEffect.foes(@battler)
     return if foes.empty? || move.statusMove?

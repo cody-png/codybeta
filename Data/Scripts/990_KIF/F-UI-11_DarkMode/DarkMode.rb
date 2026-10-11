@@ -38,13 +38,5 @@ KIF::Options.add(:graphics, :save) {
                   _INTL("Dark Pokédex, Summary, PokéNav and battle menus")])
 }
 
-class AnimatedBitmap
-  alias kif_dm_initialize initialize unless method_defined?(:kif_dm_initialize)
-
-  def initialize(file, *args)
-    if file.is_a?(String) && file.end_with?("_dark") && !pbResolveBitmap(file)
-      file = file[0...-5]
-    end
-    kif_dm_initialize(file, *args)
-  end
-end
+# (the missing "_dark" image fallback is in SCOPE-02_PIFFixes/DarkImages.rb: PIF's
+# own dark mode needs it, so it is never switched off)

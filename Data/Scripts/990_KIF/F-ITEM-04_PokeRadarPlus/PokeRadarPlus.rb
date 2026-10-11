@@ -73,7 +73,7 @@ KIF.guard_base("013_Items/005_Item_PokeRadar.rb", 2523489654, "pbPokeRadarHighli
 
 # Copy of 6.8.2 pbPokeRadarHighlightGrass with the KIF lines marked
 def pbPokeRadarHighlightGrass(showmessage = true)
-  if KIF::RadarPlus.on? && $PokemonTemp.pokeradar && $PokemonSystem.radarchaincount.to_i == 1 # KIF
+  if KIF::RadarPlus.on? && $PokemonTemp.pokeradar && $PokemonTemp.pokeradar[2].to_i > 0 && $PokemonSystem.radarchaincount.to_i == 1 # KIF
     pbMessage(_INTL("Chain count: {1}\\wtnp[10]", $PokemonTemp.pokeradar[2])) # KIF
   end                                                                  # KIF
   grasses = [] # x, y, ring (0-3 inner to outer), rarity§
@@ -114,8 +114,8 @@ def pbPokeRadarHighlightGrass(showmessage = true)
   end
   if grasses.length == 0
     # No shaking grass found, break the chain
-    if KIF::RadarPlus.on? && $PokemonTemp.pokeradar                    # KIF
-      pbMessage(_INTL("Nothing happened...\nPokeRadar+ saved the chain!"))   # KIF
+    if KIF::RadarPlus.on? && $PokemonTemp.pokeradar && $PokemonTemp.pokeradar[2].to_i > 0   # KIF: only a real chain
+      pbMessage(_INTL("Nothing happened...\nPokeRadar+ saved the chain!")) if showmessage   # KIF
     else                                                               # KIF
       pbMessage(_INTL("Nothing happened...")) if showmessage
       pbPokeRadarCancel

@@ -85,17 +85,29 @@ module KIF
     end
 
     #---------------------------------------------------------------------------
+    # The gym's type: the randomizer's roll when gym types are randomized,
+    # PIF's gym list in Classic, and in Remix / Expert (the leaders' teams
+    # are mixed there) the type the leader's own team uses most (Cody,
+    # 2026-10-11: Brock got Rock extras in Remix).
     def self.gym_type(tr_type, party)
       idx = GYM_INDEX[tr_type.to_sym]
       if idx
-        arr = ($game_switches[SWITCH_RANDOMIZED_GYM_TYPES] rescue false) ? $game_variables[VAR_GYM_TYPES_ARRAY] : nil
-        arr = GYM_TYPES_ARRAY unless arr.is_a?(Array) && arr[idx]
-        t = arr[idx]
-        t = (GameData::Type.get(t).id rescue nil) if t
-        return t if t
+        randomized = ($game_switches[SWITCH_RANDOMIZED_GYM_TYPES] rescue false)
+        remix = (($game_switches[SWITCH_MODERN_MODE] || $game_switches[SWITCH_EXPERT_MODE]) rescue false)
+        arr = randomized ? $game_variables[VAR_GYM_TYPES_ARRAY] : nil
+        arr = GYM_TYPES_ARRAY if !randomized && !remix
+        if arr.is_a?(Array) && arr[idx]
+          t = (GameData::Type.get(arr[idx]).id rescue nil)
+          return t if t
+        end
+        return majority_type(party) || GYM_TYPES_ARRAY[idx] if remix && !randomized
       end
       fav = (BattledTrainer::TRAINER_CLASS_FAVORITE_TYPES[tr_type.to_sym] rescue nil)
       return fav[0] if fav.is_a?(Array) && fav[0]
+      return majority_type(party)
+    end
+
+    def self.majority_type(party)
       counts = Hash.new(0)
       party.each { |p| p.types.uniq.each { |t| counts[t] += 1 } }
       return counts.max_by { |_t, c| c }&.first

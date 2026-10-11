@@ -388,6 +388,7 @@ class PokemonTutorNet_Scene
   end
   
   def pbStartScene(commands,party,move_list,last_move_index=0,last_mon_index=0)
+    @kif_last_indicator_key = nil   # new panels: draw the indicators again
     @commands = commands
     @move_list=move_list
     @last_move_index=last_move_index

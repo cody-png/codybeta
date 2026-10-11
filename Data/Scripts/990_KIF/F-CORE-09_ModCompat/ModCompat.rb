@@ -479,6 +479,7 @@ module KIF
     # after every file in the Mods folder has loaded
     def self.after_mods_loaded
       patch_kanto_reloaded
+      load_unlisted_mod_scripts if respond_to?(:load_unlisted_mod_scripts)
       bridge_arity if respond_to?(:bridge_arity)
       register_crafting_items if respond_to?(:register_crafting_items)
       KIF::ModSettings.drain_pending if defined?(KIF::ModSettings)
@@ -715,3 +716,59 @@ class PokemonStorageScene
     end
   end
 end
+
+#===============================================================================
+# Mod Manager mods whose mod.json lists scripts that aren't there (Cody,
+# 2026-10-10). Mega Stones lists "main.rb", but its script is
+# Mods/050_MegaStoneSimulator.rb, so Mod Manager loaded nothing and the mod
+# silently did nothing. When none of a mod's listed scripts exist, KIF loads
+# the .rb files that are in its folder instead (and says so in KIF_log).
+#===============================================================================
+module KIF
+  module ModCompat
+    def self.load_unlisted_mod_scripts
+      return unless defined?(::ModManager) && ::ModManager.respond_to?(:load_order)
+      ::ModManager.load_order.each do |mod_id|
+        info = ::ModManager.registry[mod_id] rescue nil
+        next unless info && info.respond_to?(:scripts) && info.scripts.is_a?(Array) && !info.scripts.empty?
+        folder = info.folder_path.to_s
+        listed = info.scripts.map { |s| File.join(folder, s) }
+        next if listed.any? { |f| File.exist?(f) }
+        found = Dir[File.join(folder, "**", "*.rb")].sort
+        next if found.empty?
+        found.each do |f|
+          begin
+            load File.expand_path(f)
+            KIF.log("Mod #{info.name}: mod.json lists #{info.scripts.join(', ')} (missing) - loaded #{f.sub(folder + '/', '')} instead") if KIF.respond_to?(:log)
+          rescue Exception => e
+            raise if e.is_a?(SystemExit) || (defined?(Reset) && e.is_a?(Reset))
+            KIF.log("Mod #{info.name}: #{f.sub(folder + '/', '')} failed: #{e.class}: #{e.message}") if KIF.respond_to?(:log)
+          end
+        end
+      end
+    rescue StandardError => e
+      KIF.log("Mod compat: unlisted mod scripts failed: #{e.class}: #{e.message}") if KIF.respond_to?(:log)
+    end
+  end
+end
+
+#===============================================================================
+# Alpha Encounters' alpha moves (Cody, 2026-10-10). Its Pokemon#getMoveList
+# appended the alpha's moves to the species' own move list (shared by every
+# Pokémon of that species, and growing on every call). The list handed back
+# is now a copy, so only the alpha itself gets its moves.
+#===============================================================================
+module KIF
+  module ModCompat
+    module AlphaMoveList
+      def getMoveList
+        am = @alpha_moves
+        return super unless am.is_a?(Array) && !am.empty?
+        list = species_data.moves.dup
+        am.each { |m| list << [0, m] unless list.include?([0, m]) }
+        return list
+      end
+    end
+  end
+end
+Pokemon.prepend(KIF::ModCompat::AlphaMoveList)

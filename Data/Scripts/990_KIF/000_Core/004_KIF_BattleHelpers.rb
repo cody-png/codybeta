@@ -59,3 +59,14 @@ module KIF
     end
   end
 end
+
+# KIF 0.20.7's hasActiveAbility? takes a third argument (mold_broken, from
+# DemICE's AI); mods written for KIF pass it (GhostItem Splicers). The
+# 3-argument form is always accepted, whatever the Battles module does.
+class PokeBattle_Battler
+  alias kif_core_hasActiveAbility? hasActiveAbility? unless method_defined?(:kif_core_hasActiveAbility?)
+  def hasActiveAbility?(check_ability, ignore_fainted = false, mold_broken = false)
+    return false if mold_broken
+    return kif_core_hasActiveAbility?(check_ability, ignore_fainted)
+  end
+end

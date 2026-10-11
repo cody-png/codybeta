@@ -85,7 +85,11 @@ class KifModulesScene < KifOptionsBaseScene
         end
         next
       end
-      next if KifModuleSettingsScene.entries_for(id).empty?
+      entries = KifModuleSettingsScene.entries_for(id)
+      next if entries.empty?
+      # a page whose every row is hidden right now (e.g. the Randomizer button
+      # on a save that isn't randomized) gets no button
+      next if entries.all? { |scope, b| (scope == :save && !KIF.in_game?) || (b.call rescue nil).nil? }
       buttons << ButtonOption.new(_INTL("{1} settings", _INTL(name)),
                                   proc { @kif_open = id; kif_open_page },
                                   _INTL(KIF::Modules::MODULES[id][1]))

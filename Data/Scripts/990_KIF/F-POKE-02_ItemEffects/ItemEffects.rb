@@ -82,16 +82,19 @@ ItemHandlers::UseOnPokemon.add(:TRANSGENDERSTONE, proc { |item, pokemon, scene|
   choice = scene.pbShowCommands(_INTL("Transgender to which gender?"), commands)
   if cmdFemale >= 0 && choice == cmdFemale
     pokemon.instance_variable_set(:@gender, 1)
+    pokemon.instance_variable_set(:@kif_forced_genderless, false)
     scene.pbRefresh
     scene.pbDisplay(_INTL("The Pokémon became female!"))
     next true
   elsif cmdMale >= 0 && choice == cmdMale
     pokemon.instance_variable_set(:@gender, 0)
+    pokemon.instance_variable_set(:@kif_forced_genderless, false)
     scene.pbRefresh
     scene.pbDisplay(_INTL("The Pokémon became male!"))
     next true
   elsif cmdGenderless >= 0 && choice == cmdGenderless
     pokemon.instance_variable_set(:@gender, 2)
+    pokemon.instance_variable_set(:@kif_forced_genderless, true)   # Head Legendary Breeding leaves it genderless
     scene.pbRefresh
     scene.pbDisplay(_INTL("The Pokémon became genderless!"))
     next true

@@ -156,8 +156,13 @@ module KIF
           snap = @snapshot[[m, name]]
           next if snap && snap == um
           next if old_code[loc]
+          # An alias another layer made of this module's version (e.g.
+          # kif_big_pbStartScene -> Gender's pbStartScene) is switched too,
+          # so a chain of hooks from several modules skips every Off layer.
+          alias_of_layer = (um.original_name != name)
           fb = fallback_for(m, name, um, loc[0])
           next unless fb
+          next if alias_of_layer && fb[0] == :send && fb[1] == name
           begin
             install_switch(m, name, um, id, fb)
           rescue => e

@@ -136,14 +136,17 @@ ItemHandlers::UseOnPokemon.add(:TRANSGENDERSTONE, proc { |item, pokemon, scene|
   when :female
     KIF::Shenanigans.unpizza(pokemon)
     pokemon.instance_variable_set(:@gender, 1)
+    pokemon.instance_variable_set(:@kif_forced_genderless, false)
     msg = _INTL("The Pokémon became female!")
   when :male
     KIF::Shenanigans.unpizza(pokemon)
     pokemon.instance_variable_set(:@gender, 0)
+    pokemon.instance_variable_set(:@kif_forced_genderless, false)
     msg = _INTL("The Pokémon became male!")
   when :genderless
     KIF::Shenanigans.unpizza(pokemon)
     pokemon.instance_variable_set(:@gender, 2)
+    pokemon.instance_variable_set(:@kif_forced_genderless, true)
     msg = _INTL("The Pokémon became genderless!")
   end
   scene.pbRefresh

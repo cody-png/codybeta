@@ -22,7 +22,9 @@
 #      screen shows while this runs (a full pack takes a few minutes).
 #   2. PIF 6.8.2 reads base sprites only from sprite sheets, and picks a
 #      fusion's sprite once and remembers it. Single sprite files (old packs,
-#      KIF 0.20.x installs, the import above) are now read first, every time.
+#      KIF 0.20.x installs, the import above) are now read first, every time;
+#      a decoded file is kept in memory (load_local) so a Pokémon's sprite is
+#      decoded once per session, not on every PC/party/battle draw.
 #===============================================================================
 module KIF
   module SpriteImport
@@ -417,13 +419,63 @@ module KIF
 
     def forget_lookups
       @exists = {}
+      clear_bitmaps
+    end
+
+    # Decoded sprite files, by path (the game-size bitmap). PIF keeps the
+    # sprites it cuts from its sheets in memory (SpritesBitmapCache) and only
+    # decodes a sheet once; the file route had no such cache, so every PC
+    # cursor move, party draw or battle sprite decoded the .png again. Most
+    # decode in a millisecond or two, but some files from sprite packs (ones
+    # with sRGB/eXIf/iTXt metadata blocks) take 40 ms and more each time,
+    # which showed as a short hang on those Pokémon (tester report, 0.21.15).
+    # On a hit the caller gets a private copy, as before.
+    BITMAP_CACHE_LIMIT = 120
+    @bitmaps = {}
+
+    def clear_bitmaps
+      (@bitmaps || {}).each_value do |b|
+        begin
+          b.dispose if b && !b.disposed?
+        rescue StandardError
+          nil
+        end
+      end
+      @bitmaps = {}
+    end
+
+    def cached_bitmaps
+      @bitmaps ||= {}
     end
 
     def load_local(path)
       # a private copy: PIF's shiny code recolours the bitmap it gets in place,
       # and RPG::Cache would hand the same one to the next Pokémon
+      cache = cached_bitmaps
+      kept = cache[path]
+      if kept && !kept.disposed?
+        cache.delete(path)
+        cache[path] = kept   # most recently used last
+        copy = Bitmap.new(kept.width, kept.height)
+        copy.blt(0, 0, kept, Rect.new(0, 0, kept.width, kept.height))
+        return AnimatedBitmap.from_bitmap(copy)
+      end
+      cache.delete(path)
       bmp = AnimatedBitmap.from_bitmap(Bitmap.new(path))
       bmp.scale_bitmap(3) if bmp.bitmap.width < 150   # a 96 px sprite: game size is 288
+      src = bmp.bitmap
+      keep = Bitmap.new(src.width, src.height)
+      keep.blt(0, 0, src, Rect.new(0, 0, src.width, src.height))
+      if cache.length >= BITMAP_CACHE_LIMIT
+        old_path, old = cache.first
+        cache.delete(old_path)
+        begin
+          old.dispose if old && !old.disposed?
+        rescue StandardError
+          nil
+        end
+      end
+      cache[path] = keep
       return bmp
     end
 

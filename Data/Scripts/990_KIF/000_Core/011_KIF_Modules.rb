@@ -74,6 +74,9 @@ module KIF
     OFF = 0
     ON = 1
     HIDDEN = 2
+    # A module split out of another one later: a save that already has the
+    # parent's state gets the same state for the new one
+    SPLIT_FROM = { :keggs => :items, :import => :pc }
     STATE_NAMES = ["Off", "On", "Hidden"]
 
     @file_cache = {}
@@ -281,12 +284,28 @@ module Game
           KIF::Modules.all_on!
           KIF.log("Modules: save from before Modules - every module turned On")
         end
+        KIF::Modules.inherit_split_states
       rescue => e
         KIF.log("Modules: migration failed (#{e.class}: #{e.message})")
       end
     end
   end
 end
+
+module KIF
+  module Modules
+    def self.inherit_split_states
+      h = states
+      return unless h && !h.empty?
+      SPLIT_FROM.each do |id, parent|
+        next if h.has_key?(id) || !h.has_key?(parent)
+        h[id] = h[parent]
+        KIF.log("Modules: #{MODULES[id][0]} takes #{MODULES[parent][0]}'s state (#{STATE_NAMES[h[id]] rescue h[id]})")
+      end
+    end
+  end
+end
+
 
 class Event
   alias kif_mod_event_add + unless method_defined?(:kif_mod_event_add)

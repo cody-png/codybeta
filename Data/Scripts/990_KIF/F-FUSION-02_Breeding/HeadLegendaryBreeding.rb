@@ -99,6 +99,7 @@ class Pokemon
   def kif_head_legendary_gender
     return nil unless $PokemonSystem && $PokemonSystem.legendarybreed == 1
     return nil if @gender == 0 || @gender == 1   # already has a gender (cheap test first: gender is read constantly)
+    return nil if @kif_forced_genderless           # the Transgender Stone made it genderless on purpose
     sp = species_data
     return nil unless sp.is_a?(GameData::FusedSpecies) && sp.head_pokemon && sp.body_pokemon
     return nil unless Array(sp.head_pokemon.egg_groups).include?(:Undiscovered)

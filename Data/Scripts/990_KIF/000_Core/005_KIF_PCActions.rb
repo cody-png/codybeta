@@ -28,7 +28,8 @@ module KIF
     end
 
     def self.available(pkmn)
-      return @actions.map { |a| [a, (a.label.call(pkmn) rescue nil)] }.select { |_, l| l }
+      acts = @actions.select { |a| !defined?(KIF::Modules) || KIF::Modules.proc_active?(a.handler) }
+      return acts.map { |a| [a, (a.label.call(pkmn) rescue nil)] }.select { |_, l| l }
     end
 
     # Money helper used by several actions (KIF "Streamer's Dream" makes
@@ -61,7 +62,7 @@ module KIF
     end
 
     def self.available(screen)
-      list = @commands.sort_by { |c| [c.order, c.index] }
+      list = @commands.select { |c| !defined?(KIF::Modules) || KIF::Modules.proc_active?(c.handler) }.sort_by { |c| [c.order, c.index] }
       return list.map { |c| [c, (c.label.call(screen) rescue nil)] }.select { |_, l| l }
     end
   end
@@ -85,7 +86,7 @@ module KIF
     end
 
     def self.available(screen, box)
-      list = @commands.sort_by { |c| [c.order, c.index] }
+      list = @commands.select { |c| !defined?(KIF::Modules) || KIF::Modules.proc_active?(c.handler) }.sort_by { |c| [c.order, c.index] }
       return list.map { |c| [c, (c.label.call(screen, box) rescue nil)] }.select { |_, l| l }
     end
   end

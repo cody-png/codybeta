@@ -299,23 +299,25 @@ class KifOptionsScene < KifOptionsBaseScene
 end
 
 #===============================================================================
-# Entry point: "KIF Settings" button at the bottom of PIF's main Options menu
+# Entry point: "Modules" button at the bottom of PIF's main Options menu
 #===============================================================================
 class PokemonGameOption_Scene < PokemonOption_Scene
   alias kif_pbGetOptions pbGetOptions unless method_defined?(:kif_pbGetOptions)
 
   def pbGetOptions(inloadscreen = false)
     options = kif_pbGetOptions(inloadscreen)
-    options << ButtonOption.new(_INTL("KIF Settings"),
+    # Options > Modules (012_KIF_ModulesMenu.rb) holds KIF's and Cody's
+    # settings, sorted by module (was "KIF Settings" + "Cody Settings")
+    options << ButtonOption.new(_INTL("Modules"),
                                 proc { kif_open_settings },
-                                _INTL("Customize modded features"))
+                                _INTL("Turn KIF's features on or off and change their settings"))
     KIF::ModCompat.add_root_mod_options(self, options, inloadscreen) if defined?(KIF::ModCompat)
     return options
   end
 
   def kif_open_settings
     pbFadeOutIn {
-      scene = KifOptionsScene.new
+      scene = KifModulesScene.new
       screen = PokemonOptionScreen.new(scene)
       screen.pbStartScreen
     }

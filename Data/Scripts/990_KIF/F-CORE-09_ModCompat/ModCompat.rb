@@ -530,12 +530,8 @@ module KIF
         next if o.respond_to?(:name) && names.include?(o.name.to_s)
         options << o
       end
-      # Mod settings kept by KIF (no Kanto Reloaded installed)
-      if defined?(KIF::ModSettings) && KIF::ModSettings.active? && !KIF::ModSettings.registry.empty?
-        options << ButtonOption.new(_INTL("Mod Settings"),
-                                    proc { pbFadeOutIn { PokemonOptionScreen.new(KifModSettingsScene.new).pbStartScreen } },
-                                    _INTL("Settings added by your mods"))
-      end
+      # Mod settings kept by KIF (no Kanto Reloaded installed) are opened from
+      # Options > Modules > Mod Settings (module "Mod Settings").
       return options
     rescue StandardError => e
       KIF.log("Mod options for the Options menu failed: #{e.class}: #{e.message}") if KIF.respond_to?(:log)

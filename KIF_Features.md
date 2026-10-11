@@ -1,13 +1,43 @@
 # Kuray's Infinite Fusion – Feature Guide
 
-KIF brings the features of Kuray's Infinite Fusion 0.20.7 to Pokémon Infinite Fusion 6.8.2. Almost everything is optional and lives in one place:
+KIF brings the features of Kuray's Infinite Fusion 0.20.7 to Pokémon Infinite Fusion 6.8.2. Everything is optional and lives in one place:
 
-**Pause menu → Options → KIF Settings** (near the bottom of the list). Right below it, **Cody Settings** holds features added in KIF Beta that were never part of the original KIF (see "Cody Settings" further down).
+**Pause menu → Options → Modules** (at the bottom of the list).
 
-KIF Settings opens six menus, listed below in the order you see them. Inside each menu:
+### Modules
+
+Every feature belongs to a module. Each module can be:
+
+- **Off** *(default for every module)* – the game plays like PIF: the module's features, settings, pause menu and PC entries are gone.
+- **On** – the features work and the module's settings page is listed under **SETTINGS**.
+- **Hidden** – the features work, but their settings page isn't listed (for a tidier menu once you've set things up).
+
+Settings pages appear after you close and reopen Modules.
+
+| Module | What's in it (sections below) |
+|---|---|
+| Auto Battle | Auto-Battle and its options, Self-Battle from the PC |
+| Shinies | Shinies: custom colours, odds, gamble, selling, Poké Radar chains |
+| Graphical Changes | EBDX battles (when installed), battle box extras, Move Effectiveness, big icons, game font, dark mode |
+| Information | Fusion preview and fusion screen, the improved Pokédex (evolutions, sprites), IVs and EVs in the summary |
+| Battles & Challenges | Battle format, damage variance, Battle AI, Challenges, battle mechanics, level caps, EXP/EV/IV modes, Rocket mode, catching extras |
+| Randomizer | The randomizer (incl. Entrances) and gym leader teams. Off plays a randomized save without the randomizer until it's turned back on |
+| Pokémon & Fusion | Fusion rules and base stats, breeding, evolution lock, item effects, gender, move learning, Tutor.net, type overrides |
+| Items & Shop | Kuray Shop and K-Eggs |
+| PC & Saves | PC extras (Kuray Actions), import and export, quicksave, save backups, eggs hatching into the PC |
+| Quality of Life | Pause menu extras, quick field moves, speed-up, intro skip, title screen links, frame rate, Wonder Trade names, shenanigans |
+| Mod Settings | Shows the settings of mods installed with Mod Manager (the **Mod Settings** button) |
+
+Things a module changes while the game starts (some data tables) stay in place until the next start. Pokémon & Fusion's base stat rules apply the next time a Pokémon's stats are worked out (level up, evolving...).
+
+**General settings** holds settings that are always available (Settings Presets, sprite import, save folder). Below the settings buttons: **Increment Slider by** and **DEBUG**.
+
+Inside each settings page:
 
 - **GLOBAL** options are shared by every save file.
 - **PER-SAVE FILE** options belong to the save you're playing. They only appear once a save is loaded; from the title screen's options you'll see "Load a save to edit" instead.
+
+The sections below list every setting by its original KIF menu; the table above says which module each belongs to.
 
 Defaults are shown in *(italics)*.
 
@@ -223,17 +253,17 @@ All options in this menu are per-save.
 
 ---
 
-## Bottom of KIF Settings
+## General settings and the bottom of Modules
 
-- **Settings Presets** – 12 named slots. *Save* puts this save file's per-save settings (KIF and Cody Settings) into a slot, *Load* puts a slot's settings into the save you're playing, *Rename* names it. Set up a run once, then load it on every new game. Global settings are shared by all saves already; Randomizer settings have their own presets. Needs a loaded save.
+- **Settings Presets** – 12 named slots. *Save* puts this save file's per-save settings (every module) into a slot, *Load* puts a slot's settings into the save you're playing, *Rename* names it. Set up a run once, then load it on every new game. Global settings are shared by all saves already; Randomizer settings have their own presets. Needs a loaded save.
 - **Increment Slider by** – 1 / 10 / 100 / 1000 / 10000 *(1)*. How far big sliders (like Wild Shiny Odds) move per press.
 - **DEBUG** – Off / On *(Off)*. Turns on PIF's debug mode, with the Debug menu and debug options in the PC and party.
 
 ---
 
-## Cody Settings
+## Cody's additions
 
-**Pause menu → Options → Cody Settings** – new features made for KIF Beta, kept apart from KIF's own settings. Same layout as KIF Settings, split into categories.
+New features made for KIF Beta that were never part of the original KIF. They sit in the same modules as KIF's features (Options → Modules).
 
 ### Battles
 
@@ -248,7 +278,7 @@ All options in this menu are per-save.
 
 ### Randomizer
 
-Only on saves started as randomized saves: **Cody Settings → Randomizer**. The same screen also replaces PIF's randomizer menu when you make a randomized save, and the Update Man's *Advanced options → Randomizer options* opens it too. In Oak's Lab, *Re-randomize Pokémon?* opens it as well, so you can pick a new seed before choosing your starter (the same seed always gives the same starters).
+Only on saves started as randomized saves: **Modules → Randomizer settings** (Randomizer module On). The same screen also replaces PIF's randomizer menu when you make a randomized save, and the Update Man's *Advanced options → Randomizer options* opens it too. In Oak's Lab, *Re-randomize Pokémon?* opens it as well, so you can pick a new seed before choosing your starter (the same seed always gives the same starters).
 
 - **Seed** – an 8-character code (like `K7Q2-9XMA`). The same seed with the same settings gives the same randomized game (on the same KIF Beta version and sprite pack). New random seed, type one in, or copy it.
 - **Presets & sharing** – *Copy settings code* puts the seed and every setting on your clipboard as one line (paste it into Discord); *Paste settings code* loads someone else's. *Save as preset* / *Load preset* use files in the `Randomizer/Presets` folder (saving over an existing name asks first; presets from earlier KIF Beta versions still load).

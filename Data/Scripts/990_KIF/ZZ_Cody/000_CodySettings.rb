@@ -34,18 +34,9 @@ class CodyOptionsScene < KifOptionsScene
   end
 end
 
+# Since Modules (2026-10-10) Cody's settings are listed under their module in
+# Options > Modules; the "Cody Settings" button is no longer added.
 class PokemonGameOption_Scene < PokemonOption_Scene
-  alias cody_pbGetOptions pbGetOptions unless method_defined?(:cody_pbGetOptions)
-
-  def pbGetOptions(inloadscreen = false)
-    options = cody_pbGetOptions(inloadscreen)
-    btn = ButtonOption.new(_INTL("Cody Settings"),
-                           proc { cody_open_settings },
-                           _INTL("Cody's additions to KIF Beta"))
-    idx = options.index { |o| o.respond_to?(:name) && o.name == _INTL("KIF Settings") }
-    idx ? options.insert(idx + 1, btn) : options.push(btn)
-    return options
-  end
 
   def cody_open_settings
     pbFadeOutIn {

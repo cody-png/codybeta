@@ -30,7 +30,7 @@ module KIF
     end
 
     def self.active_entries
-      list = @entries.select { |e| e.condition.nil? || e.condition.call }
+      list = @entries.select { |e| (!defined?(KIF::Modules) || KIF::Modules.proc_active?(e.handler)) && (e.condition.nil? || e.condition.call) }
       return list.each_with_index.sort_by { |e, i| [e.order || 100, i] }.map(&:first)
     end
 

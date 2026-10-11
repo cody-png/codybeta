@@ -26,6 +26,7 @@ module KIF
       return map if map.instance_variable_get(:@kif_patched)
       map.instance_variable_set(:@kif_patched, true)
       @patches[map_id].each do |name, block|
+        next if defined?(KIF::Modules) && !KIF::Modules.proc_active?(block)
         begin
           block.call(map)
         rescue => e

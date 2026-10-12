@@ -1,3 +1,4 @@
-KIF Beta 0.21.33
-First start: "Classic KIF" now means KIF as it was. Newer features (EBDX battles, Move Effectiveness, Fusion Screen) start off and can be turned on in Options > Modules.
+KIF Beta 0.21.34
+EBDX battles are now opt-in: new players start with them off (Options > Modules > Graphical Changes settings > EBDX Battles). If you already have them on, nothing changes.
+First start: "Classic KIF" means KIF as it was; newer features (EBDX battles, Move Effectiveness, Fusion Screen) start off.
 Fusion screen: a fusion you haven't seen yet is a plain silhouette again (like PIF) when Fusion Preview is Off.

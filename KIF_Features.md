@@ -160,7 +160,7 @@ K-Eggs are sold in the Kuray Shop (see "Others → Kuray QoL").
   - FGM: icons by FairyGodmother.
   - Txt: plain text.
 - **Swap BattleGUI** – Off / Type 1 / Type 2 *(Off)*. Alternative HP/Exp bar designs by Mirasein.
-- **EBDX Battles** – Off / On *(On)*. Elite Battle DX battle visuals (Luka S.J.; the version from KIF Multiplayer by Aleks): animated backdrops, camera, move animations and its own battle boxes and menus. Also **EBDX Camera Zoom**, **EBDX Stat Stage Icons** and **EBDX Own Trainer Animation**. Type Display works on EBDX's boxes too. Turning the Graphical Changes module Off gives PIF's normal battles.
+- **EBDX Battles** – Off / On *(Off)*. Elite Battle DX battle visuals (Luka S.J.; the version from KIF Multiplayer by Aleks): animated backdrops, camera, move animations and its own battle boxes and menus. Also **EBDX Camera Zoom**, **EBDX Stat Stage Icons** and **EBDX Own Trainer Animation**. Type Display works on EBDX's boxes too. Turning the Graphical Changes module Off gives PIF's normal battles.
 - **Fusion Preview** – Off / On *(Off)*. When fusing, shows the real sprite of fusions you haven't seen yet instead of a silhouette, with shiny colours if the result will be shiny.
 - **Big Pokémon Icons** – Off / Limited / All *(Off)*. Icons use a small version of the Pokémon's battle sprite.
   - Limited: party, summary and other screens.

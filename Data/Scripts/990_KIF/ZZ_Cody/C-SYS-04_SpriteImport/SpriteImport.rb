@@ -23,8 +23,9 @@
 #   2. PIF 6.8.2 reads base sprites only from sprite sheets, and picks a
 #      fusion's sprite once and remembers it. Single sprite files (old packs,
 #      KIF 0.20.x installs, the import above) are now read first, every time;
-#      a decoded file is kept in memory (load_local) so a Pokémon's sprite is
-#      decoded once per session, not on every PC/party/battle draw.
+#      a decoded file is kept (load_local; Options > Others > Sprite File
+#      Cache: Permanent / Per Session / Off) so a Pokémon's sprite is decoded
+#      once, not on every PC/party/battle draw.
 #===============================================================================
 module KIF
   module SpriteImport
@@ -430,8 +431,25 @@ module KIF
     # with sRGB/eXIf/iTXt metadata blocks) take 40 ms and more each time,
     # which showed as a short hang on those Pokémon (tester report, 0.21.15).
     # On a hit the caller gets a private copy, as before.
+    #
+    # Options > Others > "Sprite File Cache" (like Shiny Cache):
+    #   Permanent   - memory + a copy of the decoded pixels on disk
+    #                 (Cache/KIFSprites/<name>.kbm: width, height, deflated
+    #                 RGBA from Bitmap#raw_data), read back with raw_data= -
+    #                 much faster than the slow .png decodes, so even the first
+    #                 draw of a session is quick. A file that changed (size or
+    #                 time) is decoded again and its copy replaced.
+    #   Per Session - memory only
+    #   Off         - decode the file on every draw (as before 0.21.26)
     BITMAP_CACHE_LIMIT = 120
+    DISK_CACHE_DIR = "Cache/KIFSprites"
+    require "zlib"
     @bitmaps = {}
+
+    def cache_mode
+      return 1 unless $PokemonSystem && $PokemonSystem.respond_to?(:sprite_file_cache)
+      return $PokemonSystem.sprite_file_cache.to_i   # 0 Permanent, 1 Per Session, 2 Off
+    end
 
     def clear_bitmaps
       (@bitmaps || {}).each_value do |b|
@@ -448,24 +466,15 @@ module KIF
       @bitmaps ||= {}
     end
 
-    def load_local(path)
-      # a private copy: PIF's shiny code recolours the bitmap it gets in place,
-      # and RPG::Cache would hand the same one to the next Pokémon
+    def private_copy(src)
+      copy = Bitmap.new(src.width, src.height)
+      copy.blt(0, 0, src, Rect.new(0, 0, src.width, src.height))
+      return copy
+    end
+
+    def keep_bitmap(path, src)
       cache = cached_bitmaps
-      kept = cache[path]
-      if kept && !kept.disposed?
-        cache.delete(path)
-        cache[path] = kept   # most recently used last
-        copy = Bitmap.new(kept.width, kept.height)
-        copy.blt(0, 0, kept, Rect.new(0, 0, kept.width, kept.height))
-        return AnimatedBitmap.from_bitmap(copy)
-      end
       cache.delete(path)
-      bmp = AnimatedBitmap.from_bitmap(Bitmap.new(path))
-      bmp.scale_bitmap(3) if bmp.bitmap.width < 150   # a 96 px sprite: game size is 288
-      src = bmp.bitmap
-      keep = Bitmap.new(src.width, src.height)
-      keep.blt(0, 0, src, Rect.new(0, 0, src.width, src.height))
       if cache.length >= BITMAP_CACHE_LIMIT
         old_path, old = cache.first
         cache.delete(old_path)
@@ -475,7 +484,79 @@ module KIF
           nil
         end
       end
-      cache[path] = keep
+      cache[path] = private_copy(src)
+    end
+
+    # Cache/KIFSprites/<sprite name>.kbm, valid for one size + mtime of the file
+    def disk_cache_path(path)
+      return "#{DISK_CACHE_DIR}/#{File.basename(path, '.png')}.kbm"
+    end
+
+    def disk_stamp(path)
+      st = File.stat(path)
+      return [st.size, st.mtime.to_i]
+    rescue SystemCallError
+      return nil
+    end
+
+    def read_disk_cache(path)
+      return nil unless Bitmap.method_defined?(:raw_data=)
+      cp = disk_cache_path(path)
+      return nil unless File.file?(cp)
+      stamp = disk_stamp(path)
+      return nil unless stamp
+      data = File.binread(cp)
+      return nil if data.length < 24 || data[0, 4] != "KBM1"
+      size, mtime, w, h = data[4, 16].unpack("NNNN")
+      return nil unless [size, mtime] == stamp && w > 0 && h > 0 && w <= 2048 && h <= 2048
+      raw = Zlib::Inflate.inflate(data[20..-1])
+      return nil unless raw.length == w * h * 4
+      bmp = Bitmap.new(w, h)
+      bmp.raw_data = raw
+      return bmp
+    rescue StandardError, Zlib::Error
+      return nil
+    end
+
+    def write_disk_cache(path, bmp)
+      return unless bmp.respond_to?(:raw_data)
+      stamp = disk_stamp(path)
+      return unless stamp
+      raw = bmp.raw_data
+      return unless raw && raw.length == bmp.width * bmp.height * 4
+      mkdir_p(DISK_CACHE_DIR) unless File.directory?(DISK_CACHE_DIR)
+      cp = disk_cache_path(path)
+      tmp = cp + ".tmp"
+      File.binwrite(tmp, "KBM1" + [stamp[0], stamp[1], bmp.width, bmp.height].pack("NNNN") + Zlib::Deflate.deflate(raw, Zlib::BEST_SPEED))
+      File.delete(cp) if File.exist?(cp)
+      File.rename(tmp, cp)
+    rescue StandardError, Zlib::Error => e
+      KIF.log("Sprite cache: #{File.basename(path)} not written (#{e.class}: #{e.message})") if defined?(KIF.log)
+      @disk_failures = @disk_failures.to_i + 1
+    end
+
+    def load_local(path)
+      # a private copy: PIF's shiny code recolours the bitmap it gets in place,
+      # and RPG::Cache would hand the same one to the next Pokémon
+      mode = cache_mode
+      if mode != 2
+        kept = cached_bitmaps[path]
+        if kept && !kept.disposed?
+          cached_bitmaps.delete(path)
+          cached_bitmaps[path] = kept   # most recently used last
+          return AnimatedBitmap.from_bitmap(private_copy(kept))
+        end
+        if mode == 0 && (disk = read_disk_cache(path))
+          keep_bitmap(path, disk)
+          return AnimatedBitmap.from_bitmap(disk)
+        end
+      end
+      bmp = AnimatedBitmap.from_bitmap(Bitmap.new(path))
+      bmp.scale_bitmap(3) if bmp.bitmap.width < 150   # a 96 px sprite: game size is 288
+      if mode != 2
+        keep_bitmap(path, bmp.bitmap)
+        write_disk_cache(path, bmp.bitmap) if mode == 0 && @disk_failures.to_i < 20
+      end
       return bmp
     end
 
@@ -701,6 +782,16 @@ module KIF
 end
 
 PokemonLoadScreen.prepend(KIF::SpriteImport::LoadScreen) if defined?(PokemonLoadScreen)
+
+KIF::Options.define(:sprite_file_cache, 0, :global) if defined?(KIF::Options)   # 0 Permanent, 1 Per Session, 2 Off
+KIF::Options.add(:others, :global) {
+  EnumOption.new(_INTL("Sprite File Cache"), [_INTL("Permanent"), _INTL("Per Session"), _INTL("Off")],
+                 proc { $PokemonSystem.sprite_file_cache },
+                 proc { |value| $PokemonSystem.sprite_file_cache = value; KIF::SpriteImport.clear_bitmaps },
+                 [_INTL("Sprite files are decoded once and kept (memory and the Cache folder)"),
+                  _INTL("Sprite files are decoded once per session"),
+                  _INTL("Sprite files are decoded every time they are shown (slower)")])
+} if defined?(KIF::Options)
 
 KIF::Options.add(:others, :global) {
   EnumOption.new(_INTL("Imported Archives"), [_INTL("Delete"), _INTL("Keep")],

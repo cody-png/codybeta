@@ -1,12 +1,13 @@
 #===============================================================================
-# F-BATTLE-12 – EBDX battle visuals (optional, not included in KIF)
-# Elite Battle DX as it ships inside KIF Multiplayer 6.7.0 by Aleks
-# (Data/Scripts/660_EBDX, 661_BossUIHooks/003_EBDX_UIFixes.rb; graphics in
-# Graphics/EBDX, sounds in Audio/*/EBDX and Audio/SE/Anim). Cody has Aleks's
-# permission to work with it (2026-10-10).
+# F-BATTLE-12 – EBDX battle visuals
+# Elite Battle DX (Luka S.J.) as it ships inside KIF Multiplayer 6.7.0 by
+# Aleks, included in KIF Beta since 0.21.27 (Cody, 2026-10-11, with Aleks's
+# permission): Data/Scripts/660_EBDX and 661_BossUIHooks/003_EBDX_UIFixes.rb
+# copied as they are, graphics in Graphics/EBDX, sounds in Audio/*/EBDX and
+# the Audio/SE/Anim files PIF lacked. The two files are never edited here.
 #
-# When those scripts are installed without the rest of Multiplayer, this file
-# supplies what they expect from Multiplayer, without changing them:
+# Those scripts expect the rest of Multiplayer; this file supplies what they
+# need from it, without changing them:
 #   * the settings Multiplayer's options menu normally creates on
 #     PokemonSystem (camera zoom, own trainer animation, stat stage icons);
 #     a save made before EBDX was installed also gets EBDX's own on/off
@@ -120,6 +121,22 @@ if KIF::EBDX.installed?
       end
     end
     PokemonEvolutionSceneEBDX.prepend(KIF::EBDX::EvolutionSprites)
+  end
+
+  # 661/003's Type Display for EBDX boxes loads KIF 0.20.7's icon sheets from
+  # Graphics/Pictures/TypeIcons_*.png; KIF Beta keeps them in
+  # Graphics/Pictures/KIF/TypeIcons (F-BATTLE-07), and "Txt" (5) has no sheet
+  # here, so PIF's own 64x28 type strip stands in for it (the 661 code draws
+  # 5 at 64x28 anyway). Without this, Type Display 1-4 + EBDX crashed at the
+  # first battle (missing file).
+  if defined?(::DataBoxEBDX) && ::DataBoxEBDX.const_defined?(:EBDX_TYPE_DISPLAY_BITMAPS)
+    sheets = {}
+    if defined?(KIF::BattleUI::TYPE_SHEETS)
+      KIF::BattleUI::TYPE_SHEETS.each_with_index { |path, i| sheets[i] = path if path }
+    end
+    sheets[5] = "Graphics/Pictures/types"
+    ::DataBoxEBDX.send(:remove_const, :EBDX_TYPE_DISPLAY_BITMAPS)
+    ::DataBoxEBDX.const_set(:EBDX_TYPE_DISPLAY_BITMAPS, sheets)
   end
 
   KIF.log("EBDX found: battle visuals available (Options > Modules > Graphical Changes)") if KIF.respond_to?(:log)

@@ -10,7 +10,9 @@
 #     averaged or the higher of the two with Super Splicers, fused level), so
 #     No-EVs / Max IVs modes, custom fusion base stats, self-fusion boost,
 #     Dominant Fusion Types and Type Override all show as they will be;
-#   * the higher number of each stat pair (left vs right) is green;
+#   * the higher number of each stat pair (left vs right) is green - only
+#     when the two base stats differ (equal base stats differ only by the
+#     body's nature/EVs, chosen after fusing);
 #   * bars show the base stats (same colours as the Summary), plus the base
 #     total.
 # A (USE) on a fusion opens Change Body / Change Head / Confirm (Cody's
@@ -387,6 +389,7 @@ class FusionPreviewScreen
     mine = cody_fs_stat_values(g)
     theirs = cody_fs_stat_values(other)
     base = g.respond_to?(:kif_effective_base_stats) ? g.kif_effective_base_stats : g.baseStats
+    other_base = other.respond_to?(:kif_effective_base_stats) ? other.kif_effective_base_stats : other.baseStats
     pbSetSmallFont(ov)
     text = []
     total = 0
@@ -395,8 +398,12 @@ class FusionPreviewScreen
       cy = y + 3 + (i % 3) * 18
       v = mine[id]
       text << [label, cx, cy - 7, 0, fs::LABEL, fs::DARK]
-      text << [v.to_s, cx + 68, cy - 7, 1, (v > theirs[id]) ? fs::BETTER : fs::WHITE, fs::DARK]
       b = base[id] || 0
+      # green only when the base stats differ: with equal base stats the two
+      # orders differ only by the body's nature and EVs, which the player
+      # picks/changes after fusing (Cody, 2026-10-11)
+      better = v > theirs[id] && b != (other_base[id] || 0)
+      text << [v.to_s, cx + 68, cy - 7, 1, better ? fs::BETTER : fs::WHITE, fs::DARK]
       total += b
       ov.fill_rect(cx + 72, cy + 5, 31, 6, fs::BAR_BG)
       w = [[b * 30 / 150, 30].min, 1].max

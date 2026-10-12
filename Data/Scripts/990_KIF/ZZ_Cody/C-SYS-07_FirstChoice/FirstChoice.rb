@@ -3,7 +3,8 @@
 #   New players used to start with every module Off, so KIF Beta played like
 #   plain PIF until they found Options > Modules. The first time the load
 #   screen shows (no module chosen yet), KIF asks once:
-#     Classic KIF   - every module On (KIF as it always was)
+#     Classic KIF   - every module On, with the features KIF 0.20.7 never
+#                     had (EBDX, Move Effectiveness, Fusion Screen) Off
 #     PIF only      - every module Off (plays like Pokémon Infinite Fusion)
 #     Let me choose - opens Options > Modules
 #   Players who already have module choices (any save from before, or saves
@@ -37,8 +38,9 @@ module KIF
       case cmd
       when 0
         KIF::Modules.all_on!
+        classic_only!
         KIF::Modules.poll
-        pbMessage(_INTL("Every KIF feature is on."))
+        pbMessage(_INTL("KIF's classic features are on. Newer ones (EBDX battles, Move Effectiveness, Fusion Screen) can be turned on in Options > Modules."))
       when 1
         KIF::Modules::MODULES.each_key { |id| KIF::Modules.set_state(id, KIF::Modules::OFF) }
         pbMessage(_INTL("KIF's features are off: the game plays like Pokémon Infinite Fusion."))
@@ -52,6 +54,16 @@ module KIF
     rescue StandardError => e
       KIF.log("First launch question failed (#{e.class}: #{e.message})") if defined?(KIF.log)
       return false
+    end
+
+    # Classic KIF = KIF 0.20.7 as it was: features KIF never had, but that
+    # default to On inside their module, are switched off (Cody, 2026-10-12)
+    NEW_ON_BY_DEFAULT = [:mp_ebdx_enabled, :cody_effectiveness, :cody_fusionscreen]
+
+    def classic_only!
+      NEW_ON_BY_DEFAULT.each do |key|
+        $PokemonSystem.send("#{key}=", 0) if $PokemonSystem.respond_to?("#{key}=")
+      end
     end
 
     def open_modules

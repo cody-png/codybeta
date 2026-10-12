@@ -1,0 +1,7 @@
+KIF Beta 0.21.28
+KIF now updates itself: at start-up it tells you when a new version is out and downloads only the files that changed. Your saves, mods and sprites are left alone.
+Options > Modules > General settings: Updates (Stable / Beta / Off) and Check for Updates.
+Elite Battle DX battle visuals are included (Graphical Changes settings).
+The PC and party no longer pause on some Pokémon (new Sprite File Cache option).
+No more Pokémon Infinite Fusion 2 messages or PIF installer prompts at start-up.
+The fusion screen's green stats only mark real base-stat differences.

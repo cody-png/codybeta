@@ -3,3 +3,4 @@ build_release.cmd export-ignore
 push_branches.cmd export-ignore
 .gitignore export-ignore
 .gitattributes export-ignore
+publish_release.cmd export-ignore

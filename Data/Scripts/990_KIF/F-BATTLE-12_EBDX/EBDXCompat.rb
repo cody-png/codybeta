@@ -41,7 +41,18 @@ if KIF::EBDX.installed?
   end
   ::EBDXToggle.singleton_class.prepend(KIF::EBDX::ToggleModule)
   KIF::Modules.no_gate(KIF::EBDX::ToggleModule) if defined?(KIF::Modules)
-  KIF::Options.define(:mp_ebdx_enabled, 1, :global)
+  KIF::Options.define(:mp_ebdx_enabled, 0, :global)
+
+  # EBDX is opt-in (Cody, 2026-10-12): EBDX's own PokemonSystem#initialize
+  # (660_EBDX/001, unchanged) sets it On for every new player, so a new
+  # player's setting is put back to Off here. Saved settings keep their value.
+  class ::PokemonSystem
+    alias kif_ebdx_off_initialize initialize unless method_defined?(:kif_ebdx_off_initialize)
+    def initialize
+      kif_ebdx_off_initialize
+      @mp_ebdx_enabled = 0
+    end
+  end
   KIF::Options.define(:mp_ebdx_zoom_disabled, 1, :global)
   KIF::Options.define(:mp_skip_trainer_anim, 0, :global)
   KIF::Options.define(:mp_stat_stage_overlay, 1, :global)

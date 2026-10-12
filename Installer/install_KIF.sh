@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ============================================================================
 #  KIF Beta installer for Linux / Steam Deck
-#  Put this file in the folder you want and run it (bash install_KIF.sh, or
-#  right-click > Run in Konsole on a Steam Deck). It makes a "KIF" folder
-#  next to itself, downloads the game from GitHub into it and unpacks it.
+#  Put this file in the folder you want and run it: double-click it (after
+#  Properties > Permissions > "Is executable"), right-click > Run in Konsole,
+#  or bash install_KIF.sh. It makes a "KIF" folder next to itself,
+#  downloads the game from GitHub into it and unpacks it.
 #  KIF is a Windows game: it runs through Wine or Proton (see the end).
 #  After that the game keeps itself up to date (in-game updater).
 #  Needs about 4.5 GB free while installing (2 GB once done).
@@ -11,6 +12,23 @@
 #  download from somewhere else (testing).
 # ============================================================================
 set -u
+
+# Started by double-click (no terminal): open one, so the questions and the
+# download progress can be seen, and keep it open at the end.
+if [ ! -t 0 ] && [ -z "${KIF_IN_TERMINAL:-}" ]; then
+  export KIF_IN_TERMINAL=1
+  self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+  for t in konsole gnome-terminal kgx xfce4-terminal mate-terminal lxterminal x-terminal-emulator xterm; do
+    command -v "$t" >/dev/null 2>&1 || continue
+    case "$t" in
+      gnome-terminal|kgx) exec "$t" -- bash "$self" "$@" ;;
+      *)                  exec "$t" -e bash "$self" "$@" ;;
+    esac
+  done
+fi
+if [ -n "${KIF_IN_TERMINAL:-}" ] && [ -t 0 ]; then
+  trap 'printf "\n  Press Enter to close this window. "; read -r _' EXIT
+fi
 REPO="https://github.com/cody-png/codybeta/archive/refs/heads"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TARGET="$HERE/KIF"

@@ -1,4 +1,4 @@
-KIF-MANIFEST 1 version=0.21.29 channel=beta files=29549
+KIF-MANIFEST 1 version=0.21.30 channel=beta files=29549
 5d8b7ff7853a0c9ea25cef730252f32a2849ac94 3085627 Audio/BGM/Azalea Town.mp3
 c1bf8a69360590600d95f7b17970c9bbc1e317ef 2505405 Audio/BGM/BW2_Ghetsis Battle.mp3
 fc522881c06a4cb076d61a14911405c3da74338e 2722742 Audio/BGM/BW2_K_leader.mp3
@@ -3395,7 +3395,7 @@ fe767fa0b1773b41eaea0464a459b076e6609c5b 428 Data/Items.rxdata
 ef274be56fa0a395d41f9d20c4627b84d49f9e46 4878 Data/KIF/MysteryGift_KIF.txt
 a0a66659d9f44d21e1f84d80e4e5970e9df33cfa 610062 Data/KIF/entrances.dat
 ccdde561e5fc62b0b3ebd760916e6e29eb9c07f9 21721 Data/KIF/trainers_challenge.dat
-c4a85409886be59adc4345dc00e777b679e2064f 315 Data/KIF/update_notes.txt
+25f027e6b512a2964f37d212e8f7d0baba38727a 138 Data/KIF/update_notes.txt
 9a527fb1c545d642d4a709d95452fbabcc853867 78297 Data/Map001.rxdata
 775d19da5c3949f878e650e7bbd242a6a300dfe4 5213 Data/Map002.rxdata
 470905be3cae69dbe4a6a546f248949b09bb82b1 6159 Data/Map003.rxdata
@@ -4826,7 +4826,7 @@ f320fa303e0de41933b902dbc79623ea23035463 5046 Data/Scripts/990_KIF/000_Core/008_
 cdb5d0730d8ee92b88cb1c57c5aec6ae3426d46e 5626 Data/Scripts/990_KIF/000_Core/012_KIF_ModulesMenu.rb
 36be2dcfe72f0acdf24668ade930fdc7e7325c38 3740 Data/Scripts/990_KIF/000_CrashLog.rb
 363a7af6f9b65b8e31556082131b04f37323d207 1655 Data/Scripts/990_KIF/000_Paths.rb
-d13bc1070c4f4a9ce2d5fc98706d9fb9060d681d 1659 Data/Scripts/990_KIF/000_README.rb
+6c0e22fefa77b65a1f4f34a61bbcee8b15c94c39 1659 Data/Scripts/990_KIF/000_README.rb
 162f5ef769bd91b25cd83a2b067e7ec62b0cd3e9 5290 Data/Scripts/990_KIF/F-BATTLE-01_BattleFormat/BattleFormat.rb
 d10bb9de0a75f87e721b839f5ed2227e8b4efa8f 4192 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattle.rb
 7808965551398413c1fdc25dbcaf7647b48c58d8 12936 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattleChoices.rb
@@ -4958,7 +4958,7 @@ dc0d2d806447623fafeea8d45f586fd0cdd5b7f0 4266418 Data/Sprite Credits.csv
 3b3389e09b90357c0655e74ffae380fc48b7e609 410184 Data/Tilesets.rxdata
 f9b31006c733aa226e60e209c722557464a6479e 364643 Data/TilesetsTemp.rxdata
 94c39352b0edb225fa90de0ca64fe19c8a5fdae3 345 Data/Troops.rxdata
-b1e1724350ae0fad1856b6f13a60e4d66ba9242a 7 Data/VERSION
+488b26ebace65d64cd48e6dff2f36714066d6f61 7 Data/VERSION
 c7ea19a7a791e601e24bbc538d8611eb1e1025b0 245 Data/Weapons.rxdata
 88cb261de46afa991fb60f0251319dcc0a4b73f5 21823 Data/abilities.dat
 142be0a9a8a80bf26ad1292785f9ec46b76e7ea1 22509076 Data/attacksRS.dat

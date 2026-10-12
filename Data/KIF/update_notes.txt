@@ -1,4 +1,3 @@
-KIF Beta 0.21.29
-The first start now asks how you want to play: Classic KIF (everything on), PIF only (everything off) or Let me choose.
-The Hoenn K-Egg (a test egg) is no longer sold; any in your Bag still work.
-This version was delivered by the in-game updater - if you're reading this after updating, it worked!
+KIF Beta 0.21.30
+Updater test build: if you got here from inside the game, the in-game updater works!
+Nothing else changed since 0.21.29.

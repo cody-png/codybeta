@@ -1,4 +1,2 @@
-KIF Beta 0.21.31
-Steam Deck / Linux (Proton): updates now install without the Windows update window. Close the game and start it again when asked.
-Check for Updates on Stable now says when no stable release is out yet (set Updates to Beta for test builds).
-New installers: install_KIF.bat (Windows) and install_KIF.sh (Linux / Steam Deck) download KIF into a "KIF" folder.
+KIF Beta 0.21.32
+Fusion screen: a fusion you haven't seen yet is a plain silhouette again (like PIF) when Fusion Preview is Off. It used to show the sprite with a blue tint.

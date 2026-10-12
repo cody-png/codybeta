@@ -28,6 +28,8 @@ KIF 0.20.7 was built on PIF 6.4.5. **KIF Beta** brings KIF's features to **PIF 6
 2. Unzip it anywhere.
 3. Run **InfiniteFusion.exe**.
 
+After that, KIF updates itself: at start-up it offers new versions and downloads only what changed (Options > Modules > General settings > Updates).
+
 # Features
 
 **Every feature and option is explained in [KIF_Features.md](KIF_Features.md).** The guide follows the in-game menu order: Options → KIF Settings. It also ships with the game, next to InfiniteFusion.exe.

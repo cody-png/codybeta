@@ -2,9 +2,12 @@
 
 ## Install (fresh)
 1. Unzip the release into a **new, empty folder**. Don't unzip over an old KIF or PIF folder.
-2. Get the sprite pack (`Full Sprite pack ... .zip`) and drop the **zip itself** into the `Import Sprites` folder next to `InfiniteFusion.exe`. Don't unzip it. **The zip is deleted once its sprites are installed** - keep your own copy elsewhere, or set Options > Others > Imported Archives to Keep first (it then goes to an `Imported archives` folder).
+2. Get the sprite pack (`Full Sprite pack ... .zip`) and drop the **zip itself** into the `Import Sprites` folder next to `InfiniteFusion.exe`. Don't unzip it. **The zip is deleted once its sprites are installed** - keep your own copy elsewhere, or set Options > Modules > General settings > Imported Archives to Keep first (it then goes to an `Imported archives` folder).
 3. Start `InfiniteFusion.exe`. The first start sorts the pack into place (a few minutes for the full pack) and tells you how many sprites it imported. The zip is deleted once it's unpacked – the installed sprites are the only copy.
 4. If you had saves in old KIF, the game offers once to copy them over. Say yes or no; you can copy them yourself later from the `Old Savefile location` shortcut.
+
+## Updating
+From 0.21.28 on, KIF updates itself: at start-up it tells you when a new test build is out (this build is on the **Beta** channel) and downloads only the files that changed. Say **Update now**; the game closes, a small window moves the files in, and the game starts again. Options > Modules > General settings > **Updates** switches between Beta, Stable and Off; **Check for Updates** looks any time.
 
 Saves live in `%APPDATA%\KIF` (the `KIF Savefiles` shortcut). Old KIF's saves are untouched in `%APPDATA%\kurayinfinitefusion`.
 

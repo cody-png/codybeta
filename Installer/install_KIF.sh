@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# ============================================================================
+#  KIF Beta installer for Linux / Steam Deck
+#  Put this file in the folder you want and run it (bash install_KIF.sh, or
+#  right-click > Run in Konsole on a Steam Deck). It makes a "KIF" folder
+#  next to itself, downloads the game from GitHub into it and unpacks it.
+#  KIF is a Windows game: it runs through Wine or Proton (see the end).
+#  After that the game keeps itself up to date (in-game updater).
+#  Needs about 4.5 GB free while installing (2 GB once done).
+#  Options: --stable / --beta (skip the question), KIF_INSTALL_URL=<url> to
+#  download from somewhere else (testing).
+# ============================================================================
+set -u
+REPO="https://github.com/cody-png/codybeta/archive/refs/heads"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+TARGET="$HERE/KIF"
+ZIP="$TARGET/KIF_download.zip"
+UNPACK="$TARGET/.kif_unpack"
+
+say()  { printf '%s\n' "$*"; }
+fail() { say ""; say "  $*"; rm -rf "$ZIP" "$UNPACK"; rmdir "$TARGET" 2>/dev/null; exit 1; }
+ask()  { # ask "question" default -> answer (default when not interactive)
+  local a=""
+  if [ -t 0 ]; then read -r -p "  $1 " a; fi
+  [ -z "$a" ] && a="$2"
+  printf '%s' "$a"
+}
+
+say ""
+say "  ==================================="
+say "    KIF Beta installer"
+say "  ==================================="
+say ""
+say "  The game will be installed into:"
+say "    $TARGET"
+say ""
+
+if command -v curl >/dev/null 2>&1; then DL=curl
+elif command -v wget >/dev/null 2>&1; then DL=wget
+else fail "This installer needs curl or wget."; fi
+
+if [ -f "$TARGET/InfiniteFusion.exe" ]; then
+  say "  KIF is already installed there. Reinstalling downloads the game again"
+  say "  and puts back missing or damaged game files; saves, mods and imported"
+  say "  sprites are kept. (To just update, start the game: it updates itself.)"
+  case "$(ask '[R] Reinstall  [C] Cancel :' C)" in
+    r|R) ;;
+    *) say "  Nothing was changed."; exit 0 ;;
+  esac
+fi
+
+BRANCH=""
+for arg in "$@"; do
+  case "$arg" in
+    --beta) BRANCH="beta-testing" ;;
+    --stable) BRANCH="release" ;;
+  esac
+done
+if [ -z "$BRANCH" ]; then
+  say "  Which version?"
+  say "    [S] Stable - the released version (recommended)"
+  say "    [B] Beta   - test builds: newest features, may have bugs"
+  case "$(ask 'Choose S or B :' S)" in
+    b|B) BRANCH="beta-testing" ;;
+    *) BRANCH="release" ;;
+  esac
+fi
+URL="${KIF_INSTALL_URL:-$REPO/$BRANCH.zip}"
+
+mkdir -p "$TARGET" 2>/dev/null || fail "Couldn't make the folder $TARGET - move the installer somewhere you can write to."
+FREE_KB=$(df -Pk "$TARGET" 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "${FREE_KB:-}" ] && [ "$FREE_KB" -lt 4500000 ]; then
+  fail "Not enough free space: about 4.5 GB is needed, $((FREE_KB / 1024)) MB is free."
+fi
+
+say ""
+say "  Downloading KIF Beta ($BRANCH) - about 1.9 GB, this takes a while..."
+rm -f "$ZIP"
+if [ "$DL" = curl ]; then
+  curl -L --fail --retry 5 --retry-delay 3 -o "$ZIP" "$URL" || {
+    [ "$BRANCH" = release ] && fail "The download failed. If this keeps happening there may be no Stable release yet - run again and choose B (Beta)."
+    fail "The download failed. Check your internet connection and run the installer again."
+  }
+else
+  wget -q --show-progress -O "$ZIP" "$URL" || fail "The download failed. Check your internet connection and run the installer again."
+fi
+
+say ""
+say "  Unpacking (about 30,000 files)..."
+rm -rf "$UNPACK"; mkdir -p "$UNPACK"
+if command -v unzip >/dev/null 2>&1; then
+  unzip -q -o "$ZIP" -d "$UNPACK" || fail "Unpacking failed (not enough disk space, or the download was cut short)."
+elif command -v bsdtar >/dev/null 2>&1; then
+  bsdtar -xf "$ZIP" -C "$UNPACK" || fail "Unpacking failed (not enough disk space, or the download was cut short)."
+elif command -v python3 >/dev/null 2>&1; then
+  python3 -c 'import sys,zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$ZIP" "$UNPACK" || fail "Unpacking failed (not enough disk space, or the download was cut short)."
+else
+  fail "This installer needs unzip, bsdtar or python3 to unpack the game."
+fi
+TOP="$(find "$UNPACK" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+[ -n "$TOP" ] && [ -f "$TOP/InfiniteFusion.exe" ] || fail "The download doesn't look like KIF Beta (no InfiniteFusion.exe inside)."
+cp -a "$TOP/." "$TARGET/" || fail "Copying the game into $TARGET failed (disk space?)."
+rm -rf "$UNPACK" "$ZIP"
+
+# a launcher: Wine if it is installed, otherwise Proton through Steam
+cat > "$TARGET/run_KIF.sh" <<'LAUNCH'
+#!/usr/bin/env bash
+cd "$(dirname "$0")" || exit 1
+if command -v wine >/dev/null 2>&1; then
+  exec wine InfiniteFusion.exe "$@"
+fi
+echo "Wine isn't installed. To play through Steam (Steam Deck):"
+echo "  Steam > Games > Add a Non-Steam Game to My Library > Browse > pick"
+echo "  $(pwd)/InfiniteFusion.exe"
+echo "  then the game's Properties > Compatibility > Force a Steam Play"
+echo "  compatibility tool (Proton)."
+LAUNCH
+chmod +x "$TARGET/run_KIF.sh"
+
+say ""
+say "  ==================================="
+say "    KIF Beta is installed!"
+say "  ==================================="
+say ""
+say "  Folder: $TARGET"
+say "  To play:"
+say "    - with Wine:  run $TARGET/run_KIF.sh"
+say "    - Steam Deck / Proton: Steam > Add a Non-Steam Game > Browse >"
+say "      $TARGET/InfiniteFusion.exe, then Properties > Compatibility >"
+say "      Force a Steam Play compatibility tool (Proton). Start it from Steam."
+say "  Sprite pack: put the PIF sprite pack .zip into the \"Import Sprites\""
+say "  folder inside KIF; the game installs it the next time it starts."
+say ""

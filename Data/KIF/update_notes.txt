@@ -1,3 +1,4 @@
-KIF Beta 0.21.30
-Updater test build: if you got here from inside the game, the in-game updater works!
-Nothing else changed since 0.21.29.
+KIF Beta 0.21.31
+Steam Deck / Linux (Proton): updates now install without the Windows update window. Close the game and start it again when asked.
+Check for Updates on Stable now says when no stable release is out yet (set Updates to Beta for test builds).
+New installers: install_KIF.bat (Windows) and install_KIF.sh (Linux / Steam Deck) download KIF into a "KIF" folder.

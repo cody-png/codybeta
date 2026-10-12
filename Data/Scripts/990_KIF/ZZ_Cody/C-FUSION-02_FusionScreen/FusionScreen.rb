@@ -15,6 +15,8 @@
 #     body's nature/EVs, chosen after fusing);
 #   * bars show the base stats (same colours as the Summary), plus the base
 #     total.
+#   * a fusion you haven't seen, with Fusion Preview Off, is PIF's flat
+#     silhouette (blue / green / white), not a tinted sprite (2026-10-12).
 # A (USE) on a fusion opens Change Body / Change Head / Confirm (Cody's
 # mockup, 2026-10-06). Change Body/Head lists the part's current form and every
 # later one (branches included) tagged Stage 1 / Stage 2 / Final; the preview
@@ -323,6 +325,23 @@ class FusionPreviewScreen
     return Color.new(255, 255, 255, 200)
   end
 
+  # An unseen fusion with Fusion Preview Off is a flat silhouette, as in PIF
+  # (DoublePreviewScreen#draw_window replaces every visible pixel with the
+  # colour at alpha 200). A sprite colour blend at alpha 200 only tinted the
+  # sprite and left its details visible, so the colour is blended fully and
+  # the sprite drawn at PIF's 200 opacity instead.
+  def cody_fs_apply_tint(mon, dex)
+    tint = cody_fs_tint(dex)
+    if tint
+      mon.color = Color.new(tint.red, tint.green, tint.blue, 255)
+      mon.opacity = tint.alpha
+    else
+      mon.color = Color.new(0, 0, 0, 0)
+      mon.opacity = 255
+    end
+    return tint
+  end
+
   #-----------------------------------------------------------------------------
   # Drawing
   #-----------------------------------------------------------------------------
@@ -344,8 +363,7 @@ class FusionPreviewScreen
         mon.zoom_x = mon.zoom_y = zoom
         mon.x = bx + (fs::BOX_W - (ab.bitmap.width * zoom).round) / 2
         mon.y = fs::BOX_Y + (fs::BOX_H - (ab.bitmap.height * zoom).round) / 2
-        tint = cody_fs_tint(cody_fs_dex(pos))
-        mon.color = tint || Color.new(0, 0, 0, 0)
+        cody_fs_apply_tint(mon, cody_fs_dex(pos))
       else
         mon.bitmap = nil
       end

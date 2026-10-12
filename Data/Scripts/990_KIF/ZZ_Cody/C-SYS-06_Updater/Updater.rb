@@ -285,6 +285,13 @@ module KIF
       return Win.available?
     end
 
+    # Windows proper: the update window (apply.cmd, robocopy) can run. Under
+    # Wine/Proton (Linux, Steam Deck) those may be missing, so the files are
+    # moved in by the game itself and the player starts it again.
+    def update_window?
+      return windows? && !Win.wine?
+    end
+
     #---------------------------------------------------------------------------
     # Windows processes without a console window (curl), and the update window
     #---------------------------------------------------------------------------
@@ -309,6 +316,18 @@ module KIF
           false
         end
         return @available
+      end
+
+      # true under Wine / Proton (ntdll has wine_get_version there only)
+      def wine?
+        return @wine unless @wine.nil?
+        @wine = begin
+          !api("ntdll", "wine_get_version", [], "p").call.to_s.empty?
+        rescue StandardError, LoadError, NameError, RuntimeError
+          false
+        end
+        KIF::Updater.log("running under Wine/Proton: the game moves update files in itself") if @wine
+        return @wine
       end
 
       def x64?
@@ -603,7 +622,7 @@ module KIF
       File.open(File.join(dir, "remove.txt"), "wb") { |f| f.write(plan[:removals].map { |p| win_path(p) }.join("\r\n")) }
       File.open(File.join(dir, "version.txt"), "wb") { |f| f.write(version) }
       log("#{version}: #{n} files (#{size_text(plan[:bytes])}) downloaded, #{plan[:removals].length} to remove")
-      if windows?
+      if update_window?
         exe = Win.exe_path || File.join(root, "InfiniteFusion.exe")
         File.open(File.join(dir, "apply.cmd"), "wb") { |f| f.write(apply_script(dir, version, Process.pid, exe)) }
         if start_apply(dir)
@@ -634,6 +653,15 @@ module KIF
       lines.each_slice(3) { |chunk| pbMessage(chunk.join("\n")) }
     end
 
+    # Stable asked, nothing there, but the beta branch answers: the release
+    # branch simply doesn't exist yet (not a network problem)
+    def no_stable_yet?(ch, base)
+      return false unless ch == 0
+      beta = source(1)
+      return false if beta.nil? || beta == base   # a test source overrides both
+      return !remote_version(beta).nil?
+    end
+
     # at the load screen (manual: from Options, also says "up to date")
     def check(manual = false)
       ch = channel
@@ -644,7 +672,12 @@ module KIF
       v = remote_version(base)
       if v.nil?
         log("no version found at #{base}")
-        pbMessage(_INTL("Couldn't reach the update server. Try again later.")) if manual
+        return false unless manual
+        if no_stable_yet?(ch, base)
+          pbMessage(_INTL("No stable release has been published yet. Set Updates to Beta (Options > Modules > General settings) to get test builds."))
+        else
+          pbMessage(_INTL("Couldn't reach the update server. Try again later."))
+        end
         return false
       end
       unless newer?(v, current_version)
@@ -694,7 +727,11 @@ module KIF
         elsif File.file?(File.join(dir, "apply.cmd")) && !newer?(current_version, v) && v != current_version
           cmd = pbMessage(_INTL("The update to KIF Beta {1} didn't finish (a file was in use).", v),
                           [_INTL("Try again"), _INTL("Discard it")], 0)
-          if cmd == 0 && windows?
+          if cmd == 0 && !update_window?
+            File.delete(File.join(dir, "failed.txt")) rescue nil
+            apply_in_ruby(dir)
+            pbMessage(_INTL("KIF Beta {1} is installed. Close the game and start it again to use it.", v))
+          elsif cmd == 0
             File.delete(File.join(dir, "failed.txt")) rescue nil
             if start_apply(dir)
               (KIF::SessionLog.finish rescue nil) if defined?(KIF::SessionLog)

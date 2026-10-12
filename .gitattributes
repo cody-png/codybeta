@@ -4,3 +4,6 @@ push_branches.cmd export-ignore
 .gitignore export-ignore
 .gitattributes export-ignore
 publish_release.cmd export-ignore
+Installer/ export-ignore
+*.bat text eol=crlf
+*.sh text eol=lf

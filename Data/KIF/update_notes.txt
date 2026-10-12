@@ -1,7 +1,4 @@
-KIF Beta 0.21.28
-KIF now updates itself: at start-up it tells you when a new version is out and downloads only the files that changed. Your saves, mods and sprites are left alone.
-Options > Modules > General settings: Updates (Stable / Beta / Off) and Check for Updates.
-Elite Battle DX battle visuals are included (Graphical Changes settings).
-The PC and party no longer pause on some Pokémon (new Sprite File Cache option).
-No more Pokémon Infinite Fusion 2 messages or PIF installer prompts at start-up.
-The fusion screen's green stats only mark real base-stat differences.
+KIF Beta 0.21.29
+The first start now asks how you want to play: Classic KIF (everything on), PIF only (everything off) or Let me choose.
+The Hoenn K-Egg (a test egg) is no longer sold; any in your Bag still work.
+This version was delivered by the in-game updater - if you're reading this after updating, it worked!

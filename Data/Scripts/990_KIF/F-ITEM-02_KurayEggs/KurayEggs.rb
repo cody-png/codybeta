@@ -28,8 +28,9 @@
 #   * Port fix: with the PC boxes full the egg is not used up (KIF consumed
 #     it and gave nothing).
 #   * Port addition (Cody, 2026-10-05): "Hoenn K-Egg" (item 2033), only the
-#     species 6.8.2 added after KIF (dex 502-576), as a test egg. Sold in the
-#     Kuray Shop at P20,000; uses the Random K-Egg icon (no art of its own).
+#     species 6.8.2 added after KIF (dex 502-576), as a test egg. No longer
+#     sold (Cody, 2026-10-12: debug testing only); the item stays defined so
+#     eggs already in a bag still work.
 #===============================================================================
 KIF::Options.define(:kurayeggs_fusionpool, 0, :save)
 KIF::Options.define(:kurayeggs_rarity, 0, :save)
@@ -308,7 +309,7 @@ module KIF
     end
 
     def self.shop_stock
-      ids = [0, 1, 32, 33, 21, 20] + (2..19).to_a + [22]
+      ids = [0, 1, 32, 21, 20] + (2..19).to_a + [22]   # 33 (Hoenn, test egg) no longer sold
       (1..8).each { |n| ids << 22 + n if badge?(n) }
       ids << 31 if elite4?
       return ids.map { |e| symbol(e) }

@@ -1,2 +1,3 @@
-KIF Beta 0.21.32
-Fusion screen: a fusion you haven't seen yet is a plain silhouette again (like PIF) when Fusion Preview is Off. It used to show the sprite with a blue tint.
+KIF Beta 0.21.33
+First start: "Classic KIF" now means KIF as it was. Newer features (EBDX battles, Move Effectiveness, Fusion Screen) start off and can be turned on in Options > Modules.
+Fusion screen: a fusion you haven't seen yet is a plain silhouette again (like PIF) when Fusion Preview is Off.

@@ -467,7 +467,8 @@ module KIF
       if cache_mode == 0
         begin
           dir = "#{CACHE_DIR}/#{Settings::GAME_VERSION_NUMBER}"
-          [CACHE_DIR, dir].each { |d| Dir.mkdir(d) unless File.directory?(d) }
+          # "Cache" itself may not exist on a fresh install (no FileUtils in the game)
+          [File.dirname(CACHE_DIR), CACHE_DIR, dir].each { |d| Dir.mkdir(d) unless File.directory?(d) }
           bmp.save_to_png(disk_path(key)) unless File.exist?(disk_path(key))
         rescue
           nil

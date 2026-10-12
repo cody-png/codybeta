@@ -48,6 +48,7 @@ Highlights:
 - **Pokémon Infinite Fusion:** Chardub/Frogman and the PIF team.
 - **Kuray Infinite Fusion:** Kurayami, with Reïzod, DemICE, Sylvi, Trapstarr, HungryPickle, Luminatron, Bluewuppo, JustAnotherU5er, Mirasein, FairyGodmother, Lolpy1, Rekt1029 and the whole KIF community.
 - **KIF Beta (PIF 6.8.2):** cody-png.
+- **Elite Battle DX:** Luka S.J. (EBDX), as adapted in KIF Multiplayer by Aleks, included with permission.
 - Made with Pokémon Essentials.
 
 KIF is a fan project and is not affiliated with or endorsed by the PIF team.

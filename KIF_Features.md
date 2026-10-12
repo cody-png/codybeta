@@ -34,6 +34,8 @@ Things a module changes while the game starts (some data tables) stay in place u
 
 **General settings** holds settings that are always available (frame rate, sprite import, save folder). Below the settings buttons: **Settings Presets**, **Increment Slider by** and **DEBUG**.
 
+The first time the game starts, it asks **How do you want to play?** – **Classic KIF** (every module On), **PIF only** (every module Off, plays like Pokémon Infinite Fusion) or **Let me choose** (opens Modules). You can change everything later in Options → Modules.
+
 Players who were already playing KIF Beta before Modules existed get every module turned On once, so nothing they had set up stops working.
 
 Inside each settings page:
@@ -379,7 +381,7 @@ These features have no option of their own.
   - **Devolution Spray:** devolves a Pokémon, choosing head or body for a fusion.
   - **Rocket Balls.**
   - **Perfect Ball:** always maxes two different IVs.
-- **K-Eggs** (Kuray Shop): Random, Sparkling (40x shiny odds), one per type, Fusion, Base (never a fusion), Legendary, Hoenn (Pokémon new to PIF 6.8.2), and tier eggs.
+- **K-Eggs** (Kuray Shop): Random, Sparkling (40x shiny odds), one per type, Fusion, Base (never a fusion), Legendary, and tier eggs.
   - Every egg gives 10x your Wild Shiny Odds.
   - The tier eggs are Starter, 1–8 Badges and Elite 4, each with a base-stat range for that point in the game.
   - New tiers unlock as you earn badges and beat the Elite Four. You're told the next time you open the Kuray Shop.

@@ -1,0 +1,73 @@
+#===============================================================================
+# C-SYS-07 – How do you want to play? (Cody, 2026-10-12)
+#   New players used to start with every module Off, so KIF Beta played like
+#   plain PIF until they found Options > Modules. The first time the load
+#   screen shows (no module chosen yet), KIF asks once:
+#     Classic KIF   - every module On (KIF as it always was)
+#     PIF only      - every module Off (plays like Pokémon Infinite Fusion)
+#     Let me choose - opens Options > Modules
+#   Players who already have module choices (any save from before, or saves
+#   copied from old KIF, which turn everything On) are never asked.
+#   The answer is kept with the other global settings; like them it is
+#   stored once a game is saved, so quitting before the first save asks again.
+#===============================================================================
+KIF::Options.define(:kif_first_choice, false, :global)
+
+module KIF
+  module FirstChoice
+    module_function
+
+    # true when this player has never picked how to play
+    def needed?
+      return false unless $PokemonSystem && $PokemonSystem.respond_to?(:kif_first_choice)
+      return false if $PokemonSystem.kif_first_choice
+      h = KIF::Modules.states
+      unless h.nil? || h.empty?
+        $PokemonSystem.kif_first_choice = true   # already has module choices
+        return false
+      end
+      return true
+    end
+
+    def ask
+      return false unless needed?
+      pbMessage(_INTL("Welcome to KIF Beta! KIF's features come in modules you can turn on or off at any time in Options > Modules."))
+      cmd = pbMessage(_INTL("How do you want to play?"),
+                      [_INTL("Classic KIF"), _INTL("PIF only"), _INTL("Let me choose")], 0)
+      case cmd
+      when 0
+        KIF::Modules.all_on!
+        KIF::Modules.poll
+        pbMessage(_INTL("Every KIF feature is on."))
+      when 1
+        KIF::Modules::MODULES.each_key { |id| KIF::Modules.set_state(id, KIF::Modules::OFF) }
+        pbMessage(_INTL("KIF's features are off: the game plays like Pokémon Infinite Fusion."))
+      else
+        KIF::Modules::MODULES.each_key { |id| KIF::Modules.set_state(id, KIF::Modules::OFF) }
+        open_modules
+      end
+      $PokemonSystem.kif_first_choice = true
+      KIF.log("First launch: #{%w[Classic\ KIF PIF\ only Let\ me\ choose][cmd] || cmd} (#{KIF::Modules.states.select { |_k, v| v != KIF::Modules::OFF }.keys.join(', ')})") if defined?(KIF.log)
+      return true
+    rescue StandardError => e
+      KIF.log("First launch question failed (#{e.class}: #{e.message})") if defined?(KIF.log)
+      return false
+    end
+
+    def open_modules
+      pbFadeOutIn {
+        scene = KifModulesScene.new
+        screen = PokemonOptionScreen.new(scene)
+        screen.pbStartScreen
+      }
+    end
+  end
+end
+
+# At the load screen, after the update check (C-SYS-06), before the menu
+alias kif_fc_find_newer_available_version find_newer_available_version unless defined?(kif_fc_find_newer_available_version)
+def find_newer_available_version
+  ret = kif_fc_find_newer_available_version
+  KIF::FirstChoice.ask
+  return ret
+end

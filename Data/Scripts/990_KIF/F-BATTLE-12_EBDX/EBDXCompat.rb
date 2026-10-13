@@ -93,9 +93,14 @@ if KIF::EBDX.installed?
   module KIF::EBDX::SpeciesBitmap
     def setPokemonBitmapSpecies(*args)
       if args[0].is_a?(Pokemon)
-        _pkmn, species, back = args
+        pkmn, species, back = args
         pif = (BattleSpriteLoader.new.obtain_pif_sprite(species) rescue nil)
-        return setPokemonBitmapPIFSprite(pif) if pif && !back
+        if pif && !back
+          # a shiny Pokémon evolves into a shiny sprite (SCOPE-02 EvolutionShiny)
+          bm = (KIF::EvolutionShiny.bitmap(pkmn, species, pif) rescue nil) if defined?(KIF::EvolutionShiny)
+          return kif_set_animated_bitmap(bm) if bm
+          return setPokemonBitmapPIFSprite(pif)
+        end
         return super(species, back || false)
       end
       super(*args)

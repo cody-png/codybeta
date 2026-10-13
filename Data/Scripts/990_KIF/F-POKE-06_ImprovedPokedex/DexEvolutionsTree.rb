@@ -84,16 +84,23 @@ module KIF
       return node
     end
 
-    # Label of a branch, with its other methods as "or ..."
+    # Label of a branch, with its other methods as "or ...". Returns
+    # [lines, icons]: one icon per way that has one (Machoke: Rare Candy for
+    # "Lv 40" and the Linking Cord for "or Linking Cord").
     def self.branch_label(kid_entry)
       lines, icon = method_label(kid_entry[1], kid_entry[2])
+      icons = [icon]
       alts = kid_entry[3]
       if alts && !alts.empty?
-        alt_lines, _ = method_label(alts[0][0], alts[0][1])
+        alt_lines, alt_icon = method_label(alts[0][0], alts[0][1])
         lines = [lines.join(" "), _INTL("or {1}", alt_lines.join(" "))]
+        icons << alt_icon
       end
-      return [lines, icon]
+      icons = icons.compact.uniq
+      return [lines, icons]
     end
+
+    ICON_STEP = 26   # one item icon (24) + a 2 px gap
 
     def self.leaves(node)
       return 1 if node[:kids].empty?
@@ -238,31 +245,44 @@ module KIF
           x2 = x + node_w + gap + node_w / 2 - size / 2 - 4
           y2 = ky + size / 2
           cmds << [:arrow, x1, y1, x2, y2]
-          lines, icon = branch_label(entry)
+          lines, icons = branch_label(entry)
           diag = (y1 != y2)
-          limit = diag ? gap + node_w - 24 - (icon ? 26 : 0) : x2 - x1 + 20
+          limit = diag ? gap + node_w - 24 - icons.length * ICON_STEP : x2 - x1 + 20
           lines = lines.map { |l| fit(l, limit, width) }
           mx = (x1 + x2) / 2
           my = (y1 + y2) / 2
           if y1 == y2 && !two_rows
-            cmds << [:item, icon, mx - 12, my - 26, 24] if icon
-            lines.each_with_index { |l, i| cmds << [:text, l, mx, my + 2 + i * 18, 2] }
+            ix = mx - (icons.length * ICON_STEP - 2) / 2
+            icons.each_with_index { |ic, i| cmds << [:item, ic, ix + i * ICON_STEP, my - 26, 24] }
+            # the second line sits on the row of the species names: keep it in
+            # the free space between the two names
+            left_name  = fit(GameData::Species.get(node[:sp]).name, node_w, width)
+            right_name = fit(GameData::Species.get(kid[:sp]).name, node_w, width)
+            band_l = x + node_w / 2 + width.call(left_name) / 2 + 4
+            band_r = x + node_w + gap + node_w / 2 - width.call(right_name) / 2 - 4
+            lines.each_with_index do |l, i|
+              if i == 0
+                cmds << [:text, l, mx, my + 2, 2]
+              else
+                cmds << [:text, fit(l, band_r - band_l, width), (band_l + band_r) / 2, my + 2 + i * 18, 2]
+              end
+            end
           else
             # diagonal (or two-row): icon and text side by side, outside the line
             up = y2 < y1
             straight = (y1 == y2)
             isz = straight ? 20 : 24   # two-row straight arrows: label just above the line
             tw = lines.map { |l| width.call(l) }.max || 0
-            rowh = [icon ? isz : 0, lines.length * 18].max
+            rowh = [icons.empty? ? 0 : isz, lines.length * 18].max
             # branches: the label sits in the free band above (upper branch) or
             # below (lower branch) the arrows, ending where the child's column
             # starts (the parent's column is free there: the parent sits mid-way)
             top = straight ? my - 2 - rowh : (up ? BOX_Y : BOX_Y + BOX_H - rowh)
             top = [[top, BOX_Y].max, BOX_Y + BOX_H - rowh].min
-            bw = (icon ? isz + 2 : 0) + tw
+            bw = icons.length * (isz + 2) + tw
             lx = straight ? mx - bw / 2 : x + node_w + gap - 4 - bw
-            if icon
-              cmds << [:item, icon, lx, top + (rowh - isz) / 2, isz]
+            icons.each do |ic|
+              cmds << [:item, ic, lx, top + (rowh - isz) / 2, isz]
               lx += isz + 2
             end
             lines.each_with_index { |l, i| cmds << [:text, l, lx, top + (rowh - lines.length * 18) / 2 + i * 18, 0] }
@@ -290,7 +310,7 @@ module KIF
       parts = []
       chain.each do |node, entry|
         if entry
-          lines, _icon = branch_label(entry)
+          lines, _icons = branch_label(entry)
           parts << [:text, fit(lines.join(" "), 90, width) + " >"]
         end
         parts << [:node, node[:sp], GameData::Species.get(node[:sp]).name]
@@ -315,13 +335,14 @@ module KIF
       shown.each_with_index do |entry, i|
         kid = entry[0]
         sx = BOX_X + offset + i * slot
-        lines, icon = branch_label(entry)
-        lines = lines.first(2).map { |l| fit(l, slot - (icon ? 24 : 4), width) }
+        lines, icons = branch_label(entry)
+        iw = icons.length * 22
+        lines = lines.first(2).map { |l| fit(l, slot - [iw + 2, 4].max, width) }
         tw = lines.map { |l| width.call(l) }.max || 0
-        lx = sx + (slot - (tw + (icon ? 22 : 0))) / 2
+        lx = sx + (slot - (tw + iw)) / 2
         ty = BOX_Y + 33 + (lines.length == 1 ? 9 : 0)
-        if icon
-          cmds << [:item, icon, lx, BOX_Y + 41, 20]
+        icons.each do |ic|
+          cmds << [:item, ic, lx, BOX_Y + 41, 20]
           lx += 22
         end
         lines.each_with_index { |l, j| cmds << [:text, l, lx, ty + j * 18, 0] }

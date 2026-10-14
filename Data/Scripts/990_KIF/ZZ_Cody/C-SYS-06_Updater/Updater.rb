@@ -28,7 +28,7 @@
 # Where builds come from (github.com/cody-png/codybeta):
 #   Stable - the "release" branch (moves only when Cody publishes a release)
 #   Beta   - the "beta-testing" branch (test builds)
-# Options > Modules > General settings > "Updates": Stable / Beta / Off (default: the channel of
+# Options > KIF Settings > General settings > "Updates": Stable / Beta / Off (default: the channel of
 # the build that is installed) and "Check for Updates" (any time).
 # Sprite sheets the player installed (Graphics/CustomBattlers, Battlers) are
 # only replaced when the new build changed that sheet itself.
@@ -674,7 +674,7 @@ module KIF
         log("no version found at #{base}")
         return false unless manual
         if no_stable_yet?(ch, base)
-          pbMessage(_INTL("No stable release has been published yet. Set Updates to Beta (Options > Modules > General settings) to get test builds."))
+          pbMessage(_INTL("No stable release has been published yet. Set Updates to Beta (Options > KIF Settings > General settings) to get test builds."))
         else
           pbMessage(_INTL("Couldn't reach the update server. Try again later."))
         end
@@ -698,7 +698,7 @@ module KIF
           show_notes(base)
         when 3
           $PokemonSystem.kif_update_skip = v if $PokemonSystem
-          pbMessage(_INTL("You won't be asked about {1} again. Options > Modules > General settings > Check for Updates still finds it.", v))
+          pbMessage(_INTL("You won't be asked about {1} again. Options > KIF Settings > General settings > Check for Updates still finds it.", v))
           return false
         else
           return false

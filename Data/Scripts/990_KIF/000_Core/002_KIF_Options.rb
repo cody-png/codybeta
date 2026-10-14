@@ -306,18 +306,21 @@ class PokemonGameOption_Scene < PokemonOption_Scene
 
   def pbGetOptions(inloadscreen = false)
     options = kif_pbGetOptions(inloadscreen)
-    # Options > Modules (012_KIF_ModulesMenu.rb) holds KIF's and Cody's
-    # settings, sorted by module (was "KIF Settings" + "Cody Settings")
+    # Options > Modules turns KIF's features on or off; Options > KIF
+    # Settings holds their settings (012_KIF_ModulesMenu.rb)
     options << ButtonOption.new(_INTL("Modules"),
-                                proc { kif_open_settings },
-                                _INTL("Turn KIF's features on or off and change their settings"))
+                                proc { kif_open_settings(KifModulesScene) },
+                                _INTL("Turn KIF's features on, off, or on with their settings hidden"))
+    options << ButtonOption.new(_INTL("KIF Settings"),
+                                proc { kif_open_settings(KifSettingsScene) },
+                                _INTL("Change the settings of KIF's features"))
     KIF::ModCompat.add_root_mod_options(self, options, inloadscreen) if defined?(KIF::ModCompat)
     return options
   end
 
-  def kif_open_settings
+  def kif_open_settings(klass = KifModulesScene)
     pbFadeOutIn {
-      scene = KifModulesScene.new
+      scene = klass.new
       screen = PokemonOptionScreen.new(scene)
       screen.pbStartScreen
     }

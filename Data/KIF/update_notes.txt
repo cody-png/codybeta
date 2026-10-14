@@ -1,4 +1,5 @@
-KIF Beta 0.21.35
-Evolving a shiny Pokémon now shows the evolved form shiny on the "Congratulations!" screen too.
-Pokédex evolution chart: a Pokémon with two ways to evolve (Machoke: Lv 40 or the Linking Cord) shows both item icons, and the label no longer runs into the names.
-EBDX battles are opt-in for new players; Classic KIF means KIF as it was.
+KIF Beta 0.21.36
+Options now has two buttons: Modules (turn features on/off) and KIF Settings (their settings, General settings, presets).
+Poké Radar chains keep counting past 40 and keep improving the shiny odds past 20. A message tells you at 20 and 40 when the chain count is hidden.
+New "Egg Moves" setting (Off by default): Change moves only offers egg moves when it's On.
+Battle boxes: the status icon (PAR, PSN...) no longer hides behind the HP bar or shows up before the box does.

@@ -147,9 +147,9 @@ class KifPresetsScene < KifOptionsBaseScene
   end
 end
 
-# Options > Modules: the "Settings Presets" button sits above "Increment
+# Options > KIF Settings: the "Settings Presets" button sits above "Increment
 # Slider by" (always available: presets are part of the core)
-class KifModulesScene < KifOptionsBaseScene
+class KifSettingsScene < KifOptionsBaseScene
   alias kif_presets_pbGetOptions pbGetOptions unless method_defined?(:kif_presets_pbGetOptions)
 
   def pbGetOptions(inloadscreen = false)

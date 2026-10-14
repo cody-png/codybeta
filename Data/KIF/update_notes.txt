@@ -1,4 +1,4 @@
-KIF Beta 0.21.34
-EBDX battles are now opt-in: new players start with them off (Options > Modules > Graphical Changes settings > EBDX Battles). If you already have them on, nothing changes.
-First start: "Classic KIF" means KIF as it was; newer features (EBDX battles, Move Effectiveness, Fusion Screen) start off.
-Fusion screen: a fusion you haven't seen yet is a plain silhouette again (like PIF) when Fusion Preview is Off.
+KIF Beta 0.21.35
+Evolving a shiny Pokémon now shows the evolved form shiny on the "Congratulations!" screen too.
+Pokédex evolution chart: a Pokémon with two ways to evolve (Machoke: Lv 40 or the Linking Cord) shows both item icons, and the label no longer runs into the names.
+EBDX battles are opt-in for new players; Classic KIF means KIF as it was.

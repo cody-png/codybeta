@@ -40,7 +40,7 @@ module KIF
         KIF::Modules.all_on!
         classic_only!
         KIF::Modules.poll
-        pbMessage(_INTL("KIF's classic features are on. Newer ones (EBDX battles, Move Effectiveness, Fusion Screen) can be turned on in Options > Modules."))
+        pbMessage(_INTL("KIF's classic features are on. Newer ones (EBDX battles, Move Effectiveness, Fusion Screen) can be turned on in Options > KIF Settings."))
       when 1
         KIF::Modules::MODULES.each_key { |id| KIF::Modules.set_state(id, KIF::Modules::OFF) }
         pbMessage(_INTL("KIF's features are off: the game plays like Pokémon Infinite Fusion."))

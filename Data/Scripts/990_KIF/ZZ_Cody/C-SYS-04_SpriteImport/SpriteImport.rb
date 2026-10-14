@@ -129,7 +129,7 @@ module KIF
       b.draw_text(0, mid - 16, b.width, 28, line, 1)
       b.font.color = Color.new(160, 160, 176)
       b.draw_text(0, mid + 24, b.width, 28, "A full sprite pack takes a few minutes. Only once per pack.", 1)
-      b.draw_text(0, mid + 52, b.width, 28, keep_archives? ? "The archive will be kept in \"#{KEEP_DIR}\"." : "The archive is deleted after unpacking (Options > Modules > General settings to keep it).", 1)
+      b.draw_text(0, mid + 52, b.width, 28, keep_archives? ? "The archive will be kept in \"#{KEEP_DIR}\"." : "The archive is deleted after unpacking (Options > KIF Settings > General settings to keep it).", 1)
     rescue
       @status = nil
     end

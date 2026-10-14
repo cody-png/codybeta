@@ -19,6 +19,7 @@
 # skipped instead of crashing the menu.
 #===============================================================================
 KIF::Options.define(:eventmoves, 0, :save)
+KIF::Options.define(:changemoves_eggmoves, 0, :save)   # Cody, 2026-10-14
 
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Event Moves"), [_INTL("Off"), _INTL("On")],
@@ -26,6 +27,14 @@ KIF::Options.add(:battles, :save) {
                  proc { |value| $PokemonSystem.eventmoves = value },
                  [_INTL("The Egg Move Tutor only teaches egg moves."),
                   _INTL("Event Moves are available at the Egg Move Tutor.")])
+}
+
+KIF::Options.add(:battles, :save) {
+  EnumOption.new(_INTL("Egg Moves"), [_INTL("Off"), _INTL("On")],
+                 proc { $PokemonSystem.changemoves_eggmoves },
+                 proc { |value| $PokemonSystem.changemoves_eggmoves = value },
+                 [_INTL("Change moves offers known and level-up moves only."),
+                  _INTL("Change moves in the party menu also offers egg moves.")])
 }
 
 module KIF
@@ -162,7 +171,8 @@ end
 # Party "Change moves" (Cody, 2026-10-05). In 6.8.2 it only lists moves the
 # Pokémon once knew (pbRememberMoves, 005_UI_Party.rb:1216). It now offers in
 # one list: those moves, level-up moves up to its level (pre-evolutions
-# included), egg moves, and event moves when "Event Moves" is On. Tutor moves
+# included), egg moves when "Egg Moves" is On (Off by default, 2026-10-14),
+# and event moves when "Event Moves" is On. Tutor moves
 # are not included (they are unlocked by finding the tutor; KIF's Tutor.net
 # is a separate feature).
 # Also avoids a 6.8.2 bug: pbRememberMoves deleted the current moves from the
@@ -198,7 +208,7 @@ module KIF
         list << id if (pkmn.compatible_with_move?(id) rescue true)
       end
       list |= MoveRelearnerScreen.new(nil).pbGetRelearnableMoves(pkmn)
-      list |= egg_moves_for(pkmn)
+      list |= egg_moves_for(pkmn) if $PokemonSystem.changemoves_eggmoves.to_i > 0
       list |= pkmn.getEventMoveList if $PokemonSystem.eventmoves.to_i > 0
       return list.select { |id| move_ok?(id) && !known.include?(id) }
     end

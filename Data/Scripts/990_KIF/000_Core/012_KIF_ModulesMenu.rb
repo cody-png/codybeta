@@ -1,10 +1,12 @@
 #===============================================================================
-# Options > Modules (Cody, 2026-10-10)
-# Replaces the "KIF Settings" and "Cody Settings" buttons: one screen that
-# sets each module Off / On / Hidden (011_KIF_Modules.rb) and opens the
-# settings of the modules that are On. Settings come from every KIF and Cody
-# menu, sorted by the module their code belongs to. "Mod Settings" (other
-# mods' settings, when KIF provides them) is here too while that module is On.
+# Options > Modules and Options > KIF Settings (Cody, 2026-10-10; split
+# 2026-10-14 so the settings don't sit below the whole module list)
+# Modules sets each module Off / On / Hidden (011_KIF_Modules.rb).
+# KIF Settings opens the settings of the modules that are On, General
+# settings (always-on features), Mod Settings (other mods' settings, when KIF
+# provides them and that module is On), Settings Presets, Increment Slider by
+# and DEBUG. Settings come from every KIF and Cody menu, sorted by the module
+# their code belongs to.
 #===============================================================================
 class KifModuleSettingsScene < KifOptionsBaseScene
   # id: a module id, or :general for settings of always-on features
@@ -61,12 +63,11 @@ class KifModulesScene < KifOptionsBaseScene
   def kif_title; "Modules"; end
 
   def getDefaultDescription
-    return _INTL("Off: plays like PIF. Hidden: works, settings hidden. Reopen to see settings.")
+    return _INTL("Off: plays like PIF. Hidden: works, settings not listed in KIF Settings.")
   end
 
   def pbGetOptions(inloadscreen = false)
     options = []
-    options << kif_header_option("### MODULES ###")
     KIF::Modules::MODULES.each do |id, (name, desc, _f)|
       options << EnumOption.new(_INTL(name),
                                 KIF::Modules::STATE_NAMES.map { |s| _INTL(s) },
@@ -74,6 +75,19 @@ class KifModulesScene < KifOptionsBaseScene
                                 proc { |value| KIF::Modules.set_state(id, value) },
                                 _INTL(desc))
     end
+    return options
+  end
+end
+
+class KifSettingsScene < KifOptionsBaseScene
+  def kif_title; "KIF Settings"; end
+
+  def getDefaultDescription
+    return _INTL("Settings of the modules that are On (Options > Modules)")
+  end
+
+  def pbGetOptions(inloadscreen = false)
+    options = []
     buttons = []
     KIF::Modules::MODULES.each do |id, (name, _d, _f)|
       next unless KIF::Modules.visible?(id)
@@ -99,10 +113,7 @@ class KifModulesScene < KifOptionsBaseScene
                                   proc { @kif_open = :general; kif_open_page },
                                   _INTL("Settings that are always available"))
     end
-    unless buttons.empty?
-      options << kif_header_option("### SETTINGS ###")
-      options.concat(buttons)
-    end
+    options.concat(buttons)
     options << EnumOption.new(_INTL("Increment Slider by"),
                               KIF::Options::SLIDER_STEPS.map { |s| s.to_s },
                               proc { $PokemonSystem.raiserb },

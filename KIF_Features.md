@@ -1,18 +1,17 @@
 # Kuray's Infinite Fusion – Feature Guide
 
-KIF brings the features of Kuray's Infinite Fusion 0.20.7 to Pokémon Infinite Fusion 6.8.2. Everything is optional and lives in one place:
+KIF brings the features of Kuray's Infinite Fusion 0.20.7 to Pokémon Infinite Fusion 6.8.2. Everything is optional and lives at the bottom of **Pause menu → Options**:
 
-**Pause menu → Options → Modules** (at the bottom of the list).
+- **Modules** – turn each group of features on or off.
+- **KIF Settings** – the settings of the modules that are On, General settings, Settings Presets.
 
 ### Modules
 
 Every feature belongs to a module. Each module can be:
 
 - **Off** *(default for every module)* – the game plays like PIF: the module's features, settings, pause menu and PC entries are gone.
-- **On** – the features work and the module's settings page is listed under **SETTINGS**.
+- **On** – the features work and the module's settings page is listed in **KIF Settings**.
 - **Hidden** – the features work, but their settings page isn't listed (for a tidier menu once you've set things up).
-
-Settings pages appear after you close and reopen Modules.
 
 | Module | What's in it (sections below) |
 |---|---|
@@ -34,7 +33,7 @@ Things a module changes while the game starts (some data tables) stay in place u
 
 **General settings** holds settings that are always available (frame rate, sprite import, save folder). Below the settings buttons: **Settings Presets**, **Increment Slider by** and **DEBUG**.
 
-The first time the game starts, it asks **How do you want to play?** – **Classic KIF** (every module On), **PIF only** (every module Off, plays like Pokémon Infinite Fusion) or **Let me choose** (opens Modules). You can change everything later in Options → Modules.
+The first time the game starts, it asks **How do you want to play?** – **Classic KIF** (every module On), **PIF only** (every module Off, plays like Pokémon Infinite Fusion) or **Let me choose** (opens Modules). Classic KIF leaves the features KIF 0.20.7 never had (EBDX battles, Move Effectiveness, Fusion Screen) Off; turn them on in KIF Settings. You can change everything later in Options → Modules.
 
 Players who were already playing KIF Beta before Modules existed get every module turned On once, so nothing they had set up stops working.
 
@@ -145,6 +144,7 @@ K-Eggs are sold in the Kuray Shop (see "Others → Kuray QoL").
 
 - **Unfuse Traded** – Off / On *(Off)*. Allows unfusing Pokémon you got through trades.
 - **Event Moves** – Off / On *(Off)*. The Egg Move Tutor (and the party's "Change moves") also offers event-exclusive moves.
+- **Egg Moves** – Off / On *(Off)*. The party's "Change moves" also offers the Pokémon's egg moves (the Egg Move Tutor always does).
 - **Improved Pokedex** – Off / On *(Off)*. Catching or evolving a fusion also registers its head and body Pokémon in the Pokédex.
 
 ---
@@ -249,6 +249,7 @@ All options in this menu are per-save.
   - Every K-Egg.
 - **PokeRadar+** – Off / On *(Off)*. Poké Radar chains never break at random.
 - **Radar Chain Count** – Off / On *(On)*. With PokeRadar+, shows your chain count when the grass shakes.
+- **Endless chains** *(always, with the Shinies module)*. PIF stops counting a Poké Radar chain at 40 and its shiny odds stop improving at 20. KIF keeps counting, and past 20 the shiny grass keeps getting likelier: 1 in 4000 ÷ chain per patch of shaking grass (chain 40: 1 in 100, chain 100: 1 in 40), never better than 1 in 20. How easily a chain breaks stays as in PIF. When the chain count isn't shown (PokeRadar+ or Radar Chain Count Off), a message still tells you when the chain reaches 20 and 40.
 - **Enable EvoLock** – Off / On *(Off)*. Lets you lock a Pokémon's evolution from the PC ("Kuray Actions → Lock Evolution"). A locked Pokémon won't evolve by any means until you unlock it. A padlock shows on its party panel and Summary.
 - **Tutor.net** – Off / On *(On)*. Adds "Tutor.net" to the pause menu (by DemICE): every TM you own and every move tutor you've used, in one list. TMs are free to use. A tutor's move costs once, then stays unlocked forever.
 - **Kuray QoL** – Off / On *(On)*. Adds three entries to the pause menu (they can't be used in the Elite Four, Mt. Silver and a few story areas):
@@ -260,7 +261,7 @@ All options in this menu are per-save.
 
 ---
 
-## General settings and the bottom of Modules
+## General settings and the bottom of KIF Settings
 
 - **Settings Presets** – 12 named slots. *Save* puts this save file's per-save settings (every module) into a slot, *Load* puts a slot's settings into the save you're playing, *Rename* names it. Set up a run once, then load it on every new game. Global settings are shared by all saves already; Randomizer settings have their own presets. Needs a loaded save.
 - **Increment Slider by** – 1 / 10 / 100 / 1000 / 10000 *(1)*. How far big sliders (like Wild Shiny Odds) move per press.
@@ -270,7 +271,7 @@ All options in this menu are per-save.
 
 ## Cody's additions
 
-New features made for KIF Beta that were never part of the original KIF. They sit in the same modules as KIF's features (Options → Modules).
+New features made for KIF Beta that were never part of the original KIF. They sit in the same modules as KIF's features (Options → Modules, settings in Options → KIF Settings).
 
 ### Battles
 
@@ -286,7 +287,7 @@ New features made for KIF Beta that were never part of the original KIF. They si
 
 ### Randomizer
 
-Only on saves started as randomized saves: **Modules → Randomizer settings → Randomizer** (Randomizer module On). The same screen also replaces PIF's randomizer menu when you make a randomized save, and the Update Man's *Advanced options → Randomizer options* opens it too. In Oak's Lab, *Re-randomize Pokémon?* opens it as well, so you can pick a new seed before choosing your starter (the same seed always gives the same starters).
+Only on saves started as randomized saves: **KIF Settings → Randomizer settings → Randomizer** (Randomizer module On). The same screen also replaces PIF's randomizer menu when you make a randomized save, and the Update Man's *Advanced options → Randomizer options* opens it too. In Oak's Lab, *Re-randomize Pokémon?* opens it as well, so you can pick a new seed before choosing your starter (the same seed always gives the same starters).
 
 - **Seed** – an 8-character code (like `K7Q2-9XMA`). The same seed with the same settings gives the same randomized game (on the same KIF Beta version and sprite pack). New random seed, type one in, or copy it.
 - **Presets & sharing** – *Copy settings code* puts the seed and every setting on your clipboard as one line (paste it into Discord); *Paste settings code* loads someone else's. *Save as preset* / *Load preset* use files in the `Randomizer/Presets` folder (saving over an existing name asks first; presets from earlier KIF Beta versions still load).
@@ -348,9 +349,9 @@ Only on saves started as randomized saves: **Modules → Randomizer settings →
 
 ## System (Cody)
 
-- **Sprite import** – an `Import Sprites` folder next to InfiniteFusion.exe. Drop sprites in any shape – loose .png files, a sprite pack folder, folders inside folders, a .zip (or .rar / .7z) – and the next start-up *moves* every sprite to where the game reads it (base sprites, fusions into `indexed/<head>/`, triple fusions, sprite sheets). A progress screen shows while this runs. An archive is deleted once its sprites are in (Options > Modules > General settings > Imported Archives: Keep moves it to an `Imported archives` folder instead), and what else it held (icons, outfits, credits) is not kept. Sprites you already have are dropped quietly; ones that differ are held and you're asked once: "Keep the ones I have" or "Use the new ones". A pack's egg sprites are older than the game's, so those are dropped without asking (eggs the game doesn't have are still installed). PIF's own "Sprites to import" folder works the same way. Single sprite files are now read *before* sprite sheets (PIF 6.8.2 only read base sprites from downloaded sheets and remembered a fusion's first pick), so old KIF-style packs work again.
-- **Sprite File Cache** (Options > Modules > General settings) – Permanent / Per Session / Off *(Permanent)*. A sprite that comes from a single sprite file is decoded once and remembered, like the Shiny Cache: Permanent also keeps a small copy of the decoded pixels in `Cache/KIFSprites`, so even the first look at a Pokémon in a new session is instant; Per Session forgets at close; Off decodes the file every time it is shown (some files take 40 ms and more, which showed as a short pause when the PC cursor or the party reached those Pokémon).
-- **Updates** (Options > Modules > General settings) – Stable / Beta / Off *(the channel of the version you installed)*. At start-up KIF checks for a newer version and asks: **Update now / What's new / Later / Skip this version**. Update now downloads only the files that changed (not the whole game), with a progress bar (B cancels; what was downloaded is kept for next time). The game then closes, a small "KIF update" window moves the new files in, and the game starts again and says it was updated. Saves, Mods, Logs, Import Sprites and sprite packs you installed are never touched. **Check for Updates** looks any time. Beta also offers test builds. If the game folder can't be written to (e.g. Program Files), it tells you where to download the new version instead.
+- **Sprite import** – an `Import Sprites` folder next to InfiniteFusion.exe. Drop sprites in any shape – loose .png files, a sprite pack folder, folders inside folders, a .zip (or .rar / .7z) – and the next start-up *moves* every sprite to where the game reads it (base sprites, fusions into `indexed/<head>/`, triple fusions, sprite sheets). A progress screen shows while this runs. An archive is deleted once its sprites are in (Options > KIF Settings > General settings > Imported Archives: Keep moves it to an `Imported archives` folder instead), and what else it held (icons, outfits, credits) is not kept. Sprites you already have are dropped quietly; ones that differ are held and you're asked once: "Keep the ones I have" or "Use the new ones". A pack's egg sprites are older than the game's, so those are dropped without asking (eggs the game doesn't have are still installed). PIF's own "Sprites to import" folder works the same way. Single sprite files are now read *before* sprite sheets (PIF 6.8.2 only read base sprites from downloaded sheets and remembered a fusion's first pick), so old KIF-style packs work again.
+- **Sprite File Cache** (Options > KIF Settings > General settings) – Permanent / Per Session / Off *(Permanent)*. A sprite that comes from a single sprite file is decoded once and remembered, like the Shiny Cache: Permanent also keeps a small copy of the decoded pixels in `Cache/KIFSprites`, so even the first look at a Pokémon in a new session is instant; Per Session forgets at close; Off decodes the file every time it is shown (some files take 40 ms and more, which showed as a short pause when the PC cursor or the party reached those Pokémon).
+- **Updates** (Options > KIF Settings > General settings) – Stable / Beta / Off *(the channel of the version you installed)*. At start-up KIF checks for a newer version and asks: **Update now / What's new / Later / Skip this version**. Update now downloads only the files that changed (not the whole game), with a progress bar (B cancels; what was downloaded is kept for next time). The game then closes, a small "KIF update" window moves the new files in, and the game starts again and says it was updated. Saves, Mods, Logs, Import Sprites and sprite packs you installed are never touched. **Check for Updates** looks any time. Beta also offers test builds. If the game folder can't be written to (e.g. Program Files), it tells you where to download the new version instead.
 - **No start-up announcement** – PIF's load-screen message ("Pokémon Infinite Fusion 2 is now available!...", sent by PIF's server) and its "Version X is now available, use the installer" prompt are not shown; KIF Beta gets its own updater later.
 - **KIF_log.txt** – one short log per session in the save folder (the last one becomes `KIF_log_previous.txt` at start, so a crash's log is kept). Versions and folders, what the game has to show sprites with (sprite files, sheets, Download data), sprites that came out as "?", everything KIF reports (Entrances, sprite import, failures), crashes with the last maps visited. Repeats are counted instead of written, 200 KB at most; "Session ended" means the game closed normally. Send it with a bug report.
 - **Save folder** – KIF Beta keeps its saves in `%APPDATA%\KIF` (`KIF Savefiles` shortcut), apart from old KIF's `%APPDATA%\kurayinfinitefusion` (`Old Savefile location` shortcut). On the very first launch, if the old folder has saves and the new one has none, the game offers once to copy them over (copied, so old KIF keeps its own; save backups stay in the old folder).

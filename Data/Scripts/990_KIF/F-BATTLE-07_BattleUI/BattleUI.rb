@@ -189,6 +189,13 @@ class PokemonDataBox
     @kif_statusIcon.bitmap = @kif_statusBitmap.bitmap
     @kif_statusIcon.src_rect.set(0, 0, 0, 0)
     @sprites["kif_statusIcon"] = @kif_statusIcon
+    # The base method already set the box's z and hid it before this sprite
+    # existed: give it the box's layer, visibility and place now (it was left
+    # at z 0 - behind the HP/Exp bars - and visible during the intro, 2026-10-14)
+    @kif_statusIcon.z = self.z + 2
+    @kif_statusIcon.visible = self.visible
+    @kif_statusIcon.x = self.x + @spriteBaseX + 24
+    @kif_statusIcon.y = self.y + (@battler.opposes?(0) ? 49 : 52)
   end
 
   def dispose

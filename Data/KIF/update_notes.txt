@@ -1,2 +1,2 @@
-KIF Beta 0.21.43
-Poke Radar: the chain count message also shows the shiny chance, e.g. "Chain count: 72 (shiny 1 in 45)".
+KIF Beta 0.21.44
+Multi-Battle Radar: the radar Pokemon (the one the shiny patch decides) can now be in any spot of a 2v2 or 3v3, not always the first.

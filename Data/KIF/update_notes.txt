@@ -1,4 +1,4 @@
-KIF Beta 0.21.40
-Poke Radar: no cap on the shiny chance. It keeps improving with the chain: 1 in 20 at 100, 1 in 10 at 200, and on from there.
-Messages at chains of 20, 40, 60, 80, 100, 150 and 200 show the shiny chance; KIF_log.txt records every change.
-Battle Info: the screen is solid now, so the battle no longer shows through behind the text.
+KIF Beta 0.21.41
+New setting "Multi-Battle Radar" (Off / Same Species / Mixed, in Shinies settings): with Battle Format 2v2/3v3, Poke Radar battles can be doubles and triples. Every Pokemon rolls its own shininess.
+KIF_log.txt: the EBDX line now names the right menu (Options > KIF Settings).
+Poke Radar: going back to the title screen no longer leaves the radar's row of Pokemon on it.

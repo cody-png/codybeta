@@ -155,5 +155,5 @@ if KIF::EBDX.installed?
     ::DataBoxEBDX.const_set(:EBDX_TYPE_DISPLAY_BITMAPS, sheets)
   end
 
-  KIF.log("EBDX found: battle visuals available (Options > Modules > Graphical Changes)") if KIF.respond_to?(:log)
+  KIF.log("EBDX found: battle visuals available (Options > KIF Settings > Graphical Changes settings > EBDX Battles)") if KIF.respond_to?(:log)
 end

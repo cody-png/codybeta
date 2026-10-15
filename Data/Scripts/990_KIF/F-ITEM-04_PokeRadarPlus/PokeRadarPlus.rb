@@ -29,6 +29,16 @@
 #   whether or not the chain count is shown; every change of the chance is
 #   written to Logs/KIF_log.txt.
 #
+# Multi-Battle Radar (Cody, 2026-10-15; Off / Same Species / Mixed, Off by
+#   default): PIF makes every radar grass battle a single battle. With it on
+#   and Battle Format 2v2/3v3 for wild battles, the radar Pokémon brings
+#   company: Same Species - the others are the chained species too and each
+#   one counts for the chain (a won 2v2 adds 2); Mixed - the others are normal
+#   encounters from the area and only the radar Pokémon counts. Shininess:
+#   the shaking patch only decides the radar Pokémon's; every other Pokémon
+#   rolls its own (Same Species: with the chain's chance; Mixed: normal odds).
+#   A milestone passed by a jump of more than 1 is still announced.
+#
 # 6.8.2 adaptations: pbPokeRadarHighlightGrass is a guarded copy. The chain-break is in an
 # EncounterModifier proc that can't be wrapped, so while PokeRadar+ keeps a
 # chain the proc's pbPokeRadarCancel is held back and the chained species is
@@ -50,6 +60,17 @@ KIF::Options.add(:others, :save) {
                  proc { |value| $PokemonSystem.radarchaincount = value },
                  [_INTL("PokeRadar+ doesn't show the chain count"),
                   _INTL("PokeRadar+ shows the chain count when the grass shakes")])
+}
+
+KIF::Options.define(:radarmulti, 0, :save)
+
+KIF::Options.add(:others, :save) {
+  EnumOption.new(_INTL("Multi-Battle Radar"), [_INTL("Off"), _INTL("Same Species"), _INTL("Mixed")],
+                 proc { $PokemonSystem.radarmulti },
+                 proc { |value| $PokemonSystem.radarmulti = value },
+                 [_INTL("Poké Radar battles are always 1v1 (as in PIF)"),
+                  _INTL("With Battle Format 2v2/3v3: all foes are the chained species and each one counts"),
+                  _INTL("With Battle Format 2v2/3v3: the others are normal encounters; only the radar one counts")])
 }
 
 module KIF
@@ -130,9 +151,21 @@ module KIF
       KIF.log("Poké Radar chain #{chain}: shiny chance per patch of shaking grass 1 in #{d}") if defined?(KIF.log)
     end
 
-    def self.milestone_message(chain)
+    # passed: the milestone reached (a multi battle can jump past it)
+    def self.milestone_message(chain, passed = nil)
       return _INTL("Poké Radar chain: {1}! Every patch of shaking grass is shiny now!", chain) if odds_denominator(chain, shiny_odds) <= 1
       return _INTL("Poké Radar chain: {1}! Shiny chance: 1 in {2}.", chain, odds_denominator(chain, shiny_odds))
+    end
+
+    # The highest milestone reached since the last highlight (nil: none).
+    # $PokemonTemp.pokeradar[5] = the chain at the last highlight.
+    def self.milestone_passed(chain)
+      r = $PokemonTemp.pokeradar
+      return nil unless r && chain > 0
+      prev = r[5] ? r[5].to_i : chain - 1
+      prev = chain - 1 if prev >= chain
+      r[5] = chain
+      return MILESTONES.select { |m| m > prev && m <= chain }.max
     end
 
     def self.count_shown?
@@ -157,8 +190,9 @@ KIF.guard_base("013_Items/005_Item_PokeRadar.rb", 2523489654, "pbPokeRadarHighli
 def pbPokeRadarHighlightGrass(showmessage = true)
   chain = KIF::RadarPlus.count_step(!showmessage)                      # KIF: endless chain
   KIF::RadarPlus.log_chance(chain)                                     # KIF
-  if !showmessage && KIF::RadarPlus::MILESTONES.include?(chain)         # KIF: milestones
-    pbMessage(KIF::RadarPlus.milestone_message(chain))                 # KIF
+  passed = KIF::RadarPlus.milestone_passed(chain)                      # KIF
+  if !showmessage && passed                                            # KIF: milestones
+    pbMessage(KIF::RadarPlus.milestone_message(chain, passed))         # KIF
   elsif chain > 0 && KIF::RadarPlus.count_shown?                       # KIF
     pbMessage(_INTL("Chain count: {1}\\wtnp[10]", chain))             # KIF
   end                                                                  # KIF
@@ -240,6 +274,17 @@ module EncounterModifier
     alias kif_radar_trigger trigger unless method_defined?(:kif_radar_trigger)
 
     def trigger(encounter)
+      # the other Pokémon of a multi radar battle (Multi-Battle Radar)
+      multi = KIF::RadarPlus.multi
+      return KIF::RadarPlus.multi_encounter(encounter) if multi
+      single_before = $PokemonTemp.forceSingleBattle
+      on_grass = (pbPokeRadarGetShakingGrass >= 0 rescue false)
+      ret = kif_radar_trigger_keep(encounter)
+      KIF::RadarPlus.multi_begin(ret) if on_grass && !single_before && $PokemonTemp.forceSingleBattle
+      return ret
+    end
+
+    def kif_radar_trigger_keep(encounter)
       return kif_radar_trigger(encounter) unless KIF::RadarPlus.keeps_chain?
       chain = [$PokemonTemp.pokeradar[0], $PokemonTemp.pokeradar[1]]
       KIF::RadarPlus.cancel_held = false
@@ -258,6 +303,122 @@ module EncounterModifier
     end
   end
 end
+
+#-------------------------------------------------------------------------------
+# Multi-Battle Radar
+#-------------------------------------------------------------------------------
+module KIF
+  module RadarPlus
+    @multi = nil
+    class << self
+      attr_accessor :multi
+    end
+
+    def self.multi_mode
+      return 0 if Settings::HOENN || !$PokemonSystem || !$PokemonSystem.respond_to?(:radarmulti)
+      return $PokemonSystem.radarmulti.to_i
+    end
+
+    # The radar Pokémon was just chosen and PIF asked for a single battle
+    def self.multi_begin(encounter)
+      return unless encounter && multi_mode > 0 && $PokemonTemp.pokeradar
+      return unless KIF.random_encounter && KIF.format_for_wild?
+      return if $Trainer.able_pokemon_count <= 1 || pbInSafari? || $PokemonGlobal.partner
+      @multi = { :mode => multi_mode, :species => encounter[0], :level => encounter[1],
+                 :made => 0, :ends => 0 }
+      patch_battle_end_event
+      $PokemonTemp.forceSingleBattle = false
+    end
+
+    # The other foes: the chained species, or the area's normal encounter
+    def self.multi_encounter(encounter)
+      m = @multi
+      return [m[:species], m[:level]] if m[:mode] == 1
+      return encounter
+    end
+
+    def self.multi_end
+      @multi = nil
+    end
+
+    # Wild Pokémon creation: the shaking patch only decides the first one
+    def self.multi_generate(args)
+      m = @multi
+      m[:made] += 1
+      return yield if m[:made] == 1
+      r = $PokemonTemp.pokeradar
+      saved = r ? r[3] : nil
+      r[3] = [] if r                       # PIF's patch shininess skips this one
+      begin
+        pkmn = yield
+      ensure
+        r[3] = saved if r
+      end
+      if m[:mode] == 1 && pkmn && !pkmn.shiny?
+        d = odds_denominator(chain, shiny_odds)
+        if d <= 1 || rand(d) == 0
+          pkmn.shiny = true
+          pkmn.debug_shiny = false if pkmn.respond_to?(:debug_shiny=)
+          pkmn.radar_shiny = true if pkmn.respond_to?(:radar_shiny=)
+        end
+      end
+      return pkmn
+    end
+
+    # onWildBattleEnd runs once per foe. The first is the radar Pokémon: with
+    # Same Species the others count too (added before PIF adds its 1). The
+    # others never reach PIF's radar handler (it would add again: in Kanto it
+    # continues the chain with any species).
+    def self.multi_battle_end(event, args)
+      m = @multi
+      m[:ends] += 1
+      decision = args[3]   # trigger(sender, species, level, decision)
+      r = $PokemonTemp.pokeradar
+      if m[:ends] == 1
+        if r && m[:mode] == 1 && m[:made] > 1 && [1, 4].include?(decision)
+          extra = m[:made] - 1
+          real = chain
+          r[5] = real   # milestone check: the chain before this battle
+          r[2] = [r[2].to_i + extra, 40].min
+          r[4] = real + extra
+        end
+        return event.kif_radar_trigger_orig(*args)
+      end
+      # PIF's Kanto handler continues the chain with whatever species it is
+      # given, so the radar is hidden from it for these calls (its
+      # pbPokeRadarCancel is held back); other handlers see the real battle
+      $PokemonTemp.pokeradar = nil
+      self.hold_cancel = true
+      begin
+        return event.kif_radar_trigger_orig(*args)
+      ensure
+        self.hold_cancel = false
+        self.cancel_held = false
+        $PokemonTemp.pokeradar = r if $PokemonTemp.pokeradar.nil?
+      end
+    end
+
+    def self.patch_battle_end_event
+      ev = Events.onWildBattleEnd
+      return if ev.nil? || ev.respond_to?(:kif_radar_trigger_orig)
+      ev.singleton_class.send(:alias_method, :kif_radar_trigger_orig, :trigger)
+      ev.define_singleton_method(:trigger) do |*args|
+        next KIF::RadarPlus.multi_battle_end(self, args) if KIF::RadarPlus.multi
+        kif_radar_trigger_orig(*args)
+      end
+    end
+  end
+end
+
+KIF::RadarPlus.patch_battle_end_event
+
+alias kif_radar_pbGenerateWildPokemon pbGenerateWildPokemon unless defined?(kif_radar_pbGenerateWildPokemon)
+def pbGenerateWildPokemon(*args)
+  return kif_radar_pbGenerateWildPokemon(*args) unless KIF::RadarPlus.multi
+  return KIF::RadarPlus.multi_generate(args) { kif_radar_pbGenerateWildPokemon(*args) }
+end
+
+EncounterModifier.registerEncounterEnd(proc { KIF::RadarPlus.multi_end }) if EncounterModifier.respond_to?(:registerEncounterEnd)
 
 # KIF autorepel: one Repel step back for every step while the radar is on
 Events.onStepTaken += proc { |_sender, _e|

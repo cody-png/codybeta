@@ -1,2 +1,2 @@
-KIF Beta 0.21.38
-Battle Info now has its own INFO tab above the battle menu (a 5th INFO button with EBDX). Options: Battle Info > No button hides it; Z / Shift still opens it.
+KIF Beta 0.21.39
+Battle Info: the INFO tab above the battle menu is no longer cut off at the bottom.

@@ -70,3 +70,85 @@ class PokeBattle_Battler
     return kif_core_hasActiveAbility?(check_ability, ignore_fainted)
   end
 end
+
+# Stand-in battlers (DemICE's switch-in scoring, Auto-Battle's move scoring)
+# are built with an active battler's index. 6.8.2's PokeBattle_Battler.new /
+# pbInitEffects then clear what every real battler aims at that index
+# (002_Battler_Initialize.rb: Attract, Lock-On, Mean Look, Sky Drop, binding
+# moves), so only scoring a switch-in freed a trapped or infatuated Pokémon.
+# The real battlers' effects are put back once the stand-in exists.
+module KIF
+  def self.keep_battler_effects(battle)
+    saved = []
+    (battle.battlers rescue []).each { |b| saved << [b, b.effects.dup] if b && b.effects }
+    return yield
+  ensure
+    (saved || []).each { |b, eff| b.effects.replace(eff) }
+  end
+end
+
+# Shared by both battle AIs (DemICE's, F-BATTLE-03, and PIF's, fixed in
+# SCOPE-02_PIFFixes/BattleAI.rb). KIF's Frostbite / Drowsy options
+# (F-BATTLE-06) keep the status names :FROZEN / :SLEEP, so the AIs ask here
+# whether a Pokémon is really frozen / fully asleep.
+class PokeBattle_AI
+  # Frozen and unable to act (not Frostbite)
+  def kif_ai_frozen?(b)
+    return b.status == :FROZEN && !KIF::Mechanics.frostbite_in_battle?
+  end
+
+  # Asleep and unable to act (not Drowsy)
+  def kif_ai_sleeping?(b)
+    return b.status == :SLEEP && !KIF::Mechanics.drowsy_in_battle?
+  end
+
+  # Frostbite halves special moves, Drowsy halves every move; Guts ignores
+  # both (Mechanics.rb pbCalcDamageMultipliers)
+  def kif_ai_status_damage_mult(move, user, type)
+    return 1.0 if user.hasActiveAbility?(:GUTS)
+    return 0.5 if user.status == :FROZEN && KIF::Mechanics.frostbite_in_battle? && move.specialMove?(type)
+    return 0.5 if user.status == :SLEEP && KIF::Mechanics.drowsy_in_battle?
+    return 1.0
+  end
+
+  # The user's damage ability. Handlers that read the hit itself (critical
+  # hit, effectiveness, move order) can't be run before the attack: Tinted
+  # Lens and the -ate abilities are worked out here, Analytic and Sniper are
+  # left out.
+  def kif_ai_user_damage_ability(user, target, move, type, typeMod, mults, baseDmg)
+    return if !user.abilityActive?
+    case user.ability_id
+    when :ANALYTIC, :SNIPER
+      # move order / critical hits aren't known yet
+    when :TINTEDLENS
+      mults[:final_damage_multiplier] *= 2 if Effectiveness.resistant?(typeMod)
+    when :AERILATE, :PIXILATE, :REFRIGERATE, :GALVANIZE
+      mults[:base_damage_multiplier] *= 1.2 if move.type == :NORMAL && type && type != :NORMAL
+    else
+      BattleHandlers.triggerDamageCalcUserAbility(user.ability, user, target, move, mults, baseDmg, type)
+    end
+  end
+
+  # The target's damage ability (without Mold Breaker). Filter / Solid Rock
+  # read the hit's effectiveness, so they are worked out from typeMod.
+  def kif_ai_target_damage_ability(user, target, move, type, typeMod, mults, baseDmg)
+    return if !target.abilityActive?
+    if [:FILTER, :SOLIDROCK].include?(target.ability_id)
+      mults[:final_damage_multiplier] *= 0.75 if Effectiveness.super_effective?(typeMod)
+    else
+      BattleHandlers.triggerDamageCalcTargetAbility(target.ability, user, target, move, mults, baseDmg, type)
+    end
+  end
+
+  # Prism Armor / Shadow Shield: can't be ignored, so they count with Mold
+  # Breaker too (SCOPE-02_PIFFixes/NonIgnorableAbilities.rb fixes the game's own
+  # damage calc the same way).
+  def kif_ai_target_nonignorable(user, target, move, type, typeMod, mults, baseDmg)
+    return if !target.abilityActive?
+    if target.ability_id == :PRISMARMOR
+      mults[:final_damage_multiplier] *= 0.75 if Effectiveness.super_effective?(typeMod)
+    else
+      BattleHandlers.triggerDamageCalcTargetAbilityNonIgnorable(target.ability, user, target, move, mults, baseDmg, type)
+    end
+  end
+end

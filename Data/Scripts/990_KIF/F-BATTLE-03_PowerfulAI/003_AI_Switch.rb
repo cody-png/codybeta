@@ -78,7 +78,7 @@ class PokeBattle_AI
 		mindamage=10
 		if battler.effects[PBEffects::LeechSeed]>=0 && (battler.hp > battler.totalhp*0.66)
 			mindamage=33 
-			if battler.status==:SLEEP && battler.statusCount>1
+			if kif_ai_sleeping?(battler) && battler.statusCount>1   # KIF fix: not while Drowsy
 				mindamage=50
 				mindamage=100 if ((maxspeed>aspeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 			end	
@@ -329,7 +329,7 @@ class PokeBattle_AI
 					end	
 					tempdam = pbRoughDamage(j,newenemy,pokmon,100)
 					if pbCheckMoveImmunity(1,j,newenemy,pokmon,100) || 
-						(newenemy.status==:SLEEP && newenemy.statusCount>1 && !newenemy.pbHasMoveFunction?("0B4", "011"))
+						(kif_ai_sleeping?(newenemy) && newenemy.statusCount>1 && !newenemy.pbHasMoveFunction?("0B4", "011"))
 						tempdam = 0 
 					else
 						if !mold_broken && pokmon.hasActiveAbility?(:DISGUISE) && pokmon.turnCount==0	
@@ -594,7 +594,7 @@ class PokeBattle_AI
 			ownparty = @battle.pbParty(idxBattler)   # KIF port: the side being chosen for
 			ownparty.each_with_index do |pkmn, idxParty|
 				next if !pkmn || !pkmn.able?
-				next if pkmn==pokmon
+				next if pkmn.equal?(pokmon.pokemon)   # KIF fix: pokmon is the stand-in battler, so pkmn==pokmon was never true and its own ability counted as team synergy
 				if pokmon.ability==:DROUGHT
 					sum+=20 if pkmn.ability == :CHLOROPHYLL
 					sum+=10 if pkmn.ability == :FLOWERGIFT || pkmn.ability == :SOLARPOWER || pkmn.ability == :PROTOSYNTHESIS

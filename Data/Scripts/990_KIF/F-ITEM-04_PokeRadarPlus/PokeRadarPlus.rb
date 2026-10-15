@@ -333,7 +333,7 @@ module KIF
       return unless KIF.random_encounter && KIF.format_for_wild?
       return if $Trainer.able_pokemon_count <= 1 || pbInSafari? || $PokemonGlobal.partner
       @multi = { :mode => multi_mode, :species => encounter[0], :level => encounter[1],
-                 :made => 0, :ends => 0 }
+                 :made => 0, :ends => 0, :slot => 0 }
       patch_battle_end_event
       $PokemonTemp.forceSingleBattle = false
     end
@@ -349,11 +349,23 @@ module KIF
       @multi = nil
     end
 
-    # Wild Pokémon creation: the shaking patch only decides the first one
+    # The foes in a random order, so the radar Pokémon (the one the shaking
+    # patch decides) can be in any spot (Cody, 2026-10-15). pairs: [[species,
+    # level], ...] in battle order; :slot = where the radar Pokémon is.
+    def self.multi_shuffle(pairs)
+      m = @multi
+      radar = pairs[m[:slot]] || pairs[0]
+      order = (0...pairs.length).to_a.shuffle
+      out = order.map { |i| pairs[i] }
+      m[:slot] = order.index(pairs.index { |p| p.equal?(radar) } || 0)
+      return out
+    end
+
+    # Wild Pokémon creation: the shaking patch only decides the radar Pokémon
     def self.multi_generate(args)
       m = @multi
       m[:made] += 1
-      return yield if m[:made] == 1
+      return yield if m[:made] == m[:slot] + 1
       r = $PokemonTemp.pokeradar
       saved = r ? r[3] : nil
       r[3] = [] if r                       # PIF's patch shininess skips this one
@@ -373,7 +385,7 @@ module KIF
       return pkmn
     end
 
-    # onWildBattleEnd runs once per foe. Only the first (the radar Pokémon)
+    # onWildBattleEnd runs once per foe. Only the radar Pokémon's call
     # reaches PIF's radar handler, so a battle adds 1 to the chain; the others
     # never do (it would add again: in Kanto it continues the chain with any
     # species).
@@ -381,7 +393,7 @@ module KIF
       m = @multi
       m[:ends] += 1
       r = $PokemonTemp.pokeradar
-      return event.kif_radar_trigger_orig(*args) if m[:ends] == 1
+      return event.kif_radar_trigger_orig(*args) if m[:ends] == m[:slot] + 1
       # PIF's Kanto handler continues the chain with whatever species it is
       # given, so the radar is hidden from it for these calls (its
       # pbPokeRadarCancel is held back); other handlers see the real battle
@@ -409,6 +421,23 @@ module KIF
 end
 
 KIF::RadarPlus.patch_battle_end_event
+
+alias kif_radar_pbDoubleWildBattle pbDoubleWildBattle unless defined?(kif_radar_pbDoubleWildBattle)
+def pbDoubleWildBattle(species1, level1, species2, level2, *rest)
+  if KIF::RadarPlus.multi
+    (species1, level1), (species2, level2) = KIF::RadarPlus.multi_shuffle([[species1, level1], [species2, level2]])
+  end
+  return kif_radar_pbDoubleWildBattle(species1, level1, species2, level2, *rest)
+end
+
+alias kif_radar_pbTripleWildBattle pbTripleWildBattle unless defined?(kif_radar_pbTripleWildBattle)
+def pbTripleWildBattle(species1, level1, species2, level2, species3, level3, *rest)
+  if KIF::RadarPlus.multi
+    (species1, level1), (species2, level2), (species3, level3) =
+      KIF::RadarPlus.multi_shuffle([[species1, level1], [species2, level2], [species3, level3]])
+  end
+  return kif_radar_pbTripleWildBattle(species1, level1, species2, level2, species3, level3, *rest)
+end
 
 alias kif_radar_pbGenerateWildPokemon pbGenerateWildPokemon unless defined?(kif_radar_pbGenerateWildPokemon)
 def pbGenerateWildPokemon(*args)

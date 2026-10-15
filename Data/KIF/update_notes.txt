@@ -1,5 +1,6 @@
-KIF Beta 0.21.36
-Options now has two buttons: Modules (turn features on/off) and KIF Settings (their settings, General settings, presets).
-Poké Radar chains keep counting past 40 and keep improving the shiny odds past 20. A message tells you at 20 and 40 when the chain count is hidden.
-New "Egg Moves" setting (Off by default): Change moves only offers egg moves when it's On.
-Battle boxes: the status icon (PAR, PSN...) no longer hides behind the HP bar or shows up before the box does.
+KIF Beta 0.21.37
+New: Battle Info. In battle, press Z / Shift while choosing Fight/Bag/Pokémon/Run to see stat changes, effects, weather and hazards (Information module).
+Mods: a mod can now be a .rb file, a folder or a .zip in the Mods folder. Options > KIF Settings > Mods switches each one On/Off and opens its settings.
+Fusion screen: unseen custom sprites are green (imported ones were blue) and autogens grey (white was invisible on the white box).
+Losing to Misty no longer keeps her gym music playing in the Pokémon Center.
+Linux / Steam Deck: after an update the game restarts by itself.

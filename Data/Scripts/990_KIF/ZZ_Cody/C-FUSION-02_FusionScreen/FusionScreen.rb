@@ -16,7 +16,7 @@
 #   * bars show the base stats (same colours as the Summary), plus the base
 #     total.
 #   * a fusion you haven't seen, with Fusion Preview Off, is PIF's flat
-#     silhouette (blue / green / white), not a tinted sprite (2026-10-12).
+#     silhouette (green custom / grey autogen), not a tinted sprite (2026-10-12).
 # A (USE) on a fusion opens Change Body / Change Head / Confirm (Cody's
 # mockup, 2026-10-06). Change Body/Head lists the part's current form and every
 # later one (branches included) tagged Stage 1 / Stage 2 / Final; the preview
@@ -320,9 +320,14 @@ class FusionPreviewScreen
     body_id = getBodyID(dex)
     head_id = getHeadID(dex, body_id)
     pif = BattleSpriteLoader.new.obtain_fusion_pif_sprite(head_id, body_id)
-    return Color.new(170, 200, 250, 200) if pif && pif.local_path
-    return Color.new(150, 255, 150, 200) if customSpriteExists(body_id, head_id)
-    return Color.new(255, 255, 255, 200)
+    # PIF tints a sprite that is a file on disk blue; in KIF those are the
+    # custom sprites the player imported (Graphics/CustomBattlers/local_sprites),
+    # so they are green like every other custom sprite (Cody, 2026-10-14:
+    # green = custom sprite, grey = autogen)
+    return Color.new(150, 255, 150, 200) if (pif && pif.local_path) || customSpriteExists(body_id, head_id)
+    # PIF's autogen colour is white, drawn on its dark box; KIF's box is white,
+    # so the autogen silhouette is grey to show up (Cody, 2026-10-14)
+    return Color.new(136, 136, 144, 200)
   end
 
   # An unseen fusion with Fusion Preview Off is a flat silhouette, as in PIF

@@ -16,17 +16,25 @@ KIF 0.20.7 was built on PIF 6.4.5. **KIF Beta** brings KIF's features to **PIF 6
 
 - **Old KIF saves** load directly. Your settings, Pokémon and items carry over.
 - **Bug reports:** if the game crashes, send the `Logs` folder from the game folder (`KIF_errorlog.txt` in it has the crash). Report KIF problems to the KIF community, **not** to the PIF developers.
+- **New in KIF Beta:** an updater that downloads only what changed, sprite pack import, Modules (turn any part of KIF off), Settings Presets, Battle Info, the Fusion Screen and more – see [KIF_Features.md](KIF_Features.md).
 - **Not carried over from 0.20.7**, because PIF 6.8.2 now does these itself or they no longer work:
-  - the auto-updater and the sprite installer;
   - Shiny Finder.exe;
   - Individual Custom Sprites (PIF now has per-Pokémon sprites);
-  - option presets.
+  - option preset files from 0.20.7 (Settings Presets use a new format).
 
 # Installation
 
-1. Click **Code → Download ZIP** on this page, or use this link: https://github.com/cody-png/codybeta/archive/refs/heads/kif-beta.zip
-2. Unzip it anywhere.
-3. Run **InfiniteFusion.exe**.
+Download the installer for your system from the [Releases page](https://github.com/cody-png/codybeta/releases/latest):
+
+- **Windows 10 / 11:** [install_KIF.bat](https://github.com/cody-png/codybeta/releases/latest/download/install_KIF.bat)
+- **Linux / Steam Deck:** [install_KIF.sh](https://github.com/cody-png/codybeta/releases/latest/download/install_KIF.sh)
+
+1. Put the installer in the folder where you want the game.
+2. Run it (Windows: double-click. Linux: double-click after ticking Properties > Permissions > "Is executable", or right-click > Run in Konsole).
+3. It makes a **KIF** folder next to itself and downloads the game into it (about 4.5 GB free space needed while installing, 2 GB once done).
+4. Start **InfiniteFusion.exe** in the KIF folder. On Linux it runs through Wine or Proton; the installer tells you how.
+
+Your saves are in `%APPDATA%\KIF` and the installer never touches them. Running it again repairs a damaged install and keeps your saves, mods and imported sprites.
 
 After that, KIF updates itself: at start-up it offers new versions and downloads only what changed (Options > KIF Settings > General settings > Updates).
 
@@ -42,7 +50,7 @@ Highlights:
 - **Kuray QoL:** PC, Heal and the Kuray Shop from the pause menu, plus K-Eggs, Tutor.net and Quicksave.
 - **Fusion:** fusion preview, custom fusion base stats, dominant types, self-fusion boosts, and legendary-head breeding.
 - **Look and feel:** big Pokémon icons, type icons and battle GUIs, fonts, and Dark Mode.
-- **Modding support:** drop `.rb` files into the `Mods` folder.
+- **Modding support:** drop a mod's `.rb` file, its folder or its `.zip` into the `Mods` folder; switch mods On/Off in Options > KIF Settings > Mods.
 - **Infinite save backups,** with named backups.
 
 # Credits

@@ -92,10 +92,12 @@ class KifSettingsScene < KifOptionsBaseScene
     KIF::Modules::MODULES.each do |id, (name, _d, _f)|
       next unless KIF::Modules.visible?(id)
       if id == :mod_settings
-        if defined?(KIF::ModSettings) && KIF::ModSettings.active? && !KIF::ModSettings.registry.empty?
-          buttons << ButtonOption.new(_INTL("Mod Settings"),
+        has_mods = defined?(KIF::Mods) && KIF::Mods.respond_to?(:entries) && !(KIF::Mods.entries rescue []).empty?
+        has_settings = defined?(KIF::ModSettings) && KIF::ModSettings.active? && !KIF::ModSettings.registry.empty?
+        if has_mods || has_settings
+          buttons << ButtonOption.new(_INTL("Mods"),
                                       proc { @kif_open = :mod_settings; kif_open_page },
-                                      _INTL("Settings added by your mods"))
+                                      _INTL("Your mods: On/Off and their settings"))
         end
         next
       end
@@ -135,7 +137,7 @@ class KifSettingsScene < KifOptionsBaseScene
     @kif_open = nil
     return unless page
     pbFadeOutIn {
-      scene = (page == :mod_settings) ? KifModSettingsScene.new : KifModuleSettingsScene.new(page)
+      scene = (page == :mod_settings) ? KifModsScene.new : KifModuleSettingsScene.new(page)
       PokemonOptionScreen.new(scene).pbStartScreen
     }
   end

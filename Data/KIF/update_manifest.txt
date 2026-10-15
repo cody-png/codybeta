@@ -1,4 +1,4 @@
-KIF-MANIFEST 1 version=0.21.36 channel=stable files=29548
+KIF-MANIFEST 1 version=0.21.37 channel=stable files=29551
 5d8b7ff7853a0c9ea25cef730252f32a2849ac94 3085627 Audio/BGM/Azalea Town.mp3
 c1bf8a69360590600d95f7b17970c9bbc1e317ef 2505405 Audio/BGM/BW2_Ghetsis Battle.mp3
 fc522881c06a4cb076d61a14911405c3da74338e 2722742 Audio/BGM/BW2_K_leader.mp3
@@ -3395,7 +3395,7 @@ fe767fa0b1773b41eaea0464a459b076e6609c5b 428 Data/Items.rxdata
 ef274be56fa0a395d41f9d20c4627b84d49f9e46 4878 Data/KIF/MysteryGift_KIF.txt
 a0a66659d9f44d21e1f84d80e4e5970e9df33cfa 610062 Data/KIF/entrances.dat
 ccdde561e5fc62b0b3ebd760916e6e29eb9c07f9 21721 Data/KIF/trainers_challenge.dat
-27107cf6623b11585caf71a9466294c2c68e3765 495 Data/KIF/update_notes.txt
+57133b94141de56c0ef7c97d59b81d243b920468 605 Data/KIF/update_notes.txt
 9a527fb1c545d642d4a709d95452fbabcc853867 78297 Data/Map001.rxdata
 775d19da5c3949f878e650e7bbd242a6a300dfe4 5213 Data/Map002.rxdata
 470905be3cae69dbe4a6a546f248949b09bb82b1 6159 Data/Map003.rxdata
@@ -4822,11 +4822,11 @@ b6d166589f52bf7a82f873140da9b9ff3f2ec7df 1333 Data/Scripts/990_KIF/000_Core/006_
 f320fa303e0de41933b902dbc79623ea23035463 5046 Data/Scripts/990_KIF/000_Core/008_KIF_MapPatches.rb
 8a87644ff36f7b00da5cb16b2152a639790e7029 8956 Data/Scripts/990_KIF/000_Core/009_KIF_Perf.rb
 240c337c523dcfcc33fc1d594fbc76657a2d5ddc 8350 Data/Scripts/990_KIF/000_Core/010_KIF_SessionLog.rb
-4921dced643c635c0d10b5e0832ea137d3b25922 14116 Data/Scripts/990_KIF/000_Core/011_KIF_Modules.rb
-0fbdc5686aa27100235fec1555a746cfc3f9a086 5881 Data/Scripts/990_KIF/000_Core/012_KIF_ModulesMenu.rb
-36be2dcfe72f0acdf24668ade930fdc7e7325c38 3740 Data/Scripts/990_KIF/000_CrashLog.rb
+54ea8c11f7be3b353c02a459646466bf551dd17e 14158 Data/Scripts/990_KIF/000_Core/011_KIF_Modules.rb
+9d85df2868cb78a82d3ffa6d6771e2c065ebd63c 6038 Data/Scripts/990_KIF/000_Core/012_KIF_ModulesMenu.rb
+f8db66ae0d020042dafa9768caa60d4d4b1be958 3932 Data/Scripts/990_KIF/000_CrashLog.rb
 363a7af6f9b65b8e31556082131b04f37323d207 1655 Data/Scripts/990_KIF/000_Paths.rb
-20ae8334cf2303875925e01a4cbe60042133ad03 1659 Data/Scripts/990_KIF/000_README.rb
+91c4b2bb089450eeafe263b6ec6b8318659a0989 1659 Data/Scripts/990_KIF/000_README.rb
 162f5ef769bd91b25cd83a2b067e7ec62b0cd3e9 5290 Data/Scripts/990_KIF/F-BATTLE-01_BattleFormat/BattleFormat.rb
 d10bb9de0a75f87e721b839f5ed2227e8b4efa8f 4192 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattle.rb
 7808965551398413c1fdc25dbcaf7647b48c58d8 12936 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattleChoices.rb
@@ -4851,12 +4851,13 @@ d40ab69cde9c0f81875b11144fbae47815147c22 12983 Data/Scripts/990_KIF/F-BATTLE-08_
 05a3e0f2b0844fac32a5d1489efa89285fce6eaa 7578 Data/Scripts/990_KIF/F-BATTLE-12_EBDX/EBDXCompat.rb
 def1b75c19543ffd801ca68bca1990d05ca80b04 9176 Data/Scripts/990_KIF/F-CORE-02_SaveCompat/KifSaveImport.rb
 1942d6a1e9fa68aa7e0675422a9b064188b5dc63 6110 Data/Scripts/990_KIF/F-CORE-03_SaveBackups/SaveBackups.rb
-8566f9c85bcb3c2a4f2fbdfacfb3fa066d6882d1 3665 Data/Scripts/990_KIF/F-CORE-04_Mods/Mods.rb
+3b68817acdfaf8aa575f5eb5c5a9879ef4a23475 19287 Data/Scripts/990_KIF/F-CORE-04_Mods/Mods.rb
+f641988fb879579b048453cebb7edaab86d683b7 3225 Data/Scripts/990_KIF/F-CORE-04_Mods/ModsMenu.rb
 3a0a95685da09866e575529ec7a5aad243d9a642 2520 Data/Scripts/990_KIF/F-CORE-06_MysteryGift/MysteryGift.rb
 bc3e8e004e46e6d60758e98951f7394d3cf34975 3001 Data/Scripts/990_KIF/F-CORE-07_DebugTools/CompileData.rb
 f488ba3d0b72c060dcd9fc0fe4b53df499a292fa 6084 Data/Scripts/990_KIF/F-CORE-08_SettingsPresets/SettingsPresets.rb
 c576b37898c548e512466d00cb7d954d92fea523 32259 Data/Scripts/990_KIF/F-CORE-09_ModCompat/ModCompat.rb
-be13cbcfe0f4657aaef67ecf4e52ad7db24fb11b 13744 Data/Scripts/990_KIF/F-CORE-09_ModCompat/ModSettingsMenu.rb
+79b717f9fd363917fa83605643dc69fa4b9d91af 13838 Data/Scripts/990_KIF/F-CORE-09_ModCompat/ModSettingsMenu.rb
 c8c8341919cb9acfe72dfdfd9caf3f127c642e2b 4655 Data/Scripts/990_KIF/F-DATA-01_SpeciesTweaks/SpeciesTweaks.rb
 9e92fba12196bd039abadc57d9fe43fccca7e6c2 14173 Data/Scripts/990_KIF/F-FUSION-01_FusionRules/FusionRules.rb
 90a3ffe56c7846e0485057668c1527c6f7ed865a 6523 Data/Scripts/990_KIF/F-FUSION-02_Breeding/HeadLegendaryBreeding.rb
@@ -4898,6 +4899,7 @@ b1b4a00f98b5963269d1cb8000c0bf7a39562e2e 2611 Data/Scripts/990_KIF/F-UI-09_Title
 c750ae7212e2cb603472c8cbb5dde92cf94a2444 7851 Data/Scripts/990_KIF/F-UI-10_Shenanigans/Shenanigans.rb
 c8e0b93d807b446917a390149a8b859a654ce1ef 1973 Data/Scripts/990_KIF/F-UI-11_DarkMode/DarkMode.rb
 42d3b5f0cfe7c98c210c7aaaada5f2d6e0a2c2e5 648 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/BabySpecies.rb
+1de3a592acd8c66d87322908037ddf87f2acc186 1685 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/BlackoutMusic.rb
 44f9e7aef5ee79ee6d9bde19232fb5df9bfe6052 906 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/DarkImages.rb
 ba87b2e06da3c8aaaa59fd9b6680eb13e17c0d2a 858 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/DebugEcho.rb
 692e52d187e6e581b96a4b348e423a3fd7fe73a3 2929 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/EvolutionShiny.rb
@@ -4912,8 +4914,9 @@ d99502e7543b85ccf44f94cce474cb22783b4b88 767 Data/Scripts/990_KIF/SCOPE-02_PIFFi
 a4f08b509907b9b2671336a001b4b95cbee99ff1 1882 Data/Scripts/990_KIF/ZZ_Cody/000_CodySettings.rb
 e449aac087bceb3880c85bb3931122ab57daeab9 11990 Data/Scripts/990_KIF/ZZ_Cody/C-BATTLE-01_Effectiveness/Effectiveness.rb
 7e112f9c0d436873259eaf6ae13b3f8d4e7a11a0 3945 Data/Scripts/990_KIF/ZZ_Cody/C-BATTLE-02_TrainerRolls/TrainerRolls.rb
+4910a9230e0224337b4bf28e46b4da4c1b9c7f51 20153 Data/Scripts/990_KIF/ZZ_Cody/C-BATTLE-03_BattleInfo/BattleInfo.rb
 9319eefd2ad8b2d8cc519b338457562c0bae8d21 4070 Data/Scripts/990_KIF/ZZ_Cody/C-FUSION-01_LegendaryBreeding/LegendaryBreeding.rb
-9008ee5301253983e80403b93d72eb0ac0a83789 22850 Data/Scripts/990_KIF/ZZ_Cody/C-FUSION-02_FusionScreen/FusionScreen.rb
+22d451ba5b6a0eea87c78f9d54ffca8547b0cc71 23244 Data/Scripts/990_KIF/ZZ_Cody/C-FUSION-02_FusionScreen/FusionScreen.rb
 c13607796dd449a31b486d38f388c7daa1a58eb5 13627 Data/Scripts/990_KIF/ZZ_Cody/C-GYM-01_LeaderTeams/LeaderTeams.rb
 e14958d79c12688c6cf1d8dbdbb63c40db2d48fb 8760 Data/Scripts/990_KIF/ZZ_Cody/C-GYM-01_LeaderTeams/LeaderTeams_Dialogue.rb
 f161798aba0c37376f9dc51bf8da7d461900efe4 23766 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/001_RandCore.rb
@@ -4941,8 +4944,8 @@ a1f973aa3aecd38733d17e7bc006fe6930132e44 1433 Data/Scripts/990_KIF/ZZ_Cody/C-SYS
 406d41450a25f8af9e6b650cfa59c8eb651ddc19 3850 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-03_MapLoadCache/ViewportLeak.rb
 2ab90e59ca841e018e727f550f9249064ce1245c 34581 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-04_SpriteImport/SpriteImport.rb
 51d4163790ef6b0a34f068393ada1615dd42e61b 9182 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-05_SaveFolder/SaveFolder.rb
-c852694d8d132a3b69339d67dd20a689a272e7a8 30327 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-06_Updater/Updater.rb
-36d6969c9843f1f9775ab69b2dba60cf4fcf00d8 3757 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-07_FirstChoice/FirstChoice.rb
+3fed5fc54e005b623c5b30a67d890ca289a81ffb 31128 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-06_Updater/Updater.rb
+584fd936f1eb09e97b12613c3e2f444e479a37fd 3775 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-07_FirstChoice/FirstChoice.rb
 acc34040597fe41e92bb9873b3eeb3e719fe8eb7 8029 Data/Scripts/990_KIF/zz_ModuleGate/ModuleGate.rb
 6953d46533cefdce1049ee7480f4a3fb1fdf6ff4 3285 Data/Scripts/998_Experimental/OnlineWondertrade.rb
 1aa5e50967e95183eea6967622de8cf04010144d 5506 Data/Scripts/998_Experimental/RemoteBattleClient.rb
@@ -4957,7 +4960,7 @@ dc0d2d806447623fafeea8d45f586fd0cdd5b7f0 4266418 Data/Sprite Credits.csv
 3b3389e09b90357c0655e74ffae380fc48b7e609 410184 Data/Tilesets.rxdata
 f9b31006c733aa226e60e209c722557464a6479e 364643 Data/TilesetsTemp.rxdata
 94c39352b0edb225fa90de0ca64fe19c8a5fdae3 345 Data/Troops.rxdata
-293455edbf5588f1a5912b262d5c394f144abcca 7 Data/VERSION
+79a947a0fa53fcf883ed1e0d9f792ee39649ffad 7 Data/VERSION
 c7ea19a7a791e601e24bbc538d8611eb1e1025b0 245 Data/Weapons.rxdata
 88cb261de46afa991fb60f0251319dcc0a4b73f5 21823 Data/abilities.dat
 142be0a9a8a80bf26ad1292785f9ec46b76e7ea1 22509076 Data/attacksRS.dat
@@ -29538,11 +29541,11 @@ c55bf5553d9a91adb1042bccaa4c225067ddf10e 196 Graphics/Windowskins/speech ug 2.pn
 c20ff2fa9e4ede1711c88337bfcc48680fe8b3bb 509 Import Sprites/READ ME - zip and rar files are deleted after importing.txt
 53b2c5ef54dbcfa13e4c7d74d844dd6dc8b9a330 18518103 InfiniteFusion.exe
 efc611ae60983418b89b9ccc27bf03ed6db28ce0 868 KIF Savefiles.lnk
-685f2a596302fc0a815ac3edd6bb5b0158331062 45699 KIF_Features.md
+b90e8433bfe58f60a5ae2fd6643d84a17a6fa7c2 47171 KIF_Features.md
 6bf8face4e015a59ad63cb06d153511b91a74f6c 161 Logs/READ ME.txt
 86a9b16bde5f8b1254d767166e5d23128d82fe12 868 Old Savefile location.lnk
 9ce9ed45ecb22ebec33b04dd79239f448d5152b6 868 PIF Savefiles.lnk
-637bbcf8b31cd6a9cf6704881ef24c3b1cc14561 4507 README.md
+eec72bb3dd601e07253f110813572c9b232b7d08 5632 README.md
 2e717fa224ceeed030e4092119a65532d2829993 684544 RGSS100J.dll
 f7a93d01ffdd225021c053e176216c09009d8935 758272 RGSS104E.dll
 95d8bc31821cf1f44e4eb3bbb3869c157eae58e0 9267848 x64-msvcrt-ruby310.dll

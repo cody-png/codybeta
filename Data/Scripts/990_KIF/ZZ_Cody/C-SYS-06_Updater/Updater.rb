@@ -574,6 +574,27 @@ module KIF
       return moved
     end
 
+    # Wine/Proton (2026-10-14, Cody: no "close it and start it again"): the
+    # files are already moved in, so a new copy of the game is started and
+    # this one closes. Without Windows' process API: the old message.
+    def restart_after_apply(version)
+      exe = windows? ? (Win.exe_path || File.join(root, "InfiniteFusion.exe")) : nil
+      if exe
+        pbMessage(_INTL("KIF Beta {1} is installed. The game restarts now.", version))
+        h, _pid = Win.spawn("\"#{win_path(exe)}\"", 0, root)
+        if h
+          Win.close(h)
+          log("#{version}: moved in by the game, restarted")
+          (KIF::SessionLog.finish rescue nil) if defined?(KIF::SessionLog)
+          Kernel.exit!(0) rescue exit
+          return true
+        end
+        log("#{version}: the game couldn't start itself again")
+      end
+      pbMessage(_INTL("KIF Beta {1} is installed. Close the game and start it again to use it.", version))
+      return true
+    end
+
     #---------------------------------------------------------------------------
     # The whole update; true when the game is about to close for it
     #---------------------------------------------------------------------------
@@ -635,8 +656,7 @@ module KIF
         return false
       end
       apply_in_ruby(dir)
-      pbMessage(_INTL("KIF Beta {1} is installed. Close the game and start it again to use it.", version))
-      return true
+      return restart_after_apply(version)
     end
 
     #---------------------------------------------------------------------------
@@ -730,7 +750,7 @@ module KIF
           if cmd == 0 && !update_window?
             File.delete(File.join(dir, "failed.txt")) rescue nil
             apply_in_ruby(dir)
-            pbMessage(_INTL("KIF Beta {1} is installed. Close the game and start it again to use it.", v))
+            restart_after_apply(v)
           elsif cmd == 0
             File.delete(File.join(dir, "failed.txt")) rescue nil
             if start_apply(dir)

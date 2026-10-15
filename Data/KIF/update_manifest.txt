@@ -1,4 +1,4 @@
-KIF-MANIFEST 1 version=0.21.37 channel=stable files=29551
+KIF-MANIFEST 1 version=0.21.38 channel=stable files=29551
 5d8b7ff7853a0c9ea25cef730252f32a2849ac94 3085627 Audio/BGM/Azalea Town.mp3
 c1bf8a69360590600d95f7b17970c9bbc1e317ef 2505405 Audio/BGM/BW2_Ghetsis Battle.mp3
 fc522881c06a4cb076d61a14911405c3da74338e 2722742 Audio/BGM/BW2_K_leader.mp3
@@ -3395,7 +3395,7 @@ fe767fa0b1773b41eaea0464a459b076e6609c5b 428 Data/Items.rxdata
 ef274be56fa0a395d41f9d20c4627b84d49f9e46 4878 Data/KIF/MysteryGift_KIF.txt
 a0a66659d9f44d21e1f84d80e4e5970e9df33cfa 610062 Data/KIF/entrances.dat
 ccdde561e5fc62b0b3ebd760916e6e29eb9c07f9 21721 Data/KIF/trainers_challenge.dat
-57133b94141de56c0ef7c97d59b81d243b920468 605 Data/KIF/update_notes.txt
+6868fde6776397856893ebdfdd5c9d4ad693ca7a 178 Data/KIF/update_notes.txt
 9a527fb1c545d642d4a709d95452fbabcc853867 78297 Data/Map001.rxdata
 775d19da5c3949f878e650e7bbd242a6a300dfe4 5213 Data/Map002.rxdata
 470905be3cae69dbe4a6a546f248949b09bb82b1 6159 Data/Map003.rxdata
@@ -4826,7 +4826,7 @@ f320fa303e0de41933b902dbc79623ea23035463 5046 Data/Scripts/990_KIF/000_Core/008_
 9d85df2868cb78a82d3ffa6d6771e2c065ebd63c 6038 Data/Scripts/990_KIF/000_Core/012_KIF_ModulesMenu.rb
 f8db66ae0d020042dafa9768caa60d4d4b1be958 3932 Data/Scripts/990_KIF/000_CrashLog.rb
 363a7af6f9b65b8e31556082131b04f37323d207 1655 Data/Scripts/990_KIF/000_Paths.rb
-91c4b2bb089450eeafe263b6ec6b8318659a0989 1659 Data/Scripts/990_KIF/000_README.rb
+f8a1eb79de11bbec83ea7be3a100a19cff3306e3 1659 Data/Scripts/990_KIF/000_README.rb
 162f5ef769bd91b25cd83a2b067e7ec62b0cd3e9 5290 Data/Scripts/990_KIF/F-BATTLE-01_BattleFormat/BattleFormat.rb
 d10bb9de0a75f87e721b839f5ed2227e8b4efa8f 4192 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattle.rb
 7808965551398413c1fdc25dbcaf7647b48c58d8 12936 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattleChoices.rb
@@ -4914,7 +4914,7 @@ d99502e7543b85ccf44f94cce474cb22783b4b88 767 Data/Scripts/990_KIF/SCOPE-02_PIFFi
 a4f08b509907b9b2671336a001b4b95cbee99ff1 1882 Data/Scripts/990_KIF/ZZ_Cody/000_CodySettings.rb
 e449aac087bceb3880c85bb3931122ab57daeab9 11990 Data/Scripts/990_KIF/ZZ_Cody/C-BATTLE-01_Effectiveness/Effectiveness.rb
 7e112f9c0d436873259eaf6ae13b3f8d4e7a11a0 3945 Data/Scripts/990_KIF/ZZ_Cody/C-BATTLE-02_TrainerRolls/TrainerRolls.rb
-4910a9230e0224337b4bf28e46b4da4c1b9c7f51 20153 Data/Scripts/990_KIF/ZZ_Cody/C-BATTLE-03_BattleInfo/BattleInfo.rb
+71dac3f933074eea9562620419e43153c1675da9 23287 Data/Scripts/990_KIF/ZZ_Cody/C-BATTLE-03_BattleInfo/BattleInfo.rb
 9319eefd2ad8b2d8cc519b338457562c0bae8d21 4070 Data/Scripts/990_KIF/ZZ_Cody/C-FUSION-01_LegendaryBreeding/LegendaryBreeding.rb
 22d451ba5b6a0eea87c78f9d54ffca8547b0cc71 23244 Data/Scripts/990_KIF/ZZ_Cody/C-FUSION-02_FusionScreen/FusionScreen.rb
 c13607796dd449a31b486d38f388c7daa1a58eb5 13627 Data/Scripts/990_KIF/ZZ_Cody/C-GYM-01_LeaderTeams/LeaderTeams.rb
@@ -4960,7 +4960,7 @@ dc0d2d806447623fafeea8d45f586fd0cdd5b7f0 4266418 Data/Sprite Credits.csv
 3b3389e09b90357c0655e74ffae380fc48b7e609 410184 Data/Tilesets.rxdata
 f9b31006c733aa226e60e209c722557464a6479e 364643 Data/TilesetsTemp.rxdata
 94c39352b0edb225fa90de0ca64fe19c8a5fdae3 345 Data/Troops.rxdata
-79a947a0fa53fcf883ed1e0d9f792ee39649ffad 7 Data/VERSION
+7ef92b39822521e72559674fd5fd8028ae6db295 7 Data/VERSION
 c7ea19a7a791e601e24bbc538d8611eb1e1025b0 245 Data/Weapons.rxdata
 88cb261de46afa991fb60f0251319dcc0a4b73f5 21823 Data/abilities.dat
 142be0a9a8a80bf26ad1292785f9ec46b76e7ea1 22509076 Data/attacksRS.dat
@@ -29541,7 +29541,7 @@ c55bf5553d9a91adb1042bccaa4c225067ddf10e 196 Graphics/Windowskins/speech ug 2.pn
 c20ff2fa9e4ede1711c88337bfcc48680fe8b3bb 509 Import Sprites/READ ME - zip and rar files are deleted after importing.txt
 53b2c5ef54dbcfa13e4c7d74d844dd6dc8b9a330 18518103 InfiniteFusion.exe
 efc611ae60983418b89b9ccc27bf03ed6db28ce0 868 KIF Savefiles.lnk
-b90e8433bfe58f60a5ae2fd6643d84a17a6fa7c2 47171 KIF_Features.md
+cd8fbd2d4aa0c22d6cc0976bfdd3a7d8a45da454 47322 KIF_Features.md
 6bf8face4e015a59ad63cb06d153511b91a74f6c 161 Logs/READ ME.txt
 86a9b16bde5f8b1254d767166e5d23128d82fe12 868 Old Savefile location.lnk
 9ce9ed45ecb22ebec33b04dd79239f448d5152b6 868 PIF Savefiles.lnk

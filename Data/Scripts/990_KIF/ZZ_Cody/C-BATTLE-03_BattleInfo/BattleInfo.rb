@@ -13,15 +13,21 @@
 #     Future Sight and Wish.
 # Works the same in PIF's battle screen and EBDX's. Information module;
 # "Battle Info" setting, On by default (Off for Classic KIF).
+# On also shows how to open it (Cody liked both mockups, "so long as they
+# aren't in the way"): a small "Z INFO" tab above the left end of PIF's
+# command box (the right end has your Pokémon's battle box), and a 5th INFO
+# button in EBDX's command row (EBDX fits 5; not added when its DEBUG button
+# already takes the 5th place). "On, no button" keeps only the key.
 #===============================================================================
 KIF::Options.define(:cody_battleinfo, 1, :global)
 
 KIF::Options.add(:others, :global) {
-  EnumOption.new(_INTL("Battle Info"), [_INTL("Off"), _INTL("On")],
+  EnumOption.new(_INTL("Battle Info"), [_INTL("Off"), _INTL("On"), _INTL("No button")],
                  proc { $PokemonSystem.cody_battleinfo },
                  proc { |value| $PokemonSystem.cody_battleinfo = value },
                  [_INTL("No battle info screen"),
-                  _INTL("In battle, the Action button (Z/Shift) shows stat changes, effects and the field")])
+                  _INTL("In battle, INFO (or Z/Shift) shows stat changes, effects and the field"),
+                  _INTL("Battle info with Z/Shift only, no INFO button on screen")])
 }
 
 module KIF
@@ -34,7 +40,12 @@ module KIF
 
     def on?
       return $PokemonSystem && $PokemonSystem.respond_to?(:cody_battleinfo) &&
-             $PokemonSystem.cody_battleinfo.to_i == 1
+             $PokemonSystem.cody_battleinfo.to_i > 0
+    end
+
+    # the INFO tab (PIF) / INFO button (EBDX) is shown
+    def button?
+      return on? && $PokemonSystem.cody_battleinfo.to_i == 1
     end
 
     def const(name)
@@ -425,14 +436,68 @@ module KIF
   end
 end
 
+module KIF
+  module BattleInfo
+    TAB_W = 92
+    TAB_H = 24
+
+    # PIF's command box: a small tab on its top edge, left end
+    def self.tab_bitmap
+      w, h = TAB_W, TAB_H
+      bmp = Bitmap.new(w, h)
+      border = Color.new(88, 88, 96)
+      top = Color.new(232, 232, 240)
+      low = Color.new(200, 200, 212)
+      bmp.fill_rect(2, 0, w - 4, h, border)
+      bmp.fill_rect(0, 2, w, h - 4, border)
+      bmp.fill_rect(1, 1, w - 2, h - 2, border)
+      bmp.fill_rect(2, 2, w - 4, h - 4, top)
+      bmp.fill_rect(2, h / 2 + 1, w - 4, h / 2 - 3, low)
+      bmp.fill_rect(6, 4, 18, h - 8, Color.new(72, 120, 200))
+      pbSetSmallFont(bmp)
+      pbDrawTextPositions(bmp, [["Z", 15, 2, 2, Color.new(255, 255, 255), Color.new(32, 64, 120)],
+                                [_INTL("INFO"), 58, 2, 2, Color.new(64, 64, 72), Color.new(176, 176, 184)]])
+      return bmp
+    end
+
+    def self.show_tab
+      return nil unless button?
+      vp = Viewport.new(0, 0, Graphics.width, Graphics.height)
+      vp.z = 99_999 + 2
+      spr = Sprite.new(vp)
+      spr.bitmap = tab_bitmap
+      spr.x = 4
+      spr.y = Graphics.height - 96 - TAB_H + 2
+      return [vp, spr]
+    rescue StandardError => e
+      KIF.log("Battle Info tab failed (#{e.class}: #{e.message})") if defined?(KIF.log)
+      return nil
+    end
+
+    def self.hide_tab(tab)
+      return unless tab
+      vp, spr = tab
+      spr.bitmap.dispose if spr.bitmap && !spr.bitmap.disposed?
+      spr.dispose
+      vp.dispose
+    rescue StandardError
+    end
+
+    # EBDX: the command index the INFO button answers with
+    EBDX_INFO = 50
+  end
+end
+
 class PokeBattle_Scene
   alias kif_bi_pbCommandMenu pbCommandMenu unless method_defined?(:kif_bi_pbCommandMenu)
   alias kif_bi_pbUpdate pbUpdate unless method_defined?(:kif_bi_pbUpdate)
 
   def pbCommandMenu(*args)
     @kif_bi_command = true
+    tab = KIF::BattleInfo.show_tab
     return kif_bi_pbCommandMenu(*args)
   ensure
+    KIF::BattleInfo.hide_tab(tab)
     @kif_bi_command = false
   end
 
@@ -448,9 +513,20 @@ if defined?(PokeBattle_SceneEBDX)
     alias kif_bi_ebdx_pbCommandMenu pbCommandMenu unless method_defined?(:kif_bi_ebdx_pbCommandMenu)
     alias kif_bi_ebdx_pbUpdate pbUpdate unless method_defined?(:kif_bi_ebdx_pbUpdate)
 
+    # The INFO button answers EBDX_INFO: open the screen, then the menu again
     def pbCommandMenu(*args)
-      @kif_bi_command = true
-      return kif_bi_ebdx_pbCommandMenu(*args)
+      loop do
+        @kif_bi_command = true
+        ret = kif_bi_ebdx_pbCommandMenu(*args)
+        @kif_bi_command = false
+        return ret unless ret == KIF::BattleInfo::EBDX_INFO
+        begin
+          KifBattleInfoScreen.new(@battle).run
+        rescue StandardError => e
+          KIF.log("Battle Info failed (#{e.class}: #{e.message})") if defined?(KIF.log)
+        end
+        Input.update
+      end
     ensure
       @kif_bi_command = false
     end
@@ -459,6 +535,21 @@ if defined?(PokeBattle_SceneEBDX)
       ret = kif_bi_ebdx_pbUpdate(*args)
       KIF::BattleInfo.check_key(self) if @kif_bi_command
       return ret
+    end
+  end
+end
+
+if defined?(CommandWindowEBDX)
+  class CommandWindowEBDX
+    alias kif_bi_compileCommands compileCommands unless method_defined?(:kif_bi_compileCommands)
+
+    def compileCommands(index)
+      cmds = kif_bi_compileCommands(index)
+      if KIF::BattleInfo.button? && !@safaribattle && cmds.length == 4 && @indexes.length == 4
+        cmds.push(_INTL("INFO"))
+        @indexes.push(KIF::BattleInfo::EBDX_INFO)
+      end
+      return cmds
     end
   end
 end

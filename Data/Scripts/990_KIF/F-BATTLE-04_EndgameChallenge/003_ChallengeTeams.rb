@@ -9,6 +9,8 @@
 #   * "Shedproofing": if your party has a Wonder Guard Pokémon, specific
 #     Pokémon swap a move for one that can hit it (Hidden Power IVs set to the
 #     needed type).
+# Fixed (2026-10-14): Cynthia's B269H347 read `pkmn.ability == :BADDREAMS`
+# (a comparison), so it never got Bad Dreams against a Wonder Guard team.
 # KIF quirk kept: B9H378 tries to learn "MYSTICWATER" (an item, not a move),
 # which PIF ignores, so it keeps 3 moves in that case.
 #===============================================================================
@@ -1001,7 +1003,10 @@ module KIF
 						end
 					when :B123H142
 						if needsomething
-							pkmn.ability = :STEALTHROCK
+							# KIF fix: was "pkmn.ability = :STEALTHROCK" (a move); the other
+							# teams answer Wonder Guard by learning Stealth Rock
+							pkmn.forget_move_at_index(3)
+							pkmn.learn_move(:STEALTHROCK)
 						end
 						if partypoopers>0
 							pkmn.item = :REDCARD
@@ -1785,7 +1790,7 @@ module KIF
 					# Cynthia
 					when :B269H347
 						if partypoopers>0
-							pkmn.ability == :BADDREAMS
+							pkmn.ability = :BADDREAMS   # KIF fix: was ==, a comparison that did nothing
 						end
 					when :B352H343
 						if partypoopers>0 || needsomething

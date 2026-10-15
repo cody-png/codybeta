@@ -69,10 +69,15 @@ module KIF
       end
 
       # A battler built from a Pokémon outside the battle (for scoring)
+      # (built with an active battler's index: the real battlers' effects
+      # aimed at that index are kept, see 000_Core/004_KIF_BattleHelpers.rb)
       def fake_battler(battle, pkmn, index, idxParty)
-        b = PokeBattle_Battler.new(battle, index)
-        b.pbInitPokemon(pkmn, idxParty)
-        b.pbInitEffects(false)
+        b = nil
+        KIF.keep_battler_effects(battle) do
+          b = PokeBattle_Battler.new(battle, index)
+          b.pbInitPokemon(pkmn, idxParty)
+          b.pbInitEffects(false)
+        end
         return b
       end
 

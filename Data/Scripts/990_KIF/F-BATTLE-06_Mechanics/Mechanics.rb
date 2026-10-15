@@ -55,7 +55,9 @@
 #   * KIF's AI edits for Drowsy/Frostbite (004_AI_Move.rb:202,
 #     005_AI_Move_EffectScores.rb:1759, 006_AI_Move_Utilities.rb:485) were in
 #     base AI methods that DemICE's AI (F-BATTLE-03) replaces, so they never
-#     ran in KIF; not ported.
+#     ran in KIF; not ported. Since 2026-10-14 both battle AIs know Frostbite
+#     and Drowsy (frostbite_in_battle? / drowsy_in_battle? below,
+#     000_Core/004_KIF_BattleHelpers.rb, SCOPE-02_PIFFixes/BattleAI.rb).
 #===============================================================================
 KIF::Options.define(:modernhail, 0, :save)
 KIF::Options.define(:frostbite, 0, :save)
@@ -368,3 +370,16 @@ module KIF
   end
 end
 KIF::Mechanics.install_step_hook
+
+# Frostbite / Drowsy apply in battle only while the Battles module is on
+# (the battle hooks above are module-gated; the battle AIs ask these).
+module KIF
+  module Mechanics
+    def self.battles_on?
+      return !defined?(KIF::Modules) || KIF::Modules.active?(:battles)
+    end
+
+    def self.frostbite_in_battle?; frostbite? && battles_on?; end
+    def self.drowsy_in_battle?;    drowsy? && battles_on?;    end
+  end
+end

@@ -299,7 +299,7 @@ class PokeBattle_AI
 				end
 			end
 			# If user is asleep, prefer moves that are usable while asleep
-			if user.status == :SLEEP && !move.usableWhenAsleep? && user.statusCount==1 # DemICE check if it'll wake up this turn
+			if kif_ai_sleeping?(user) && !move.usableWhenAsleep? && user.statusCount==1 # DemICE check if it'll wake up this turn  # KIF fix: not while Drowsy
 				user.eachMove do |m|
 					next unless m.usableWhenAsleep?
 					score *= 2
@@ -307,7 +307,7 @@ class PokeBattle_AI
 				end
 			end
 			# If user is frozen, prefer a move that can thaw the user
-			if user.status == :FROZEN
+			if kif_ai_frozen?(user)   # KIF fix: Frostbite (F-BATTLE-06) can act
 				if move.thawsUser?
 					score *= 2
 				else
@@ -319,7 +319,7 @@ class PokeBattle_AI
 				end
 			end
 			# If target is frozen, don't prefer moves that could thaw them
-			if target.status == :FROZEN
+			if kif_ai_frozen?(target)   # KIF fix: Frostbite (F-BATTLE-06) can act
 				user.eachMove do |m|
 					next if m.thawsUser?
 					score *= 0.3 if score<120
@@ -513,23 +513,16 @@ class PokeBattle_AI
 		}
 		# Ability effects that alter damage
 		moldBreaker = false
-		if skill>=PBTrainerAI.highSkill && target.hasMoldBreaker?
+		# KIF fix: the user's Mold Breaker (or Moongeist Beam / Sunsteel Strike / Photon Geyser) ignores the target's ability; KIF checked the target's
+		if skill>=PBTrainerAI.highSkill && (user.hasMoldBreaker? || ["163", "164"].include?(move.function))
 			moldBreaker = true
 		end
 		if skill>=PBTrainerAI.mediumSkill && user.abilityActive?
-			# NOTE: These abilities aren't suitable for checking at the start of the
-			#       round.  # DemICE: Some of them, yes.
-			abilityBlacklist = [:ANALYTIC,:SNIPER]#,:TINTEDLENS,:AERILATE,:PIXILATE,:REFRIGERATE]
-			canCheck = true
-			abilityBlacklist.each do |m|
-				next if move.id != m
-				canCheck = false
-				break
-			end
-			if canCheck
-				BattleHandlers.triggerDamageCalcUserAbility(user.ability,
-					user,target,move,multipliers,baseDmg,type)
-			end
+			# KIF fix: KIF compared move.id with these ability ids, so Analytic and
+			# Sniper were never left out and Tinted Lens read a stale effectiveness.
+			# Analytic / Sniper are left out, Tinted Lens and the -ate abilities are
+			# worked out from this move (000_Core/004_KIF_BattleHelpers.rb).
+			kif_ai_user_damage_ability(user, target, move, type, typeMod, multipliers, baseDmg)
 		end
 		if skill>=PBTrainerAI.mediumSkill && !moldBreaker
 			user.eachAlly do |b|
@@ -541,19 +534,19 @@ class PokeBattle_AI
 		if skill>=PBTrainerAI.bestSkill && !moldBreaker && target.abilityActive?
 			# NOTE: These abilities aren't suitable for checking at the start of the
 			#       round.    #DemICE:  WHAT THE FUCK DO YOU MEAN THEY AREN'T SUITABLE FFS
-			abilityBlacklist = [:FILTER,:SOLIDROCK]
-			canCheck = true
-			abilityBlacklist.each do |m|
-				#next if move.id != m # Really? comparing a move id with an ability id? This blacklisting never worked.
-				if target.hasActiveAbility?(m)
-					canCheck = false
-					break
-				end
+			# KIF fix: only Filter / Solid Rock's own handlers are left out (they
+			# read the hit's effectiveness; applied below from typeMod). KIF skipped
+			# the target's ability handler whenever hasActiveAbility?(:FILTER) was
+			# true, which also drops a second ability given by a mod (Thick Fat...).
+			if ![:FILTER, :SOLIDROCK].include?(target.ability_id)
+				BattleHandlers.triggerDamageCalcTargetAbility(target.ability,
+					user,target,move,multipliers,baseDmg,type)
 			end
-			if canCheck
-			BattleHandlers.triggerDamageCalcTargetAbility(target.ability,
-				user,target,move,multipliers,baseDmg,type)
-			end
+		end
+		# KIF fix: Prism Armor / Shadow Shield were never counted (they can't be
+		# ignored, so Mold Breaker doesn't skip them)
+		if skill>=PBTrainerAI.bestSkill
+			kif_ai_target_nonignorable(user, target, move, type, typeMod, multipliers, baseDmg)
 		end
 		if skill>=PBTrainerAI.bestSkill && !moldBreaker
 			target.eachAlly do |b|
@@ -760,6 +753,8 @@ class PokeBattle_AI
 				multipliers[:final_damage_multiplier] /= 2
 			end
 		end
+		# KIF fix: Frostbite / Drowsy damage cut (F-BATTLE-06)
+		multipliers[:final_damage_multiplier] *= kif_ai_status_damage_mult(move, user, type)
 		# Aurora Veil, Reflect, Light Screen
 		if skill>=PBTrainerAI.highSkill
 			if !move.ignoresReflect? && !user.hasActiveAbility?(:INFILTRATOR)
@@ -1074,12 +1069,10 @@ class PokeBattle_AI
 		hasPhysicalAttack = false
 		hasSpecialAttack = false
 		canthaw = false
-		user.eachMove do |m|
-			next if !m.physicalMove?(m.type)
+		user.eachMove do |m|   # KIF fix: KIF skipped non-physical moves and stopped at the first physical one
 			hasPhysicalAttack = true if m.physicalMove?(m.type)
 			hasSpecialAttack = true if m.specialMove?(m.type)
 			canthaw = true if m.thawsUser?
-			break
 		end
 		aspeed = pbRoughStat(user,:SPEED,skill)
 		ospeed = pbRoughStat(target,:SPEED,skill)
@@ -1189,7 +1182,7 @@ class PokeBattle_AI
 				bestmove=bestMoveVsTarget(target,battler,skill) # [maxdam,maxmove,maxprio,physorspec]
 				maxdam=bestmove[0]
 				maxmove=bestmove[1]
-				maxdam=0 if (target.status == :SLEEP && target.statusCount>1)
+				maxdam=0 if (kif_ai_sleeping?(target) && target.statusCount>1)
 				#if maxdam>battler.hp
 				echo(maxdam.to_s+" expected dmg vs "+heal.to_s+" healing\n")
 				if !targetSurvivesMove(maxmove,target,battler)
@@ -1368,6 +1361,7 @@ class PokeBattle_AI
 		if usableStatusItems.length>0 #&& pbAIRandom(100)<40
 			usableStatusItems.sort! { |a,b| a[1]<=>b[1] }
 			usableStatusItems.each do |i|
+				statusitemscore=0   # KIF fix: no score carried over from the previous item
 				if i[1]==7
 					if	(
 						battler.hasActiveAbility?(:GUTS) && hasPhysicalAttack &&
@@ -1400,7 +1394,7 @@ class PokeBattle_AI
 						battler.status==:SLEEP && (battler.statusCount==1 || target.pbHasMoveFunction?("003"))
 						) ||
 						(
-						battler.status==:FROZEN && canthaw
+						battler.status==:FROZEN && (canthaw || (KIF::Mechanics.frostbite_in_battle? && (!hasSpecialAttack || battler.hasActiveAbility?(:GUTS))))   # KIF fix: Frostbite only cuts special moves
 						) ||
 						(
 						battler.status==:PARALYSIS &&
@@ -1420,7 +1414,7 @@ class PokeBattle_AI
 
 					else
 
-						if battler.statusCount>2 && battler.status==:SLEEP && !target.pbHasMoveFunction?("003")
+						if battler.statusCount>2 && kif_ai_sleeping?(battler) && !target.pbHasMoveFunction?("003")   # KIF fix: not while Drowsy
 							statusitemscore=100
 							bestmove=bestMoveVsTarget(target,user,skill) # [maxdam,maxmove,maxprio,physorspec]
 							maxdam=bestmove[0]
@@ -1444,9 +1438,9 @@ class PokeBattle_AI
 							end
 							halfhealth=(user.totalhp/2)
 							thirdhealth=(user.totalhp/3)
-							if targetSurvivesMove(maxmove,target,user,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+							if targetSurvivesMove(maxmove,target,user,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 50
-								statusitemscore+= 60 if (target.status == :SLEEP && target.statusCount>1)
+								statusitemscore+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 								if skill>=PBTrainerAI.highSkill
 									aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1468,7 +1462,7 @@ class PokeBattle_AI
 								statusitemscore += 20 if halfhealth>maxdam
 								statusitemscore += 40 if thirdhealth>maxdam
 							end
-						elsif battler.status==:FROZEN
+						elsif battler.status==:FROZEN   # (Frostbite that matters for this Pokemon; see the checks above)
 							statusitemscore=100
 							bestmove=bestMoveVsTarget(target,user,skill) # [maxdam,maxmove,maxprio,physorspec]
 							maxdam=bestmove[0]
@@ -1494,9 +1488,9 @@ class PokeBattle_AI
 							thirdhealth=(user.totalhp/3)
 							aspeed = pbRoughStat(user,:SPEED,skill)
 							ospeed = pbRoughStat(target,:SPEED,skill)
-							if targetSurvivesMove(maxmove,target,user,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+							if targetSurvivesMove(maxmove,target,user,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 50
-								statusitemscore+= 60 if (target.status == :SLEEP && target.statusCount>1)
+								statusitemscore+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 								if skill>=PBTrainerAI.highSkill
 									aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1544,9 +1538,9 @@ class PokeBattle_AI
 							thirdhealth=(user.totalhp/3)
 							aspeed = pbRoughStat(user,:SPEED,skill)
 							ospeed = pbRoughStat(target,:SPEED,skill)
-							if targetSurvivesMove(maxmove,target,user,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+							if targetSurvivesMove(maxmove,target,user,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 50
-								statusitemscore+= 60 if (target.status == :SLEEP && target.statusCount>1)
+								statusitemscore+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 								if skill>=PBTrainerAI.highSkill
 									aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1578,7 +1572,7 @@ class PokeBattle_AI
 							thirdhealth=(user.totalhp/3)
 							aspeed = pbRoughStat(user,:SPEED,skill)
 							ospeed = pbRoughStat(target,:SPEED,skill)
-							if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+							if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 								#statusitemscore += 40
 								if skill>=PBTrainerAI.highSkill
 									aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1603,7 +1597,7 @@ class PokeBattle_AI
 							bestmove=bestMoveVsTarget(target,battler,skill) # [maxdam,maxmove,maxprio,physorspec]
 							maxdam=bestmove[0]
 							maxmove=bestmove[1]
-							maxdam=0 if (target.status == :SLEEP && target.statusCount>1)
+							maxdam=0 if (kif_ai_sleeping?(target) && target.statusCount>1)
 							if !targetSurvivesMove(maxmove,target,battler)
 								if maxdam>(battler.hp+halfhealth)
 									statusitemscore=0
@@ -1694,7 +1688,7 @@ class PokeBattle_AI
 				else
 					case i[0]
 					when :AWAKENING, :CHESTOBERRY, :BLUEFLUTE
-						if battler.statusCount>2 && battler.status==:SLEEP && !target.pbHasMoveFunction?("003") &&
+						if battler.statusCount>2 && kif_ai_sleeping?(battler) && !target.pbHasMoveFunction?("003") &&   # KIF fix: not while Drowsy
 							!battler.pbHasMoveFunction?("0B4") # Sleep Talk
 							statusitemscore=100
 							bestmove=bestMoveVsTarget(target,user,skill) # [maxdam,maxmove,maxprio,physorspec]
@@ -1721,9 +1715,9 @@ class PokeBattle_AI
 							thirdhealth=(user.totalhp/3)
 							aspeed = pbRoughStat(user,:SPEED,skill)
 							ospeed = pbRoughStat(target,:SPEED,skill)
-							if targetSurvivesMove(maxmove,target,user,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+							if targetSurvivesMove(maxmove,target,user,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 50
-								statusitemscore+= 60 if (target.status == :SLEEP && target.statusCount>1)
+								statusitemscore+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 								if skill>=PBTrainerAI.highSkill
 									aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1749,7 +1743,11 @@ class PokeBattle_AI
 							statusitemscore=0
 						end
 					when :ICEHEAL, :ASPEARBERRY
-						if battler.status==:FROZEN && canthaw
+						# KIF fix: KIF used Ice Heal only when a move could thaw the user anyway
+						# (the Full Heal check above calls that pointless); Frostbite only
+						# matters for special moves without Guts.
+						if battler.status==:FROZEN && !canthaw &&
+							(!KIF::Mechanics.frostbite_in_battle? || (hasSpecialAttack && !battler.hasActiveAbility?(:GUTS)))
 							statusitemscore=100
 							bestmove=bestMoveVsTarget(target,user,skill) # [maxdam,maxmove,maxprio,physorspec]
 							maxdam=bestmove[0]
@@ -1775,9 +1773,9 @@ class PokeBattle_AI
 							thirdhealth=(user.totalhp/3)
 							aspeed = pbRoughStat(user,:SPEED,skill)
 							ospeed = pbRoughStat(target,:SPEED,skill)
-							if targetSurvivesMove(maxmove,target,user,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+							if targetSurvivesMove(maxmove,target,user,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 50
-								statusitemscore+= 60 if (target.status == :SLEEP && target.statusCount>1)
+								statusitemscore+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 								if skill>=PBTrainerAI.highSkill
 									aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1830,9 +1828,9 @@ class PokeBattle_AI
 							thirdhealth=(user.totalhp/3)
 							aspeed = pbRoughStat(user,:SPEED,skill)
 							ospeed = pbRoughStat(target,:SPEED,skill)
-							if targetSurvivesMove(maxmove,target,user,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+							if targetSurvivesMove(maxmove,target,user,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 50
-								statusitemscore+= 60 if (target.status == :SLEEP && target.statusCount>1)
+								statusitemscore+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 								statusitemscore += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 								if skill>=PBTrainerAI.highSkill
 									aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1869,7 +1867,7 @@ class PokeBattle_AI
 							thirdhealth=(user.totalhp/3)
 							aspeed = pbRoughStat(user,:SPEED,skill)
 							ospeed = pbRoughStat(target,:SPEED,skill)
-							if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+							if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 								#statusitemscore += 40
 								if skill>=PBTrainerAI.highSkill
 									aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1900,7 +1898,7 @@ class PokeBattle_AI
 							bestmove=bestMoveVsTarget(target,battler,skill) # [maxdam,maxmove,maxprio,physorspec]
 							maxdam=bestmove[0]
 							maxmove=bestmove[1]
-							maxdam=0 if (target.status == :SLEEP && target.statusCount>1)
+							maxdam=0 if (kif_ai_sleeping?(target) && target.statusCount>1)
 							if !targetSurvivesMove(maxmove,target,battler)
 								if maxdam>(battler.hp+halfhealth)
 									statusitemscore=0
@@ -1998,6 +1996,7 @@ class PokeBattle_AI
 			end
 
 		end
+		statusitemscore = maxscore   # KIF fix: the chosen item's score, not the last item looked at
 		xitemscore=0
 		maxscore=0
 		chosenxitem = nil
@@ -2035,9 +2034,9 @@ class PokeBattle_AI
 						thirdhealth=(user.totalhp/3)
 						aspeed = pbRoughStat(user,:SPEED,skill)
 						ospeed = pbRoughStat(target,:SPEED,skill)
-						if targetSurvivesMove(maxmove,target,user,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+						if targetSurvivesMove(maxmove,target,user,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 							xitemscore += 40
-							xitemscore+= 60 if (target.status == :SLEEP && target.statusCount>1)
+							xitemscore+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 							xitemscore += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 							if skill>=PBTrainerAI.highSkill
 								aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -2091,7 +2090,7 @@ class PokeBattle_AI
 							((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 							xitemscore-=90
 						end
-						if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+						if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 							if maxphys
 								xitemscore += 30
 								xitemscore += 20 if halfhealth>maxdam
@@ -2123,9 +2122,9 @@ class PokeBattle_AI
 							((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 							xitemscore-=90
 						end
-						if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+						if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 							xitemscore += 40
-							xitemscore+= 60 if (target.status == :SLEEP && target.statusCount>1)
+							xitemscore+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 							xitemscore += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 							if skill>=PBTrainerAI.highSkill
 								aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -2163,7 +2162,7 @@ class PokeBattle_AI
 							((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 							xitemscore-=90
 						end
-						if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+						if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 							if maxspec
 								xitemscore += 30
 								xitemscore += 20 if halfhealth>maxdam
@@ -2195,7 +2194,7 @@ class PokeBattle_AI
 							((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 							xitemscore-=90
 						end
-						if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+						if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 							#xitemscore += 40
 							if skill>=PBTrainerAI.highSkill
 								aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -2255,9 +2254,9 @@ class PokeBattle_AI
 						else
 							xitemscore -= 200
 						end
-						if (targetSurvivesMove(maxmove,target,user,maxprio) || (target.status == :SLEEP && target.statusCount>1)) && hascrit==2
+						if (targetSurvivesMove(maxmove,target,user,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)) && hascrit==2
 							xitemscore += 40
-							xitemscore+= 60 if (target.status == :SLEEP && target.statusCount>1)
+							xitemscore+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 							xitemscore += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 							if skill>=PBTrainerAI.highSkill
 								aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -2299,6 +2298,7 @@ class PokeBattle_AI
 			end
 			#return prevItem[0], idxTarget
 		end
+		xitemscore = maxscore   # KIF fix: the chosen X item's score, not the last one looked at
 		echo("\nItem scores:\n")
 		if chosenhpitem
 			echo(chosenhpitem[0].name+": "+hpitemscore.to_s+"\n")

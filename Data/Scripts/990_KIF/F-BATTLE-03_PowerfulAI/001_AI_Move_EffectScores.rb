@@ -303,7 +303,7 @@ class PokeBattle_AI
 						((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 						score-=90
 					end
-					if targetSurvivesMove(maxmove,target,attacker) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,attacker) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						score += 40
 						score += 20 if halfhealth>maxdam
 						score += 40 if thirdhealth>maxdam
@@ -342,7 +342,7 @@ class PokeBattle_AI
 					maxphys=(bestmove[3]=="physical")
 					halfhealth=(user.totalhp/2)
 					thirdhealth=(user.totalhp/3)
-					if targetSurvivesMove(maxmove,target,attacker,maxprio)|| (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,attacker,maxprio)|| (kif_ai_sleeping?(target) && target.statusCount>1)
 						score += 40
 						score+=20 if maxphys
 						if user.pbHasMoveFunction?("0D5", "0D6")   #  Recovery
@@ -395,7 +395,7 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio)|| (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio)|| (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 40
 					score+=20 if maxphys
 					if user.pbHasMoveFunction?("0D5", "0D6")   #  Recovery
@@ -449,7 +449,7 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 40
 					score+=20 if maxphys
 					if user.pbHasMoveFunction?("0D5", "0D6")   #  Recovery
@@ -502,9 +502,9 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 20
-					score+= 60 if (target.status == :SLEEP && target.statusCount>1)
+					score+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 					if skill>=PBTrainerAI.highSkill
 						aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
 						ospeed*=1.5 if target.hasActiveAbility?(:SPEEDBOOST)
@@ -551,7 +551,7 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 20
 					if skill>=PBTrainerAI.highSkill
 						aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -600,9 +600,9 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 20
-					score+= 60 if (target.status == :SLEEP && target.statusCount>1)
+					score+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 					score+=20 if maxspec
 					score += 20 if halfhealth>maxdam
 					score += 40 if thirdhealth>maxdam
@@ -655,7 +655,7 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 40
 					score+=20 if maxspec
 					if user.pbHasMoveFunction?("0D5", "0D6")   #  Recovery
@@ -707,7 +707,7 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 30
 					score += 20 if halfhealth>maxdam
 					score += 40 if thirdhealth>maxdam
@@ -754,7 +754,7 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 30
 					score += 20 if halfhealth>maxdam
 					score += 40 if thirdhealth>maxdam
@@ -806,7 +806,7 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 30
 					score += 20 if halfhealth>maxdam
 					score += 40 if thirdhealth>maxdam
@@ -844,7 +844,7 @@ class PokeBattle_AI
 						((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 						score-=90
 					end
-					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						if maxphys
 							score += 30
 							score += 20 if halfhealth>maxdam
@@ -886,7 +886,7 @@ class PokeBattle_AI
 						((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 						score-=90
 					end
-					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						if maxphys
 							score += 40
 							score += 20 if halfhealth>maxdam
@@ -929,7 +929,7 @@ class PokeBattle_AI
 						((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 						score-=90
 					end
-					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						if maxspec
 							score += 30
 							score += 20 if halfhealth>maxdam
@@ -970,7 +970,7 @@ class PokeBattle_AI
 						((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 						score-=90
 					end
-					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						#score += 40
 						if skill>=PBTrainerAI.highSkill
 							aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1005,7 +1005,7 @@ class PokeBattle_AI
 						((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 						score-=90
 					end
-					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						#score += 40
 						if skill>=PBTrainerAI.highSkill
 							aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1052,7 +1052,7 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 40
 					score += 20 if user.hasActiveAbility?(:SPEEDBOOST)
 					if skill>=PBTrainerAI.highSkill
@@ -1101,7 +1101,7 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 40
 					score += 20 if user.hasActiveAbility?(:SPEEDBOOST)
 					if skill>=PBTrainerAI.highSkill
@@ -1153,7 +1153,7 @@ class PokeBattle_AI
 						((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 						score-=90
 					end
-					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						score += 40
 						score += 20 if user.hasActiveAbility?(:SPEEDBOOST)
 						if skill>=PBTrainerAI.highSkill
@@ -1228,9 +1228,9 @@ class PokeBattle_AI
 						((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 						score-=90
 					end
-					if targetSurvivesMove(maxmove,target,user,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,user,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						score += 40
-						score+= 60 if (target.status == :SLEEP && target.statusCount>1)
+						score+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 						score += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 						if skill>=PBTrainerAI.highSkill
 							aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1302,7 +1302,7 @@ class PokeBattle_AI
 					((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 					score-=90
 				end
-				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+				if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 					score += 40
 					score += 20 if user.hasActiveAbility?(:SPEEDBOOST)
 					if skill>=PBTrainerAI.highSkill
@@ -1350,9 +1350,9 @@ class PokeBattle_AI
 						((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 						score-=90
 					end
-					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						score += 40
-						score+= 60 if (target.status == :SLEEP && target.statusCount>1)
+						score+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 						score += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 						if skill>=PBTrainerAI.highSkill
 							aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1412,7 +1412,7 @@ class PokeBattle_AI
 						((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 						score-=90
 					end
-					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,attacker,maxprio) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						score += 40
 						score += 20 if user.hasActiveAbility?(:SPEEDBOOST)
 						if skill>=PBTrainerAI.highSkill
@@ -1492,7 +1492,7 @@ class PokeBattle_AI
 						((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 						score-=90
 					end
-					if targetSurvivesMove(maxmove,target,attacker,maxprio,mult) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,attacker,maxprio,mult) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						score += 100-30*mult
 						if skill>=PBTrainerAI.highSkill
 							aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -1543,9 +1543,9 @@ class PokeBattle_AI
 					end
 					mult=2
 					mult=1.5 if ((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0)) && user.hasActiveItem?(:SITRUSBERRY)
-					if targetSurvivesMove(maxmove,target,user,maxprio,mult) || (target.status == :SLEEP && target.statusCount>1)
+					if targetSurvivesMove(maxmove,target,user,maxprio,mult) || (kif_ai_sleeping?(target) && target.statusCount>1)
 						score += 40
-						score+= 60 if (target.status == :SLEEP && target.statusCount>1)
+						score+= 60 if (kif_ai_sleeping?(target) && target.statusCount>1)
 						score += 60 if user.hasActiveAbility?(:SPEEDBOOST)
 						if skill>=PBTrainerAI.highSkill
 							aspeed*=1.5 if user.hasActiveAbility?(:SPEEDBOOST)
@@ -2068,7 +2068,7 @@ class PokeBattle_AI
 			halfhealth=(user.totalhp/2)
 			thirdhealth=(user.totalhp/3)
 			score+=30 if user.hasActiveItem?(:HEATROCK)
-			score+=30 if halfhealth>maxdam || (target.status == :SLEEP && target.statusCount>1)
+			score+=30 if halfhealth>maxdam || (kif_ai_sleeping?(target) && target.statusCount>1)
 			score+=40 if water && ((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 			if ((aspeed<ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 				score -= 50 if maxdam>thirdhealth
@@ -2147,7 +2147,7 @@ class PokeBattle_AI
 			halfhealth=(user.totalhp/2)
 			thirdhealth=(user.totalhp/3)
 			score+=30 if user.hasActiveItem?(:DAMPROCK)
-			score+=30 if halfhealth>maxdam || (target.status == :SLEEP && target.statusCount>1)
+			score+=30 if halfhealth>maxdam || (kif_ai_sleeping?(target) && target.statusCount>1)
 			score+=40 if fire && ((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 			if ((aspeed<ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 				score -= 50 if maxdam>thirdhealth
@@ -2225,7 +2225,7 @@ class PokeBattle_AI
 			halfhealth=(user.totalhp/2)
 			thirdhealth=(user.totalhp/3)
 			score+=30 if user.hasActiveItem?(:SMOOTHROCK)
-			score+=30 if halfhealth>maxdam || (target.status == :SLEEP && target.statusCount>1)
+			score+=30 if halfhealth>maxdam || (kif_ai_sleeping?(target) && target.statusCount>1)
 			score+=20 if maxspec && ((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0)) && user.pbHasType?(:ROCK)
 			score+=20 if user.pbHasType?(:ROCK)
 			if !user.hasActiveItem?(:SAFETYGOGGLES) && !user.hasActiveItem?(:UTILITYUMBRELLA) &&
@@ -2300,7 +2300,7 @@ class PokeBattle_AI
 			halfhealth=(user.totalhp/2)
 			thirdhealth=(user.totalhp/3)
 			score+=30 if user.hasActiveItem?(:ICYROCK)
-			score+=30 if halfhealth>maxdam || (target.status == :SLEEP && target.statusCount>1)
+			score+=30 if halfhealth>maxdam || (kif_ai_sleeping?(target) && target.statusCount>1)
 			#score+=20 if maxphys && aspeed>ospeed && user.pbHasType?(:ICE) # DemICE alas, not in this game
 			score+=20 if user.pbHasType?(:ICE)
 			if !user.hasActiveItem?(:SAFETYGOGGLES) && !user.hasActiveItem?(:UTILITYUMBRELLA) &&
@@ -2594,7 +2594,7 @@ class PokeBattle_AI
 			ospeed = pbRoughStat(target,:SPEED,skill)
 			score -= 30 if user.pbOwnSide.effects[PBEffects::StealthRock] || user.pbOwnSide.effects[PBEffects::ToxicSpikes]>0 ||
 			user.pbOwnSide.effects[PBEffects::Spikes]>0 || user.pbOwnSide.effects[PBEffects::StickyWeb]
-			if ((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0)) && !(target.status == :SLEEP && target.statusCount>1)
+			if ((aspeed>ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0)) && !(kif_ai_sleeping?(target) && target.statusCount>1)
 				score -= 30 # DemICE: Switching AI is dumb so if you're faster, don't sack a healthy mon. Better use another move.
 			else
 				score +=30 if user.hasActiveAbility?(:REGENERATOR)
@@ -2668,7 +2668,7 @@ class PokeBattle_AI
 						end
 					end
 				end
-				if (opponent.status == :SLEEP && opponent.statusCount==2)
+				if (kif_ai_sleeping?(opponent) && opponent.statusCount==2)
 						stagemult+=5 if targetSurvivesMove(maxmove,attacker,opponent)
 						stagemult+=5 if !targetSurvivesMove(maxoppmove,opponent,attacker)
 				end
@@ -2744,7 +2744,7 @@ class PokeBattle_AI
 			bestmove=bestMoveVsTarget(target,user,skill) # [maxdam,maxmove,maxprio,physorspec]
 			maxdam=bestmove[0]
 			maxmove=bestmove[1]
-			if targetSurvivesMove(maxmove,target,attacker) || (target.status == :SLEEP && target.statusCount>1)
+			if targetSurvivesMove(maxmove,target,attacker) || (kif_ai_sleeping?(target) && target.statusCount>1)
 				#score += 40
 				pspeed=0
 				espeed=0
@@ -2779,7 +2779,7 @@ class PokeBattle_AI
 			maxdam=bestmove[0]
 			maxmove=bestmove[1]
 			maxprio=bestmove[2]
-			if targetSurvivesMove(maxmove,target,attacker,maxprio) || maxprio==0 || (target.status == :SLEEP && target.statusCount>1)
+			if targetSurvivesMove(maxmove,target,attacker,maxprio) || maxprio==0 || (kif_ai_sleeping?(target) && target.statusCount>1)
 				#score += 40
 				pspeed=0
 				espeed=0
@@ -2896,7 +2896,7 @@ class PokeBattle_AI
 				if attacker.effects[PBEffects::Ingrain] || attacker.effects[PBEffects::AquaRing]
 					score+=10
 				end
-				if attacker.hasWorkingAbility(:RAINDISH) && @battle.pbWeather==:RAINDANCE
+				if attacker.hasWorkingAbility(:RAINDISH) && [:Rain, :HeavyRain].include?(@battle.pbWeather)   # KIF fix: was :RAINDANCE (v16 name), never true
 					score+=10
 				end
 				if opponent.status==:PARALYSIS || opponent.status==:SLEEP
@@ -2959,7 +2959,7 @@ class PokeBattle_AI
 			bestmove=bestMoveVsTarget(target,user,skill) # [maxdam,maxmove,maxprio,physorspec]
 			maxdam=bestmove[0]
 			maxmove=bestmove[1]
-			maxdam=0 if (target.status == :SLEEP && target.statusCount>1)
+			maxdam=0 if (kif_ai_sleeping?(target) && target.statusCount>1)
 			#if maxdam>user.hp
 			if !targetSurvivesMove(maxmove,target,user)
 				if maxdam>(user.hp+halfhealth)
@@ -3058,7 +3058,7 @@ class PokeBattle_AI
 				bestmove=bestMoveVsTarget(target,user,skill) # [maxdam,maxmove,maxprio,physorspec]
 				maxdam=bestmove[0]
 				maxmove=bestmove[1]
-				maxdam=0 if (target.status == :SLEEP && target.statusCount>1)
+				maxdam=0 if (kif_ai_sleeping?(target) && target.statusCount>1)
 				mult=2
 				mult=1 if user.pbHasMoveFunction?("0AA", "14C", "168" , "14B")
 				#if maxdam>user.hp
@@ -3170,7 +3170,7 @@ class PokeBattle_AI
 						maxdam *= 0.7
 					end
 				end
-				maxdam=0 if (target.status == :SLEEP && target.statusCount>1)
+				maxdam=0 if (kif_ai_sleeping?(target) && target.statusCount>1)
 				#if maxdam>user.hp
 				if !targetSurvivesMove(maxmove,target,user)
 					if maxdam>(user.hp+halfhealth)
@@ -3276,7 +3276,7 @@ class PokeBattle_AI
 				bestmove=bestMoveVsTarget(target,user,skill) # [maxdam,maxmove,maxprio,physorspec]
 				maxdam=bestmove[0]
 				maxmove=bestmove[1]
-				maxdam=0 if (target.status == :SLEEP && target.statusCount>1)
+				maxdam=0 if (kif_ai_sleeping?(target) && target.statusCount>1)
 				#if maxdam>user.hp
 				if !targetSurvivesMove(maxmove,target,user)
 					if maxdam>(user.hp+halfhealth)
@@ -3380,14 +3380,16 @@ class PokeBattle_AI
 		oppitemworks = target.itemActive?
 		attitemworks = user.itemActive?
 		skill=100
+		# KIF fix: Aqua Ring / Ingrain heal 1/16 (KIF counted 0), Big Root x1.3
+		# (KIF's Ingrain line used the v16 constant PBItems::BIGROOT)
 		if (user.effects[PBEffects::AquaRing])==true
-			subscore = 0
+			subscore = 0.0625
 			subscore *= 1.3 if attitemworks && user.item == :BIGROOT
 			healing += subscore
 		end
 		if user.effects[PBEffects::Ingrain]
-			subscore = 0
-			subscore *= 1.3 if attitemworks && user.item == PBItems::BIGROOT
+			subscore = 0.0625
+			subscore *= 1.3 if attitemworks && user.item == :BIGROOT
 			healing += subscore
 		end
 		healing += 0.0625 if user.hasWorkingAbility(:DRYSKIN) &&  @battle.pbWeather==:Rain
@@ -3399,7 +3401,7 @@ class PokeBattle_AI
 		healing*=0 if user.effects[PBEffects::HealBlock]>0
 		return healing if heal
 		if !(user.hasWorkingAbility(:MAGICGUARD))
-			if !(attitemworks && user.item == :SAFETYGOGGLES) || !(user.hasWorkingAbility(:OVERCOAT))
+			if !(attitemworks && user.item == :SAFETYGOGGLES) && !(user.hasWorkingAbility(:OVERCOAT))   # KIF fix: was ||, so neither stopped weather damage
 				weatherchip = 0
 				weatherchip += 0.0625 if @battle.pbWeather==:Sun && (user.hasWorkingAbility(:DRYSKIN))
 				if @battle.pbWeather==:Sandstorm && !(user.pbHasType?(:ROCK) || user.pbHasType?(:STEEL) || user.pbHasType?(:GROUND)) && !(user.hasWorkingAbility(:SANDVEIL) || user.hasWorkingAbility(:SANDFORCE) || user.hasWorkingAbility(:SANDRUSH))
@@ -3420,6 +3422,8 @@ class PokeBattle_AI
 			if user.status!=:NONE && !rest
 				statuschip = 0
 				statuschip += 0.0625 if user.status==:BURN
+				# KIF fix: Frostbite (F-BATTLE-06) loses HP each turn like a burn
+				statuschip += ((Settings::MECHANICS_GENERATION >= 7) ? 0.0625 : 0.125) if user.status==:FROZEN && KIF::Mechanics.frostbite_in_battle?
 				statuschip += 0.125 if ((user.status==:POISON &&  !user.hasWorkingAbility(:POISONHEAL) && user.effects[PBEffects::Toxic]==0)) || (user.status == :SLEEP && target.hasWorkingAbility(:BADDREAMS))
 				statuschip += (0.0625*user.effects[PBEffects::Toxic]) if user.effects[PBEffects::Toxic]!=0 && !(user.hasWorkingAbility(:POISONHEAL))
 				chip+=statuschip
@@ -3505,7 +3509,9 @@ class PokeBattle_AI
 		pri = move.priority
 		pri +=1 if user.hasWorkingAbility(:GALEWINGS) && user.hp==user.totalhp && move.type==:FLYING
 		pri +=1 if move.baseDamage==0 && user.hasActiveAbility?(:PRANKSTER)
-		pri +=1 if move.function=="HigherPriorityInGrassyTerrain" && @battle.field.terrain==:Grassy && user.affectedByTerrain?
+		# KIF fix: "HigherPriorityInGrassyTerrain" is a v20 function code that v19 never has. PIF 6.8.2 has no
+		# Grassy Glide (nor a v19 code for it); the move id still matches one a mod adds.
+		pri +=1 if move.id==:GRASSYGLIDE && @battle.field.terrain==:Grassy && user.affectedByTerrain?
 		pri +=3 if move.healingMove? && user.hasActiveAbility?(:TRIAGE)
 		return pri
 	end
@@ -3582,9 +3588,14 @@ class PokeBattle_Battle
 			@index=currentmon.index
 		end
 		wonderroom= @field.effects[PBEffects::WonderRoom]!=0
-		battler = PokeBattle_Battler.new(self,@index)
-		battler.pbInitPokemon(pokemon,@index)
-		battler.pbInitEffects(batonpass)#,false,effectnegate)
+		# KIF fix: building the stand-in with an active battler's index cleared
+		# the real battlers' Attract / Lock-On / Mean Look... aimed at it
+		battler = nil
+		KIF.keep_battler_effects(self) do
+			battler = PokeBattle_Battler.new(self,@index)
+			battler.pbInitPokemon(pokemon,@index)
+			battler.pbInitEffects(batonpass)#,false,effectnegate)
+		end
 		if batonpass
 			battler.stages[:ATTACK]          = currentmon.stages[:ATTACK]
 			battler.stages[:DEFENSE]         = currentmon.stages[:DEFENSE]

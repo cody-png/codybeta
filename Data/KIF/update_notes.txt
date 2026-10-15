@@ -1,2 +1,3 @@
-KIF Beta 0.21.38
-Battle Info now has its own INFO tab above the battle menu (a 5th INFO button with EBDX). Options: Battle Info > No button hides it; Z / Shift still opens it.
+KIF Beta 0.21.39
+Battle AI fixes for both AIs: better damage guesses, no Thunder Wave into Volt Absorb, Frostbite and Drowsy understood, Mean Look / Block used when trapping helps.
+Trainers using DemICE's AI pick items better, and checking a switch-in no longer frees your Pokémon from Mean Look or infatuation.

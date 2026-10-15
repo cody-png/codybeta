@@ -265,8 +265,11 @@ end
 class KifBattleInfoScreen
   W = 512
   H = 384
-  BG       = Color.new(28, 36, 48, 235)
-  PANEL    = Color.new(255, 255, 255, 22)
+  # Both solid (Monto: the battle showing through made the text hard to
+  # read). fill_rect replaces pixels instead of blending, so the old
+  # see-through panel colour (alpha 22) punched holes in the background.
+  BG       = Color.new(28, 36, 48, 255)
+  PANEL    = Color.new(46, 55, 68, 255)
   TEXT     = Color.new(240, 240, 240)
   SHADOW   = Color.new(40, 40, 48)
   DIMTEXT  = Color.new(168, 176, 188)

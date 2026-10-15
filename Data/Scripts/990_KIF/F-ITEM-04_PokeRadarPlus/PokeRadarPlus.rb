@@ -19,11 +19,15 @@
 # Endless chains (Cody, 2026-10-14; Kanto radar, with or without PokeRadar+):
 #   PIF stops counting at 40 and its shiny odds stop improving at chain 20.
 #   KIF keeps its own count past 40 ($PokemonTemp.pokeradar[4]); the odds
-#   follow PIF's formula up to 20 and then keep improving: 1 in 4000/chain
-#   per patch of shaking grass (40 -> 1/100, 100 -> 1/40), never better than
-#   1/20. How easily a chain breaks stays PIF's (it reads PIF's count, max 40).
-#   Without the chain count on screen (PokeRadar+ Off or Radar Chain Count
-#   Off) a message still says when the chain reaches 20 and 40.
+#   follow PIF's formula up to 20 and then keep improving with no floor
+#   (Cody, 2026-10-15): through the points in ANCHORS - PIF's best at 20
+#   (1 in 200), 1 in 20 at 100, 1 in 10 at 200 - smoothly in between, and
+#   past 200 it keeps improving at the same rate (2x per 100 links) until
+#   every patch of shaking grass is shiny.
+#   How easily a chain breaks stays PIF's (it reads PIF's count, max 40).
+#   A message (with the shiny chance) at 20, 40, 60, 80, 100, 150 and 200,
+#   whether or not the chain count is shown; every change of the chance is
+#   written to Logs/KIF_log.txt.
 #
 # 6.8.2 adaptations: pbPokeRadarHighlightGrass is a guarded copy. The chain-break is in an
 # EncounterModifier proc that can't be wrapped, so while PokeRadar+ keeps a
@@ -65,7 +69,11 @@ module KIF
       return Settings::SHINY_POKEMON_CHANCE
     end
 
-    MILESTONES = [20, 40]
+    MILESTONES = [20, 40, 60, 80, 100, 150, 200]
+    # [chain, 1 in N] with the default odds; between two points the chance
+    # changes by the same factor every link, and past the last point it keeps
+    # the last stretch's rate. Other Wild Shiny Odds scale the whole curve.
+    ANCHORS = [[20, 200.0], [100, 20.0], [200, 10.0]]
 
     # The real chain length: PIF's count, then KIF's own past PIF's cap of 40
     def self.chain
@@ -92,9 +100,39 @@ module KIF
 
     # 1 in this many per patch of shaking grass
     def self.odds_denominator(chain, odds)
-      v = [(65536 / [odds, 1].max) - [chain, 40].min * 200, 200].max   # PIF
-      v = [[v, 4000 / chain].min, 20].max if chain > 20
-      return v
+      pif = [(65536 / [odds, 1].max) - [chain, 40].min * 200, 200].max   # PIF
+      return pif if chain <= 20
+      best = [(65536 / [odds, 1].max) - 20 * 200, 200].max               # PIF at 20
+      v = (best * curve(chain) / ANCHORS[0][1]).round
+      return [[v, pif].min, 1].max   # no cap: 1 in 1 = every patch shiny
+    end
+
+    # 1 in N along ANCHORS (log-linear between points, extended past the end)
+    def self.curve(chain)
+      a = ANCHORS
+      i = (0...a.length - 1).find { |k| chain <= a[k + 1][0] } || a.length - 2
+      c0, v0 = a[i]
+      c1, v1 = a[i + 1]
+      return v0 * ((v1 / v0) ** ((chain - c0).to_f / (c1 - c0)))
+    end
+
+    def self.chance_text(chain)
+      d = odds_denominator(chain, shiny_odds)
+      return d <= 1 ? _INTL("every patch is shiny") : _INTL("shiny chance 1 in {1}", d)
+    end
+
+    # KIF_log: every time the chance changes
+    def self.log_chance(chain)
+      return if chain <= 0
+      d = odds_denominator(chain, shiny_odds)
+      return if @last_logged == d
+      @last_logged = d
+      KIF.log("Poké Radar chain #{chain}: shiny chance per patch of shaking grass 1 in #{d}") if defined?(KIF.log)
+    end
+
+    def self.milestone_message(chain)
+      return _INTL("Poké Radar chain: {1}! Every patch of shaking grass is shiny now!", chain) if odds_denominator(chain, shiny_odds) <= 1
+      return _INTL("Poké Radar chain: {1}! Shiny chance: 1 in {2}.", chain, odds_denominator(chain, shiny_odds))
     end
 
     def self.count_shown?
@@ -118,10 +156,11 @@ KIF.guard_base("013_Items/005_Item_PokeRadar.rb", 2523489654, "pbPokeRadarHighli
 # Copy of 6.8.2 pbPokeRadarHighlightGrass with the KIF lines marked
 def pbPokeRadarHighlightGrass(showmessage = true)
   chain = KIF::RadarPlus.count_step(!showmessage)                      # KIF: endless chain
-  if chain > 0 && KIF::RadarPlus.count_shown?                          # KIF
+  KIF::RadarPlus.log_chance(chain)                                     # KIF
+  if !showmessage && KIF::RadarPlus::MILESTONES.include?(chain)         # KIF: milestones
+    pbMessage(KIF::RadarPlus.milestone_message(chain))                 # KIF
+  elsif chain > 0 && KIF::RadarPlus.count_shown?                       # KIF
     pbMessage(_INTL("Chain count: {1}\\wtnp[10]", chain))             # KIF
-  elsif !showmessage && KIF::RadarPlus::MILESTONES.include?(chain)     # KIF: 20 and 40
-    pbMessage(_INTL("Poké Radar chain: {1}!", chain))                   # KIF
   end                                                                  # KIF
   grasses = [] # x, y, ring (0-3 inner to outer), rarity§
   # Choose 1 random tile from each ring around the player
@@ -149,9 +188,13 @@ def pbPokeRadarHighlightGrass(showmessage = true)
         s = (rand(100) < 25) ? 1 : 0
         if $PokemonTemp.pokeradar && $PokemonTemp.pokeradar[2] > 0
           v = KIF::RadarPlus.odds_denominator(chain, KIF::RadarPlus.shiny_odds)          # KIF
-          v = 0xFFFF / v
-          v = rand(65536) / v
-          s = 2 if v == 0
+          if v <= 1                                                                   # KIF: every patch shiny
+            s = 2                                                                     # KIF
+          else                                                                        # KIF
+            v = 0xFFFF / v
+            v = rand(65536) / v
+            s = 2 if v == 0
+          end                                                                         # KIF
         end
         grasses.push([x, y, i, s])
       end

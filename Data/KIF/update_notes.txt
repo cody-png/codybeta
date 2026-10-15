@@ -1,2 +1,4 @@
-KIF Beta 0.21.39
-Battle Info: the INFO tab above the battle menu is no longer cut off at the bottom.
+KIF Beta 0.21.40
+Poke Radar: no cap on the shiny chance. It keeps improving with the chain: 1 in 20 at 100, 1 in 10 at 200, and on from there.
+Messages at chains of 20, 40, 60, 80, 100, 150 and 200 show the shiny chance; KIF_log.txt records every change.
+Battle Info: the screen is solid now, so the battle no longer shows through behind the text.

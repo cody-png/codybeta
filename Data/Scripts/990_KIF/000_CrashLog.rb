@@ -57,6 +57,8 @@ def load_scripts_from_folder(path)
   end
   files.sort!
   files.each do |f|
+    # a mod script KIF's Mods loader already ran (Mods/<folder>/, 2026-10-14)
+    next if defined?(KIF::Mods) && KIF::Mods.respond_to?(:loaded_file?) && KIF::Mods.loaded_file?(path + "/" + f)
     code = File.open(path + "/" + f, "r") { |file| file.read }
     begin
       eval(code, nil, f)

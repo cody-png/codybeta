@@ -18,7 +18,7 @@ Every feature belongs to a module. Each module can be:
 | Auto Battle | Auto-Battle and its options, Self-Battle from the PC |
 | Shinies | Shinies: custom colours, odds, gamble, selling, Poké Radar chains |
 | Graphical Changes | EBDX battles, battle box extras, Move Effectiveness, big icons, game font, dark mode |
-| Information | Fusion preview and fusion screen, the improved Pokédex (evolutions, sprites), IVs and EVs in the summary |
+| Information | Fusion preview and fusion screen, the improved Pokédex (evolutions, sprites), IVs and EVs in the summary, Battle Info |
 | Battles & Challenges | Battle format, damage variance, Battle AI, Challenges, battle mechanics, level caps, EXP/EV/IV modes, Rocket mode, catching extras, Gym Leader teams, trainers keeping their rolled teams |
 | Randomizer | The randomizer (incl. Entrances) and gym leader teams. Off plays a randomized save without the randomizer until it's turned back on |
 | Pokémon & Fusion | Fusion rules and base stats, breeding, evolution lock, item effects, gender, move learning, Tutor.net, type overrides |
@@ -27,13 +27,13 @@ Every feature belongs to a module. Each module can be:
 | PC & Saves | PC extras (Kuray Actions), quicksave, save backups, eggs hatching into the PC |
 | Import & Export | Exporting Pokémon to files and importing them back |
 | Quality of Life | Pause menu extras, quick field moves, speed-up, intro skip, title screen links, Wonder Trade names, shenanigans |
-| Mod Settings | Shows the settings of mods installed with Mod Manager (the **Mod Settings** button) |
+| Mod Settings | The **Mods** button in KIF Settings: every installed mod with On/Off, and its settings |
 
 Things a module changes while the game starts (some data tables) stay in place until the next start. Pokémon & Fusion's base stat rules apply the next time a Pokémon's stats are worked out (level up, evolving...).
 
 **General settings** holds settings that are always available (frame rate, sprite import, save folder). Below the settings buttons: **Settings Presets**, **Increment Slider by** and **DEBUG**.
 
-The first time the game starts, it asks **How do you want to play?** – **Classic KIF** (every module On), **PIF only** (every module Off, plays like Pokémon Infinite Fusion) or **Let me choose** (opens Modules). Classic KIF leaves the features KIF 0.20.7 never had (EBDX battles, Move Effectiveness, Fusion Screen) Off; turn them on in KIF Settings. You can change everything later in Options → Modules.
+The first time the game starts, it asks **How do you want to play?** – **Classic KIF** (every module On), **PIF only** (every module Off, plays like Pokémon Infinite Fusion) or **Let me choose** (opens Modules). Classic KIF leaves the features KIF 0.20.7 never had (EBDX battles, Move Effectiveness, Fusion Screen, Battle Info) Off; turn them on in KIF Settings. You can change everything later in Options → Modules.
 
 Players who were already playing KIF Beta before Modules existed get every module turned On once, so nothing they had set up stops working.
 
@@ -345,7 +345,8 @@ Only on saves started as randomized saves: **KIF Settings → Randomizer setting
 - **Skip intro** – Off / On *(On, global)*. On: the game starts at the title screen without the opening movie (Gengar and Nidorino). The title screen and its music stay.
 - **Map load cache** *(always on)*. Walking back and forth between connected maps no longer reloads the next map's tileset each time it comes into view (PIF did, ~60 ms each time, a visible hitch). The last few tilesets and animated tiles no longer on screen are kept.
 
-- **Fusion Screen** – Off / On *(On, all saves)*. The DNA Splicers' preview shows, for both fusion orders, the fusion's name, types and the stats it will really have once fused (its fused level, the body's EVs and nature, the averaged IVs – or the higher ones with Super Splicers – and every setting that changes stats or types, such as No-EVs / Max IVs modes, custom fusion base stats, the self-fusion boost and Dominant Fusion Types). The higher stat of each left/right pair is green when the two base stats differ (with equal base stats the numbers only differ by the body's nature and EVs, which you pick after fusing); the bars and "Base total" show the base stats. Press **A** on a fusion for **Change Body / Change Head / Confirm**. Change Body or Change Head lists that part's current form and every later evolution (branches included), tagged Stage 1, Stage 2 or Final; the preview follows the cursor, and the other side mirrors the change so both orders stay comparable. Confirm always fuses the Pokémon you have now (it reads "Fuse <name>" while you're previewing an evolution).
+- **Fusion Screen** – Off / On *(On, all saves)*. The DNA Splicers' preview shows, for both fusion orders, the fusion's name, types and the stats it will really have once fused (its fused level, the body's EVs and nature, the averaged IVs – or the higher ones with Super Splicers – and every setting that changes stats or types, such as No-EVs / Max IVs modes, custom fusion base stats, the self-fusion boost and Dominant Fusion Types). The higher stat of each left/right pair is green when the two base stats differ (with equal base stats the numbers only differ by the body's nature and EVs, which you pick after fusing); the bars and "Base total" show the base stats. Press **A** on a fusion for **Change Body / Change Head / Confirm**. Change Body or Change Head lists that part's current form and every later evolution (branches included), tagged Stage 1, Stage 2 or Final; the preview follows the cursor, and the other side mirrors the change so both orders stay comparable. Confirm always fuses the Pokémon you have now (it reads "Fuse <name>" while you're previewing an evolution). With Fusion Preview Off, a fusion you haven't seen is a silhouette: green when it has a custom sprite (from the sprite sheets or a sprite you imported), grey when it's an autogen.
+- **Battle Info** – Off / On *(On, global; Information module)*. While choosing Fight / Bag / Pokémon / Run, press **Z / Shift** (the Action button) for a page per Pokémon on the field and a Field page (Left / Right to switch, Back to close): stat changes with their multiplier (and the resulting stats of your own Pokémon), current types, HP and status, ability and held item, effects with turns left (Taunt, Encore, Leech Seed, Substitute, Perish count...), weather, terrain, Trick Room and the other rooms, Gravity, screens, Tailwind and hazards on each side, Future Sight and Wish. A foe's ability and item show as ??? until the battle reveals them (ability pop-up, or a message naming them). Works in PIF's battle screen and with EBDX.
 
 ## System (Cody)
 
@@ -394,6 +395,6 @@ These features have no option of their own.
 - **Speed keys:** with speed-up in Toggle mode, L goes to the next speed and R goes back to 1x.
 - **Skip the intro:** put an empty file named `NoIntro.krs` in your save folder to go straight to the load screen.
 - **Load screen:** links to the KIF Discord and documentation.
-- **Mods folder:** any `.rb` file in the `Mods` folder next to InfiniteFusion.exe loads when the game starts. A broken mod is skipped instead of crashing the game.
+- **Mods folder:** the `Mods` folder next to InfiniteFusion.exe takes a mod as a `.rb` file, a folder (its `.rb` files load in name order, or in the order its `mod.json` lists; mods it depends on load first) or a `.zip` (unpacked into a folder of the same name the next time the game starts; the zip is moved to `Mods/Imported`). Folders with a `mod.json` are left to Mod Manager when it's installed. **Options > KIF Settings > Mods** lists every mod with **On / Off** (applies at the next start; Mod Manager's mods use Mod Manager's own switch) and a settings page for each mod that added settings. A broken mod is skipped instead of crashing the game, and the Mods list says so.
 - **Crash log:** if the game crashes, the full error is saved to `KIF_errorlog.txt` in the `Logs` folder next to InfiniteFusion.exe, ready to share. Every other KIF log (session log, frame log, Entrances returns) is in that folder too.
 - **Old KIF saves** load directly. Their settings, Pokémon and items carry over.

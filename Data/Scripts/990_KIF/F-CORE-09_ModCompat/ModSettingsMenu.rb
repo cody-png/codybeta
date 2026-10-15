@@ -178,6 +178,7 @@ module KIF
       h = {}
       opts.each { |ok, ov| h[ok.to_s.to_sym] = ov }
       h[:key] = key(k)
+      h[:mod] ||= KIF::Mods.current if defined?(KIF::Mods) && KIF::Mods.respond_to?(:current)
       h[:type] = (h[:type] || :toggle).to_s.to_sym
       h[:name] ||= k.to_s
       h[:category] = "Uncategorized" if h[:category].nil? || h[:category].to_s.empty? ||

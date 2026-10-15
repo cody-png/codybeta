@@ -41,8 +41,8 @@ module KIF
                         "EBDX, battle box, effectiveness colours, icons, font, dark mode.",
                         %w[F-BATTLE-12 F-BATTLE-07 C-BATTLE-01 F-UI-02 F-UI-03 F-UI-11]],
       :information  => ["Information",
-                        "Fusion preview and screen, Pokédex evolutions, IVs and EVs.",
-                        %w[F-FUSION-03 C-FUSION-02 F-POKE-06 F-UI-04]],
+                        "Fusion preview and screen, Pokédex evolutions, IVs and EVs, Battle Info.",
+                        %w[F-FUSION-03 C-FUSION-02 F-POKE-06 F-UI-04 C-BATTLE-03]],
       :battles      => ["Battles & Challenges",
                         "Battle format, AI, challenges, level caps, EXP modes, gym teams.",
                         %w[F-BATTLE-01 F-BATTLE-03 F-BATTLE-04 F-BATTLE-05 F-BATTLE-06 F-BATTLE-08 F-BATTLE-09 F-BATTLE-10 F-BATTLE-11 C-GYM-01 C-BATTLE-02]],
@@ -68,7 +68,7 @@ module KIF
                         "Pause menu extras, field moves, speed-up, intro skip, shenanigans.",
                         %w[F-UI-01 F-UI-05 F-UI-07 F-UI-09 F-UI-10 SCOPE-04 C-SYS-02]],
       :mod_settings => ["Mod Settings",
-                        "Shows the settings of your Mod Manager mods here.",
+                        "The Mods list in KIF Settings: switch mods On/Off, their settings.",
                         []]
     }
     OFF = 0

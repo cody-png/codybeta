@@ -18,6 +18,13 @@
 #   * A mod that raises an error is skipped and the error is written to
 #     KIF_errorlog.txt instead of stopping the game.
 #   * 6.8.2's own scripts don't need KIF's alias guards: mods load once.
+#   * 2026-10-14 (Cody): a mod can also be a folder (Mods/<name>/ with its
+#     .rb files, a mod.json when it has one) or a .zip (unpacked into
+#     Mods/<name>/ at start-up, the zip moved to Mods/Imported). Folders with
+#     a mod.json are left to Mod Manager when it is installed. Every mod can
+#     be switched Off in Options > KIF Settings > Mods (KIF_Mods.kro in the
+#     save folder); the list is built from "sources" (KIF::Mods.add_source) so
+#     a future Mod Manager can list its own mods there.
 #===============================================================================
 $POKEMONDATA_QUEUEING ||= []
 
@@ -28,15 +35,426 @@ end
 
 module KIF
   module Mods
-    FOLDER = "Mods"
+    FOLDER    = "Mods"
+    DONE_DIR  = "Imported"                       # unpacked .zip files go here
+    SKIP_DIRS = [DONE_DIR, "ModDev", "Mods"]     # never mods themselves
+    STATE     = "KIF_Mods.kro"                   # ids switched Off (save folder)
     @loaded = false
     @failed = []
+    @sources = []
+    @loaded_files = {}
     class << self
       attr_reader :failed
+      attr_accessor :current   # id of the mod whose scripts are loading
+    end
+
+    # One installed mod. kind: :file (Mods/x.rb), :folder (Mods/x/), or a
+    # source's own kind (:mod_manager...). settings: KIF Mod Settings rows it
+    # registered while loading.
+    class Entry
+      attr_accessor :id, :name, :version, :author, :description, :kind, :path,
+                    :source, :loaded, :error
+      def initialize(h = {})
+        h.each { |k, v| send("#{k}=", v) if respond_to?("#{k}=") }
+        @name ||= @id.to_s
+      end
+
+      def enabled?; return @source ? @source.enabled?(self) : true; end
+      # what happened when it loaded this session (KIF's own mods)
+      def error; return @error || (KIF::Mods.status[@id] || {})[:error]; end
+      def loaded; return @loaded.nil? ? (KIF::Mods.status[@id] || {})[:loaded] : @loaded; end
+      def settings
+        return [] unless defined?(KIF::ModSettings) && KIF::ModSettings.active?
+        return KIF::ModSettings.registry.select { |e| e[:mod] == @id }
+      end
     end
 
     # file names loaded straight from the Mods folder this session
     def self.loaded_root; @loaded_root || []; end
+
+    def self.status; return @status ||= {}; end
+
+    def self.loaded_file?(path)
+      return @loaded_files[File.expand_path(path)] ? true : false
+    end
+
+    #---------------------------------------------------------------------------
+    # Sources of the Mods list: KIF's own (files, folders, zips) and Mod
+    # Manager's. Another manager adds itself with KIF::Mods.add_source(obj);
+    # obj answers entries -> [Entry], enabled?(entry), set_enabled(entry, bool)
+    # and optionally open_settings(entry).
+    #---------------------------------------------------------------------------
+    def self.add_source(src)
+      @sources.delete_if { |s| s.class == src.class }
+      @sources << src
+    end
+
+    def self.sources; return @sources; end
+
+    def self.entries
+      list = []
+      @sources.each do |s|
+        begin
+          list.concat(Array(s.entries))
+        rescue StandardError => e
+          KIF.log("Mods list: #{s.class} failed (#{e.class}: #{e.message})")
+        end
+      end
+      return list
+    end
+
+    # KIF's switched-off list
+    def self.state_path; return File.join(KIF.save_dir, STATE); end
+
+    def self.disabled
+      return @disabled if @disabled
+      @disabled = []
+      if File.file?(state_path)
+        @disabled = File.read(state_path).force_encoding("UTF-8").split(/\r?\n/).map(&:strip).reject(&:empty?)
+      end
+      return @disabled
+    rescue StandardError
+      return @disabled = []
+    end
+
+    def self.set_disabled(id, off)
+      list = disabled
+      off ? (list << id unless list.include?(id)) : list.delete(id)
+      File.open(state_path, "wb") { |f| f.write(list.join("\r\n")) }
+    rescue StandardError => e
+      KIF.log("Mods: couldn't save the On/Off list (#{e.message})")
+    end
+
+    #---------------------------------------------------------------------------
+    # mod.json (a small reader: the engine's JSON isn't in every build)
+    #---------------------------------------------------------------------------
+    module MiniJSON
+      module_function
+
+      def parse(text)
+        @s = text.to_s.sub(/\A\xEF\xBB\xBF/, "")
+        @i = 0
+        v = value
+        return v
+      rescue StandardError
+        return nil
+      end
+
+      def ws; @i += 1 while @i < @s.length && @s[@i] =~ /\s/; end
+
+      def value
+        ws
+        c = @s[@i]
+        case c
+        when "{"
+          @i += 1; h = {}; ws
+          (@i += 1; return h) if @s[@i] == "}"
+          loop do
+            ws; k = value; ws
+            raise "colon" unless @s[@i] == ":"
+            @i += 1
+            h[k.to_s] = value; ws
+            if @s[@i] == ","
+              @i += 1
+            elsif @s[@i] == "}"
+              @i += 1; return h
+            else
+              raise "object"
+            end
+          end
+        when "["
+          @i += 1; a = []; ws
+          (@i += 1; return a) if @s[@i] == "]"
+          loop do
+            a << value; ws
+            if @s[@i] == ","
+              @i += 1
+            elsif @s[@i] == "]"
+              @i += 1; return a
+            else
+              raise "array"
+            end
+          end
+        when '"'
+          @i += 1; out = +""
+          while @i < @s.length && @s[@i] != '"'
+            if @s[@i] == "\\"
+              @i += 1
+              e = @s[@i]
+              out << ({ "n" => "\n", "t" => "\t", "r" => "\r", "b" => "\b", "f" => "\f" }[e] ||
+                      (e == "u" ? [@s[@i + 1, 4].hex].pack("U").tap { @i += 4 } : e))
+            else
+              out << @s[@i]
+            end
+            @i += 1
+          end
+          @i += 1
+          return out
+        else
+          lit = @s[@i..-1][/\A(true|false|null|-?\d+(\.\d+)?([eE][+-]?\d+)?)/]
+          raise "value" unless lit
+          @i += lit.length
+          return true if lit == "true"
+          return false if lit == "false"
+          return nil if lit == "null"
+          return lit.include?(".") || lit =~ /e/i ? lit.to_f : lit.to_i
+        end
+      end
+    end
+
+    def self.read_json(path)
+      h = MiniJSON.parse(File.read(path, encoding: "UTF-8"))
+      return h.is_a?(Hash) ? h : nil
+    rescue StandardError
+      return nil
+    end
+
+    #---------------------------------------------------------------------------
+    # .zip mods: unpacked into Mods/<name>/ (a zip holding one folder gives
+    # that folder's contents), then moved to Mods/Imported
+    #---------------------------------------------------------------------------
+    def self.mkdir_p(dir)
+      return if dir.nil? || dir.empty? || File.directory?(dir)
+      mkdir_p(File.dirname(dir))
+      Dir.mkdir(dir) unless File.directory?(dir)
+    end
+
+    def self.unpack_zips(dir)
+      Dir.children(dir).sort.each do |c|
+        next unless c =~ /\.zip\z/i
+        zip = File.join(dir, c)
+        next unless File.file?(zip)
+        name = File.basename(c, ".*")
+        into = File.join(dir, name)
+        if File.exist?(into)
+          KIF.log("Mod zip #{c}: Mods/#{name} already exists - the zip is left alone (delete one of them)")
+          next
+        end
+        begin
+          n = unzip(zip, into)
+          done = File.join(dir, DONE_DIR)
+          mkdir_p(done)
+          dest = File.join(done, c); k = 2
+          while File.exist?(dest)
+            dest = File.join(done, "#{name} (#{k})#{File.extname(c)}"); k += 1
+          end
+          File.rename(zip, dest)
+          KIF.log("Mod zip #{c}: #{n} files unpacked into Mods/#{name} (zip moved to Mods/#{DONE_DIR})")
+        rescue StandardError => e
+          KIF.log("Mod zip #{c} couldn't be unpacked (#{e.class}: #{e.message})")
+          @failed << c
+          (rm_tree(into) rescue nil)
+        end
+      end
+    end
+
+    def self.unzip(zip, into)
+      require "zlib"
+      raise "no zip reader" unless defined?(KIF::SpriteImport::Zip)
+      written = 0
+      File.open(zip, "rb") do |f|
+        list = KIF::SpriteImport::Zip.entries(f)
+        names = list.map { |e| e[0].tr("\\", "/").split("/").reject { |p| p.empty? || p == "." || p == ".." } }
+        files = names.each_with_index.reject { |n, i| n.empty? || list[i][0].end_with?("/") }
+        # one folder around everything: drop it
+        tops = files.map { |n, _| n.length > 1 ? n[0] : nil }.uniq
+        strip = (tops.length == 1 && tops[0]) ? 1 : 0
+        files.each do |parts, i|
+          _name, method, csize, offset = list[i]
+          rel = parts[strip..-1]
+          next if rel.nil? || rel.empty?
+          raise "unsupported packing (method #{method})" unless method == 0 || method == 8
+          f.seek(offset)
+          h = f.read(30)
+          raise "damaged entry #{parts.join('/')}" unless h && h[0, 4] == "PK\x03\x04".b
+          nlen, xlen = h[26, 4].unpack("vv")
+          f.seek(offset + 30 + nlen + xlen)
+          data = f.read(csize)
+          data = Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(data) if method == 8
+          dest = File.join(into, *rel)
+          mkdir_p(File.dirname(dest))
+          File.open(dest, "wb") { |o| o.write(data) }
+          written += 1
+        end
+      end
+      mkdir_p(into)
+      return written
+    end
+
+    def self.rm_tree(path)
+      return unless File.exist?(path)
+      if File.directory?(path)
+        Dir.children(path).each { |c| rm_tree(File.join(path, c)) }
+        Dir.rmdir(path)
+      else
+        File.delete(path)
+      end
+    end
+
+    #---------------------------------------------------------------------------
+    # KIF's own mods: Mods/*.rb and Mods/<folder>/
+    #---------------------------------------------------------------------------
+    class NativeSource
+      attr_reader :dir
+      def initialize(dir); @dir = dir; @entries = nil; end
+
+      def mod_manager_folders?
+        return defined?(::ModManager) ? true : false
+      end
+
+      # folders and files KIF loads (Mod Manager's own mod.json folders excluded)
+      def entries
+        return @entries if @entries
+        list = []
+        return list unless File.directory?(@dir)
+        Dir.children(@dir).sort.each do |c|
+          path = File.join(@dir, c)
+          if File.file?(path) && c =~ /\.rb\z/i
+            list << Entry.new(:id => c, :name => File.basename(c, ".*").sub(/\A\d+[_ -]*/, "").tr("_", " "),
+                              :kind => :file, :path => path, :source => self)
+          elsif File.directory?(path)
+            next if c.start_with?(".", "_") || SKIP_DIRS.include?(c)
+            json = File.join(path, "mod.json")
+            if File.file?(json)
+              next if mod_manager_folders?
+              h = KIF::Mods.read_json(json) || {}
+              desc = h["description"].is_a?(Array) ? h["description"].join(" ") : h["description"].to_s
+              list << Entry.new(:id => c, :name => (h["name"] || c).to_s, :version => h["version"]&.to_s,
+                                :author => h["author"]&.to_s, :description => desc, :kind => :folder,
+                                :path => path, :source => self)
+            else
+              next if Dir[File.join(path, "**", "*.rb")].empty?
+              list << Entry.new(:id => c, :name => c, :kind => :folder, :path => path, :source => self)
+            end
+          end
+        end
+        return @entries = list
+      end
+
+      def enabled?(e); return !KIF::Mods.disabled.include?(e.id); end
+      def set_enabled(e, on); KIF::Mods.set_disabled(e.id, !on); end
+
+      # the scripts of a folder mod, in load order
+      def scripts(e)
+        return [e.path] if e.kind == :file
+        json = File.join(e.path, "mod.json")
+        h = File.file?(json) ? (KIF::Mods.read_json(json) || {}) : nil
+        if h && h["scripts"].is_a?(Array) && !h["scripts"].empty?
+          listed = h["scripts"].map { |s| File.join(e.path, s.to_s) }.select { |f| File.file?(f) }
+          return listed unless listed.empty?
+          KIF.log("Mod #{e.name}: mod.json lists #{h['scripts'].join(', ')} (missing) - loading its .rb files instead")
+        end
+        return KIF::Mods.folder_scripts(e.path)
+      end
+
+      # mod.json "dependencies" first
+      def order(list)
+        ids = list.map(&:id)
+        deps = {}
+        list.each do |e|
+          json = File.join(e.path.to_s, "mod.json")
+          h = (e.kind == :folder && File.file?(json)) ? (KIF::Mods.read_json(json) || {}) : {}
+          d = Array(h["dependencies"]).map { |x| x.is_a?(Hash) ? x["id"].to_s : x.to_s }
+          # dependencies name mod.json ids; match them to folders by id or name
+          deps[e.id] = list.select { |o| o != e && d.any? { |x| x == o.id || x == (KIF::Mods.read_json(File.join(o.path.to_s, "mod.json")) || {})["id"].to_s } }.map(&:id)
+        end
+        out = []
+        visit = lambda do |id, stack|
+          return if out.include?(id) || stack.include?(id)
+          (deps[id] || []).each { |d| visit.call(d, stack + [id]) }
+          out << id
+        end
+        ids.each { |id| visit.call(id, []) }
+        return out.map { |id| list.find { |e| e.id == id } }
+      end
+    end
+
+    # like the game's script loader: files by name, then sub-folders
+    def self.folder_scripts(dir)
+      files = []; folders = []
+      Dir.children(dir).sort.each do |c|
+        next if c.start_with?(".")
+        p = File.join(dir, c)
+        if File.directory?(p)
+          folders << p
+        elsif c =~ /\.rb\z/i
+          files << p
+        end
+      end
+      return files + folders.flat_map { |f| folder_scripts(f) }
+    end
+
+    # Mod Manager's mods (it loads them itself; KIF lists them and uses its
+    # own On/Off)
+    class ModManagerSource
+      def entries
+        return [] unless defined?(::ModManager) && ::ModManager.respond_to?(:registry)
+        return ::ModManager.registry.map do |id, info|
+          Entry.new(:id => "mm:#{id}", :name => info.name.to_s, :version => info.version.to_s,
+                    :author => info.author.to_s, :description => info.description.to_s,
+                    :kind => :mod_manager, :path => info.folder_path.to_s, :source => self,
+                    :loaded => ::ModManager.load_order.include?(id))
+        end
+      end
+
+      def mm_id(e); return e.id.sub(/\Amm:/, ""); end
+      def enabled?(e); return ::ModManager.enabled?(mm_id(e)); end
+
+      def set_enabled(e, on)
+        ::ModManager.toggle(mm_id(e)) if enabled?(e) != on
+      end
+    end
+
+    def self.load_file(file, id)
+      @current = id
+      load File.expand_path(file)
+      @loaded_files[File.expand_path(file)] = true
+      return true
+    rescue Exception => e
+      raise if e.is_a?(SystemExit) || (defined?(Reset) && e.is_a?(Reset))
+      @failed << id unless @failed.include?(id)
+      KIF::CrashLog.write("Mod skipped: #{file}\r\n" + KIF::CrashLog.describe(e)) if defined?(KIF::CrashLog)
+      KIF.log("Mod failed: #{id} (#{File.basename(file)}): #{e.class}: #{e.message}")
+      return e
+    ensure
+      @current = nil
+    end
+
+    # Everything in one Mods folder (the game's, or a test's)
+    def self.load_dir(dir)
+      @loaded_root = []
+      @disabled = nil
+      @status = {}
+      native = NativeSource.new(dir)
+      add_source(native)
+      add_source(ModManagerSource.new)
+      unpack_zips(dir)
+      off = []
+      # loose .rb files first, in name order (as KIF 0.20.7)
+      native.entries.select { |e| e.kind == :file }.each do |e|
+        (off << e.id; next) unless e.enabled?
+        r = load_file(e.path, e.id)
+        status[e.id] = { :loaded => r == true, :error => (r == true ? nil : r) }
+        next unless r == true
+        @loaded_root << e.id
+        KIF.log("Mod loaded: #{e.id}")
+      end
+      # then folders (Mod Manager's own are loaded by Mod Manager); the source
+      # is asked again, as Mod Manager may have loaded by now
+      native.instance_variable_set(:@entries, nil)
+      folders = native.order(native.entries.select { |e| e.kind == :folder })
+      folders.each do |e|
+        (off << e.id; next) unless e.enabled?
+        # a script also dropped loose into Mods/ is already loaded (twice
+        # makes its aliases recurse)
+        scripts = native.scripts(e).reject { |f| loaded_file?(f) || @loaded_root.include?(File.basename(f)) }
+        results = scripts.map { |f| load_file(f, e.id) }
+        bad = results.find { |r| r != true }
+        status[e.id] = { :loaded => bad.nil?, :error => bad }
+        KIF.log("Mod loaded: #{e.name} (folder #{e.id}, #{scripts.length} scripts)") if bad.nil?
+      end
+      KIF.log("Mods switched Off: #{off.join(', ')}") unless off.empty?
+    end
 
     def self.load_all
       return if @loaded
@@ -48,19 +466,7 @@ module KIF
       KIF::ModCompat.before_mods_load if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:before_mods_load)
       Dir.mkdir(FOLDER) unless File.directory?(FOLDER)
       KIF::ModSettings.install(FOLDER) if defined?(KIF::ModSettings)
-      @loaded_root = []
-      Dir[File.join(".", FOLDER, "*.rb")].sort.each do |file|
-        begin
-          load File.expand_path(file)
-          @loaded_root << File.basename(file)
-          KIF.log("Mod loaded: #{File.basename(file)}")
-        rescue Exception => e
-          raise if e.is_a?(SystemExit) || (defined?(Reset) && e.is_a?(Reset))
-          @failed << File.basename(file)
-          KIF::CrashLog.write("Mod skipped: #{file}\r\n" + KIF::CrashLog.describe(e)) if defined?(KIF::CrashLog)
-          KIF.log("Mod failed: #{File.basename(file)}: #{e.class}: #{e.message}")
-        end
-      end
+      load_dir(File.join(".", FOLDER))
       KIF::ModCompat.after_mods_loaded if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:after_mods_loaded)
     rescue => e
       KIF.log("Mods folder failed: #{e.message}")

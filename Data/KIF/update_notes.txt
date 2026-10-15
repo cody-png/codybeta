@@ -1,2 +1,5 @@
-KIF Beta 0.21.44
-Multi-Battle Radar: the radar Pokemon (the one the shiny patch decides) can now be in any spot of a 2v2 or 3v3, not always the first.
+KIF Beta 0.21.45
+Battle AI fixes for both AIs: better damage guesses, no Thunder Wave into Volt Absorb, Frostbite and Drowsy understood, Mean Look / Block used when trapping helps.
+Trainers using DemICE's AI pick items better, and checking a switch-in no longer frees your Pokemon from Mean Look or infatuation.
+Multi-Battle Radar: the radar Pokemon (the one the shiny patch decides) can be in any spot of a 2v2 or 3v3.
+Poke Radar: the chain count also shows the shiny chance.

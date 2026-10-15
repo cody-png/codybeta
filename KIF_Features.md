@@ -92,6 +92,7 @@ All options in this menu are per-save.
 - **Auto-Battle Evolutions** – Watch / Automatic *(Automatic)*. Evolutions right after a battle play by themselves (B still stops one); a move the new form wants follows Auto-Battle New Moves.
 - **Damage Variance** – Off / On *(On)*. Off removes the random damage roll, so a move always does the same damage.
 - **Battle AI** – PIF / DemICE *(DemICE)*. Which brain opponents use. DemICE's AI (from the community hard-mode mods) plays smarter and focuses on its best move. PIF is PIF 6.8.2's own AI.
+  Both AIs know the Frostbite and Drowsy options (a frostbitten or drowsy Pokémon is not treated as frozen or asleep), and use Mean Look, Block or Spider Web when trapping pays off: with Perish Song, on a foe that loses HP every turn (Toxic, Leech Seed, Curse, Nightmare), or on a foe that can barely hurt them.
 
 ### Battle mechanics (by Bluewuppo)
 

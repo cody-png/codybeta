@@ -25,8 +25,17 @@
 #     behave like PIF's unless DemICE's code uses them:
 #     PokeBattle_Battler#hasActiveAbility? (extra mold_broken argument) and
 #     pbBattleTypeWeakingBerry (no berry animation while $aiberrycheck).
-#   * DemICE's AI has no Drowsy/Frostbite awareness (F-BATTLE-06); KIF's own
+#   * DemICE's AI had no Drowsy/Frostbite awareness (F-BATTLE-06); KIF's own
 #     Drowsy/Frostbite AI edits were in base AI methods DemICE replaces.
+#     Since 2026-10-14 both AIs treat them as Frostbite / Drowsy (helpers in
+#     000_Core/004_KIF_BattleHelpers.rb).
+#   * Fixes 2026-10-14 (lines marked "KIF fix"): damage estimate (the user's
+#     Mold Breaker, Analytic/Sniper/Tinted Lens/-ate, Filter/Solid Rock,
+#     Prism Armor/Shadow Shield), Rain Dish weather name, Aqua Ring/Ingrain/
+#     Big Root healing, Overcoat/Safety Goggles vs weather, Grassy Glide id,
+#     trainer item choice (move scan, status/X item scores, Ice Heal),
+#     switch-in stand-ins no longer clear real battlers' Attract/Mean Look/
+#     Lock-On, a switch-in's own ability no longer counts as team synergy.
 #
 # 6.8.2 differences lost while On (DemICE replaces these methods whole):
 #   6.8.2's reworked trainer item choice (pbEnemyItemToUse – Full Restore and

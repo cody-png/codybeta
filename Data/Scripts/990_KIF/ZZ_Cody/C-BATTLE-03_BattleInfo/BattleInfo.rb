@@ -439,9 +439,18 @@ end
 module KIF
   module BattleInfo
     TAB_W = 92
-    TAB_H = 24
+    TAB_H = 26
 
-    # PIF's command box: a small tab on its top edge, left end
+    # text centred in a box (draw_text centres it vertically for any font;
+    # pbDrawTextPositions placed the small font low and the box cut it off)
+    def self.tab_text(bmp, x, w, text, base, shadow)
+      bmp.font.color = shadow
+      bmp.draw_text(x + 1, 1, w, TAB_H - 2, text, 1)
+      bmp.font.color = base
+      bmp.draw_text(x, 0, w, TAB_H - 2, text, 1)
+    end
+
+    # PIF's command box: a small tab sitting on its top edge, left end
     def self.tab_bitmap
       w, h = TAB_W, TAB_H
       bmp = Bitmap.new(w, h)
@@ -453,10 +462,10 @@ module KIF
       bmp.fill_rect(1, 1, w - 2, h - 2, border)
       bmp.fill_rect(2, 2, w - 4, h - 4, top)
       bmp.fill_rect(2, h / 2 + 1, w - 4, h / 2 - 3, low)
-      bmp.fill_rect(6, 4, 18, h - 8, Color.new(72, 120, 200))
+      bmp.fill_rect(6, 5, 18, h - 10, Color.new(72, 120, 200))
       pbSetSmallFont(bmp)
-      pbDrawTextPositions(bmp, [["Z", 15, 2, 2, Color.new(255, 255, 255), Color.new(32, 64, 120)],
-                                [_INTL("INFO"), 58, 2, 2, Color.new(64, 64, 72), Color.new(176, 176, 184)]])
+      tab_text(bmp, 6, 18, "Z", Color.new(255, 255, 255), Color.new(32, 64, 120))
+      tab_text(bmp, 26, w - 30, _INTL("INFO"), Color.new(64, 64, 72), Color.new(176, 176, 184))
       return bmp
     end
 
@@ -467,7 +476,7 @@ module KIF
       spr = Sprite.new(vp)
       spr.bitmap = tab_bitmap
       spr.x = 4
-      spr.y = Graphics.height - 96 - TAB_H + 2
+      spr.y = Graphics.height - 96 - TAB_H   # ends where the command box starts
       return [vp, spr]
     rescue StandardError => e
       KIF.log("Battle Info tab failed (#{e.class}: #{e.message})") if defined?(KIF.log)

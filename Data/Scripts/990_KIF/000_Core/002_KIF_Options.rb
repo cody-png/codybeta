@@ -74,7 +74,8 @@ module KIF
       @scopes[key] = scope
       ivar = :"@#{key}"
       if PokemonSystem.method_defined?(key) && !PokemonSystem.method_defined?(:"kif_defined_#{key}")
-        KIF.log("PokemonSystem##{key} already exists in base PIF; KIF default not applied")
+        # the getter below replaces it, so KIF's default does apply when unset
+        KIF.log("PokemonSystem##{key} is also defined outside KIF; KIF's default (#{default.inspect}) applies when it's unset")
       end
       PokemonSystem.class_eval do
         define_method(:"kif_defined_#{key}") { true }

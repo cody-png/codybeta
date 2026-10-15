@@ -1,6 +1,2 @@
-KIF Beta 0.21.37
-New: Battle Info. In battle, press Z / Shift while choosing Fight/Bag/Pokémon/Run to see stat changes, effects, weather and hazards (Information module).
-Mods: a mod can now be a .rb file, a folder or a .zip in the Mods folder. Options > KIF Settings > Mods switches each one On/Off and opens its settings.
-Fusion screen: unseen custom sprites are green (imported ones were blue) and autogens grey (white was invisible on the white box).
-Losing to Misty no longer keeps her gym music playing in the Pokémon Center.
-Linux / Steam Deck: after an update the game restarts by itself.
+KIF Beta 0.21.38
+Battle Info now has its own INFO tab above the battle menu (a 5th INFO button with EBDX). Options: Battle Info > No button hides it; Z / Shift still opens it.

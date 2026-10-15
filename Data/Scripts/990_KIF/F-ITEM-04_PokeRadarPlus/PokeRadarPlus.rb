@@ -138,6 +138,13 @@ module KIF
       return v0 * ((v1 / v0) ** ((chain - c0).to_f / (c1 - c0)))
     end
 
+    # "Chain count" with the shiny chance (Monto, 2026-10-15)
+    def self.count_message(chain)
+      d = odds_denominator(chain, shiny_odds)
+      return _INTL("Chain count: {1} (every patch shiny)\\wtnp[10]", chain) if d <= 1
+      return _INTL("Chain count: {1} (shiny 1 in {2})\\wtnp[10]", chain, d)
+    end
+
     def self.chance_text(chain)
       d = odds_denominator(chain, shiny_odds)
       return d <= 1 ? _INTL("every patch is shiny") : _INTL("shiny chance 1 in {1}", d)
@@ -195,7 +202,7 @@ def pbPokeRadarHighlightGrass(showmessage = true)
   if !showmessage && passed                                            # KIF: milestones
     pbMessage(KIF::RadarPlus.milestone_message(chain, passed))         # KIF
   elsif chain > 0 && KIF::RadarPlus.count_shown?                       # KIF
-    pbMessage(_INTL("Chain count: {1}\\wtnp[10]", chain))             # KIF
+    pbMessage(KIF::RadarPlus.count_message(chain))                     # KIF
   end                                                                  # KIF
   grasses = [] # x, y, ring (0-3 inner to outer), rarity§
   # Choose 1 random tile from each ring around the player

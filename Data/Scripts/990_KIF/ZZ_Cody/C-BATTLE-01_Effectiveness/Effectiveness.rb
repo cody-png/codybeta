@@ -115,7 +115,7 @@ module KIF
       return "x#{m.round}"
     end
 
-    LINE_WIDTH   = 104   # px available for a foe line in the info box
+    LINE_WIDTH   = 88    # px available for a foe line (the box's white area is 92 px)
     SCROLL_HOLD  = 1.0   # s shown at the start and at the end of a scroll
     SCROLL_STEP  = 0.3   # s per character step
 
@@ -205,19 +205,38 @@ class FightMenuDisplay
       end
       pbSetSmallFont(bmp)
       @cody_lines = []
-      y = (foes.length > 2) ? 42 : 44
-      foes.first(3).each do |f|
+      # one line per foe; foes with the same name and result share a line
+      # (three Ekans showed three overlapping "Ekans x1/2", Monto 2026-10-15)
+      entries = []
+      foes.each do |f|
         val = KIF::MoveEffect.value(move, @battler, f)
+        mult = KIF::MoveEffect.multiplier_text(val || ::Effectiveness::NORMAL_EFFECTIVE)
+        name = f.name.to_s
+        next if entries.any? { |e| e[0] == name && e[1] == mult }
+        entries << [name, mult, val]
+      end
+      entries = entries.first(3)
+      if entries.length > 2
+        # three lines don't fit under the type icon: the move's type is
+        # already the button's colour, so the icon makes room
+        @typeIcon.visible = false
+        @visibility["typeIcon"] = false if @visibility
+        @cody_pp[2] = 6 if @cody_pp
+        y = 23
+        step = 17
+      else
+        y = 44
+        step = 16
+      end
+      entries.each do |name, mult, val|
         res = KIF::MoveEffect.result(val) || :normal
         st = KIF::MoveEffect::STYLE[res]
         base = st ? st[3] : FightMenuDisplay::TEXT_BASE_COLOR
         shadow = st ? st[4] : FightMenuDisplay::TEXT_SHADOW_COLOR
-        mult = KIF::MoveEffect.multiplier_text(val || ::Effectiveness::NORMAL_EFFECTIVE)
-        name = f.name.to_s
         fit = name.length
         fit -= 1 while fit > 1 && bmp.text_size("#{name[0, fit]} #{mult}").width > KIF::MoveEffect::LINE_WIDTH
         @cody_lines << { :name => name, :fit => fit, :mult => mult, :y => y, :base => base, :shadow => shadow }
-        y += (foes.length > 2) ? 14 : 16
+        y += step
       end
       pbSetNarrowFont(bmp)
       @cody_marquee_t0 = KIF::MoveEffect.now

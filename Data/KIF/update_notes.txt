@@ -1,4 +1,3 @@
-KIF Beta 0.21.41
-New setting "Multi-Battle Radar" (Off / Same Species / Mixed, in Shinies settings): with Battle Format 2v2/3v3, Poke Radar battles can be doubles and triples. Every Pokemon rolls its own shininess.
-KIF_log.txt: the EBDX line now names the right menu (Options > KIF Settings).
-Poke Radar: going back to the title screen no longer leaves the radar's row of Pokemon on it.
+KIF Beta 0.21.42
+Move Effectiveness: in 3v3 the Fight menu box no longer stacks overlapping lines. Foes with the same name and result share one line, and three lines fit in the box.
+Multi-Battle Radar: a 2v2 or 3v3 radar battle adds 1 to the chain, not one per Pokemon.

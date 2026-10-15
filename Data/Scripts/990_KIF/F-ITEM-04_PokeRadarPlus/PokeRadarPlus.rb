@@ -32,9 +32,10 @@
 # Multi-Battle Radar (Cody, 2026-10-15; Off / Same Species / Mixed, Off by
 #   default): PIF makes every radar grass battle a single battle. With it on
 #   and Battle Format 2v2/3v3 for wild battles, the radar Pokémon brings
-#   company: Same Species - the others are the chained species too and each
-#   one counts for the chain (a won 2v2 adds 2); Mixed - the others are normal
-#   encounters from the area and only the radar Pokémon counts. Shininess:
+#   company: Same Species - the others are the chained species too; Mixed -
+#   the others are normal encounters from the area. Either way a won battle
+#   adds 1 to the chain, however many foes it had (Cody, 2026-10-15: a 3v3
+#   adding 3 was too much). Shininess:
 #   the shaking patch only decides the radar Pokémon's; every other Pokémon
 #   rolls its own (Same Species: with the chain's chance; Mixed: normal odds).
 #   A milestone passed by a jump of more than 1 is still announced.
@@ -69,8 +70,8 @@ KIF::Options.add(:others, :save) {
                  proc { $PokemonSystem.radarmulti },
                  proc { |value| $PokemonSystem.radarmulti = value },
                  [_INTL("Poké Radar battles are always 1v1 (as in PIF)"),
-                  _INTL("With Battle Format 2v2/3v3: all foes are the chained species and each one counts"),
-                  _INTL("With Battle Format 2v2/3v3: the others are normal encounters; only the radar one counts")])
+                  _INTL("With Battle Format 2v2/3v3: all foes are the chained species (chain +1 per battle)"),
+                  _INTL("With Battle Format 2v2/3v3: the others are normal encounters (chain +1 per battle)")])
 }
 
 module KIF
@@ -365,25 +366,15 @@ module KIF
       return pkmn
     end
 
-    # onWildBattleEnd runs once per foe. The first is the radar Pokémon: with
-    # Same Species the others count too (added before PIF adds its 1). The
-    # others never reach PIF's radar handler (it would add again: in Kanto it
-    # continues the chain with any species).
+    # onWildBattleEnd runs once per foe. Only the first (the radar Pokémon)
+    # reaches PIF's radar handler, so a battle adds 1 to the chain; the others
+    # never do (it would add again: in Kanto it continues the chain with any
+    # species).
     def self.multi_battle_end(event, args)
       m = @multi
       m[:ends] += 1
-      decision = args[3]   # trigger(sender, species, level, decision)
       r = $PokemonTemp.pokeradar
-      if m[:ends] == 1
-        if r && m[:mode] == 1 && m[:made] > 1 && [1, 4].include?(decision)
-          extra = m[:made] - 1
-          real = chain
-          r[5] = real   # milestone check: the chain before this battle
-          r[2] = [r[2].to_i + extra, 40].min
-          r[4] = real + extra
-        end
-        return event.kif_radar_trigger_orig(*args)
-      end
+      return event.kif_radar_trigger_orig(*args) if m[:ends] == 1
       # PIF's Kanto handler continues the chain with whatever species it is
       # given, so the radar is hidden from it for these calls (its
       # pbPokeRadarCancel is held back); other handlers see the real battle

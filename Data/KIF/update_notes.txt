@@ -1,3 +1,2 @@
-KIF Beta 0.21.42
-Move Effectiveness: in 3v3 the Fight menu box no longer stacks overlapping lines. Foes with the same name and result share one line, and three lines fit in the box.
-Multi-Battle Radar: a 2v2 or 3v3 radar battle adds 1 to the chain, not one per Pokemon.
+KIF Beta 0.21.43
+Poke Radar: the chain count message also shows the shiny chance, e.g. "Chain count: 72 (shiny 1 in 45)".

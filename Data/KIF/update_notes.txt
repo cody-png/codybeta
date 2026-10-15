@@ -1,5 +1,5 @@
-KIF Beta 0.21.45
-Battle AI fixes for both AIs: better damage guesses, no Thunder Wave into Volt Absorb, Frostbite and Drowsy understood, Mean Look / Block used when trapping helps.
-Trainers using DemICE's AI pick items better, and checking a switch-in no longer frees your Pokemon from Mean Look or infatuation.
-Multi-Battle Radar: the radar Pokemon (the one the shiny patch decides) can be in any spot of a 2v2 or 3v3.
-Poke Radar: the chain count also shows the shiny chance.
+KIF Beta 0.21.46
+Multi-Battle Radar (Mixed): the other Pokemon in a radar 2v2/3v3 now roll their shininess with the chain's chance too, like Same Species.
+Trade bubbles: every NPC who offers a trade now shows the trade bubble (PIF only had it on some, e.g. not the Cerulean trade).
+PC: switching between full boxes is faster. A fusion's box icon is made much faster the first time it's shown, and a new box no longer draws its icons twice.
+Shiny fusion icons: the party and the PC no longer mix up which half is shiny.

@@ -1,5 +1,5 @@
 #===============================================================================
-# C-RAND-01 – Randomizer: Dynamic Route and the PokéRadar (Cody, 2026-10-06)
+# C-RAND-01 – Randomizer: Dynamic Route and the PokéRadar (2026-10-06)
 #   * Dynamic Route (Wild encounters, 5th mode): every time a map is entered,
 #     its encounter table is rolled again with Route's rules (Strength range,
 #     legendaries, custom sprites, fusions). Leave, and they may be gone.
@@ -17,7 +17,7 @@
 #       - Oak's aide (Route 24 field research): in Dynamic she can't catalogue
 #         anything and finishes the research; in Dynamic Route she catalogues
 #         the visit and finds them all gone afterwards. Both research quests
-#         complete with their quest points and reward (Cody).
+#         complete with their quest points and reward.
 #===============================================================================
 module KIF
   module Rand

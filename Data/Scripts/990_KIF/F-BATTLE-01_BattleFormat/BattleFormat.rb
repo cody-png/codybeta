@@ -5,7 +5,7 @@
 #
 # "Battle Format" (force_double_wild – KIF's name, so old KIF saves keep their
 # value): 1v1 / 2v2 / 3v3.
-# "Format Applies To" (battle_format_scope, new – Cody 2026-10-04):
+# "Format Applies To" (battle_format_scope, new):
 #   Wild     – KIF behaviour: random wild encounters (grass, caves, fishing,
 #              Headbutt/Rock Smash/Sweet Scent) bring 2 or 3 wild Pokémon.
 #              Needs 2 / 3 able Pokémon in the party, not in the Safari Zone

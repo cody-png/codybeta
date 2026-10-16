@@ -1,7 +1,7 @@
 #===============================================================================
-# KIF Settings – the new screen (Cody, 2026-10-16; mockups in Claude Docs/
-# Settings mockups/v2, layout A). Options > KIF Settings opens it; it replaces
-# the old KIF Settings and Modules screens.
+# KIF Settings – the new screen (2026-10-16). It replaces Options entirely:
+# the pause menu's and the load screen's Options open it, with PIF's own
+# options in the same sections.
 # * Sidebar: the sections of 015_KIF_SettingsData.rb, then Modules (Off / On /
 #   Hidden per module), Mods (On/Off per mod and their settings) and Presets.
 # * Rows: every setting KIF and its features register (KIF::Options), under
@@ -24,14 +24,16 @@ module KIF
 
     # Every setting the player can see now, in menu order:
     # [{opt:, scope:, name:, mod:, children: [{opt:, scope:}]}]
-    def collect
+    # all: also the settings of modules that are Off/Hidden (to see where a
+    # module's settings would go)
+    def collect(all = false)
       out = []
       KIF::Options.all_menu_ids.each do |menu|
         parent = nil
         KIF::Options.entries(menu).each do |scope, builder|
           next if scope == :save && !KIF.in_game?
           mod = (KIF::Modules.for_proc(builder) rescue nil)
-          next unless KIF::Modules.visible?(mod)
+          next unless all || KIF::Modules.visible?(mod)
           opt = begin
                   builder.call
                 rescue StandardError => e
@@ -50,6 +52,52 @@ module KIF
       end
       out.concat(root_options)
       return out
+    end
+
+    # PIF's own Options (the four menus behind its root buttons) and anything
+    # mods add to the root. Returns [items, extra root rows, root scene]; the
+    # scenes stay alive because their option procs belong to them.
+    PIF_ROOT = ["System & Audio", "Gameplay", "Visuals & Content", "Challenge Options", "KIF Settings"]
+
+    def pif_items(inloadscreen)
+      root = PokemonGameOption_Scene.new
+      root_opts = (root.pbGetOptions(inloadscreen) rescue [])
+      scenes = [SystemOptionsScene]
+      scenes += [GameplayOptionsScene, SpriteOptionsScene, ChallengeOptionsScene] if $game_switches
+      items = []
+      seen = {}
+      scenes.each do |k|
+        sc = k.new
+        opts = begin
+                 sc.pbGetOptions(inloadscreen)
+               rescue StandardError => e
+                 KIF.log("KIF Settings: #{k} options failed (#{e.class}: #{e.message})")
+                 []
+               end
+        opts.each do |o|
+          next unless o && o.respond_to?(:name)
+          n = o.name.to_s.strip
+          next if seen[n]
+          seen[n] = true
+          items << { :opt => o, :scope => nil, :name => n, :mod => nil, :children => [], :pif => sc }
+        end
+      end
+      extra = root_opts.reject { |o| !o.respond_to?(:name) || PIF_ROOT.include?(o.name.to_s) || seen[o.name.to_s.strip] }
+      return [items, extra, root]
+    end
+
+    # module id => [section labels] where its settings sit
+    def module_sections
+      map = {}
+      topic_rows(collect(true)).each do |sec, list|
+        label = (SECTIONS.find { |x| x[0] == sec } || [nil, sec.to_s])[1]
+        list.each do |r|
+          next unless r.kind == :opt && r.mod
+          map[r.mod] ||= []
+          map[r.mod] << label unless map[r.mod].include?(label)
+        end
+      end
+      return map
     end
 
     # The rows that sat at the bottom of the old KIF Settings
@@ -99,10 +147,12 @@ module KIF
     end
 
     def module_rows
+      where = (module_sections rescue {})
       KIF::Modules::MODULES.map do |id, (name, desc, _f)|
+        d = _INTL(desc)
+        d += " " + _INTL("Settings in: {1}.", where[id].map { |l| _INTL(l) }.join(", ")) if where[id] && !where[id].empty?
         opt = EnumOption.new(_INTL(name), KIF::Modules::STATE_NAMES.map { |s| _INTL(s) },
-                             proc { KIF::Modules.state(id) }, proc { |v| KIF::Modules.set_state(id, v) },
-                             _INTL(desc))
+                             proc { KIF::Modules.state(id) }, proc { |v| KIF::Modules.set_state(id, v) }, d)
         Row.new(:opt, opt, :save, _INTL(name), :modules, nil, 0, nil)
       end
     end
@@ -144,35 +194,43 @@ module KIF
     end
 
     #---------------------------------------------------------------------------
-    # Defaults: which KIF::Options key each row reads, found by changing every
-    # key once and seeing which rows follow (no feature has to say it).
+    # Defaults: what each row shows with a brand-new PokemonSystem (KIF's and
+    # PIF's settings live there). Rows that read something else (the save's
+    # difficulty, mod settings) get no default: no dot, no Z.
     # opt => value the row shows at its default
     #---------------------------------------------------------------------------
     def defaults_for(opts)
       out = {}
-      return out unless $PokemonSystem
-      opts = opts.select { |o| !button?(o) && o.respond_to?(:get) }
-      base = opts.map { |o| (o.get rescue nil) }
-      KIF::Options.defaults.each do |key, default|
-        next unless default.is_a?(Integer) && $PokemonSystem.respond_to?(:"#{key}=")
-        next if KIF::Options.scope(key) == :save && !KIF.in_game?
-        old = $PokemonSystem.send(key)
-        next unless old.is_a?(Integer)
-        begin
-          $PokemonSystem.send(:"#{key}=", old + 7919)
-          hit = []
-          opts.each_with_index { |o, i| hit << o if !out.has_key?(o) && (o.get rescue nil) != base[i] }
-          next if hit.empty?
-          $PokemonSystem.send(:"#{key}=", default)
-          hit.each { |o| out[o] = (o.get rescue nil) }
-        ensure
-          $PokemonSystem.send(:"#{key}=", old)
-        end
+      real = $PokemonSystem
+      return out unless real
+      fresh = (PokemonSystem.new rescue nil)
+      return out unless fresh
+      opts.each do |o|
+        next if button?(o) || !o.respond_to?(:get)
+        # only rows that read PokemonSystem: with none at all, they fail
+        reads = begin
+                  $PokemonSystem = nil
+                  o.get
+                  false
+                rescue StandardError
+                  true
+                ensure
+                  $PokemonSystem = real
+                end
+        next unless reads
+        d = begin
+              $PokemonSystem = fresh
+              o.get
+            rescue StandardError
+              nil
+            ensure
+              $PokemonSystem = real
+            end
+        out[o] = d unless d.nil?
       end
       return out
-    rescue StandardError => e
-      KIF.log("KIF Settings: defaults not found (#{e.class}: #{e.message})")
-      return out
+    ensure
+      $PokemonSystem = real if real
     end
   end
 end
@@ -202,7 +260,8 @@ class KifSettingsScreen
 
   attr_accessor :section, :sel, :focus
 
-  def initialize
+  def initialize(inloadscreen = false)
+    @inloadscreen = inloadscreen
     @sections = KIF::SettingsScreen::SECTIONS.map { |id, label, col, _g| [id, label, col] }
     @section = 0
     @sel = 0
@@ -212,15 +271,39 @@ class KifSettingsScreen
     @query = nil
     @sub = nil        # a mod's settings page shown inside the Mods section
     rebuild
+    @section = next_section(-1, 1) || 0
+  end
+
+  # sections with nothing to show (every module behind them Off) are greyed
+  # out and skipped
+  def empty_section?(i)
+    id = @sections[i][0]
+    return false if id == :modules
+    return (@rows[id] || []).none? { |r| r.kind == :opt }
+  end
+
+  def next_section(from, dir)
+    n = @sections.length
+    1.upto(n) do |k|
+      i = (from + dir * k) % n
+      return i unless empty_section?(i)
+    end
+    return nil
   end
 
   # (Re)reads every setting: after any change, so rows that depend on others
   # (module states, slider steps) are current
   def rebuild
     items = KIF::SettingsScreen.collect
+    pif, extra, @root = KIF::SettingsScreen.pif_items(@inloadscreen)
+    items = pif + items
     @rows = KIF::SettingsScreen.topic_rows(items)
     @rows[:modules] = KIF::SettingsScreen.module_rows
     @rows[:mods] = KIF::SettingsScreen.mod_rows
+    unless extra.empty?
+      @rows[:mods] << KIF::SettingsScreen::Row.new(:head, nil, nil, _INTL("Added to Options"), :mods, "Added to Options", 0, nil)
+      extra.each { |o| @rows[:mods] << KIF::SettingsScreen::Row.new(:opt, o, nil, o.name.to_s, :mods, "Added to Options", 0, nil) }
+    end
     @rows[:presets] = KIF::SettingsScreen.preset_rows
     opts = items.flat_map { |it| [it[:opt]] + it[:children].map { |c| c[:opt] } }
     @defaults = KIF::SettingsScreen.defaults_for(opts)
@@ -300,6 +383,7 @@ class KifSettingsScreen
       Input.update
       break if handle_input == :close
     end
+    close_effects
   ensure
     @sprite.bitmap.dispose if @sprite && @sprite.bitmap
     @sprite.dispose if @sprite
@@ -311,7 +395,7 @@ class KifSettingsScreen
     return search if Input.trigger?(Input::JUMPUP) || Input.trigger?(Input::SPECIAL)
     if @focus == :side
       if Input.repeat?(Input::DOWN) || Input.repeat?(Input::UP)
-        @section = (@section + (Input.repeat?(Input::DOWN) ? 1 : -1)) % @sections.length
+        @section = next_section(@section, Input.repeat?(Input::DOWN) ? 1 : -1) || @section
         @sel = 0
         @scroll = 0
         pbPlayCursorSE
@@ -365,6 +449,21 @@ class KifSettingsScreen
     return nil
   end
 
+  # What PIF's Options did on closing (GameOptions.rb pbEndScene): keep the
+  # save's lowest difficulty, reshuffle trainers when the game mode changed
+  def close_effects
+    if $Trainer && $Trainer.respond_to?(:lowest_difficulty) && $Trainer.selected_difficulty < $Trainer.lowest_difficulty
+      $Trainer.lowest_difficulty = $Trainer.selected_difficulty
+    end
+    mode = @root && @root.instance_variable_get(:@current_game_mode)
+    if mode && defined?(getTrainersDataMode) && getTrainersDataMode != mode
+      pbMessage(_INTL("The game was mode changed - Reshuffling trainers."))
+      Kernel.pbShuffleTrainers
+    end
+  rescue StandardError => e
+    KIF.log("KIF Settings: closing failed (#{e.class}: #{e.message})")
+  end
+
   def change(dir)
     r = current
     return unless r
@@ -391,6 +490,12 @@ class KifSettingsScreen
     keep = [@section, @sel, @scroll]
     rebuild
     @section, @sel, @scroll = keep
+    if empty_section?(@section) && !@query && !@sub
+      @focus = :side
+      @section = next_section(@section, 1) || @section
+      @sel = 0
+      @scroll = 0
+    end
     @sel = 0 if @sel >= [opt_rows.length, 1].max
     refresh
   end
@@ -510,7 +615,7 @@ class KifSettingsScreen
       end
       rbox(b, 14, y + 2, 28, y + 16, 3, Color.new(*col))
       text(b, 14, y + 3, 15, 13, label[0], TXT, PF::TINY, 2)
-      dim = @query && counts[id].nil?
+      dim = (@query && counts[id].nil?) || (!@query && empty_section?(i))
       name = PF.fit(PF::TEXT, _INTL(label), SIDE_X1 - 35 - (counts[id] ? 12 : 0))
       text(b, 33, y - 2, 120, 22, name, active ? TXT : (dim ? Color.new(95, 104, 118) : DIM), PF::TEXT, 0, active)
       text(b, SIDE_X1 - 8, y + 3, 0, 13, counts[id].to_s, WARN, PF::TINY, 1) if counts[id]
@@ -644,7 +749,8 @@ class KifSettingsScreen
       end
       return
     end
-    v = PF.fit(PF::TEXT, vals[cur] || cur.to_s, 150)
+    shown = o.is_a?(NumberOption) ? (cur + o.optstart.to_i).to_s : (vals[cur] || cur.to_s)
+    v = PF.fit(PF::TEXT, shown, 150)
     vw = PF.width(PF::TEXT, v)
     text(b, VAL_X1 - 14 - vw, y, vw + 2, 22, v, TXT)
     if selected
@@ -666,7 +772,7 @@ class KifSettingsScreen
     end
     text(b, 14, y0 + 1, 330, 26, PF.fit(PF::ROW, r.label, 330), TXT, PF::ROW)
     x = W - 14
-    if r.section != :modules && r.section != :presets && !r.action
+    if r.scope && r.section != :modules && r.section != :presets && !r.action
       x -= pill(b, x, y0 + 7, r.scope == :global ? _INTL("ALL SAVES") : _INTL("THIS SAVE"), PILL, true) + 6
     end
     if @defaults.has_key?(r.opt) && KIF::SettingsScreen.choices?(r.opt)
@@ -694,5 +800,27 @@ class KifSettingsScreen
     end
     out << line unless line.empty?
     return out
+  end
+end
+
+#===============================================================================
+# Options (pause menu and load screen) opens this screen instead of PIF's
+# Options. If it fails, PIF's Options open as before and the error is logged.
+#===============================================================================
+KIF.guard_base("052_InfiniteFusion/System/Game Options/GameOptions.rb", 2796826256, "PokemonGameOption_Scene#pbEndScene (KifSettingsScreen#close_effects)")
+
+class PokemonOptionScreen
+  alias kif_ss_pbStartScreen pbStartScreen unless method_defined?(:kif_ss_pbStartScreen)
+
+  def pbStartScreen(inloadscreen = false)
+    if @scene.instance_of?(PokemonGameOption_Scene)
+      begin
+        return KifSettingsScreen.new(inloadscreen).main
+      rescue StandardError => e
+        KIF.log("KIF Settings failed, PIF's Options instead (#{e.class}: #{e.message})")
+        KIF.log(e.backtrace.first(3).join(" | ")) if e.backtrace
+      end
+    end
+    return kif_ss_pbStartScreen(inloadscreen)
   end
 end

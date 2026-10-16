@@ -1,6 +1,6 @@
 #===============================================================================
-# F-BATTLE-02 – Auto-Battle: the prompts it used to stop at (port addition,
-# Cody 2026-10-09). KIF's Auto-Battle (and so this port) still waited for the
+# F-BATTLE-02 – Auto-Battle: the prompts it used to stop at (port addition).
+# KIF's Auto-Battle (and so this port) still waited for the
 # player at three spots; each now has a setting under Battles:
 #   * Auto-Battle Switching – Ask / AI decides / Stay in. The "<trainer> is
 #     about to send in X. Will you switch?" offer (Shift style,

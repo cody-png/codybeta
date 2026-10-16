@@ -3,7 +3,7 @@
 # Source: KIF 0.20.7 002_BattleSettings.rb:67 (ENABLE_CRITICAL_CAPTURES = true)
 #         and 011_Battle/003_Battle/001_PokeBattle_BattleCommon.rb pbCaptureCalc
 #
-# "Critical Captures" (critical_captures, per-save, default On – Cody's call).
+# "Critical Captures" (critical_captures, per-save, default On).
 # PIF 6.8.2 removed the Settings-driven check and instead gives a guaranteed
 # "last ball" critical capture (x*6/12, or always for shinies) when the thrown
 # ball is the last one in the bag. That stays as is; KIF's check runs after it

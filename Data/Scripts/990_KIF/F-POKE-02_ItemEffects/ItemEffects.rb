@@ -109,7 +109,7 @@ def getDevolvedSpecies(pokemon)
   return GameData::Species.get(pokemon.species).get_previous_species
 end
 
-# Fusions (Cody, 2026-10-05): when both head and body can devolve, ask which.
+# Fusions: when both head and body can devolve, ask which.
 # Returns the new species, or nil if nothing can devolve / the player cancels.
 def kif_devolution_target(pokemon, scene = nil)
   sp = pokemon.species_data
@@ -183,7 +183,7 @@ if defined?(GENERIC_PRIZES_MULTI) && GENERIC_PRIZES_MULTI.is_a?(Array) &&
 end
 
 #-------------------------------------------------------------------------------
-# Mist Stone: choose the evolution (port addition, Cody 2026-10-05)
+# Mist Stone: choose the evolution (port addition)
 # 6.8.2 (New Items effects.rb:1559) picks a random one when there are several
 # (Eevee, or a fusion whose head and body can both evolve). Now, like the
 # Devolution Spray, the player chooses: "Head: Kabuto > Kabutops", "Body: ...",

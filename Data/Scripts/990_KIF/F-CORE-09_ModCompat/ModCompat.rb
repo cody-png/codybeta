@@ -451,7 +451,7 @@ end
 KIF::ModCompat.write_version
 
 #===============================================================================
-# Kanto Reloaded's settings in the Options menu (Cody, 2026-10-10)
+# Kanto Reloaded's settings in the Options menu (2026-10-10)
 #   KR adds "Kanto Reloaded" and "Mod Settings" buttons to the root Options
 #   menu, which it recognises as KIF 0.20.7's PokemonOption_Scene. On PIF
 #   6.8.2 the root menu is PokemonGameOption_Scene, so KR skipped it and its
@@ -736,8 +736,8 @@ class PokemonStorageScene
 end
 
 #===============================================================================
-# Mod Manager mods whose mod.json lists scripts that aren't there (Cody,
-# 2026-10-10). Mega Stones lists "main.rb", but its script is
+# Mod Manager mods whose mod.json lists scripts that aren't there
+# (2026-10-10). Mega Stones lists "main.rb", but its script is
 # Mods/050_MegaStoneSimulator.rb, so Mod Manager loaded nothing and the mod
 # silently did nothing. When none of a mod's listed scripts exist, KIF loads
 # the .rb files that are in its folder instead (and says so in KIF_log).
@@ -775,7 +775,7 @@ module KIF
 end
 
 #===============================================================================
-# Alpha Encounters' alpha moves (Cody, 2026-10-10). Its Pokemon#getMoveList
+# Alpha Encounters' alpha moves (2026-10-10). Its Pokemon#getMoveList
 # appended the alpha's moves to the species' own move list (shared by every
 # Pokémon of that species, and growing on every call). The list handed back
 # is now a copy, so only the alpha itself gets its moves.

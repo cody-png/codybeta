@@ -1,6 +1,6 @@
 #===============================================================================
-# Ability Capsule / Secret Capsule – ability picker (port addition, requested
-# by Cody 2026-10-05; not a KIF 0.20.7 feature)
+# Ability Capsule / Secret Capsule – ability picker (port addition, not a
+# KIF 0.20.7 feature)
 #
 # 6.8.2: the Ability Capsule only swaps between the two regular abilities
 #   (013_Items/002_Item_Effects.rb:1115) and the Secret Capsule is marked

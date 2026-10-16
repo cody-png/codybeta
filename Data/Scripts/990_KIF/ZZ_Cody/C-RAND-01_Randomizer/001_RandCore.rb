@@ -1,5 +1,5 @@
 #===============================================================================
-# C-RAND-01 – Randomizer, chunk 1: foundation (Cody, 2026-10-06)
+# C-RAND-01 – Randomizer, chunk 1: foundation (2026-10-06)
 #
 # PIF's randomizer (025-Randomizer + Common Events 15 "SET RANDOMIZER OPTIONS"
 # and 28 "APPLY randomizer options") keeps working; this layer adds:
@@ -325,7 +325,7 @@ module KIF
     end
 
     # Dex number of a species, symbol, number or PIFSprite. PIF's swap table
-    # and custom sprite lists can hold PIFSprites (seen in Cody's saves), and
+    # and custom sprite lists can hold PIFSprites (seen in real saves), and
     # getDexNumberForSpecies passes those through untouched.
     def self.dex_of(sp)
       return sp if sp.is_a?(Integer)
@@ -533,7 +533,7 @@ module KIF
       legend = sw(SWITCH_RANDOM_WILD_LEGENDARIES)
       old_dex = getDexNumberForSpecies(old_species) rescue nil
       old_dex = nil if old_dex && old_dex >= Settings::ZAPMOLCUNO_NB   # triple fusions can't be measured
-      # Strength range applies to Dynamic too (Cody): the pick stays within
+      # Strength range applies to Dynamic too: the pick stays within
       # range of the usual Pokémon, widening a little when nothing fits
       bst = get(:wild_bst)
       300.times do |i|

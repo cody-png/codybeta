@@ -1,5 +1,5 @@
 #===============================================================================
-# C-SYS-04 – Sprite import (Cody, 2026-10-08)
+# C-SYS-04 – Sprite import (2026-10-08)
 #   1. Drop sprites into the "Import Sprites" folder (next to the game's .exe) in any
 #      shape: loose .png files, a sprite pack folder, folders inside folders,
 #      a .zip (or .rar / .7z, unpacked by Windows' own tar when it can). At
@@ -429,7 +429,7 @@ module KIF
     # cursor move, party draw or battle sprite decoded the .png again. Most
     # decode in a millisecond or two, but some files from sprite packs (ones
     # with sRGB/eXIf/iTXt metadata blocks) take 40 ms and more each time,
-    # which showed as a short hang on those Pokémon (tester report, 0.21.15).
+    # which showed as a short hang on those Pokémon (0.21.15).
     # On a hit the caller gets a private copy, as before.
     #
     # Options > Others > "Sprite File Cache" (like Shiny Cache):

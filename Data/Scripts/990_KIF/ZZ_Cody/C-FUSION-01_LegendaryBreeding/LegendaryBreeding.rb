@@ -1,5 +1,5 @@
 #===============================================================================
-# C-FUSION-01 – Legendary Breeding (Cody)
+# C-FUSION-01 – Legendary Breeding
 # Cody Settings → Breeding & Fusion → "Legendary Breeding" (per save,
 # default Off).
 #
@@ -7,7 +7,7 @@
 # head or body) can breed with any Pokémon that can breed: no egg-group or
 # gender check for the pair. Baby Pokémon and Unown (also "Undiscovered")
 # still can't breed, nor can Shadow Pokémon.
-# The Egg (Cody): each parent gives one species (a fusion parent gives its
+# The Egg: each parent gives one species (a fusion parent gives its
 # head or body at random). If they differ, the Egg is 25% each: parent A,
 # parent B, A-head/B-body fusion, B-head/A-body fusion – e.g. Mewtwo + Vulpix
 # → Mewtwo, Vulpix, Mewpix or Vultwo. With Ditto, the Egg is the other

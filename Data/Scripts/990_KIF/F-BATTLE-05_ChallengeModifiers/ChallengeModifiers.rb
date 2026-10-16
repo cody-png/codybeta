@@ -12,7 +12,7 @@
 #     non-player battler gets +1 Atk/Def/SpA/SpD/Spe every 3 turns (Easy),
 #     2 turns (Normal) or every turn (Hard); Chaos gives +2 every turn.
 #
-# Fixed vs KIF (Cody, 2026-10-04): KIF skipped pbTryUseMove for the forced
+# Fixed vs KIF: KIF skipped pbTryUseMove for the forced
 # move, so a sleeping, frozen, fully paralysed, flinching or confused Pokémon
 # still acted. The forced move now goes through PIF's normal checks
 # (incl. disobedience, Taunt, Gravity). As in KIF, it uses no PP.

@@ -3,7 +3,7 @@
 # PIF 6.8.2's evolution scene (016_UI/001_Non-interactive UI/004_UI_Evolution.rb
 # pbStartScreen) draws the evolved form with setPokemonBitmapPIFSprite, which
 # loads the new species' sprite as it is: a shiny Kakuna turned into a normal
-# Beedrill on the "Congratulations!" screen (tester report, Monto), and
+# Beedrill on the "Congratulations!" screen, and
 # was shiny again everywhere after. EBDX's evolution scene uses the same call
 # (F-BATTLE-12 EBDXCompat setPokemonBitmapSpecies).
 # Here the evolved sprite gets the Pokémon's colours: KIF's shiny colours

@@ -19,7 +19,7 @@
 # The window title shows "Auto-Battler (ON/OFF) | Loop Self-Battle (ON/OFF)".
 #
 # 6.8.2 adaptations:
-#   * No battle shortcut keys (Cody, 2026-10-05): KIF's X (Auto-Battle) is
+#   * No battle shortcut keys: KIF's X (Auto-Battle) is
 #     6.8.2's speed-up key and L/R are the KIF speed keys, so Auto-Battle and
 #     Battle Loop are toggled in KIF Settings. KIF's "Auto-Battle Shortcut"
 #     option is therefore not ported.

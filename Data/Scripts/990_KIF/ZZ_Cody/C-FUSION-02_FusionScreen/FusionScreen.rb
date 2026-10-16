@@ -1,9 +1,9 @@
 #===============================================================================
-# C-FUSION-02 – Fusion Screen (Cody)
+# C-FUSION-02 – Fusion Screen
 # Cody Settings > Interface > "Fusion Screen" (Off/On, all saves, default On)
 #
 # The DNA Splicer preview (052_InfiniteFusion/Fusion/Menus/FusionPreviewScreen.rb)
-# gets a new layout (Cody's approved mockup, 2026-10-06). For each side:
+# gets a new layout (2026-10-06). For each side:
 #   * the fusion's name, level and types;
 #   * the stats it will really have: built from a copy of the Pokémon the
 #     splicers would make (body keeps its EVs/nature/type override, IVs
@@ -17,8 +17,8 @@
 #     total.
 #   * a fusion you haven't seen, with Fusion Preview Off, is PIF's flat
 #     silhouette (green custom / grey autogen), not a tinted sprite (2026-10-12).
-# A (USE) on a fusion opens Change Body / Change Head / Confirm (Cody's
-# mockup, 2026-10-06). Change Body/Head lists the part's current form and every
+# A (USE) on a fusion opens Change Body / Change Head / Confirm.
+# Change Body/Head lists the part's current form and every
 # later one (branches included) tagged Stage 1 / Stage 2 / Final; the preview
 # follows the cursor and shows that fusion's sprite, name, types and stats at
 # the fused level. The other side mirrors the choice (same pair, swapped).
@@ -235,7 +235,7 @@ class FusionPreviewScreen
     return cody_fs_frame(fs::BOX_W, fs::BOX_H)
   end
 
-  # White frame like the mockups (dark border, rounded corners)
+  # White frame (dark border, rounded corners)
   def cody_fs_frame(w, h, bmp = nil, x = 0, y = 0)
     fs = KIF::FusionScreen
     bmp ||= Bitmap.new(w, h)
@@ -322,11 +322,11 @@ class FusionPreviewScreen
     pif = BattleSpriteLoader.new.obtain_fusion_pif_sprite(head_id, body_id)
     # PIF tints a sprite that is a file on disk blue; in KIF those are the
     # custom sprites the player imported (Graphics/CustomBattlers/local_sprites),
-    # so they are green like every other custom sprite (Cody, 2026-10-14:
-    # green = custom sprite, grey = autogen)
+    # so they are green like every other custom sprite
+    # (green = custom sprite, grey = autogen)
     return Color.new(150, 255, 150, 200) if (pif && pif.local_path) || customSpriteExists(body_id, head_id)
     # PIF's autogen colour is white, drawn on its dark box; KIF's box is white,
-    # so the autogen silhouette is grey to show up (Cody, 2026-10-14)
+    # so the autogen silhouette is grey to show up
     return Color.new(136, 136, 144, 200)
   end
 
@@ -424,7 +424,7 @@ class FusionPreviewScreen
       b = base[id] || 0
       # green only when the base stats differ: with equal base stats the two
       # orders differ only by the body's nature and EVs, which the player
-      # picks/changes after fusing (Cody, 2026-10-11)
+      # picks/changes after fusing
       better = v > theirs[id] && b != (other_base[id] || 0)
       text << [v.to_s, cx + 68, cy - 7, 1, better ? fs::BETTER : fs::WHITE, fs::DARK]
       total += b

@@ -1,7 +1,9 @@
 #===============================================================================
 # KIF Settings (new screen, 2026-10-16) – where every setting goes
 # Sections in the sidebar, headings inside them, and the shorter names a row
-# gets under its heading (Cody, 2026-10-16: "Shorten under headings").
+# gets under its heading.
+# PIF's own options (System & Audio, Gameplay, Visuals & Content, Challenge
+# Options) are placed here too: the screen replaces Options entirely.
 # A setting not listed here still shows: it lands under "Other" in Game, so
 # a new feature's setting is never lost.
 #===============================================================================
@@ -16,7 +18,7 @@ module KIF
         ["Poké Radar", ["PokeRadar+", "Radar Chain Count", "Multi-Battle Radar"]],
         ["Speed", ["Shiny Cache"]]]],
       [:battles, "Battles", [210, 80, 80], [
-        ["Format", ["Battle Format", "Format Applies To"]],
+        ["Format", ["Battle Format", "Format Applies To", "Battle Style"]],
         ["Auto-Battle", ["Auto-Battle", "Auto-Battle Shiny Stop", "Auto-Battle Switching",
                          "Auto-Battle Level Up", "Auto-Battle New Moves", "Auto-Battle Evolutions"]],
         ["Mechanics", ["Battle AI", "Damage Variance", "Modern Hail", "Frostbite", "Drowsy",
@@ -27,7 +29,8 @@ module KIF
       [:pokemon, "Pokémon", [90, 170, 100], [
         ["Levels and EXP", ["Level Cap", "Cap Behavior", "Trainer Exp. Boost", "ExpAll Redistribution"]],
         ["EVs and IVs", ["No-EVs Mode", "Max IVs Mode", "EVs Train Mode"]],
-        ["Catching", ["Critical Captures", "Rocket Mode", "Skip Caught Prompt", "Recover Consumables"]],
+        ["Catching", ["Prompt Nicknames", "Critical Captures", "Rocket Mode", "Skip Caught Prompt",
+                      "Recover Consumables"]],
         ["Fusion", ["Fusion BaseStats", "NPC Fusion BaseStats", "Self-Fusion Stat Boost",
                     "Dominant Fusion Types", "Unfuse Traded"]],
         ["Breeding and moves", ["Legendary Breeding", "Head Legendary Breeding", "Event Moves",
@@ -35,10 +38,11 @@ module KIF
         ["K-Eggs", ["K-Eggs Usage", "K-Eggs Rarity", "K-Eggs Fusion Odds", "K-Eggs Fusion Pool",
                     "K-Eggs Rewards"]]]],
       [:graphics, "Graphics", [110, 120, 220], [
-        ["Battle", ["Type Display", "Swap BattleGUI"]],
+        ["Battle", ["Battle Animations", "Battle Movement", "Battle Type Icons", "Type Display", "Swap BattleGUI"]],
+        ["Sprites", ["Random Sprites", "Joke Sprites", "Custom Eggs", "Fusion Icons"]],
         ["Screens", ["Fusion Screen", "Fusion Preview", "Big Pokémon Icons", "Summary IVs/EVs", "Dark Mode"]],
-        ["Pokédex", ["Improved Pokedex", "Dex Evolutions", "Dex Sprite Select"]],
-        ["Text", ["Game's Font"]]]],
+        ["Pokédex", ["Autogen dex entries", "Improved Pokedex", "Dex Evolutions", "Dex Sprite Select"]],
+        ["Text", ["Game's Font", "Speech Frame"]]]],
       [:selfbattle, "Self-Battle", [200, 120, 60], [
         ["Self-Battle", ["Battle Size", "Player Size", "Level", "Team Select", "Limitless Select",
                          "Randomize Team", "Randomize Share", "Players Folder", "Battle Loop", "Stat Tracker"]],
@@ -46,15 +50,22 @@ module KIF
                     "Import Sprite on Import"]],
         ["Export", ["Delete on Export", "Export Sprite on Export"]]]],
       [:challenges, "Challenges", [160, 80, 180], [
-        ["Challenges", ["Metronome Madness", "Letdown", "Letdown Player Only", "Berserker"]]]],
+        ["Rules", ["Level caps", "No reviving", "No heals (battles)", "No heals (overworld)"]],
+        ["KIF challenges", ["Metronome Madness", "Letdown", "Letdown Player Only", "Berserker"]]]],
       [:game, "Game", [70, 160, 170], [
+        ["Difficulty", ["Difficulty"]],
+        ["Movement", ["Default Movement", "Quick HMs"]],
+        ["Speed-up", ["Speed-up type", "Speed-up (Overworld)", "Speed-up (Battles)", "Speed-up Limit (Toggle)"]],
         ["Randomizer", ["Randomizer"]],
         ["Kuray Shop", ["Streamer's Dream", "Kuray QoL"]],
-        ["World", ["Overworld Poison", "Tutor.net", "Speed-up Limit (Toggle)"]],
-        ["Saves", ["Quicksave with S", "Save Backups", "Hatch to PC Prompt"]],
+        ["World", ["Overworld Poison", "Tutor.net"]],
+        ["Saves", ["Autosave", "Quicksave with S", "Save Backups", "Hatch to PC Prompt"]],
         ["Fun", ["Kuray's Shenanigans"]]]],
       [:system, "System", [130, 140, 155], [
-        ["Updates", ["Updates", "Check for Updates"]],
+        ["Audio", ["Music Volume", "SE Volume"]],
+        ["Screen", ["Screen Size", "Device"]],
+        ["Text", ["Text Speed", "Text Entry"]],
+        ["Updates and downloads", ["Updates", "Check for Updates", "Download data"]],
         ["Speed", ["Frame rate", "Sprite File Cache"]],
         ["Start-up", ["Skip intro"]],
         ["Files", ["Imported Archives"]],
@@ -90,7 +101,10 @@ module KIF
       "Import Without Deletion" => "Keep the File", "Import Sprite on Import" => "Sprite",
       "Delete on Export" => "Delete After", "Export Sprite on Export" => "Sprite",
       "Letdown Player Only" => "Letdown: You Only",
-      "Speed-up Limit (Toggle)" => "Speed-up Limit",
+      "Speed-up Limit (Toggle)" => "Toggle Limit", "Speed-up type" => "Type",
+      "Speed-up (Overworld)" => "Overworld", "Speed-up (Battles)" => "Battles",
+      "Battle Animations" => "Animations", "Battle Movement" => "Movement", "Battle Type Icons" => "Type Icons",
+      "Autogen dex entries" => "Autogen Entries",
     }
   end
 end

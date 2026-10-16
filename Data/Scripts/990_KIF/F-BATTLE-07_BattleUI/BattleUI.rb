@@ -28,8 +28,8 @@
 #   Battles > "Show Lv. in BSM" (per save): levels stay visible in battle in
 #     Base Stats Mode (6.8.2's No-Levels switch).
 #   Graphics > "Dark Mode" (F-UI-11, PIF's own dark mode setting) now also
-#     gives battles KIF's dark message box and command menu (Cody, play test 4:
-#     "KIF dark mode only works in battles").
+#     gives battles KIF's dark message box and command menu (KIF's
+#     dark mode only applied to battles).
 #
 # Always on (as KIF): the status icon is its own sprite, drawn over the bars
 # and moved up (foe 49, player 52) so it's no longer cut off at the bottom of
@@ -47,9 +47,9 @@
 #   * 6.8.2 swaps the battle text colours in dark mode; with KIF's dark art the
 #     KIF colours are used (light grey on dark).
 #   * Type Display shows the in-battle types (Soak, Transform...), like PIF's
-#     icons; KIF showed the Pokémon's own types (Cody, 2026-10-05).
+#     icons; KIF showed the Pokémon's own types.
 #   * GUI 2's Exp bar isn't stretched x1.5 as in KIF, which filled it at ~67%
-#     Exp (Cody, 2026-10-05).
+#     Exp.
 #   * Assets copied to Graphics/Pictures/KIF/{BattleGUI,Battle,TypeIcons}.
 #===============================================================================
 KIF::Options.define(:typedisplay, 0, :global)
@@ -297,8 +297,8 @@ class PokemonDataBox
       @kif_typeSheet = sheet
     end
     bmp = @kif_typeBitmap.bitmap
-    # In-battle types like PIF's icons (KIF used the Pokémon's own types;
-    # Cody, 2026-10-05)
+    # In-battle types like PIF's icons (KIF used the Pokémon's own
+    # types)
     type1 = @battler.type1
     type2 = @battler.type2
     text = (mode == 5)
@@ -320,8 +320,7 @@ class PokemonDataBox
   end
 
   # Trapstarr's Exp bar patch: no crash on a NaN/infinite fraction.
-  # KIF also stretched the GUI 2 bar x1.5 (full at ~67% Exp); not ported
-  # (Cody, 2026-10-05).
+  # KIF also stretched the GUI 2 bar x1.5 (full at ~67% Exp); not ported.
   def refreshExp
     f = @showExp ? exp_fraction : 0
     return kif_bui_refreshExp unless f.is_a?(Float) && (f.nan? || f.infinite?)

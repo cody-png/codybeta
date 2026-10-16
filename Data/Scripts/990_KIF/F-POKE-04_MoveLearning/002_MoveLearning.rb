@@ -19,7 +19,7 @@
 # skipped instead of crashing the menu.
 #===============================================================================
 KIF::Options.define(:eventmoves, 0, :save)
-KIF::Options.define(:changemoves_eggmoves, 0, :save)   # Cody, 2026-10-14
+KIF::Options.define(:changemoves_eggmoves, 0, :save)
 
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Event Moves"), [_INTL("Off"), _INTL("On")],
@@ -168,7 +168,7 @@ class FusionTutorService
 end
 
 #-------------------------------------------------------------------------------
-# Party "Change moves" (Cody, 2026-10-05). In 6.8.2 it only lists moves the
+# Party "Change moves". In 6.8.2 it only lists moves the
 # Pokémon once knew (pbRememberMoves, 005_UI_Party.rb:1216). It now offers in
 # one list: those moves, level-up moves up to its level (pre-evolutions
 # included), egg moves when "Egg Moves" is On (Off by default, 2026-10-14),

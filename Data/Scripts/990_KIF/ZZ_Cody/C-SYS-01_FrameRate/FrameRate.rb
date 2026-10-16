@@ -1,5 +1,5 @@
 #===============================================================================
-# C-SYS-01 – Frame rate (Cody, 2026-10-08) - experimental
+# C-SYS-01 – Frame rate (2026-10-08) - experimental
 #   Cody Settings > Interface > "Frame rate": 40 (PIF's own), 60, 80, 100,
 #   120 or Match monitor (the engine draws at most 120 frames a second).
 #   The game itself always runs 40 steps a second, exactly like PIF, so

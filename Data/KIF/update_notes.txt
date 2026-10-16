@@ -1,6 +1,5 @@
-KIF Beta 0.21.48
-KIF Settings is rebuilt: one screen with sections on the left (Shinies, Battles, Pokemon, Graphics, Self-Battle, Challenges, Game, System, Modules, Mods, Presets) and sharp, easy-to-read text.
-- Every setting shows its choices as a bar; Left/Right changes it. Names are shorter under their heading (Auto-Battle > Stop on Shiny).
-- An orange dot marks a setting you changed; Z sets it back to its default. The bottom bar explains the setting and shows its default.
-- A (or F / Tab) searches every setting by name and description.
-- Modules, Mods and Presets are sections of the same screen. Options has one KIF Settings button.
+KIF Beta 0.21.49
+Options is now the new settings screen: PIF's own options (volume, text speed, screen size, difficulty, speed-up, sprites, challenge rules) sit in the same sections as KIF's.
+- A section whose settings all belong to modules you turned Off is greyed out and skipped.
+- Each module in Modules says which sections hold its settings.
+- Buttons other mods add to Options are listed under Mods.

@@ -1,7 +1,6 @@
 #===============================================================================
 # F-POKE-06 (part) – Evolution tree in the Pokédex entry box (port addition,
-# Cody 2026-10-05, from a friend's suggestion; mock-ups: Bulbapedia's
-# Poliwag and Eevee charts)
+# laid out like Bulbapedia's Poliwag and Eevee charts)
 #
 # Option "Dex Evolutions" (Others, global):
 #   Credits Box (default) – the text lines of DexEvolutions.rb replace the
@@ -180,7 +179,7 @@ module KIF
       elsif m.start_with?("Trade")
         return [[_INTL("Trade"), w].compact, nil]
       elsif m.start_with?("Item")
-        # the item is spelled out (Cody, 2026-10-05): "Moon Stone"
+        # the item is spelled out: "Moon Stone"
         return [(w ? [iname(param), w] : two_lines(iname(param))), param]
       elsif m.include?("HoldItem")
         return [(w ? [_INTL("Hold {1}", iname(param)), w] : [_INTL("Hold"), iname(param)]), param]

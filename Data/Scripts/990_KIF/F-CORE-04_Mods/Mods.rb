@@ -18,7 +18,7 @@
 #   * A mod that raises an error is skipped and the error is written to
 #     KIF_errorlog.txt instead of stopping the game.
 #   * 6.8.2's own scripts don't need KIF's alias guards: mods load once.
-#   * 2026-10-14 (Cody): a mod can also be a folder (Mods/<name>/ with its
+#   * 2026-10-14: a mod can also be a folder (Mods/<name>/ with its
 #     .rb files, a mod.json when it has one) or a .zip (unpacked into
 #     Mods/<name>/ at start-up, the zip moved to Mods/Imported). Folders with
 #     a mod.json are left to Mod Manager when it is installed. Every mod can

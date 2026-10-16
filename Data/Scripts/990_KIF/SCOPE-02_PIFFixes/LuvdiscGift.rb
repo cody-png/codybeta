@@ -1,5 +1,5 @@
 #===============================================================================
-# SCOPE-02 – Luvdisc gift on every playthrough (tester request, 2026-10-10)
+# SCOPE-02 – Luvdisc gift on every playthrough (2026-10-10)
 #   The deliveryman in the PokéMart (map 81, event 28) gives a Luvdisc once
 #   you have the Pokédex (switch 988) - but PIF also needs switch 972, which
 #   the intro sets only when a save file already existed (a 2nd playthrough).

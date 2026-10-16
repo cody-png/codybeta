@@ -6,7 +6,7 @@
 # That file is a copy of PIF 6.4.5's species data. Compared with 6.4.5 it
 # changes only six things; loading the whole copy on 6.8.2 would undo 6.8.2's
 # own species changes (base stats, tutor lists, abilities, evolutions).
-# Cody (2026-10-05): keep 6.8.2's data and apply only KIF's six changes:
+# This file keeps 6.8.2's data and applies only KIF's six changes:
 #   * Dialga, Palkia: catch rate 30 -> 3
 #   * Ferroseed, Ferrothorn: Steel/Grass -> Grass/Steel
 #   * Phantump: Grass/Ghost -> Ghost/Grass

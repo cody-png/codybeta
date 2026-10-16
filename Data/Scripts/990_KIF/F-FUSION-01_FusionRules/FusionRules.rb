@@ -25,7 +25,7 @@
 # 6.8.2 adaptations (no copies of base methods):
 #   * The boost is applied through baseStats while calc_stats runs. The
 #     Summary BST column shows the boosted values (kif_effective_base_stats;
-#     KIF showed the unboosted ones, Cody asked to see the boost 2026-10-05).
+#     KIF showed the unboosted ones).
 #   * FusedSpecies caches its types when created, so KIF's change to
 #     calculate_type1/2 only took effect for fusions created after toggling.
 #     Here FusedSpecies#type1/type2 apply the rule when read.

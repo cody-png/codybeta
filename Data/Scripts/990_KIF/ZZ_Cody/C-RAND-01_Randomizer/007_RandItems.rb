@@ -1,5 +1,5 @@
 #===============================================================================
-# C-RAND-01 – Randomizer, chunk 5: items (Cody, 2026-10-06)
+# C-RAND-01 – Randomizer, chunk 5: items (2026-10-06)
 #   * Item mode: Mapped (each item always becomes the same other item) or
 #     Dynamic (every item ball, gift and shop slot rolls its own item; fixed
 #     by the seed and the spot, so reloading gives the same item). TMs too.
@@ -10,7 +10,7 @@
 #     battle items, mail, evolution items, gems, held items, TMs, other.
 #   * Keep shop basics: Poké Balls and Splicers stay buyable.
 #   * Banned items: never a result. Starts with the items that have no use in
-#     PIF (shards, apricorns, contest scarves, mail, ...) – Cody.
+#     PIF (shards, apricorns, contest scarves, mail, ...).
 #===============================================================================
 module KIF
   module Rand

@@ -1,5 +1,5 @@
 #===============================================================================
-# C-SYS-02 – Skip intro (Cody, 2026-10-08)
+# C-SYS-02 – Skip intro (2026-10-08)
 #   Cody Settings > Interface > "Skip intro": Off / On (default).
 #   On: the game starts at the title screen without the opening movie
 #   (Gengar and Nidorino). The title screen and its music stay.

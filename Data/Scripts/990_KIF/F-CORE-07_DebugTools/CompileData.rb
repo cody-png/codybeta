@@ -19,7 +19,7 @@
 #     files.
 #   * Not ported: KIF's restored in-game PBS editors (Edit Wild Encounters,
 #     Trainer Types, Individual Trainers, Items, Pokémon, Regional Dexes) –
-#     only decompile/recompile was asked for (Cody, 2026-10-05).
+#     only decompile/recompile is needed.
 #===============================================================================
 if defined?(DebugMenuCommands)
   DebugMenuCommands.register("kif_writedata", {

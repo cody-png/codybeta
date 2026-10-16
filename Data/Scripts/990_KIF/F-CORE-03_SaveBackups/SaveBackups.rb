@@ -7,7 +7,7 @@
 # a backup" menu, but deletes all but the newest 10. KIF never deleted its
 # backups.
 #
-# Others > "Save Backups" (all saves; Cody 2026-10-05):
+# Others > "Save Backups" (all saves):
 #   Infinite (default) – backups are never deleted (KIF)
 #   PIF                – 6.8.2's limit (Settings::SAVEFILE_NB_BACKUPS)
 # Save menu, either way (KIF): "Name the next backup" – type a name, then

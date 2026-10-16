@@ -1,8 +1,7 @@
 #===============================================================================
 # KIF::MapPatches – add or change map events when a map is loaded, without
-# touching the Data/MapNNN.rxdata files (port framework, Cody 2026-10-05:
-# "Let the scripts add the events when the map loads. Modularity is
-# important.").
+# touching the Data/MapNNN.rxdata files (port framework: the
+# scripts add the events when the map loads, so the port stays modular).
 #
 #   KIF::MapPatches.add(314, "Dem NPC") { |map| ... change map.events ... }
 #

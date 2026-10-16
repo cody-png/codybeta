@@ -37,7 +37,7 @@
 #     (identical result, much faster) and cached (option "Shiny Cache").
 #   * New option "Shiny Filter" (port addition): Off = exact KIF colours,
 #     Filtered = every KIF shiny goes through KIF::Shiny::Polish (outlines and
-#     shading stay readable), Hybrid (default, Cody 2026-10-05) = half of the
+#     shading stay readable), Hybrid (default) = half of the
 #     shinies are filtered. Which half is a per-Pokémon roll saved with its
 #     colours (kif_filter_roll), re-rolled with them (gamble, debug re-roll)
 #     and copied with them (Shiny Fuse Dye).

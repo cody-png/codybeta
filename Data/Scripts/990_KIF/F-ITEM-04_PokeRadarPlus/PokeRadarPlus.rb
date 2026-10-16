@@ -16,11 +16,11 @@
 #   down, and the radar's shiny grass uses "Wild Shiny Odds" (F-SHINY-02)
 #   instead of the fixed 1/4096 base.
 #
-# Endless chains (Cody, 2026-10-14; Kanto radar, with or without PokeRadar+):
+# Endless chains (Kanto radar, with or without PokeRadar+):
 #   PIF stops counting at 40 and its shiny odds stop improving at chain 20.
 #   KIF keeps its own count past 40 ($PokemonTemp.pokeradar[4]); the odds
 #   follow PIF's formula up to 20 and then keep improving with no floor
-#   (Cody, 2026-10-15): through the points in ANCHORS - PIF's best at 20
+#   through the points in ANCHORS - PIF's best at 20
 #   (1 in 200), 1 in 20 at 100, 1 in 10 at 200 - smoothly in between, and
 #   past 200 it keeps improving at the same rate (2x per 100 links) until
 #   every patch of shaking grass is shiny.
@@ -29,16 +29,16 @@
 #   whether or not the chain count is shown; every change of the chance is
 #   written to Logs/KIF_log.txt.
 #
-# Multi-Battle Radar (Cody, 2026-10-15; Off / Same Species / Mixed, Off by
+# Multi-Battle Radar (Off / Same Species / Mixed, Off by
 #   default): PIF makes every radar grass battle a single battle. With it on
 #   and Battle Format 2v2/3v3 for wild battles, the radar Pokémon brings
 #   company: Same Species - the others are the chained species too; Mixed -
 #   the others are normal encounters from the area. Either way a won battle
-#   adds 1 to the chain, however many foes it had (Cody, 2026-10-15: a 3v3
-#   adding 3 was too much). Shininess:
+#   adds 1 to the chain, however many foes it had (a 3v3 used to add 3).
+#   Shininess:
 #   the shaking patch only decides the radar Pokémon's; every other Pokémon
 #   rolls its own with the chain's chance, as if it had its own shaking patch
-#   (both modes; Mixed used normal odds until Cody's call, 2026-10-15).
+#   (both modes; Mixed used to use normal odds).
 #   A milestone passed by a jump of more than 1 is still announced.
 #
 # 6.8.2 adaptations: pbPokeRadarHighlightGrass is a guarded copy. The chain-break is in an
@@ -47,7 +47,7 @@
 # put back. Hoenn's PokéNav radar (Settings::HOENN) isn't changed.
 #===============================================================================
 KIF::Options.define(:pokeradarplus, 0, :save)
-KIF::Options.define(:radarchaincount, 1, :save)   # port addition (Cody, 2026-10-05)
+KIF::Options.define(:radarchaincount, 1, :save)   # port addition
 
 KIF::Options.add(:others, :save) {
   EnumOption.new(_INTL("PokeRadar+"), [_INTL("Off"), _INTL("On")],
@@ -139,7 +139,7 @@ module KIF
       return v0 * ((v1 / v0) ** ((chain - c0).to_f / (c1 - c0)))
     end
 
-    # "Chain count" with the shiny chance (Monto, 2026-10-15)
+    # "Chain count" with the shiny chance
     def self.count_message(chain)
       d = odds_denominator(chain, shiny_odds)
       return _INTL("Chain count: {1} (every patch shiny)\\wtnp[10]", chain) if d <= 1
@@ -351,7 +351,7 @@ module KIF
     end
 
     # The foes in a random order, so the radar Pokémon (the one the shaking
-    # patch decides) can be in any spot (Cody, 2026-10-15). pairs: [[species,
+    # patch decides) can be in any spot. pairs: [[species,
     # level], ...] in battle order; :slot = where the radar Pokémon is.
     def self.multi_shuffle(pairs)
       m = @multi

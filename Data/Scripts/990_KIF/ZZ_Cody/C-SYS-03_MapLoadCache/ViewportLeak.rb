@@ -34,7 +34,7 @@ module KIF
 
       # the hidden lists the engine keeps on the viewport (Arrays only it holds)
       # (Ruby-side @variables of a Viewport subclass are left alone)
-      # (a tester's game logged "wrong number of arguments (given 0, expected
+      # (one game logged "wrong number of arguments (given 0, expected
       # 1..4)" here - Kernel#select's message - so the result is checked to be
       # an Array and walked without .select; failures now log where they were)
       def lists(vp)

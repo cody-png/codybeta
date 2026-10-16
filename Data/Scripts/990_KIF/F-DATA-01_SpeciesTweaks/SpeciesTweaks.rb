@@ -99,6 +99,6 @@ end
 
 KIF::DataLoad.after_load_all("KIF species tweaks") {
   KIF::SpeciesTweaks.data_reloaded   # fresh data from the files: PIF's values
-  KIF::SpeciesTweaks.sync(!defined?(KIF::Modules) || KIF::Modules.active?(:pokemon))
+  KIF::SpeciesTweaks.sync(!defined?(KIF::Modules) || KIF::Modules.active?("F-DATA-01_SpeciesTweaks"))
 }
 KIF::Modules.watch(:pokemon) { |active| KIF::SpeciesTweaks.sync(active) } if defined?(KIF::Modules)

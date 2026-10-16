@@ -60,7 +60,7 @@ module KIF
     # The current save's settings into slot i
     def save(i)
       d = data
-      d[:slots][i] = keys.each_with_object({}) { |k, h| h[k] = Marshal.load(Marshal.dump($PokemonSystem.send(k))) }
+      d[:slots][i] = keys.each_with_object({}) { |k, h| h[k] = Marshal.load(Marshal.dump(KIF::Options.raw(k))) }   # the player's values, not a mod's locks
       ok = write(d)
       KIF.log("Settings preset #{i + 1} (#{d[:names][i]}) saved: #{d[:slots][i].length} settings") if ok
       return ok

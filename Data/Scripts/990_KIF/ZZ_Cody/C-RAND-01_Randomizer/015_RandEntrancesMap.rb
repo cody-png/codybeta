@@ -249,7 +249,7 @@ module KIF
           pbDrawShadowText(t, 16, 0, 300, 32, _INTL("Entrance log"), WHITE, SHADOW)
           pbDrawShadowText(t, Graphics.width - 316, 0, 300, 32, _INTL("{1} found, {2} to go", found, left), WHITE, SHADOW, 1)
           pbDrawShadowText(t, 16, Graphics.height - 32, Graphics.width - 32, 32,
-                           _INTL("{1}/{2}  Up/Down: door  Left/Right: ends  A: list", @index + 1, @list.length), WHITE, SHADOW)
+                           _INTL("{1}/{2}  Up/Down: door  Left/Right: ends  {3}: list", @index + 1, @list.length, KIF::Keys.name(Input::USE)), WHITE, SHADOW)
           i = @sprites["info"].bitmap
           i.clear
           i.fill_rect(0, 0, VIEW_W, 52, Color.new(16, 16, 24, 190))

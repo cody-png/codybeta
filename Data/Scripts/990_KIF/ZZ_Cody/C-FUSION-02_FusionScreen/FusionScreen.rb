@@ -441,7 +441,7 @@ class FusionPreviewScreen
     bmp.clear
     bmp.fill_rect(0, 0, bmp.width, bmp.height, KIF::FusionScreen::HINT_BG)
     pbSetSmallFont(bmp)
-    pbDrawTextPositions(bmp, [[_INTL("A: Options"), 6, -4, 0,
+    pbDrawTextPositions(bmp, [[_INTL("{1}: Options", KIF::Keys.name(Input::USE)), 6, -4, 0,
                                KIF::FusionScreen::LABEL, Color.new(48, 48, 48)]])
   end
 

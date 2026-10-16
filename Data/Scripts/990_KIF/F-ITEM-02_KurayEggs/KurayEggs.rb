@@ -140,7 +140,7 @@ module KIF
         # registered after the module gate ran (data load), so gated here
         # (a plain proc: HandlerHash.add only takes Procs)
         ItemHandlers::UseInField.add(sym, proc { |it|
-          next nil if defined?(KIF::Modules) && !KIF::Modules.active?(:keggs)
+          next nil if defined?(KIF::Modules) && !KIF::Modules.active?("F-ITEM-02_KurayEggs")
           next KIF::KurayEggs.use(effect, it)
         })
       end

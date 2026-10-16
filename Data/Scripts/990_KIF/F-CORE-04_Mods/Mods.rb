@@ -63,6 +63,8 @@ module KIF
       # what happened when it loaded this session (KIF's own mods)
       def error; return @error || (KIF::Mods.status[@id] || {})[:error]; end
       def loaded; return @loaded.nil? ? (KIF::Mods.status[@id] || {})[:loaded] : @loaded; end
+      # why it wasn't loaded (mod.json requires_kif / incompatible), or nil
+      def blocked; return (KIF::Mods.status[@id] || {})[:blocked]; end
       def settings
         return [] unless defined?(KIF::ModSettings) && KIF::ModSettings.active?
         return KIF::ModSettings.registry.select { |e| e[:mod] == @id }
@@ -73,6 +75,12 @@ module KIF
     def self.loaded_root; @loaded_root || []; end
 
     def self.status; return @status ||= {}; end
+
+    # a mod's name for messages ("Set by Kanto Reloaded")
+    def self.display_name(id)
+      return nil if id.nil?
+      return (@names || {})[id] || id.to_s
+    end
 
     def self.loaded_file?(path)
       return @loaded_files[File.expand_path(path)] ? true : false
@@ -426,16 +434,22 @@ module KIF
       @loaded_root = []
       @disabled = nil
       @status = {}
+      @names = {}
+      KIF::Features.reset! if defined?(KIF::Features)
+      KIF::Locks.reset! if defined?(KIF::Locks)
       native = NativeSource.new(dir)
       add_source(native)
       add_source(ModManagerSource.new)
       unpack_zips(dir)
       off = []
+      on = mods_on(native)
       # loose .rb files first, in name order (as KIF 0.20.7)
       native.entries.select { |e| e.kind == :file }.each do |e|
         (off << e.id; next) unless e.enabled?
+        @names[e.id] = e.name.to_s
         r = load_file(e.path, e.id)
         status[e.id] = { :loaded => r == true, :error => (r == true ? nil : r) }
+        KIF::ModRules.release(e.id) unless r == true
         next unless r == true
         @loaded_root << e.id
         KIF.log("Mod loaded: #{e.id}")
@@ -444,17 +458,55 @@ module KIF
       # is asked again, as Mod Manager may have loaded by now
       native.instance_variable_set(:@entries, nil)
       folders = native.order(native.entries.select { |e| e.kind == :folder })
+      blocked = {}
       folders.each do |e|
         (off << e.id; next) unless e.enabled?
+        json = KIF::ModRules.json_for(e)
+        why = KIF::ModRules.blocked_reason(e, json, on, blocked)
+        if why
+          status[e.id] = { :loaded => false, :error => nil, :blocked => why }
+          blocked[e.id] = e.name.to_s
+          blocked[json["id"].to_s] = e.name.to_s if json && json["id"]
+          KIF.log("Mod not loaded: #{e.name} - #{why}")
+          next
+        end
+        @names[e.id] = e.name.to_s
+        KIF::ModRules.apply(e.id, e.name.to_s, json)
         # a script also dropped loose into Mods/ is already loaded (twice
         # makes its aliases recurse)
         scripts = native.scripts(e).reject { |f| loaded_file?(f) || @loaded_root.include?(File.basename(f)) }
         results = scripts.map { |f| load_file(f, e.id) }
         bad = results.find { |r| r != true }
         status[e.id] = { :loaded => bad.nil?, :error => bad }
-        KIF.log("Mod loaded: #{e.name} (folder #{e.id}, #{scripts.length} scripts)") if bad.nil?
+        if bad.nil?
+          KIF.log("Mod loaded: #{e.name} (folder #{e.id}, #{scripts.length} scripts)")
+        else
+          KIF::ModRules.release(e.id)
+          blocked[e.id] = e.name.to_s
+          blocked[json["id"].to_s] = e.name.to_s if json && json["id"]
+        end
       end
+      KIF::ModRules.apply_mod_manager
       KIF.log("Mods switched Off: #{off.join(', ')}") unless off.empty?
+    end
+
+    # every mod that is On: id / folder => name (for "incompatible")
+    def self.mods_on(native)
+      on = {}
+      native.entries.each do |e|
+        next unless e.enabled?
+        on[e.id] = e.name.to_s
+        on[File.basename(e.id, ".*")] = e.name.to_s if e.kind == :file
+        json = e.kind == :folder ? KIF::ModRules.json_for(e) : nil
+        on[json["id"].to_s] = e.name.to_s if json && json["id"]
+      end
+      ModManagerSource.new.entries.each do |e|
+        on[e.id.sub(/\Amm:/, "")] = e.name.to_s if (e.enabled? rescue false)
+      end
+      return on
+    rescue StandardError => e
+      KIF.log("Mods: couldn't list the mods that are On (#{e.class}: #{e.message})")
+      return on || {}
     end
 
     def self.load_all

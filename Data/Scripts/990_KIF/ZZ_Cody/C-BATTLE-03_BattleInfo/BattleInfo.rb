@@ -26,8 +26,8 @@ KIF::Options.add(:others, :global) {
                  proc { $PokemonSystem.cody_battleinfo },
                  proc { |value| $PokemonSystem.cody_battleinfo = value },
                  [_INTL("No battle info screen"),
-                  _INTL("In battle, INFO (or Z/Shift) shows stat changes, effects and the field"),
-                  _INTL("Battle info with Z/Shift only, no INFO button on screen")])
+                  _INTL("In battle, INFO (or {1}) shows stat changes, effects and the field", KIF::Keys.name(Input::ACTION)),
+                  _INTL("Battle info with {1} only, no INFO button on screen", KIF::Keys.name(Input::ACTION))])
 }
 
 module KIF
@@ -488,7 +488,7 @@ class KifBattleInfoScreen
     end
     hints = [[:lr, _INTL("Pokémon")]]
     hints << [:ud, _INTL("Page")] if battler?
-    hints << ["Esc", _INTL("Close")]
+    hints << [KIF::Keys.name(Input::BACK), _INTL("Close")]
     footer(b, hints)
   end
 
@@ -730,7 +730,7 @@ module KIF
       bmp.fill_rect(2, h / 2 + 1, w - 4, h / 2 - 3, low)
       bmp.fill_rect(6, 5, 18, h - 10, Color.new(72, 120, 200))
       pbSetSmallFont(bmp)
-      tab_text(bmp, 6, 18, "Z", Color.new(255, 255, 255), Color.new(32, 64, 120))
+      tab_text(bmp, 6, 18, KIF::Keys.short(Input::ACTION), Color.new(255, 255, 255), Color.new(32, 64, 120))
       tab_text(bmp, 26, w - 30, _INTL("INFO"), Color.new(64, 64, 72), Color.new(176, 176, 184))
       return bmp
     end

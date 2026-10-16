@@ -338,7 +338,7 @@ module KIF
 
         def trigger(*args)
           mode = KIF::Mechanics.walkingpoison
-          return kif_mech_trigger(*args) if mode == 0 || (defined?(KIF::Modules) && !KIF::Modules.active?(:battles))
+          return kif_mech_trigger(*args) if mode == 0 || (defined?(KIF::Modules) && !KIF::Modules.active?("F-BATTLE-06_Mechanics"))
           handled = args[1]
           old = KIF::Mechanics.walking
           KIF::Mechanics.walking = true
@@ -376,7 +376,7 @@ KIF::Mechanics.install_step_hook
 module KIF
   module Mechanics
     def self.battles_on?
-      return !defined?(KIF::Modules) || KIF::Modules.active?(:battles)
+      return !defined?(KIF::Modules) || KIF::Modules.active?("F-BATTLE-06_Mechanics")
     end
 
     def self.frostbite_in_battle?; frostbite? && battles_on?; end

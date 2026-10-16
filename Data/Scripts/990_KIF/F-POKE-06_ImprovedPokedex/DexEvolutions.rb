@@ -167,20 +167,21 @@ class PokemonPokedexInfo_Scene
   # controllers/Steam Deck/JoiPlay).
   def kif_draw_evo_hint
     overlay = @sprites["overlay"].bitmap
+    run = KIF::Keys.name(Input::ACTION)   # the key bound to Run (Z / Shift by default)
     if KIF::DexTree.entry_mode?
       # Entry Box mode (DexEvolutionsTree.rb): Run cycles the entry box
       sd = GameData::Species.get_species_form(@species, @form)
       fusion = KIF::DexTree.fusion?(sd)
       label = case KIF::DexTree.state
-              when 0 then fusion ? _INTL("RUN: Head line") : _INTL("RUN: Evolutions")
-              when 1 then fusion ? _INTL("RUN: Body line") : _INTL("RUN: Entry")
-              else _INTL("RUN: Entry")
+              when 0 then fusion ? _INTL("{1}: Head line", run) : _INTL("{1}: Evolutions", run)
+              when 1 then fusion ? _INTL("{1}: Body line", run) : _INTL("{1}: Entry", run)
+              else _INTL("{1}: Entry", run)
               end
       if KIF::DexTree.showing? && KIF::DexTree.pages > 1
-        label = _INTL("C: Page {1}/{2}  ", KIF::DexTree.page % KIF::DexTree.pages + 1, KIF::DexTree.pages) + label
+        label = _INTL("{1}: Page {2}/{3}  ", KIF::Keys.name(Input::USE), KIF::DexTree.page % KIF::DexTree.pages + 1, KIF::DexTree.pages) + label
       end
     else
-      label = KIF::DexEvolutions.show ? _INTL("RUN: Credits") : _INTL("RUN: Evolutions")
+      label = KIF::DexEvolutions.show ? _INTL("{1}: Credits", run) : _INTL("{1}: Evolutions", run)
     end
     pbSetSmallFont(overlay)
     pbDrawTextPositions(overlay, [[label, 502, 2, 1, Color.new(248, 248, 248), Color.new(160, 40, 48)]])

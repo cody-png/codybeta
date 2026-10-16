@@ -89,8 +89,7 @@ module KIF
       return @basenames if @basenames
       @basenames = {}
       dupes = {}
-      root = KIF.respond_to?(:scripts_dir) ? KIF.scripts_dir : nil
-      root ||= File.join("Data", "Scripts", "990_KIF")
+      root = KIF::Features.root
       Dir.glob(File.join(root, "**", "*.rb")).each do |f|
         b = File.basename(f)
         dupes[b] = true if @basenames.has_key?(b)
@@ -132,8 +131,12 @@ module KIF
       return $PokemonSystem.kif_modules
     end
 
+    # A mod can set a module for as long as it's On (mod.json "modules",
+    # KIF::Locks): that state wins over the player's, which is kept
     def self.state(id)
       return ON if id.nil?
+      f = KIF::Locks.module_state(id)
+      return f unless f.nil?
       h = states
       v = h ? h[id] : nil
       return v.nil? ? OFF : v
@@ -146,19 +149,43 @@ module KIF
       poll   # watchers (frame rate, species data...) follow at once
     end
 
-    def self.active?(id);  return id.nil? || state(id) != OFF; end
-    def self.visible?(id); return id.nil? || state(id) == ON;  end
+    # id: a module (:battles), or a feature folder ("F-BATTLE-08_LevelCaps"):
+    # a feature is active while its module is and no mod replaced it
+    def self.active?(id)
+      return true if id.nil?
+      if id.is_a?(String)
+        return false if KIF::Features.replaced?(id)
+        id = KIF::Features.module_of(id)
+        return true if id.nil?
+      end
+      return state(id) != OFF
+    end
 
-    # true when a proc (handler, builder...) belongs to an active module
-    def self.proc_active?(pr);  return active?(for_proc(pr));  end
-    def self.proc_visible?(pr); return visible?(for_proc(pr)); end
+    def self.visible?(id)
+      return true if id.nil?
+      if id.is_a?(String)
+        return false if KIF::Features.replaced?(id)
+        id = KIF::Features.module_of(id)
+        return true if id.nil?
+      end
+      return state(id) == ON
+    end
+
+    # true when a proc (handler, builder...) belongs to an active module /
+    # feature
+    def self.proc_active?(pr);  return active?(KIF::Features.key_for_proc(pr) || for_proc(pr));  end
+    def self.proc_visible?(pr); return visible?(KIF::Features.key_for_proc(pr) || for_proc(pr)); end
 
     # Blocks told when a module turns active / inactive (and once at start).
-    # Not gated: they must also run when the module is turned off.
+    # Not gated: they must also run when the module is turned off. A block
+    # from a feature's own folder follows that feature (so it's also told
+    # when a mod replaces the feature).
     @watchers = []
     @last = {}
 
     def self.watch(id, &block)
+      key = KIF::Features.key_for_proc(block)
+      id = key if key && KIF::Features.module_of(key) == id
       @watchers << [id, block]
     end
 
@@ -258,7 +285,7 @@ module KIF
 
     def self.gate_callback(cb, fallback = nil)
       return cb if cb.is_a?(GatedCallback)
-      id = for_proc(cb)
+      id = KIF::Features.key_for_proc(cb) || for_proc(cb)
       return id ? GatedCallback.new(id, cb, fallback) : cb
     end
 
@@ -266,6 +293,156 @@ module KIF
     def self.pif_handler(hash_obj, key)
       snap = @handler_snapshot[hash_obj]
       return snap ? snap[key] : nil
+    end
+  end
+end
+
+#===============================================================================
+# Features (2026-10-16): one folder of a module ("F-BATTLE-08_LevelCaps").
+# A mod can replace one with its own version without turning the whole
+# module Off:
+#   mod.json   "replaces": ["F-BATTLE-08_LevelCaps"]
+#   or Ruby    KIF::Features.replace("LevelCaps")
+# While the mod is On, that folder's code acts as if its module were Off
+# (PIF's behaviour, settings and menu entries hidden); the rest of the module
+# keeps working. KIF::Features.list shows every feature a mod can replace.
+# The core and the always-on parts (no module) can't be replaced.
+#===============================================================================
+module KIF
+  module Features
+    @file_keys = {}
+    @module_of = {}
+    @replaced = {}    # key => [mod name, mod id]
+
+    # the module a feature folder belongs to (nil = always on / not a feature)
+    def self.module_of(key)
+      return @module_of[key] if @module_of.has_key?(key)
+      found = nil
+      KIF::Modules::MODULES.each do |id, (_n, _d, prefixes)|
+        found = id if prefixes.any? { |pre| key.start_with?("#{pre}_") }
+        break if found
+      end
+      return @module_of[key] = found
+    end
+
+    # the feature a source file belongs to ("F-BATTLE-08_LevelCaps"), or nil
+    def self.key_for_file(path)
+      return nil if path.nil?
+      path = path.to_s
+      return @file_keys[path] if @file_keys.has_key?(path)
+      key = nil
+      if KIF::Modules.for_file(path)
+        full = path
+        full = KIF::Modules.basename_map[path] || path unless path.include?("/") || path.include?("\\")
+        key = full.split(/[\/\\]/).find { |seg| module_of(seg) }
+      end
+      return @file_keys[path] = key
+    end
+
+    def self.key_for_proc(pr)
+      return nil unless pr.respond_to?(:source_location)
+      loc = (pr.source_location rescue nil)
+      return loc ? key_for_file(loc[0]) : nil
+    end
+
+    # KIF's script folder (the game runs from its own folder; a test run
+    # may not)
+    HERE = (__FILE__.to_s.include?("/") || __FILE__.to_s.include?("\\")) ? File.expand_path(__FILE__.to_s) : nil
+    def self.root
+      return KIF.scripts_dir if KIF.respond_to?(:scripts_dir)
+      dir = File.join("Data", "Scripts", "990_KIF")
+      return dir if File.directory?(dir) || HERE.nil?
+      return File.dirname(File.dirname(HERE))
+    end
+
+    # names the folder name doesn't spell out
+    NAMES = {
+      "F-BATTLE-09_ExpEvIvModes"   => "EXP, EV & IV Modes",
+      "F-BATTLE-11_CatchQoL"       => "Catch QoL",
+      "F-UI-01_QoLPauseMenu"       => "QoL Pause Menu",
+      "F-UI-04_SummaryIVEV"        => "Summary IVs & EVs",
+      "F-ITEM-04_PokeRadarPlus"    => "Poké Radar+",
+      "F-POKE-06_ImprovedPokedex"  => "Improved Pokédex",
+      "F-POKE-05_TutorNet"         => "Tutor.net",
+      "F-UI-08_HatchToPC"          => "Hatch to PC",
+      "F-UI-09_TitleAndLoad"       => "Title and Load Screens",
+      "F-UI-10_Shenanigans"        => "Kuray's Shenanigans"
+    }
+
+    # "F-BATTLE-08_LevelCaps" -> "Level Caps"
+    def self.title(key)
+      return NAMES[key] if NAMES[key]
+      return key.sub(/\A[A-Z]+(?:-[A-Z]+)?-\d+_/, "").gsub(/([a-z0-9])([A-Z])/, '\1 \2').gsub(/([A-Z]+)([A-Z][a-z])/, '\1 \2')
+    end
+
+    # Every feature a mod can replace:
+    # [{:id => "F-BATTLE-08_LevelCaps", :name => "Level Caps",
+    #   :module => :battles, :module_name => "Battles & Challenges"}, ...]
+    def self.list
+      return @list if @list
+      out = []
+      dirs = Dir.glob(File.join(root, "*")) + Dir.glob(File.join(root, "*", "*"))
+      dirs.select { |d| File.directory?(d) }.map { |d| File.basename(d) }.uniq.sort.each do |key|
+        mod = module_of(key)
+        next unless mod
+        out << { :id => key, :name => title(key), :module => mod,
+                 :module_name => KIF::Modules::MODULES[mod][0] }
+      end
+      return @list = out
+    end
+
+    # "F-BATTLE-08_LevelCaps", "F-BATTLE-08", "LevelCaps" or "Level Caps" -> the id
+    def self.resolve(name)
+      name = name.to_s.strip
+      return nil if name.empty?
+      ids = list.map { |f| f[:id] }
+      return name if ids.include?(name)
+      flat = name.downcase.delete(" _-")
+      hits = ids.select { |id| id.sub(/\A[A-Z]+(?:-[A-Z]+)?-\d+_/, "").downcase.delete(" _-") == flat }
+      hits = ids.select { |id| id.start_with?("#{name}_") } if hits.empty?
+      return hits.length == 1 ? hits[0] : nil
+    end
+
+    # by: the mod's name; owner: its id (both default to the mod whose
+    # scripts are loading)
+    def self.replace(name, by: nil, owner: nil)
+      id = resolve(name)
+      owner ||= (KIF::Mods.current if defined?(KIF::Mods) && KIF::Mods.respond_to?(:current))
+      by ||= (KIF::Mods.display_name(owner) if owner && KIF::Mods.respond_to?(:display_name)) || owner || "A mod"
+      unless id
+        KIF.log("#{by}: can't replace \"#{name}\" - no KIF feature by that name (KIF::Features.list has them)")
+        return false
+      end
+      if @replaced[id] && @replaced[id][1] != owner
+        KIF.log("#{by}: #{id} is already replaced by #{@replaced[id][0]} - left to it")
+        return false
+      end
+      @replaced[id] = [by.to_s, owner]
+      KIF.log("#{by} replaces KIF's #{title(id)} (#{id})")
+      return true
+    end
+
+    # undo what a mod replaced (a mod that failed to load)
+    def self.release(owner)
+      @replaced.delete_if { |_k, v| v[1] == owner }
+    end
+
+    def self.replaced?(key)
+      return false if @replaced.empty?
+      return @replaced.has_key?(key)
+    end
+
+    def self.replaced_by(key); return @replaced[key] ? @replaced[key][0] : nil; end
+
+    # the features one mod replaced
+    def self.owned_by(owner)
+      return @replaced.select { |_k, v| v[1] == owner }.keys
+    end
+    # key => mod name
+    def self.replacements; return @replaced.map { |k, v| [k, v[0]] }.to_h; end
+
+    def self.reset!
+      @replaced = {}
     end
   end
 end

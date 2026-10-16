@@ -472,7 +472,7 @@ module KIF
               last = Time.now.to_f
               got = items.inject(0) { |s, (path, _sha, _size)| p = staged(dir, path); s + (File.file?(p) ? File.size(p) : 0) }
               status(title, _INTL("{1} of {2}", size_text([got, total].min), size_text(total)),
-                     total > 0 ? got.to_f / total : 1, _INTL("B: cancel (you can update later)"))
+                     total > 0 ? got.to_f / total : 1, _INTL("{1}: cancel (you can update later)", KIF::Keys.name(Input::BACK)))
             else
               Graphics.update
               Input.update
@@ -493,7 +493,7 @@ module KIF
       bad = items.reject { |path, sha, size| good_file?(staged(dir, path), sha, size) }
       bad.each_with_index do |(path, sha, size), i|
         status(title, _INTL("{1} ({2} of {3})", File.basename(path), i + 1, bad.length),
-               (i + 1).to_f / bad.length, _INTL("B: cancel (you can update later)"))
+               (i + 1).to_f / bad.length, _INTL("{1}: cancel (you can update later)", KIF::Keys.name(Input::BACK)))
         return :cancelled if cancel_pressed?
         data = fetch(url_for(base, path))
         dest = staged(dir, path)

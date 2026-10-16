@@ -267,3 +267,35 @@ begin
 rescue StandardError
   nil
 end
+
+#===============================================================================
+# Encryption.xor (001_Technical/000_Encryption.rb) decodes messages.dat (31 MB)
+# one byte at a time in Ruby: ~7 s the first time any text is looked up.
+# Same result, four bytes at a time: ~1.2 s. Used for reading and writing.
+#===============================================================================
+module Encryption
+  class << self
+    alias kif_perf_xor xor unless method_defined?(:kif_perf_xor)
+
+    def xor(data)
+      key = ENCRYPTION_KEY
+      return kif_perf_xor(data) unless key.length == 16
+      n = data.bytesize
+      full = n - n % 16
+      k0, k1, k2, k3 = key.pack("C*").unpack("L<4")
+      w = data.byteslice(0, full).unpack("L<*")
+      i = 0
+      len = w.length
+      while i < len
+        w[i] ^= k0
+        w[i + 1] ^= k1
+        w[i + 2] ^= k2
+        w[i + 3] ^= k3
+        i += 4
+      end
+      out = w.pack("L<*")
+      out << data.byteslice(full, n - full).bytes.each_with_index.map { |b, j| b ^ key[j] }.pack("C*") if n > full
+      return out
+    end
+  end
+end

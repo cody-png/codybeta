@@ -1,3 +1,10 @@
-KIF Beta 0.21.50
-- The description at the bottom of the settings screen now shows three lines, so module descriptions are no longer cut off.
-- A description longer than that moves up a line at a time while its row stays selected, with small arrows showing there is more.
+KIF Beta 0.21.51
+Options > Mods can now find, install and update mods:
+- Browse lists the mods in the KIF-Mods catalog. Pick one to install it, together with any mods it needs.
+- Updates lists your mods that have a newer version (Update all does them in one go). Their settings are kept.
+- Installed shows ERROR for a mod that failed to load, and ON/OFF NEXT START after you switch one.
+Search: press D (or Q) and type straight into the search bar; the list follows as you type. The key hints show the keys you have bound.
+Every setting has a new, clearer description.
+The Base Stats sliders only show while Base Stats is on.
+Faster: the game's text is ready a few seconds sooner after start-up, and shuffling trainers in the Randomizer takes a few seconds instead of about 20.
+The old settings pages are gone: Settings by category, mod settings and presets all open inside the settings screen.

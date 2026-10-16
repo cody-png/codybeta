@@ -5,8 +5,8 @@
 #
 # Per-save settings (every KIF and Cody's additions setting that resets on New Game) can
 # be saved into one of 12 named presets and loaded into another save, so a
-# new run doesn't need every setting toggled again. KIF Settings > Settings
-# Presets. Global settings are shared by every save already, so a preset
+# new run doesn't need every setting toggled again. Options > KIF Settings
+# > Presets. Global settings are shared by every save already, so a preset
 # holds only the per-save ones. Randomizer settings have their own presets
 # (Randomizer > Presets & sharing).
 # Changes from KIF: one file (KIF_Presets.kro in the save folder) instead of
@@ -92,78 +92,48 @@ module KIF
   end
 end
 
-class KifPresetsScene < KifOptionsBaseScene
-  def kif_title; "Settings Presets"; end
-  def kif_colors; [[200, 130, 200], [115, 75, 115]]; end
-
-  def getDefaultDescription
-    return _INTL("Save this file's settings, or load them into another save.")
-  end
-
-  def slot_option(i)
-    label = KIF::Presets.name(i)
-    label += "  " + _INTL("(empty)") unless KIF::Presets.filled?(i)
-    return ButtonOption.new(label, proc { kif_slot_menu(i) },
-                            _INTL("Load, save or rename this preset."))
-  end
-
-  def pbGetOptions(inloadscreen = false)
-    return [kif_header_option("### LOAD A SAVE TO USE PRESETS ###")] unless KIF.in_game?
-    return Array.new(KIF::Presets::SLOTS) { |i| slot_option(i) }
-  end
-
-  def kif_slot_menu(i)
-    name = KIF::Presets.name(i)
-    cmds = [_INTL("Load"), _INTL("Save"), _INTL("Rename"), _INTL("Cancel")]
-    choice = pbMessage(_INTL("{1}", name), cmds, cmds.length)
-    case choice
-    when 0
-      if !KIF::Presets.filled?(i)
-        pbPlayBuzzerSE
-        pbMessage(_INTL("{1} is empty.", name))
-      elsif pbConfirmMessage(_INTL("Replace this save's settings with {1}?", name))
-        n = KIF::Presets.load(i)
-        pbMessage(_INTL("Loaded {1} ({2} settings).", name, n))
-      end
-    when 1
-      if !KIF::Presets.filled?(i) || pbConfirmMessage(_INTL("Overwrite {1} with this save's settings?", name))
-        if KIF::Presets.save(i)
-          pbMessage(_INTL("This save's settings are now in {1}.", name))
-        else
-          pbMessage(_INTL("The preset couldn't be saved."))
-        end
-      end
-    when 2
-      new_name = pbEnterText(_INTL("Preset name?"), 0, 16, name)
-      KIF::Presets.rename(i, new_name)
+# The rows of the settings screen's Presets section: one per slot, each
+# opening Load / Save / Rename
+module KIF
+  module Presets
+    def self.slot_option(i)
+      label = name(i)
+      label += "  " + _INTL("(empty)") unless filled?(i)
+      return ButtonOption.new(label, proc { slot_menu(i) },
+                              filled?(i) ? _INTL("Load this preset, save this save's settings over it, or rename it.")
+                                         : _INTL("Save this save's settings here, or rename the slot."))
     end
-    kif_refresh_slot(i)
-  end
 
-  def kif_refresh_slot(i)
-    return unless @PokemonOptions && @sprites && @sprites["option"]
-    @PokemonOptions[i] = slot_option(i)
-    @sprites["option"].refresh rescue nil
-  end
-end
+    def self.slot_options
+      return [] unless KIF.in_game?
+      return Array.new(SLOTS) { |i| slot_option(i) }
+    end
 
-# Options > KIF Settings: the "Settings Presets" button sits above "Increment
-# Slider by" (always available: presets are part of the core)
-class KifSettingsScene < KifOptionsBaseScene
-  alias kif_presets_pbGetOptions pbGetOptions unless method_defined?(:kif_presets_pbGetOptions)
-
-  def pbGetOptions(inloadscreen = false)
-    options = kif_presets_pbGetOptions(inloadscreen)
-    btn = ButtonOption.new(_INTL("Settings Presets"), proc { kif_open_presets },
-                           _INTL("Save this file's settings, or load them into another save."))
-    idx = options.index { |o| o.respond_to?(:name) && o.name == _INTL("Increment Slider by") }
-    idx ? options.insert(idx, btn) : options.push(btn)
-    return options
-  end
-
-  def kif_open_presets
-    pbFadeOutIn {
-      PokemonOptionScreen.new(KifPresetsScene.new).pbStartScreen
-    }
+    def self.slot_menu(i)
+      n = name(i)
+      cmds = [_INTL("Load"), _INTL("Save"), _INTL("Rename"), _INTL("Cancel")]
+      choice = pbMessage(_INTL("{1}", n), cmds, cmds.length)
+      case choice
+      when 0
+        if !filled?(i)
+          pbPlayBuzzerSE
+          pbMessage(_INTL("{1} is empty.", n))
+        elsif pbConfirmMessage(_INTL("Replace this save's settings with {1}?", n))
+          count = load(i)
+          pbMessage(_INTL("Loaded {1} ({2} settings).", n, count))
+        end
+      when 1
+        if !filled?(i) || pbConfirmMessage(_INTL("Overwrite {1} with this save's settings?", n))
+          if save(i)
+            pbMessage(_INTL("This save's settings are now in {1}.", n))
+          else
+            pbMessage(_INTL("The preset couldn't be saved."))
+          end
+        end
+      when 2
+        new_name = pbEnterText(_INTL("Preset name?"), 0, 16, n)
+        rename(i, new_name)
+      end
+    end
   end
 end

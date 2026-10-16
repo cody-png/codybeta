@@ -66,12 +66,9 @@ module KIF
       end
     end
 
+    # the settings screen, opened on its Modules section
     def open_modules
-      pbFadeOutIn {
-        scene = KifModulesScene.new
-        screen = PokemonOptionScreen.new(scene)
-        screen.pbStartScreen
-      }
+      pbFadeOutIn { KifSettingsScreen.new(true, :modules).main }
     end
   end
 end

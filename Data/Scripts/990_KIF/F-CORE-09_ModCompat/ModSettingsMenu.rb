@@ -9,7 +9,7 @@
 #   without checking for it).
 #   When no Kanto Reloaded is installed, KIF provides the same API before the
 #   Mods folder loads, keeps the values in KIF_ModSettings.kro in the save
-#   folder (all saves) and lists them under Options > Mod Settings.
+#   folder (all saves) and lists them under Options > KIF Settings > Mods.
 #   With Kanto Reloaded installed nothing here runs: it has its own.
 #===============================================================================
 module KIF
@@ -302,48 +302,23 @@ module KIF
   end
 end
 
-class KifModSettingsScene < KifOptionsBaseScene
-  def kif_title; "Mod Settings"; end
-  def getDefaultDescription; return _INTL("Settings added by your mods"); end
-
-  def pbGetOptions(inloadscreen = false)
-    options = []
-    KIF::ModSettings.used_categories.each do |c|
-      name = c[:name].to_s
-      options << ButtonOption.new(_INTL(name), proc { @kif_cat = name; kif_open_category },
-                                  _INTL(c[:description].to_s))
+# Rows for the settings screen: one category's settings, or a list of
+# registry entries (one mod's)
+module KIF
+  module ModSettings
+    def self.options_for(list)
+      return list.map do |e|
+        begin
+          option_for(e)
+        rescue StandardError => ex
+          KIF.log("Mod setting #{e[:key]} has no row: #{ex.class}: #{ex.message}") if KIF.respond_to?(:log)
+          nil
+        end
+      end.compact
     end
-    return options
-  end
 
-  def kif_open_category
-    cat = @kif_cat
-    return unless cat
-    pbFadeOutIn {
-      scene = KifModSettingsCategoryScene.new(cat)
-      PokemonOptionScreen.new(scene).pbStartScreen
-    }
-    @kif_cat = nil
-  end
-end
-
-class KifModSettingsCategoryScene < KifOptionsBaseScene
-  def initialize(category)
-    super()
-    @kif_category = category
-  end
-
-  def kif_title; @kif_category.to_s; end
-  def getDefaultDescription; return _INTL("Settings added by your mods"); end
-
-  def pbGetOptions(inloadscreen = false)
-    return KIF::ModSettings.entries_in(@kif_category).map do |e|
-      begin
-        KIF::ModSettings.option_for(e)
-      rescue StandardError => ex
-        KIF.log("Mod setting #{e[:key]} has no row: #{ex.class}: #{ex.message}") if KIF.respond_to?(:log)
-        nil
-      end
-    end.compact
+    def self.options_in(category)
+      return options_for(entries_in(category))
+    end
   end
 end

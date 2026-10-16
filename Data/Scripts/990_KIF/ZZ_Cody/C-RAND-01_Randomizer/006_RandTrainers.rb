@@ -206,7 +206,7 @@ module KIF
     end
 
     def self.theme_ok?(dex, theme)
-      sp = (GameData::Species.get(dex) rescue nil)
+      sp = lite_species(dex) || (GameData::Species.get(dex) rescue nil)
       return false unless sp
       return theme.any? { |t| sp.type1 == t || sp.type2 == t }
     end

@@ -50,7 +50,7 @@ Highlights:
 - **Kuray QoL:** PC, Heal and the Kuray Shop from the pause menu, plus K-Eggs, Tutor.net and Quicksave.
 - **Fusion:** fusion preview, custom fusion base stats, dominant types, self-fusion boosts, and legendary-head breeding.
 - **Look and feel:** big Pokémon icons, type icons and battle GUIs, fonts, and Dark Mode.
-- **Modding support:** drop a mod's `.rb` file, its folder or its `.zip` into the `Mods` folder; switch mods On/Off in Options > Mods.
+- **Modding support:** drop a mod's `.rb` file, its folder or its `.zip` into the `Mods` folder; switch mods On/Off, browse and install mods from the KIF-Mods catalog, and update them in Options > Mods.
 - **Infinite save backups,** with named backups.
 
 # Credits

@@ -1,6 +1,6 @@
 # Kuray's Infinite Fusion – Feature Guide
 
-KIF brings the features of Kuray's Infinite Fusion 0.20.7 to Pokémon Infinite Fusion 6.8.2. Everything is optional and lives in **Pause menu → Options** (also on the load screen): one screen, which also holds PIF's own options (volume, text speed, screen size, difficulty, speed-up, sprites, challenge rules), with sections on the left (Shinies, Battles, Pokémon, Graphics, Self-Battle, Challenges, Game, System, **Modules**, **Mods**, **Presets**) and that section's settings on the right, under headings. Up/Down picks, Right opens a section, Left/Right changes a setting (its choices show as a bar), Esc goes back. An orange dot marks a setting you changed; **Z** sets it back to its default (the bottom bar shows the default and whether the setting is per save or for all saves). **A** (or F / Tab) searches every setting by name and description. A section whose settings all belong to modules that are Off is greyed out and skipped; each module in **Modules** says which sections hold its settings. Buttons other mods add to Options are listed under **Mods**.
+KIF brings the features of Kuray's Infinite Fusion 0.20.7 to Pokémon Infinite Fusion 6.8.2. Everything is optional and lives in **Pause menu → Options** (also on the load screen): one screen, which also holds PIF's own options (volume, text speed, screen size, difficulty, speed-up, sprites, challenge rules), with sections on the left (Shinies, Battles, Pokémon, Graphics, Self-Battle, Challenges, Game, System, **Modules**, **Mods**, **Presets**) and that section's settings on the right, under headings. Up/Down picks, Right opens a section, Left/Right changes a setting (its choices show as a bar), Esc goes back. An orange dot marks a setting you changed; **Z** sets it back to its default (the bottom bar shows the default and whether the setting is per save or for all saves). **D** (or Q) opens the search bar (the screen shows whichever key you've bound): type, and the list shows the matching settings of every section as you type (every word has to be in the name or the description); Enter goes to the results, Esc closes the bar. The box at the bottom explains the selected setting (a long text moves up by itself). Sub-settings, such as the Base Stats sliders, only show while their setting is on. A section whose settings all belong to modules that are Off is greyed out and skipped; each module in **Modules** says which sections hold its settings. Buttons other mods add to Options are listed under **Mods**.
 
 ### Modules
 
@@ -34,10 +34,7 @@ The first time the game starts, it asks **How do you want to play?** – **Class
 
 Players who were already playing KIF Beta before Modules existed get every module turned On once, so nothing they had set up stops working.
 
-Inside each settings page:
-
-- **GLOBAL** options are shared by every save file.
-- **PER-SAVE FILE** options belong to the save you're playing. They only appear once a save is loaded; from the title screen's options you'll see "Load a save to edit" instead.
+The box at the bottom says whether a setting is for **all saves** (shared by every save file) or **this save** (belongs to the save you're playing). Per-save settings only appear once a save is loaded, so the title screen's Options shows fewer.
 
 The sections below list every setting by its original KIF menu; the table above says which module each belongs to.
 
@@ -394,7 +391,11 @@ These features have no option of their own.
 - **Speed keys:** with speed-up in Toggle mode, L goes to the next speed and R goes back to 1x.
 - **Skip the intro:** put an empty file named `NoIntro.krs` in your save folder to go straight to the load screen.
 - **Load screen:** links to the KIF Discord and documentation.
-- **Mods folder:** the `Mods` folder next to InfiniteFusion.exe takes a mod as a `.rb` file, a folder (its `.rb` files load in name order, or in the order its `mod.json` lists; mods it depends on load first) or a `.zip` (unpacked into a folder of the same name the next time the game starts; the zip is moved to `Mods/Imported`). Folders with a `mod.json` are left to Mod Manager when it's installed. **Options > Mods** lists every mod with **On / Off** (applies at the next start; Mod Manager's mods use Mod Manager's own switch) and a settings page for each mod that added settings. A broken mod is skipped instead of crashing the game, and the Mods list says so.
+- **Mods folder:** the `Mods` folder next to InfiniteFusion.exe takes a mod as a `.rb` file, a folder (its `.rb` files load in name order, or in the order its `mod.json` lists; mods it depends on load first) or a `.zip` (unpacked into a folder of the same name the next time the game starts; the zip is moved to `Mods/Imported`). Folders with a `mod.json` are left to Mod Manager when it's installed. The **Mods** section of Options starts with a row that switches between three lists (Left / Right):
+  - **Installed** – every mod with **On / Off** (applies at the next start, shown as *ON/OFF NEXT START*; Mod Manager's mods use Mod Manager's own switch), a settings page for each mod that added settings, and *Settings by category*. A broken mod is skipped instead of crashing the game and shows *ERROR*.
+  - **Browse** – the KIF-Mods catalog (the mods Mod Manager 2.0 lists). Enter installs a mod, and any mods it needs (it asks first and shows the download size). Its pictures and sounds go into the game's Graphics / Audio folders, the rest into `Mods/<mod>`. It starts working the next time the game starts.
+  - **Updates** – installed catalog mods with a newer version; **Update all** updates them in one go. Only changed files are downloaded, and a mod's own settings are kept.
+  With Mod Manager 2.0 installed, Browse and Updates are left to its own browser.
 - **Trade bubbles:** every NPC who offers a trade shows the trade bubble above their head until the trade is done (PIF only showed it for some of them).
 - **Faster PC boxes:** a fusion's icon is made much faster the first time it's shown, and switching boxes no longer draws the new box's icons twice, so flipping between full boxes doesn't stutter. Shiny fusion icons show the shiny colours on the right half in both the party and the PC.
 - **Crash log:** if the game crashes, the full error is saved to `KIF_errorlog.txt` in the `Logs` folder next to InfiniteFusion.exe, ready to share. Every other KIF log (session log, frame log, Entrances returns) is in that folder too.

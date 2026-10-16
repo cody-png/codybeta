@@ -1,5 +1,3 @@
-KIF Beta 0.21.49
-Options is now the new settings screen: PIF's own options (volume, text speed, screen size, difficulty, speed-up, sprites, challenge rules) sit in the same sections as KIF's.
-- A section whose settings all belong to modules you turned Off is greyed out and skipped.
-- Each module in Modules says which sections hold its settings.
-- Buttons other mods add to Options are listed under Mods.
+KIF Beta 0.21.50
+- The description at the bottom of the settings screen now shows three lines, so module descriptions are no longer cut off.
+- A description longer than that moves up a line at a time while its row stays selected, with small arrows showing there is more.

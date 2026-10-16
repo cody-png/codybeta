@@ -119,8 +119,8 @@ module KIF
         "You may use your whole party against Kanto Gym Leaders."],
       "Battle Info" => [
         "No battle info screen.",
-        "In battle, INFO (or Z/Shift) shows stats, abilities, moves, the field and the speed order.",
-        "Battle info opens with Z/Shift only; no INFO button on screen."],
+        "In battle, INFO (or {ACTION}) shows stats, abilities, moves, the field and the speed order.",
+        "Battle info opens with {ACTION} only; no INFO button on screen."],
       "Move Effectiveness" => [
         "The Fight menu doesn't show how effective moves are.",
         "The Fight menu marks how effective each move is against the foe."],
@@ -390,9 +390,9 @@ module KIF
         vals = (opt.respond_to?(:values) && opt.values.is_a?(Array)) ? opt.values : nil
         return nil unless vals && vals.length == d.length
         v = (opt.get rescue 0)
-        return _INTL(d[v.is_a?(Integer) ? v : 0] || d[0])
+        return KIF::Keys.fill(_INTL(d[v.is_a?(Integer) ? v : 0] || d[0]))
       end
-      return _INTL(d)
+      return KIF::Keys.fill(_INTL(d))
     end
   end
 end

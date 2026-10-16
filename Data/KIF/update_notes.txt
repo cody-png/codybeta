@@ -1,10 +1,8 @@
-KIF Beta 0.21.51
-Options > Mods can now find, install and update mods:
-- Browse lists the mods in the KIF-Mods catalog. Pick one to install it, together with any mods it needs.
-- Updates lists your mods that have a newer version (Update all does them in one go). Their settings are kept.
-- Installed shows ERROR for a mod that failed to load, and ON/OFF NEXT START after you switch one.
-Search: press D (or Q) and type straight into the search bar; the list follows as you type. The key hints show the keys you have bound.
-Every setting has a new, clearer description.
-The Base Stats sliders only show while Base Stats is on.
-Faster: the game's text is ready a few seconds sooner after start-up, and shuffling trainers in the Randomizer takes a few seconds instead of about 20.
-The old settings pages are gone: Settings by category, mod settings and presets all open inside the settings screen.
+KIF Beta 0.21.52
+Mods can now change KIF without replacing it:
+- A mod can take over one KIF feature (for example Level Caps). Only that feature steps aside; the rest of KIF keeps working.
+- A mod can set some settings or modules while it's On. Those rows show LOCKED and say which mod set them. Switch the mod Off and your own settings come back - they were kept the whole time.
+- A mod made for another KIF version, or one that doesn't work with a mod you have On, isn't started. Options > Mods shows it as BLOCKED with the reason.
+- Browse warns before you install a mod that won't start (WON'T START) or clashes with one you have (CLASH).
+- Browse can list more than one catalog: other modders' catalogs show under KIF-Mods.
+Key hints on the other screens (Pokédex, Fusion screen, Randomizer, Battle Info, updates) show the keys you have bound instead of letters like "A:" or "Z/Shift".

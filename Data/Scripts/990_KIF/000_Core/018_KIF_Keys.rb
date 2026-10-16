@@ -67,6 +67,31 @@ module KIF
       return default
     end
 
+    # What a screen prints for a button: the player's key, else the game's
+    # default one. short: the shortest bound key ("Z" rather than "Shift"),
+    # for tight spots.
+    def defaults
+      return @defaults ||= {
+        Input::USE => "C", Input::BACK => "X", Input::ACTION => "Z",
+        Input::SPECIAL => "D", Input::JUMPUP => "Q", Input::JUMPDOWN => "W"
+      }
+    end
+
+    def name(button)
+      return label(button, defaults[button] || "?")
+    end
+
+    def short(button)
+      names = (bindings[button] || []).map { |c| NAMES[c] && NAMES[c][0] }.compact
+      return names.min_by(&:length) || defaults[button] || "?"
+    end
+
+    # "{USE}", "{ACTION}"... in a text -> the keys (for descriptions written
+    # once)
+    def fill(text)
+      return text.to_s.gsub(/\{(USE|BACK|ACTION|SPECIAL|JUMPUP|JUMPDOWN)\}/) { name(Input.const_get($1)) }
+    end
+
     # the mkxp-z symbols (for Input.triggerex?) of the keys bound to button
     def symbols(button)
       return (bindings[button] || []).map { |c| NAMES[c] && NAMES[c][1] }.compact

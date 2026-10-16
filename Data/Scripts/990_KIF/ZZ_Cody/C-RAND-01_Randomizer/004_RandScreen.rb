@@ -280,7 +280,7 @@ module KIF
         [[:pokemon, _INTL("Banned Pokémon")], [:moves, _INTL("Banned moves")], [:abilities, _INTL("Banned abilities")]].map do |kind, label|
           DynButton.new(proc { KIF::Rand.mark(:"__ban_#{kind}", "#{label} (#{KIF::Rand.bans(kind).length})") },
                         proc { KIF::Rand.ban_picker(kind, label) },
-                        _INTL("A: ban / unban   L/R: page   Z: clear all"))
+                        _INTL("{1}: ban / unban   {2}/{3}: page   {4}: clear all", KIF::Keys.name(Input::USE), KIF::Keys.name(Input::JUMPUP), KIF::Keys.name(Input::JUMPDOWN), KIF::Keys.name(Input::ACTION)))
         end
       }
     end

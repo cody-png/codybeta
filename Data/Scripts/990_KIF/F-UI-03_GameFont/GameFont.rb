@@ -31,7 +31,7 @@ module KIF
     @applied = nil
 
     def self.choice
-      return 0 if defined?(KIF::Modules) && !KIF::Modules.active?(:graphics)   # PIF's font
+      return 0 if defined?(KIF::Modules) && !KIF::Modules.active?("F-UI-03_GameFont")   # PIF's font
       v = $PokemonSystem ? $PokemonSystem.kurayfonts.to_i : 0
       return (0...FONTS.length).include?(v) ? v : 0
     end

@@ -48,9 +48,10 @@ module KIF
     # [:send, name] or [:um, UnboundMethod] or nil (new method)
     def self.fallback_for(mod, name, um, file)
       orig = um.original_name
-      id = for_file(file)
+      # the feature (or module) the file belongs to
+      id = KIF::Features.key_for_file(file) || for_file(file)
       # the alias this file made; when it points at another layer of the SAME
-      # module (two files of one feature on one method), keep walking down
+      # feature (two files of one feature on one method), keep walking down
       cur_file = file
       cur_um = um
       10.times do
@@ -66,7 +67,7 @@ module KIF
         break unless found
         nm, other = found
         loc = other.source_location
-        return [:send, nm] unless loc && for_file(loc[0]) == id
+        return [:send, nm] unless loc && (KIF::Features.key_for_file(loc[0]) || for_file(loc[0])) == id
         cur_file = loc[0]
         cur_um = other
       end
@@ -88,7 +89,9 @@ module KIF
       return um.parameters.any? { |t, _| t == :key || t == :keyreq || t == :keyrest }
     end
 
-    def self.install_switch(mod, name, um, id, fb)
+    # key: what the switch checks - the feature folder ("F-BATTLE-08_LevelCaps",
+    # so a mod can replace one feature) or the module id
+    def self.install_switch(mod, name, um, id, fb, key = id)
       vis = if mod.private_method_defined?(name) then :private
             elsif mod.protected_method_defined?(name) then :protected
             else :public end
@@ -97,22 +100,22 @@ module KIF
         nm = fb[1]
         if kw
           mod.send(:define_method, name) do |*args, **opts, &blk|
-            KIF::Modules.active?(id) ? um.bind_call(self, *args, **opts, &blk) : __send__(nm, *args, **opts, &blk)
+            KIF::Modules.active?(key) ? um.bind_call(self, *args, **opts, &blk) : __send__(nm, *args, **opts, &blk)
           end
         else
           mod.send(:define_method, name) do |*args, &blk|
-            KIF::Modules.active?(id) ? um.bind_call(self, *args, &blk) : __send__(nm, *args, &blk)
+            KIF::Modules.active?(key) ? um.bind_call(self, *args, &blk) : __send__(nm, *args, &blk)
           end
         end
       else
         fum = fb[1]
         if kw
           mod.send(:define_method, name) do |*args, **opts, &blk|
-            KIF::Modules.active?(id) ? um.bind_call(self, *args, **opts, &blk) : fum.bind_call(self, *args, **opts, &blk)
+            KIF::Modules.active?(key) ? um.bind_call(self, *args, **opts, &blk) : fum.bind_call(self, *args, **opts, &blk)
           end
         else
           mod.send(:define_method, name) do |*args, &blk|
-            KIF::Modules.active?(id) ? um.bind_call(self, *args, &blk) : fum.bind_call(self, *args, &blk)
+            KIF::Modules.active?(key) ? um.bind_call(self, *args, &blk) : fum.bind_call(self, *args, &blk)
           end
         end
       end
@@ -120,17 +123,17 @@ module KIF
       @gated[id] += 1
     end
 
-    def self.install_super_switch(mod, name, um, id)
+    def self.install_super_switch(mod, name, um, id, key = id)
       vis = if mod.private_method_defined?(name) then :private
             elsif mod.protected_method_defined?(name) then :protected
             else :public end
       if uses_keywords?(um)
         mod.send(:define_method, name) do |*args, **opts, &blk|
-          KIF::Modules.active?(id) ? um.bind_call(self, *args, **opts, &blk) : super(*args, **opts, &blk)
+          KIF::Modules.active?(key) ? um.bind_call(self, *args, **opts, &blk) : super(*args, **opts, &blk)
         end
       else
         mod.send(:define_method, name) do |*args, &blk|
-          KIF::Modules.active?(id) ? um.bind_call(self, *args, &blk) : super(*args, &blk)
+          KIF::Modules.active?(key) ? um.bind_call(self, *args, &blk) : super(*args, &blk)
         end
       end
       mod.send(vis, name) unless vis == :public
@@ -164,7 +167,7 @@ module KIF
           next unless fb
           next if alias_of_layer && fb[0] == :send && fb[1] == name
           begin
-            install_switch(m, name, um, id, fb)
+            install_switch(m, name, um, id, fb, KIF::Features.key_for_file(loc[0]) || id)
           rescue => e
             KIF.log("Module gate: #{m}##{name} not switched (#{e.class}: #{e.message})")
           end
@@ -181,7 +184,7 @@ module KIF
             id = for_file(um.source_location[0])
             next unless id
             begin
-              install_super_switch(pre, name, um, id)
+              install_super_switch(pre, name, um, id, KIF::Features.key_for_file(um.source_location[0]) || id)
             rescue => e
               KIF.log("Module gate: #{pre}##{name} not switched (#{e.class}: #{e.message})")
             end

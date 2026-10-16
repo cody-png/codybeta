@@ -33,7 +33,7 @@ if KIF::EBDX.installed?
     module EBDX
       module ToggleModule
         def enabled?
-          return false if defined?(KIF::Modules) && !KIF::Modules.active?(:graphics)
+          return false if defined?(KIF::Modules) && !KIF::Modules.active?("F-BATTLE-12_EBDX")
           return super
         end
       end

@@ -66,7 +66,7 @@ module KIF
     }
 
     def self.on?
-      return false if defined?(KIF::Modules) && !KIF::Modules.active?(:battles)
+      return false if defined?(KIF::Modules) && !KIF::Modules.active?("F-BATTLE-03_PowerfulAI")
       return true unless $PokemonSystem && $PokemonSystem.respond_to?(:powerfulai)
       return $PokemonSystem.powerfulai.to_i != 0
     end

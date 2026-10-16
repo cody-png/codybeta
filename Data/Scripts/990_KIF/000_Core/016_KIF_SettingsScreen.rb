@@ -34,6 +34,9 @@ module KIF
         KIF::Options.entries(menu).each do |scope, builder|
           next if scope == :save && !KIF.in_game?
           mod = (KIF::Modules.for_proc(builder) rescue nil)
+          # a feature a mod replaced: its settings go with it
+          key = (KIF::Features.key_for_proc(builder) rescue nil)
+          next if key && KIF::Features.replaced?(key)
           next unless all || KIF::Modules.visible?(mod)
           opt = begin
                   builder.call
@@ -161,8 +164,10 @@ module KIF
       KIF::Modules::MODULES.map do |id, (name, desc, _f)|
         d = _INTL(desc)
         d += " " + _INTL("Settings in: {1}.", where[id].map { |l| _INTL(l) }.join(", ")) if where[id] && !where[id].empty?
-        opt = EnumOption.new(_INTL(name), KIF::Modules::STATE_NAMES.map { |s| _INTL(s) },
-                             proc { KIF::Modules.state(id) }, proc { |v| KIF::Modules.set_state(id, v) }, d)
+        opt = BadgeEnum.new(_INTL(name), KIF::Modules::STATE_NAMES.map { |s| _INTL(s) },
+                            proc { KIF::Modules.state(id) }, proc { |v| KIF::Modules.set_state(id, v) }, d)
+        lock = KIF::Locks.module_lock(id)
+        opt.kif_lock = lock[1] if lock
         Row.new(:opt, opt, :save, _INTL(name), :modules, nil, 0, nil)
       end
     end
@@ -170,6 +175,7 @@ module KIF
     # A choice row or button with a small label at the right (ERROR, UPDATE...)
     class BadgeEnum < EnumOption
       attr_accessor :kif_badge   # [text, Color] or nil
+      attr_accessor :kif_lock    # name of the mod that set it, or nil
     end
 
     class BadgeButton < ButtonOption
@@ -185,7 +191,10 @@ module KIF
 
     def describe_mod(e)
       bits = []
+      bits << _INTL("Not started: {1}", e.blocked) if e.respond_to?(:blocked) && e.blocked
       bits << _INTL("Failed to load (see Logs/KIF_errorlog.txt).") if e.error
+      took = mod_takes(e)
+      bits << took if took
       who = []
       who << "v#{e.version}" if e.version && !e.version.empty?
       who << _INTL("by {1}", e.author) if e.author && !e.author.empty? && e.author != "Unknown"
@@ -194,6 +203,24 @@ module KIF
       bits << _INTL("Mod Manager mod.") if e.kind == :mod_manager
       bits << _INTL("Mods folder: {1}", e.id) if bits.empty?
       return KIF::PixelFont.utf8(bits.join(" "))
+    end
+
+    # "Replaces Level Caps. Sets 2 settings and Auto Battle." (what a mod
+    # that is running took over)
+    def mod_takes(e)
+      ids = [e.id]
+      feats = KIF::Features.owned_by(e.id)
+      sets = KIF::Locks.table.values.count { |v| ids.include?(v[2]) }
+      mods = KIF::Modules::MODULES.keys.select { |m| (l = KIF::Locks.module_lock(m)) && ids.include?(l[2]) }
+      out = []
+      out << _INTL("Replaces {1}.", feats.map { |f| KIF::Features.title(f) }.join(", ")) unless feats.empty?
+      what = []
+      what << (sets == 1 ? _INTL("1 setting") : _INTL("{1} settings", sets)) if sets > 0
+      what << mods.map { |m| _INTL(KIF::Modules::MODULES[m][0]) }.join(", ") unless mods.empty?
+      out << _INTL("Sets {1}.", what.join(_INTL(" and "))) unless what.empty?
+      return out.empty? ? nil : out.join(" ")
+    rescue StandardError
+      return nil
     end
 
     def mod_rows
@@ -237,7 +264,9 @@ module KIF
           # loaded this session (a mod added since the game started wasn't)
           loaded = e.loaded
           loaded = false if loaded.nil? && e.kind != :mod_manager
-          if e.error
+          if e.respond_to?(:blocked) && e.blocked && e.enabled?
+            opt.kif_badge = [_INTL("BLOCKED"), KIF::PixelUI::DOWN]
+          elsif e.error
             opt.kif_badge = [_INTL("ERROR"), KIF::PixelUI::DOWN]
           elsif !loaded.nil? && (loaded ? true : false) != e.enabled?
             opt.kif_badge = [e.enabled? ? _INTL("ON NEXT START") : _INTL("OFF NEXT START"), KIF::PixelUI::WARN]
@@ -276,17 +305,39 @@ module KIF
         opt = ButtonOption.new(_INTL("Try again"), nil, cat.error || _INTL("The mod catalog is empty."))
         return [Row.new(:opt, opt, nil, opt.name, :mods, nil, 0, nil, [:catalog_reload])]
       end
-      rows << Row.new(:head, nil, nil, _INTL("KIF-Mods catalog"), :mods, "Catalog", 0, nil)
-      items.each do |it|
-        opt = BadgeButton.new(it.name, nil, catalog_desc(it))
-        if cat.update?(it)
-          opt.kif_badge = [_INTL("UPDATE"), KIF::PixelUI::WARN]
-        elsif cat.installed?(it)
-          opt.kif_badge = [_INTL("INSTALLED"), KIF::PixelUI::OWN]
-        else
-          opt.kif_badge = [cat.size_label(it), KIF::PixelUI::PILL]
+      # one heading per catalog (KIF-Mods first, then the ones mods added)
+      items.group_by { |it| it.catalog ? it.catalog.name : "KIF-Mods" }.each do |cname, list|
+        head = _INTL("{1} catalog", cname)
+        rows << Row.new(:head, nil, nil, KIF::PixelFont.utf8(head), :mods, head, 0, nil)
+        list.each do |it|
+          desc = catalog_desc(it)
+          why = cat.kif_problem(it)
+          clash = cat.installed?(it) ? [] : cat.conflicts(it)
+          if why
+            desc = KIF::PixelFont.utf8(_INTL("Won't start: {1}", why)) + " " + desc
+          elsif !clash.empty?
+            names = clash.map { |id| (f = cat.find(id)) ? f.name : id }
+            desc = KIF::PixelFont.utf8(_INTL("Doesn't work with {1}, which you have.", names.join(", "))) + " " + desc
+          end
+          opt = BadgeButton.new(it.name, nil, desc)
+          if why
+            opt.kif_badge = [_INTL("WON'T START"), KIF::PixelUI::DOWN]
+          elsif cat.update?(it)
+            opt.kif_badge = [_INTL("UPDATE"), KIF::PixelUI::WARN]
+          elsif cat.installed?(it)
+            opt.kif_badge = [_INTL("INSTALLED"), KIF::PixelUI::OWN]
+          elsif !clash.empty?
+            opt.kif_badge = [_INTL("CLASH"), KIF::PixelUI::WARN]
+          else
+            opt.kif_badge = [cat.size_label(it), KIF::PixelUI::PILL]
+          end
+          rows << Row.new(:opt, opt, nil, it.name, :mods, head, 0, nil, [:catalog_install, it])
         end
-        rows << Row.new(:opt, opt, nil, it.name, :mods, "Catalog", 0, nil, [:catalog_install, it])
+      end
+      cat.failed.each do |c|
+        opt = ButtonOption.new(KIF::PixelFont.utf8(_INTL("Couldn't reach {1}", c.name)), nil,
+                               _INTL("That catalog didn't answer. Press to try again."))
+        rows << Row.new(:opt, opt, nil, opt.name, :mods, "Catalog", 0, nil, [:catalog_reload])
       end
       return rows
     end
@@ -320,6 +371,22 @@ module KIF
     def preset_rows
       return [] unless defined?(KIF::Presets) && KIF.in_game?
       return KIF::Presets.slot_options.map { |o| Row.new(:opt, o, :save, o.name.to_s, :presets, nil, 0, nil) }
+    end
+
+    # Rows a mod locked (KIF::Locks): opt => the mod's name
+    def locks_for(opts)
+      out = {}
+      return out unless KIF::Locks.any?
+      opts.each do |o|
+        next if button?(o) || !o.respond_to?(:get)
+        KIF::Options.keys_read { o.get }.each do |k|
+          l = KIF::Locks.get(k)
+          next unless l
+          out[o] = l[1]
+          break
+        end
+      end
+      return out
     end
 
     #---------------------------------------------------------------------------
@@ -386,6 +453,7 @@ class KifSettingsScreen
   SEGON   = Color.new(90, 110, 140)
   SIDESEL = Color.new(52, 66, 86)
   DOTC    = Color.new(232, 160, 48)
+  LOCKC   = Color.new(150, 112, 210)
 
   attr_accessor :section, :sel, :focus
 
@@ -441,6 +509,7 @@ class KifSettingsScreen
     @rows[:presets] = KIF::SettingsScreen.preset_rows
     opts = items.flat_map { |it| [it[:opt]] + it[:children].map { |c| c[:opt] } }
     @defaults = KIF::SettingsScreen.defaults_for(opts)
+    @locks = KIF::SettingsScreen.locks_for(opts)
     @sub[:rows] = @sub[:build].call if @sub
   end
 
@@ -502,11 +571,26 @@ class KifSettingsScreen
       v = (opt.get rescue 0)
       d = d[v.is_a?(Integer) ? v : 0] || d[0]
     end
-    return PF.utf8(d.to_s).gsub(/\s+/, " ").strip
+    d = PF.utf8(d.to_s).gsub(/\s+/, " ").strip
+    by = locked_by(opt)
+    d = PF.utf8(_INTL("Set by {1} while that mod is On.", by)) + " " + d if by
+    return d
+  end
+
+  # the mod that locked a row's setting, or nil
+  def locked_by(opt)
+    return nil unless opt
+    return opt.kif_lock if opt.respond_to?(:kif_lock) && opt.kif_lock
+    return @locks ? @locks[opt] : nil
+  end
+
+  def locked_buzz(_r)
+    pbPlayBuzzerSE
   end
 
   def changed?(r)
     return false unless r.opt && @defaults.has_key?(r.opt)
+    return false if locked_by(r.opt)
     return (r.opt.get rescue nil) != @defaults[r.opt]
   end
 
@@ -613,6 +697,7 @@ class KifSettingsScreen
     return unless r
     o = r.opt
     return if KIF::SettingsScreen.button?(o)
+    return locked_buzz(r) if locked_by(o)
     cur = (o.get rescue nil)
     return if cur.nil?
     nv = dir > 0 ? o.next(cur) : o.prev(cur)
@@ -949,6 +1034,10 @@ class KifSettingsScreen
       end
       rrect(b, x - 9, y + 10, x - 5, y + 14, 1, DOTC) if changed?(r)
       text(b, x, y - 1, 330, 26, r.label, TXT, PF::ROW)
+      if locked_by(r.opt)
+        lx = x + PF.width(PF::ROW, PF.utf8(r.label.to_s)) + 6
+        pill(b, lx, y + 5, _INTL("LOCKED"), LOCKC) if lx + 52 < VAL_X1 - 120 || mode == :below
+      end
       vy = (mode == :below) ? y + ROW_H + 1 : y + 2
       draw_value(b, r, vy, selected, mode)
     end
@@ -1033,7 +1122,11 @@ class KifSettingsScreen
     if r.scope && r.section != :modules && r.section != :presets && !r.action
       x -= pill(b, x, y0 + 7, r.scope == :global ? _INTL("ALL SAVES") : _INTL("THIS SAVE"), PILL, true) + 6
     end
-    if @defaults.has_key?(r.opt) && KIF::SettingsScreen.choices?(r.opt)
+    if (by = locked_by(r.opt))
+      by = PF.utf8(by.to_s)
+      by = by[0, 17] + "..." if by.length > 20
+      pill(b, x, y0 + 7, _INTL("LOCKED BY {1}", by.upcase), LOCKC, true)
+    elsif @defaults.has_key?(r.opt) && KIF::SettingsScreen.choices?(r.opt)
       d = r.opt.values[@defaults[r.opt].to_i]
       pill(b, x, y0 + 7, _INTL("DEFAULT: {1}", PF.utf8(d.to_s).upcase), PILL, true) if d
     elsif @defaults.has_key?(r.opt) && KIF::SettingsScreen.slider?(r.opt)

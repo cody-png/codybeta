@@ -18,6 +18,16 @@
 # reads the catalog from that folder instead (laid out like the repository).
 # With Mod Manager 2.0 installed, its own browser is used and these tabs are
 # not shown.
+#
+# More catalogs (2026-10-16): a modder can keep their own repository laid out
+# the same way, and Browse lists it under KIF-Mods. Added by
+#   * KIF_mods_catalogs.txt next to the game: one per line,
+#     "owner/repo", "owner/repo@branch" or a folder, then an optional name
+#     ("Stonewall/kr-mods@main Kanto Reloaded"); # starts a comment
+#   * a mod's mod.json: "catalog": "owner/repo@branch" (its updates come
+#     from there)
+#   * Ruby: KIF::ModCatalog.add_catalog("owner/repo", branch: "main", name: "...")
+# A mod found in two catalogs comes from the first one (KIF-Mods first).
 #===============================================================================
 module KIF
   module ModCatalog
@@ -25,20 +35,45 @@ module KIF
     TREE_URL   = "https://api.github.com/repos/#{REPO}/git/trees/main?recursive=1"
     RAW_BASE   = "https://raw.githubusercontent.com/#{REPO}/main"
     SOURCE_FILE = "KIF_mods_source.txt"
+    CATALOGS_FILE = "KIF_mods_catalogs.txt"
     ASSET_DIRS = %w[Graphics Audio Fonts]
     RECORD     = ".kif_installed"
     ASSETS     = ".installed_assets"
     SKIP       = %w[modpacks]
     CACHE_TIME = 600   # seconds a fetched list is reused
 
+    # one catalog: a GitHub repository (or a folder laid out like one)
+    class Catalog
+      attr_reader :repo, :branch, :path
+      def initialize(repo, branch = "main", name = nil, path = nil)
+        @repo = repo.to_s
+        @branch = (branch || "main").to_s
+        @name = name
+        @path = path
+      end
+      def local?;   return !@path.nil?; end
+      def name;     return (@name && !@name.to_s.empty?) ? @name.to_s : (local? ? File.basename(@path) : @repo); end
+      def key;      return local? ? File.expand_path(@path) : "#{@repo.downcase}@#{@branch}"; end
+      def tree_url; return "https://api.github.com/repos/#{@repo}/git/trees/#{@branch}?recursive=1"; end
+      def raw_base; return "https://raw.githubusercontent.com/#{@repo}/#{@branch}"; end
+      def base
+        return raw_base unless local?
+        full = File.expand_path(@path).tr("\\", "/").sub(%r{\A/}, "")
+        return "file:///" + full.split("/").map { |seg| seg.b.gsub(/[^A-Za-z0-9\-._~:]/n) { |c| format("%%%02X", c.ord) } }.join("/")
+      end
+    end
+
     # one mod in the catalog
     class Item
-      attr_reader :folder, :json, :files
-      def initialize(folder, json, files)
+      attr_reader :folder, :json, :files, :catalog
+      def initialize(folder, json, files, catalog = nil)
         @folder = folder
         @json = json || {}
         @files = files     # rel path => [sha, size]
+        @catalog = catalog
       end
+      def base; return @catalog ? @catalog.base : KIF::ModCatalog.base; end
+      def requires_kif; return @json["requires_kif"]; end
       def id;      return (@json["id"] || @folder).to_s; end
       def name;    return KIF::PixelFont.utf8((@json["name"] || @folder).to_s); end
       def version; return @json["version"].to_s; end
@@ -81,15 +116,62 @@ module KIF
     end
 
     def base
+      return catalogs[0].base
+    end
+
+    # KIF-Mods (or the KIF_mods_source.txt folder), then the others
+    @added = []
+    def add_catalog(repo, branch: "main", name: nil)
+      repo = repo.to_s.strip
+      return false if repo.empty?
+      path = File.directory?(repo) ? repo : nil
+      unless path || repo =~ %r{\A[\w.-]+/[\w.-]+\z}
+        log("\"#{repo}\" isn't a GitHub repository (owner/repo) or a folder")
+        return false
+      end
+      c = Catalog.new(path ? nil : repo, branch, name, path)
+      return false if @added.any? { |x| x.key == c.key }
+      @added << c
+      @items = nil
+      return true
+    end
+
+    # "owner/repo@branch Name" / a folder path
+    def parse_catalog(line)
+      line = line.to_s.sub(/#.*\z/, "").strip
+      return nil if line.empty?
+      # a folder (its path may have spaces), then the name
+      words = line.split(/\s+/)
+      words.length.downto(1) do |n|
+        dir = words[0, n].join(" ")
+        return Catalog.new(nil, nil, words[n..-1].join(" "), dir) if File.directory?(dir)
+      end
+      spec, name = line.split(/\s+/, 2)
+      repo, branch = spec.split("@", 2)
+      return nil unless repo =~ %r{\A[\w.-]+/[\w.-]+\z}
+      return Catalog.new(repo, branch, name)
+    end
+
+    def catalogs
       s = source
-      return RAW_BASE unless s
-      full = File.expand_path(s).tr("\\", "/").sub(%r{\A/}, "")
-      return "file:///" + full.split("/").map { |seg| seg.b.gsub(/[^A-Za-z0-9\-._~:]/n) { |c| format("%%%02X", c.ord) } }.join("/")
+      list = [s ? Catalog.new(nil, nil, "KIF-Mods", s) : Catalog.new(REPO, "main", "KIF-Mods")]
+      file = File.join(root, CATALOGS_FILE)
+      if File.file?(file)
+        File.read(file).to_s.force_encoding("UTF-8").split(/\r?\n/).each do |l|
+          c = parse_catalog(l)
+          list << c if c
+        end
+      end
+      list.concat(@added)
+      seen = {}
+      return list.select { |c| seen[c.key] ? false : (seen[c.key] = true) }
     end
 
     def items;   return @items; end
     def checked; return @checked; end
     def error;   return @error; end
+    # catalogs that couldn't be read last time: [Catalog, ...]
+    def failed;  return @failed || []; end
 
     def find(id)
       return nil unless @items
@@ -102,37 +184,60 @@ module KIF
     def load(force = false)
       return @items if @items && !force && @checked && Time.now - @checked < CACHE_TIME
       @error = nil
-      files = source ? local_tree(source) : remote_tree
-      if files.nil?
+      @failed = []
+      list = []
+      cats = catalogs
+      cats.each do |cat|
+        files = cat.local? ? local_tree(cat.path) : remote_tree(cat)
+        if files.nil?
+          @failed << cat
+          log("#{cat.name}: couldn't be read")
+          next
+        end
+        list.concat(items_in(cat, files, list))
+      end
+      updater.hide_status
+      if list.empty? && !@failed.empty?
         @error = _INTL("Couldn't reach the mod catalog. Check the internet connection and try again.")
         return @items
       end
+      @items = list
+      @checked = Time.now
+      log("#{list.length} mods listed (#{cats.length - @failed.length} of #{cats.length} catalogs)")
+      return @items
+    end
+
+    # the mods of one catalog (one already listed by an earlier catalog is
+    # skipped)
+    def items_in(cat, files, before = [])
       by_folder = {}
       files.each do |path, info|
         top, rest = path.split("/", 2)
         next if rest.nil? || top.start_with?(".") || SKIP.include?(top)
         (by_folder[top] ||= {})[rest] = info
       end
-      list = []
+      out = []
       folders = by_folder.keys.select { |f| by_folder[f].has_key?("mod.json") }.sort_by(&:downcase)
       folders.each_with_index do |f, i|
-        status(_INTL("Reading the mod list"), _INTL("{1} of {2}", i + 1, folders.length), (i + 1).to_f / folders.length)
-        text = updater.fetch(updater.url_for(base, "#{f}/mod.json"))
+        status(_INTL("Reading the mod list"), _INTL("{1}: {2} of {3}", cat.name, i + 1, folders.length), (i + 1).to_f / folders.length)
+        text = updater.fetch(updater.url_for(cat.base, "#{f}/mod.json"))
         json = text ? (KIF::Mods::MiniJSON.parse(KIF::PixelFont.utf8(text).sub(/\A﻿/, "")) rescue nil) : nil
-        next log("#{f}/mod.json unreadable") unless json.is_a?(Hash)
-        list << Item.new(f, json, by_folder[f])
+        next log("#{cat.name}: #{f}/mod.json unreadable") unless json.is_a?(Hash)
+        it = Item.new(f, json, by_folder[f], cat)
+        if (twin = (before + out).find { |o| o.id == it.id || o.folder == it.folder })
+          log("#{cat.name}: #{it.id} is also in #{twin.catalog ? twin.catalog.name : 'KIF-Mods'} - that one is used")
+          next
+        end
+        out << it
       end
-      updater.hide_status
-      @items = list
-      @checked = Time.now
-      log("#{list.length} mods listed")
-      return @items
+      return out
     end
 
     # rel path => [sha, size], from GitHub's tree listing
-    def remote_tree
-      status(_INTL("Reading the mod list"), _INTL("Contacting GitHub..."))
-      text = updater.fetch(TREE_URL)
+    def remote_tree(cat = nil)
+      cat ||= catalogs[0]
+      status(_INTL("Reading the mod list"), _INTL("Contacting GitHub ({1})...", cat.name))
+      text = updater.fetch(cat.tree_url)
       return nil unless text
       text = text.to_s.dup.force_encoding("UTF-8")
       out = {}
@@ -259,6 +364,13 @@ module KIF
       return KIF::Mods.entries.any? { |e| e.id == id || e.name == id } rescue false
     end
 
+    # why a catalog mod wouldn't start on this KIF, or nil
+    def kif_problem(item)
+      spec = item.requires_kif
+      return nil if KIF::ModRules.version_ok?(spec)
+      return _INTL("Needs {1} (this is KIF {2}).", KIF::ModRules.version_text(spec), KIF::ModRules.kif_version)
+    end
+
     # installed mods this one says it doesn't work with
     def conflicts(item)
       return item.incompatible.select { |id| (find(id) && installed?(find(id))) || installed_id?(id) }
@@ -281,7 +393,7 @@ module KIF
         dir = File.join(stage, item.folder)
         title = list.length > 1 ? _INTL("Installing {1} ({2} of {3})", item.name, i + 1, list.length) : _INTL("Installing {1}", item.name)
         unless todo.empty?
-          bad = updater.download(updater.url_for(base, item.folder), todo, dir, item.version, title)
+          bad = updater.download(updater.url_for(item.base, item.folder), todo, dir, item.version, title)
           if bad == :cancelled
             updater.hide_status
             log("#{item.folder}: cancelled")
@@ -353,6 +465,11 @@ module KIF
         pbMessage(_INTL("{1} is installed (v{2}). Switch it On or Off under Installed.", item.name, cat.installed_version(item)))
         return
       end
+      why = cat.kif_problem(item)
+      if why
+        pbMessage(_INTL("{1} won't start on this KIF. {2}", item.name, why))
+        return
+      end
       list, missing = cat.install_list(item)
       unless missing.empty?
         pbMessage(_INTL("{1} needs {2}, which isn't in the catalog. Install that first.", item.name, missing.join(", ")))
@@ -360,7 +477,8 @@ module KIF
       end
       bad = cat.conflicts(item)
       unless bad.empty?
-        return unless pbConfirmMessage(_INTL("{1} doesn't work with {2}, which you have. Install it anyway?", item.name, bad.join(", ")))
+        names = bad.map { |id| (f = cat.find(id)) ? f.name : id }
+        return unless pbConfirmMessage(_INTL("{1} doesn't work with {2}, which you have. Install it anyway?", item.name, names.join(", ")))
       end
       bytes = list.inject(0) { |s, it| s + cat.plan(it).inject(0) { |t, f| t + f[2] } }
       q = if updating
@@ -376,7 +494,7 @@ module KIF
     end
 
     def update_all
-      ups = cat.updates
+      ups = cat.updates.reject { |it| cat.kif_problem(it) }
       return if ups.empty?
       bytes = ups.inject(0) { |s, it| s + cat.plan(it).inject(0) { |t, f| t + f[2] } }
       return unless pbConfirmMessage(_INTL("Update {1} mods ({2})? Their settings are kept.", ups.length, KIF::Updater.size_text(bytes)))

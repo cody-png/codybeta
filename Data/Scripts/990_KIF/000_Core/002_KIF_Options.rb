@@ -80,6 +80,10 @@ module KIF
       PokemonSystem.class_eval do
         define_method(:"kif_defined_#{key}") { true }
         define_method(key) do
+          t = KIF::Options.tracing
+          t << key if t
+          lock = KIF::Locks.table[key]
+          return lock[0] if lock
           val = instance_variable_get(ivar)
           if val.nil?
             val = KIF::Options.copy_default(key)
@@ -89,6 +93,34 @@ module KIF
         end
         define_method(:"#{key}=") { |v| instance_variable_set(ivar, v) }
       end
+    end
+
+    # The player's own value (a mod's lock doesn't count): what saves keep
+    def self.raw(key, sys = $PokemonSystem)
+      return nil unless sys
+      key = key.to_sym
+      ivar = :"@#{key}"
+      return sys.instance_variable_get(ivar) if sys.instance_variable_defined?(ivar) && !sys.instance_variable_get(ivar).nil?
+      return copy_default(key) if @defaults.has_key?(key)
+      plain = :"kif_unlocked_#{key}"
+      return sys.respond_to?(plain) ? sys.send(plain) : sys.send(key)
+    end
+
+    # The settings a block reads ([:shinyodds]); the settings screen uses it
+    # to find which rows a mod locked
+    @tracing = nil
+    def self.tracing; @tracing; end
+
+    def self.keys_read
+      old = @tracing
+      @tracing = []
+      begin
+        yield
+      rescue StandardError
+      end
+      return @tracing.uniq
+    ensure
+      @tracing = old
     end
 
     def self.copy_default(key)
@@ -125,7 +157,8 @@ module KIF
       hash = {}
       @carry.each { |k, v| hash[k] = Marshal.load(Marshal.dump(v)) }
       return hash unless $PokemonSystem
-      save_keys.each { |k| hash[k] = Marshal.load(Marshal.dump($PokemonSystem.send(k))) }
+      # the player's values, not a mod's locks
+      save_keys.each { |k| hash[k] = Marshal.load(Marshal.dump(raw(k))) }
       return hash
     end
 
@@ -141,6 +174,139 @@ module KIF
           $PokemonSystem.send(:"#{k}=", copy_default(k))
         end
       end
+    end
+  end
+end
+
+#===============================================================================
+# Locks (2026-10-16): a mod sets some settings or modules for as long as it's
+# On ("Experiences": a hardcore mod pins shiny odds, turns Auto Battle off).
+#   mod.json   "locks":   { "shinyodds": 16, "levelcap": 1 }
+#              "modules": { "auto_battle": "off", "randomizer": "on" }
+#   Ruby       KIF::Locks.set(:shinyodds, 16)
+#              KIF::Locks.set_module(:auto_battle, :off)
+# The game reads the locked value; the settings screen shows the row with a
+# LOCKED badge ("Set by <mod>") and won't change it. The player's own value
+# is kept (and saved) underneath, so it's back once the mod is Off.
+# Any KIF setting (KIF::Options.define) or PIF one on PokemonSystem
+# (textspeed, battlestyle...) can be locked. Mod Settings can't be locked
+# Off (the player must always be able to switch a mod Off).
+#===============================================================================
+module KIF
+  module Locks
+    @table = {}     # setting => [value, mod name, mod id]
+    @modules = {}   # module id => [state, mod name, mod id]
+    @wrapped = {}
+    MODULE_STATES = { "off" => 0, "on" => 1, "hidden" => 2 }
+
+    class << self
+      attr_reader :table
+    end
+
+    def self.any?; return !@table.empty? || !@modules.empty?; end
+
+    def self.owner_name(by, owner)
+      owner ||= (KIF::Mods.current if defined?(KIF::Mods) && KIF::Mods.respond_to?(:current))
+      by ||= (KIF::Mods.display_name(owner) if owner && defined?(KIF::Mods) && KIF::Mods.respond_to?(:display_name)) || owner || "A mod"
+      return [by.to_s, owner]
+    end
+
+    # the value as the setting stores it (true -> 1 for On/Off settings...)
+    def self.fit(key, value)
+      d = KIF::Options.defaults[key]
+      cur = d.nil? ? ($PokemonSystem.send(key) rescue nil) : d
+      if cur.is_a?(Integer)
+        return 1 if value == true
+        return 0 if value == false
+        return value.round if value.is_a?(Float)
+        return value if value.is_a?(Integer)
+        return nil
+      end
+      return value if cur.nil? || [true, false].include?(cur) && [true, false].include?(value)
+      return value.to_f if cur.is_a?(Float) && value.is_a?(Numeric)
+      return value if value.class == cur.class && !value.is_a?(Hash) && !value.is_a?(Array)
+      return nil
+    end
+
+    def self.set(key, value, by: nil, owner: nil)
+      key = key.to_sym
+      by, owner = owner_name(by, owner)
+      unless KIF::Options.defaults.has_key?(key) || wrap(key)
+        KIF.log("#{by}: can't lock \"#{key}\" - no setting by that name")
+        return false
+      end
+      if key == :kif_modules
+        KIF.log("#{by}: modules are locked with \"modules\", not \"locks\"")
+        return false
+      end
+      v = fit(key, value)
+      if v.nil?
+        KIF.log("#{by}: can't lock #{key} to #{value.inspect} (it holds #{KIF::Options.defaults[key].class})")
+        return false
+      end
+      if @table[key] && @table[key][2] != owner
+        KIF.log("#{by}: #{key} is already locked by #{@table[key][1]} - left to it")
+        return false
+      end
+      @table[key] = [v, by, owner]
+      return true
+    end
+
+    def self.set_module(id, state, by: nil, owner: nil)
+      by, owner = owner_name(by, owner)
+      id = id.to_s.to_sym
+      st = state.is_a?(Integer) ? state : MODULE_STATES[state.to_s.downcase]
+      unless KIF::Modules::MODULES.has_key?(id) && st && st.between?(0, 2)
+        KIF.log("#{by}: can't set module #{id} to #{state.inspect}")
+        return false
+      end
+      if id == :mod_settings && st != KIF::Modules::ON
+        KIF.log("#{by}: Mod Settings can't be locked #{state} (players need it to switch mods Off)")
+        return false
+      end
+      if @modules[id] && @modules[id][2] != owner
+        KIF.log("#{by}: module #{id} is already set by #{@modules[id][1]} - left to it")
+        return false
+      end
+      @modules[id] = [st, by, owner]
+      KIF::Modules.poll if KIF::Modules.respond_to?(:poll) && $PokemonSystem
+      return true
+    end
+
+    def self.get(key); return @table[key.to_sym]; end
+    def self.module_lock(id); return @modules[id]; end
+
+    def self.module_state(id)
+      return nil if @modules.empty?
+      l = @modules[id]
+      return l ? l[0] : nil
+    end
+
+    # undo every lock of a mod (one that failed to load)
+    def self.release(owner)
+      @table.delete_if { |_k, v| v[2] == owner }
+      @modules.delete_if { |_k, v| v[2] == owner }
+    end
+
+    def self.reset!
+      @table = {}
+      @modules = {}
+    end
+
+    # PIF's own settings (plain attributes): the getter learns about locks
+    def self.wrap(key)
+      return true if @wrapped[key]
+      return false unless PokemonSystem.method_defined?(key) && PokemonSystem.method_defined?(:"#{key}=")
+      plain = :"kif_unlocked_#{key}"
+      PokemonSystem.send(:alias_method, plain, key) unless PokemonSystem.method_defined?(plain)
+      PokemonSystem.send(:define_method, key) do
+        t = KIF::Options.tracing
+        t << key if t
+        lock = KIF::Locks.table[key]
+        lock ? lock[0] : __send__(plain)
+      end
+      @wrapped[key] = true
+      return true
     end
   end
 end

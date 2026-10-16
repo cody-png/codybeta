@@ -307,14 +307,11 @@ class PokemonGameOption_Scene < PokemonOption_Scene
 
   def pbGetOptions(inloadscreen = false)
     options = kif_pbGetOptions(inloadscreen)
-    # Options > Modules turns KIF's features on or off; Options > KIF
-    # Settings holds their settings (012_KIF_ModulesMenu.rb)
-    options << ButtonOption.new(_INTL("Modules"),
-                                proc { kif_open_settings(KifModulesScene) },
-                                _INTL("Turn KIF's features on, off, or on with their settings hidden"))
+    # One button since 2026-10-16: the new KIF Settings screen also holds
+    # Modules, Mods and Presets (016_KIF_SettingsScreen.rb)
     options << ButtonOption.new(_INTL("KIF Settings"),
-                                proc { kif_open_settings(KifSettingsScene) },
-                                _INTL("Change the settings of KIF's features"))
+                                proc { pbFadeOutIn { KifSettingsScreen.new.main } },
+                                _INTL("KIF's settings, modules, mods and presets"))
     KIF::ModCompat.add_root_mod_options(self, options, inloadscreen) if defined?(KIF::ModCompat)
     return options
   end

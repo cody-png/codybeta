@@ -1,4 +1,4 @@
-KIF-MANIFEST 1 version=0.21.49 channel=stable files=29561
+KIF-MANIFEST 1 version=0.21.50 channel=stable files=29561
 5d8b7ff7853a0c9ea25cef730252f32a2849ac94 3085627 Audio/BGM/Azalea Town.mp3
 c1bf8a69360590600d95f7b17970c9bbc1e317ef 2505405 Audio/BGM/BW2_Ghetsis Battle.mp3
 fc522881c06a4cb076d61a14911405c3da74338e 2722742 Audio/BGM/BW2_K_leader.mp3
@@ -3395,7 +3395,7 @@ fe767fa0b1773b41eaea0464a459b076e6609c5b 428 Data/Items.rxdata
 ef274be56fa0a395d41f9d20c4627b84d49f9e46 4878 Data/KIF/MysteryGift_KIF.txt
 a0a66659d9f44d21e1f84d80e4e5970e9df33cfa 610062 Data/KIF/entrances.dat
 ccdde561e5fc62b0b3ebd760916e6e29eb9c07f9 21721 Data/KIF/trainers_challenge.dat
-285fd8bc1ce7f5c230e0ff88c1a746755a3ea1b6 411 Data/KIF/update_notes.txt
+280297fbf353cfc547f8db75f922bf6ecd1dfec3 274 Data/KIF/update_notes.txt
 9a527fb1c545d642d4a709d95452fbabcc853867 78297 Data/Map001.rxdata
 775d19da5c3949f878e650e7bbd242a6a300dfe4 5213 Data/Map002.rxdata
 470905be3cae69dbe4a6a546f248949b09bb82b1 6159 Data/Map003.rxdata
@@ -4827,10 +4827,10 @@ ea231eb7b99aeca4a309cb7b54950818fd8fac77 14185 Data/Scripts/990_KIF/000_Core/011
 e2a6cb5571bb9defcf6fc52c9f002934f5dc27b9 43160 Data/Scripts/990_KIF/000_Core/013_KIF_PixelFont.rb
 e5bbbb6554f1bcabac388f840b496833158fbb49 6814 Data/Scripts/990_KIF/000_Core/014_KIF_PixelUI.rb
 d97673de74eda04fe9e3a8e0a969046247727ba9 7533 Data/Scripts/990_KIF/000_Core/015_KIF_SettingsData.rb
-095c919121340c998a4adbf1d4e6d98e03a3cabd 29488 Data/Scripts/990_KIF/000_Core/016_KIF_SettingsScreen.rb
+17c8b6a610f6b7d64919659ae1c854bd5b794897 30826 Data/Scripts/990_KIF/000_Core/016_KIF_SettingsScreen.rb
 a556d3642dd37f04d8e8eb99cdb68a66c2dbf312 3915 Data/Scripts/990_KIF/000_CrashLog.rb
 94a304270165a1f1c8bbdeee71f773931f13f68b 1653 Data/Scripts/990_KIF/000_Paths.rb
-e3eddbebc8661f8d554d04bc14876175122e377b 1659 Data/Scripts/990_KIF/000_README.rb
+ee9545ca070b0c1d3423807a52f423797912b1d3 1659 Data/Scripts/990_KIF/000_README.rb
 c71dc6639c04aa6eafd1faf81e55486063e7db0e 5270 Data/Scripts/990_KIF/F-BATTLE-01_BattleFormat/BattleFormat.rb
 1c8845dcc1b056e90da7b27b7f2bc14b2315ee80 4173 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattle.rb
 9de49fa7a2f541bdf128a78d0b6816069832339d 13148 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattleChoices.rb
@@ -4970,7 +4970,7 @@ dc0d2d806447623fafeea8d45f586fd0cdd5b7f0 4266418 Data/Sprite Credits.csv
 3b3389e09b90357c0655e74ffae380fc48b7e609 410184 Data/Tilesets.rxdata
 f9b31006c733aa226e60e209c722557464a6479e 364643 Data/TilesetsTemp.rxdata
 94c39352b0edb225fa90de0ca64fe19c8a5fdae3 345 Data/Troops.rxdata
-4426c9f8488d3a1c63a85168e57b62324f36b1c6 7 Data/VERSION
+1f0affe16bc9ba58d0511625cbf866fc260ba1b4 7 Data/VERSION
 c7ea19a7a791e601e24bbc538d8611eb1e1025b0 245 Data/Weapons.rxdata
 88cb261de46afa991fb60f0251319dcc0a4b73f5 21823 Data/abilities.dat
 142be0a9a8a80bf26ad1292785f9ec46b76e7ea1 22509076 Data/attacksRS.dat

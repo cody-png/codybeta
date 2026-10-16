@@ -246,7 +246,7 @@ class KifSettingsScreen
   LIST_X0 = 150
   LIST_X1 = W - 6
   LIST_Y0 = 36
-  LIST_Y1 = H - 110
+  LIST_Y1 = H - 120
   ROW_H   = 26
   HEAD_H  = 18
   LINE2_H = 26
@@ -382,6 +382,7 @@ class KifSettingsScreen
       Graphics.update
       Input.update
       break if handle_input == :close
+      tick_description
     end
     close_effects
   ensure
@@ -781,9 +782,46 @@ class KifSettingsScreen
     elsif @defaults.has_key?(r.opt) && KIF::SettingsScreen.slider?(r.opt)
       pill(b, x, y0 + 7, _INTL("DEFAULT: {1}", @defaults[r.opt].to_i + r.opt.optstart.to_i), PILL, true)
     end
-    wrap(desc_of(r.opt), W - 30)[0, 2].each_with_index do |ln, k|
-      text(b, 14, y0 + 27 + k * 19, W - 28, 22, ln, TXT)
+    lines = wrap(desc_of(r.opt), W - 30)
+    lines = wrap(desc_of(r.opt), W - 46) if lines.length > DESC_LINES   # room for the arrows
+    first = desc_first_line(r, lines.length)
+    lines[first, DESC_LINES].each_with_index do |ln, k|
+      text(b, 14, y0 + 26 + k * DESC_DY, W - 34, DESC_DY, ln, TXT)
     end
+    # more lines than fit: a small arrow shows which way the rest is
+    if lines.length > DESC_LINES
+      tri(b, W - 20, y0 + 32, :u, first > 0 ? DIM : LINE, 3)
+      tri(b, W - 20, y0 + 72, :d, first + DESC_LINES < lines.length ? DIM : LINE, 3)
+    end
+  end
+
+  # A description longer than the panel moves up one line at a time while
+  # its row stays selected, then starts again from the top
+  DESC_LINES = 3
+  DESC_DY    = 17
+  DESC_STEP  = 100   # frames per line
+  DESC_HOLD  = 3     # steps spent on the first and last lines
+
+  def desc_first_line(r, n)
+    extra = n - DESC_LINES
+    return 0 if extra <= 0
+    if @desc_row != r.object_id
+      @desc_row = r.object_id
+      @desc_tick = 0
+    end
+    step = @desc_tick.to_i / DESC_STEP
+    cycle = extra + 2 * DESC_HOLD
+    pos = step % cycle
+    return 0 if pos < DESC_HOLD
+    return [pos - DESC_HOLD + 1, extra].min
+  end
+
+  def tick_description
+    r = (@focus == :list || @query) ? current : nil
+    return unless r && r.object_id == @desc_row
+    before = @desc_tick.to_i / DESC_STEP
+    @desc_tick = @desc_tick.to_i + 1
+    refresh if @desc_tick / DESC_STEP != before
   end
 
   def wrap(str, width)

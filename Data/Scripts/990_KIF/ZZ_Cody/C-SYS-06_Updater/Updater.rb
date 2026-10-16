@@ -448,9 +448,9 @@ module KIF
 
     # Downloads `items` ([path, sha, size]) into dir/files; returns the paths
     # that couldn't be fetched, or :cancelled
-    def download(base, items, dir, version)
+    def download(base, items, dir, version, title = nil)
       total = items.inject(0) { |s, it| s + it[2] }
-      title = _INTL("Updating to KIF Beta {1}", version)
+      title ||= _INTL("Updating to KIF Beta {1}", version)
       todo = items.reject { |path, sha, size| good_file?(staged(dir, path), sha, size) }   # resumed downloads
       if !todo.empty? && windows? && (curl = Win.curl)
         cfg = File.join(dir, "download.cfg")
@@ -694,7 +694,7 @@ module KIF
         log("no version found at #{base}")
         return false unless manual
         if no_stable_yet?(ch, base)
-          pbMessage(_INTL("No stable release has been published yet. Set Updates to Beta (Options > KIF Settings > General settings) to get test builds."))
+          pbMessage(_INTL("No stable release has been published yet. Set Updates to Beta (Options > System) to get test builds."))
         else
           pbMessage(_INTL("Couldn't reach the update server. Try again later."))
         end
@@ -718,7 +718,7 @@ module KIF
           show_notes(base)
         when 3
           $PokemonSystem.kif_update_skip = v if $PokemonSystem
-          pbMessage(_INTL("You won't be asked about {1} again. Options > KIF Settings > General settings > Check for Updates still finds it.", v))
+          pbMessage(_INTL("You won't be asked about {1} again. Options > System > Check for Updates still finds it.", v))
           return false
         else
           return false

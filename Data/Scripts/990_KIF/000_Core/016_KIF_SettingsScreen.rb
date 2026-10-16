@@ -9,7 +9,8 @@
 #   next to the name, or on a second line when they don't fit; sliders as a
 #   slider; buttons as OPEN. An orange dot marks a setting changed from its
 #   default; Z sets it back.
-# * Search (A): names and descriptions in every section.
+# * Search (D, or whatever key is bound to Input::SPECIAL): names and
+#   descriptions in every section. Key hints use the player's keybindings.
 # Draws the same option objects the old screens used, so no feature changes.
 #===============================================================================
 module KIF
@@ -123,6 +124,7 @@ module KIF
         placed[it[:name]] = true
         label = rename ? (RENAMES[it[:name]] || it[:name]) : it[:name]
         list << Row.new(:opt, it[:opt], it[:scope], label, id, heading, 0, it[:mod])
+        next if parent_off?(it[:opt])
         it[:children].each do |c|
           list << Row.new(:opt, c[:opt], c[:scope], c[:opt].name.to_s.strip, id, heading, 1, it[:mod])
         end
@@ -146,6 +148,14 @@ module KIF
       return rows
     end
 
+    # sub-settings (Base Stats sliders) only matter while their parent is on
+    def parent_off?(opt)
+      return false unless choices?(opt)
+      first = opt.values[0].to_s
+      return false unless ["Off", _INTL("Off")].include?(first)
+      return (opt.get rescue 1).to_i == 0
+    end
+
     def module_rows
       where = (module_sections rescue {})
       KIF::Modules::MODULES.map do |id, (name, desc, _f)|
@@ -157,17 +167,81 @@ module KIF
       end
     end
 
+    # A choice row or button with a small label at the right (ERROR, UPDATE...)
+    class BadgeEnum < EnumOption
+      attr_accessor :kif_badge   # [text, Color] or nil
+    end
+
+    class BadgeButton < ButtonOption
+      attr_accessor :kif_badge
+    end
+
+    # Mods section: Installed, Browse (the KIF-Mods catalog) and Updates
+    VIEWS = [:installed, :browse, :updates]
+    @mods_view = 0
+    class << self
+      attr_accessor :mods_view
+    end
+
+    def describe_mod(e)
+      bits = []
+      bits << _INTL("Failed to load (see Logs/KIF_errorlog.txt).") if e.error
+      who = []
+      who << "v#{e.version}" if e.version && !e.version.empty?
+      who << _INTL("by {1}", e.author) if e.author && !e.author.empty? && e.author != "Unknown"
+      bits << who.join(" ") + "." unless who.empty?
+      bits << e.description.to_s.gsub(/\s+/, " ")[0, 160] if e.description && !e.description.empty?
+      bits << _INTL("Mod Manager mod.") if e.kind == :mod_manager
+      bits << _INTL("Mods folder: {1}", e.id) if bits.empty?
+      return KIF::PixelFont.utf8(bits.join(" "))
+    end
+
     def mod_rows
       return [] unless defined?(KIF::Mods) && KIF::Mods.respond_to?(:entries)
-      rows = []
       list = (KIF::Mods.entries rescue [])
+      cat = defined?(KIF::ModCatalog) && KIF::ModCatalog.available?
+      view = cat ? (@mods_view || 0) : 0
+      rows = []
+      if cat
+        ups = KIF::ModCatalog.items ? KIF::ModCatalog.updates.length : 0
+        names = [_INTL("Installed {1}", list.length), _INTL("Browse"),
+                 ups > 0 ? _INTL("Updates {1}", ups) : _INTL("Updates")]
+        # no name: the bar is the tab row
+        opt = EnumOption.new("", names, proc { @mods_view || 0 },
+                             proc { |v| @mods_view = v },
+                             _INTL("Left/Right: your mods, the KIF-Mods catalog, or updates for the mods you have."))
+        rows << Row.new(:opt, opt, nil, opt.name, :mods, nil, 0, nil)
+        if view > 0 && KIF::ModCatalog.items.nil? && !@mods_loading
+          @mods_loading = true
+          begin
+            KIF::ModCatalog.load
+          ensure
+            @mods_loading = false
+          end
+        end
+      end
+      return rows + installed_rows(list) if view == 0
+      return rows + browse_rows if view == 1
+      return rows + update_rows
+    end
+
+    def installed_rows(list)
+      rows = []
       unless list.empty?
         rows << Row.new(:head, nil, nil, _INTL("Installed"), :mods, "Installed", 0, nil)
         list.each do |e|
-          opt = EnumOption.new(e.name.to_s, [_INTL("Off"), _INTL("On")],
-                               proc { e.enabled? ? 1 : 0 },
-                               proc { |v| e.source.set_enabled(e, v == 1) if e.enabled? != (v == 1) },
-                               KifModsScene.describe(e))
+          opt = BadgeEnum.new(e.name.to_s, [_INTL("Off"), _INTL("On")],
+                              proc { e.enabled? ? 1 : 0 },
+                              proc { |v| e.source.set_enabled(e, v == 1) if e.enabled? != (v == 1) },
+                              describe_mod(e))
+          # loaded this session (a mod added since the game started wasn't)
+          loaded = e.loaded
+          loaded = false if loaded.nil? && e.kind != :mod_manager
+          if e.error
+            opt.kif_badge = [_INTL("ERROR"), KIF::PixelUI::DOWN]
+          elsif !loaded.nil? && (loaded ? true : false) != e.enabled?
+            opt.kif_badge = [e.enabled? ? _INTL("ON NEXT START") : _INTL("OFF NEXT START"), KIF::PixelUI::WARN]
+          end
           rows << Row.new(:opt, opt, :global, e.name.to_s, :mods, "Installed", 0, nil)
         end
       end
@@ -187,10 +261,65 @@ module KIF
       return rows
     end
 
+    def catalog_desc(it)
+      who = ["v#{it.version}"]
+      who << _INTL("by {1}", it.author) unless it.author.empty?
+      tags = it.tags.empty? ? "" : " (#{it.tags.join(', ')})"
+      return KIF::PixelFont.utf8("#{who.join(' ')}#{tags}. #{it.description}".gsub(/\s+/, " "))
+    end
+
+    def browse_rows
+      cat = KIF::ModCatalog
+      rows = []
+      items = cat.items
+      if items.nil? || items.empty?
+        opt = ButtonOption.new(_INTL("Try again"), nil, cat.error || _INTL("The mod catalog is empty."))
+        return [Row.new(:opt, opt, nil, opt.name, :mods, nil, 0, nil, [:catalog_reload])]
+      end
+      rows << Row.new(:head, nil, nil, _INTL("KIF-Mods catalog"), :mods, "Catalog", 0, nil)
+      items.each do |it|
+        opt = BadgeButton.new(it.name, nil, catalog_desc(it))
+        if cat.update?(it)
+          opt.kif_badge = [_INTL("UPDATE"), KIF::PixelUI::WARN]
+        elsif cat.installed?(it)
+          opt.kif_badge = [_INTL("INSTALLED"), KIF::PixelUI::OWN]
+        else
+          opt.kif_badge = [cat.size_label(it), KIF::PixelUI::PILL]
+        end
+        rows << Row.new(:opt, opt, nil, it.name, :mods, "Catalog", 0, nil, [:catalog_install, it])
+      end
+      return rows
+    end
+
+    def update_rows
+      cat = KIF::ModCatalog
+      if cat.items.nil?
+        opt = ButtonOption.new(_INTL("Try again"), nil, cat.error || _INTL("The mod catalog is empty."))
+        return [Row.new(:opt, opt, nil, opt.name, :mods, nil, 0, nil, [:catalog_reload])]
+      end
+      ups = cat.updates
+      rows = [Row.new(:head, nil, nil, _INTL("Updates"), :mods, "Updates", 0, nil)]
+      if ups.length > 1
+        opt = ButtonOption.new(_INTL("Update all ({1})", ups.length), nil,
+                               _INTL("Updates every mod below. Their settings are kept."))
+        rows << Row.new(:opt, opt, nil, opt.name, :mods, "Updates", 0, nil, [:catalog_update_all])
+      end
+      ups.each do |it|
+        opt = BadgeButton.new(it.name, nil,
+                              KIF::PixelFont.utf8(_INTL("v{1} > v{2}. {3} Your settings are kept.", cat.installed_version(it), it.version, it.description)))
+        opt.kif_badge = [_INTL("UPDATE"), KIF::PixelUI::WARN]
+        rows << Row.new(:opt, opt, nil, it.name, :mods, "Updates", 0, nil, [:catalog_install, it])
+      end
+      when_t = cat.checked ? cat.checked.strftime("%H:%M") : "-"
+      opt = ButtonOption.new(ups.empty? ? _INTL("Every mod is up to date") : _INTL("Check again"), nil,
+                             _INTL("Last checked at {1}. Press to check again.", when_t))
+      rows << Row.new(:opt, opt, nil, opt.name, :mods, "Updates", 0, nil, [:catalog_reload])
+      return rows
+    end
+
     def preset_rows
-      return [] unless defined?(KifPresetsScene) && KIF.in_game?
-      scene = KifPresetsScene.new
-      return scene.pbGetOptions(false).map { |o| Row.new(:opt, o, :save, o.name.to_s, :presets, nil, 0, nil) }
+      return [] unless defined?(KIF::Presets) && KIF.in_game?
+      return KIF::Presets.slot_options.map { |o| Row.new(:opt, o, :save, o.name.to_s, :presets, nil, 0, nil) }
     end
 
     #---------------------------------------------------------------------------
@@ -260,7 +389,8 @@ class KifSettingsScreen
 
   attr_accessor :section, :sel, :focus
 
-  def initialize(inloadscreen = false)
+  # start: a section id to open on (e.g. :modules)
+  def initialize(inloadscreen = false, start = nil)
     @inloadscreen = inloadscreen
     @sections = KIF::SettingsScreen::SECTIONS.map { |id, label, col, _g| [id, label, col] }
     @section = 0
@@ -269,9 +399,13 @@ class KifSettingsScreen
     @side_scroll = 0
     @focus = :side
     @query = nil
-    @sub = nil        # a mod's settings page shown inside the Mods section
+    @sub = nil        # a page shown inside the Mods section (a mod's settings...)
     rebuild
     @section = next_section(-1, 1) || 0
+    if start && (i = @sections.index { |x| x[0] == start })
+      @section = i
+      @focus = :list unless opt_rows.empty?
+    end
   end
 
   # sections with nothing to show (every module behind them Off) are greyed
@@ -299,18 +433,23 @@ class KifSettingsScreen
     items = pif + items
     @rows = KIF::SettingsScreen.topic_rows(items)
     @rows[:modules] = KIF::SettingsScreen.module_rows
-    @rows[:mods] = KIF::SettingsScreen.mod_rows
-    unless extra.empty?
+    @rows[:mods] = KIF::Modules.visible?(:mod_settings) ? KIF::SettingsScreen.mod_rows : []
+    unless extra.empty? || KIF::SettingsScreen.mods_view.to_i != 0
       @rows[:mods] << KIF::SettingsScreen::Row.new(:head, nil, nil, _INTL("Added to Options"), :mods, "Added to Options", 0, nil)
       extra.each { |o| @rows[:mods] << KIF::SettingsScreen::Row.new(:opt, o, nil, o.name.to_s, :mods, "Added to Options", 0, nil) }
     end
     @rows[:presets] = KIF::SettingsScreen.preset_rows
     opts = items.flat_map { |it| [it[:opt]] + it[:children].map { |c| c[:opt] } }
     @defaults = KIF::SettingsScreen.defaults_for(opts)
-    if @sub
-      e = @sub[:entry]
-      @sub[:rows] = sub_rows_for(e) if e
-    end
+    @sub[:rows] = @sub[:build].call if @sub
+  end
+
+  # a page inside the Mods section; Esc goes back to the page it came from
+  def open_sub(title, &build)
+    @sub = { :title => title, :build => build, :rows => build.call, :back => @sub, :ret => @sel }
+    @sel = 0
+    @scroll = 0
+    refresh
   end
 
   def query=(q)
@@ -326,12 +465,14 @@ class KifSettingsScreen
   def rows
     return @sub[:rows] if @sub
     if @query
-      q = @query.downcase
+      # every word typed has to be in the name or the description
+      words = PF.utf8(@query).downcase.split(/\s+/)
       out = []
       @sections.each do |id, label, _c|
         found = (@rows[id] || []).select do |r|
-          r.kind == :opt && (r.label.downcase.include?(q) || r.opt.name.to_s.downcase.include?(q) ||
-                             desc_of(r.opt).downcase.include?(q))
+          next false unless r.kind == :opt
+          hay = PF.utf8("#{r.label} #{r.opt.name} #{desc_of(r.opt)}").downcase
+          words.all? { |w| hay.include?(w) }
         end
         next if found.empty?
         found.group_by(&:heading).each do |h, rs|
@@ -356,7 +497,7 @@ class KifSettingsScreen
   end
 
   def desc_of(opt)
-    d = opt.description
+    d = (KIF::SettingsScreen.description_for(opt) rescue nil) || opt.description
     if d.is_a?(Array)
       v = (opt.get rescue 0)
       d = d[v.is_a?(Integer) ? v : 0] || d[0]
@@ -392,7 +533,8 @@ class KifSettingsScreen
   end
 
   def handle_input
-    # A (and Q / Page Up: the same button) or F / Tab: search
+    return edit_search if @editing
+    # Input::SPECIAL (D by default) or JUMPUP (Q): search
     return search if Input.trigger?(Input::JUMPUP) || Input.trigger?(Input::SPECIAL)
     if @focus == :side
       if Input.repeat?(Input::DOWN) || Input.repeat?(Input::UP)
@@ -434,8 +576,9 @@ class KifSettingsScreen
     elsif Input.trigger?(Input::BACK)
       pbPlayCancelSE
       if @sub
-        @sub = nil
-        @sel = @sub_return || 0
+        @sel = @sub[:ret] || 0
+        @sub = @sub[:back]
+        @sub[:rows] = @sub[:build].call if @sub
         @scroll = 0
       elsif @query
         @query = nil
@@ -509,13 +652,20 @@ class KifSettingsScreen
       case r.action[0]
       when :mod_page
         e = r.action[1]
-        @sub_return = @sel
-        @sub = { :title => _INTL("{1} settings", e.name), :entry => e, :rows => sub_rows_for(e) }
-        @sel = 0
-        @scroll = 0
-        refresh
+        open_sub(_INTL("{1} settings", e.name)) { sub_rows_for(e) }
       when :categories
-        hidden { pbFadeOutIn { PokemonOptionScreen.new(KifModSettingsScene.new).pbStartScreen } }
+        open_sub(_INTL("Settings by category")) { category_rows }
+      when :mod_category
+        name = r.action[1]
+        open_sub(_INTL(name)) { category_page(name) }
+      when :catalog_install
+        hidden { KIF::ModCatalogUI.install(r.action[1]) }
+        after_change
+      when :catalog_update_all
+        hidden { KIF::ModCatalogUI.update_all }
+        after_change
+      when :catalog_reload
+        hidden { KIF::ModCatalog.load(true) }
         after_change
       end
       return
@@ -536,24 +686,108 @@ class KifSettingsScreen
 
   def sub_rows_for(e)
     list = [KIF::SettingsScreen::Row.new(:head, nil, nil, _INTL("{1} settings", e.name), :mods, nil, 0, nil)]
-    page = KifModPageScene.new(e)
-    page.pbGetOptions(false).each do |o|
+    KIF::Mods.page_options(e).each do |o|
       next unless o && o.respond_to?(:name)
       list << KIF::SettingsScreen::Row.new(:opt, o, :global, o.name.to_s, :mods, nil, 0, nil)
     end
     return list
   end
 
+  # Mod settings by the categories mods registered them in
+  def category_rows
+    list = [KIF::SettingsScreen::Row.new(:head, nil, nil, _INTL("Categories"), :mods, nil, 0, nil)]
+    return list unless defined?(KIF::ModSettings) && KIF::ModSettings.active?
+    KIF::ModSettings.used_categories.each do |c|
+      name = c[:name].to_s
+      o = ButtonOption.new(_INTL(name), nil, _INTL(c[:description].to_s))
+      list << KIF::SettingsScreen::Row.new(:opt, o, :global, o.name.to_s, :mods, nil, 0, nil, [:mod_category, name])
+    end
+    return list
+  end
+
+  def category_page(name)
+    list = [KIF::SettingsScreen::Row.new(:head, nil, nil, _INTL(name), :mods, nil, 0, nil)]
+    KIF::ModSettings.options_in(name).each do |o|
+      list << KIF::SettingsScreen::Row.new(:opt, o, :global, o.name.to_s, :mods, nil, 0, nil)
+    end
+    return list
+  end
+
+  # D / Q (SPECIAL / JUMPUP) opens the search bar; what's typed goes straight into it and the
+  # list follows as you type
   def search
     pbPlayDecisionSE
-    q = nil
-    hidden { q = pbEnterText(_INTL("Search settings"), 0, 20, @query || "") }
-    self.query = q
+    @editing = true
+    @edit_text = (@query || "").dup
+    @caret = 0
     @sub = nil
-    @focus = opt_rows.empty? ? :side : :list
-    @focus = :list if @query
+    Input.text_input = true if Input.respond_to?(:text_input=)
+    Input.gets if Input.respond_to?(:gets)   # drop the key that opened it
     refresh
     return nil
+  end
+
+  # keyboard keys that are also game buttons, so a typed letter isn't
+  # taken for a controller button
+  def keys_use;  KIF::Keys.symbols(Input::USE) | [:RETURN, :KP_ENTER]; end
+  def keys_back; KIF::Keys.symbols(Input::BACK) | [:ESCAPE]; end
+
+  # the keyboard keys the player has bound (keybindings), for the hints
+  def key_search;  KIF::Keys.label(Input::SPECIAL) || KIF::Keys.label(Input::JUMPUP) || "D"; end
+  def key_default; KIF::Keys.label(Input::ACTION, "Z"); end
+  def key_back;    KIF::Keys.label(Input::BACK, "Esc"); end
+
+  def edit_search
+    @caret = (@caret + 1) % 40
+    blink = (@caret == 0 || @caret == 20)
+    typed = (Input.respond_to?(:gets) ? Input.gets.to_s : "")
+    typed = PF.utf8(typed).gsub(/[[:cntrl:]]/, "")
+    if Input.triggerex?(:RETURN) || Input.triggerex?(:KP_ENTER) || Input.trigger?(Input::DOWN)
+      stop_search(:list)
+    elsif Input.triggerex?(:ESCAPE)
+      stop_search(:keep)
+    elsif Input.trigger?(Input::USE) && keys_use.none? { |k| (Input.triggerex?(k) rescue false) }
+      # a controller's confirm button: no keyboard here, use the on-screen one
+      stop_search(:keep)
+      q = nil
+      hidden { q = pbEnterText(_INTL("Search settings"), 0, 20, @query || "") }
+      self.query = q
+      @focus = :list if @query
+      refresh
+    elsif Input.trigger?(Input::BACK) && keys_back.none? { |k| (Input.triggerex?(k) rescue false) }
+      stop_search(:keep)
+    elsif Input.repeatex?(:BACKSPACE)
+      unless @edit_text.empty?
+        @edit_text = @edit_text[0...-1]
+        search_changed
+      end
+    elsif !typed.empty?
+      @edit_text << typed if @edit_text.length < 30
+      @edit_text = @edit_text[0, 30]
+      search_changed
+    elsif blink
+      refresh
+    end
+    return nil
+  end
+
+  def search_changed
+    self.query = @edit_text
+    refresh
+  end
+
+  # :list = to the results, :keep = stay where the screen was
+  def stop_search(where)
+    @editing = false
+    Input.text_input = false if Input.respond_to?(:text_input=)
+    self.query = @edit_text
+    pbPlayDecisionSE
+    if @query
+      @focus = opt_rows.empty? ? @focus : :list
+    else
+      @focus = :side if @focus == :list && opt_rows.empty?
+    end
+    refresh
   end
 
   #---------------------------------------------------------------------------
@@ -569,11 +803,13 @@ class KifSettingsScreen
     draw_sidebar(b)
     draw_list(b)
     draw_description(b)
-    hints = if @focus == :side
-              [[:ud, _INTL("Section")], [:lr, _INTL("Open")], ["A", _INTL("Search")], ["Esc", _INTL("Close")]]
+    hints = if @editing
+              [[nil, _INTL("Type to search")], ["Enter", _INTL("Results")], [key_back, _INTL("Done")]]
+            elsif @focus == :side
+              [[:ud, _INTL("Section")], [:lr, _INTL("Open")], [key_search, _INTL("Search")], [key_back, _INTL("Close")]]
             else
-              [[:ud, _INTL("Select")], [:lr, _INTL("Change")], ["Z", _INTL("Default")],
-               ["Esc", @query ? _INTL("Clear search") : (@sub ? _INTL("Back") : _INTL("Sections"))]]
+              [[:ud, _INTL("Select")], [:lr, _INTL("Change")], [key_default, _INTL("Default")],
+               [key_back, @query ? _INTL("Clear search") : (@sub ? _INTL("Back") : _INTL("Sections"))]]
             end
     footer(b, hints)
   end
@@ -583,19 +819,30 @@ class KifSettingsScreen
     b.fill_rect(0, 31, W, 1, LINE)
     text(b, 10, 2, 200, 28, _INTL("KIF Settings"), TXT, PF::TITLE)
     x0 = 10 + PF.width(PF::TITLE, _INTL("KIF Settings")) + 12
-    rbox(b, x0, 4, W - 8, 27, 5, DARK, @query ? SELB : LINE)
-    c = @query ? TXT : DIM
+    rbox(b, x0, 4, W - 8, 27, 5, DARK, (@query || @editing) ? SELB : LINE)
+    c = (@query || @editing) ? TXT : DIM
     rbox(b, x0 + 7, 9, x0 + 16, 18, 4, c)
     rbox(b, x0 + 9, 11, x0 + 14, 16, 2, DARK)
     3.times { |i| b.fill_rect(x0 + 15 + i, 17 + i, 2, 2, c) }
-    if @query
+    if @editing
+      shown = PF.utf8(@edit_text)
+      shown = shown[1..-1] while shown.length > 1 && PF.width(PF::TEXT, shown) > 200
+      tw = shown.empty? ? 0 : text(b, x0 + 24, 4, 300, 23, shown, TXT)
+      text(b, x0 + 30, 4, 300, 23, _INTL("Type to search"), DIM) if shown.empty?
+      b.fill_rect(x0 + 24 + tw + (tw > 0 ? 3 : 0), 9, 2, 14, SELB) if @caret.to_i < 20
+      if @query
+        n = opt_rows.length
+        text(b, W - 16, 4, 0, 23, n == 1 ? _INTL("1 found") : _INTL("{1} found", n), DIM, PF::TEXT, 1)
+      end
+    elsif @query
       text(b, x0 + 24, 4, 300, 23, PF.fit(PF::TEXT, @query, 200), TXT)
       n = opt_rows.length
       text(b, W - 16, 4, 0, 23, n == 1 ? _INTL("1 found") : _INTL("{1} found", n), DIM, PF::TEXT, 1)
     else
       text(b, x0 + 24, 4, 200, 23, _INTL("Search settings"), DIM)
-      kw = PF.width(PF::TINY, "A") + 8
-      key(b, W - 14 - kw, 8, "A")
+      k = key_search
+      kw = [PF.width(PF::TINY, k) + 8, 16].max
+      key(b, W - 14 - kw, 8, k)
     end
   end
 
@@ -716,9 +963,18 @@ class KifSettingsScreen
 
   def draw_value(b, r, y, selected, mode)
     o = r.opt
+    badge = o.respond_to?(:kif_badge) ? o.kif_badge : nil
     if mode == :button
-      pill(b, VAL_X1, y + 3, _INTL("OPEN"), selected ? SEL : PILL, true) if o.instance_variable_get(:@onPressProc) || r.action
+      if badge
+        pill(b, VAL_X1, y + 3, badge[0], badge[1], true)
+      elsif o.instance_variable_get(:@onPressProc) || r.action
+        pill(b, VAL_X1, y + 3, _INTL("OPEN"), selected ? SEL : PILL, true)
+      end
       return
+    end
+    if badge && mode == :beside && KIF::SettingsScreen.choices?(o)
+      seg = o.values.sum { |v| PF.width(PF::TEXT, PF.utf8(v.to_s)) + 12 }
+      pill(b, VAL_X1 - seg - 8, y + 3, badge[0], badge[1], true)
     end
     if KIF::SettingsScreen.slider?(o)
       v = o.get.to_i + o.optstart.to_i
@@ -771,7 +1027,8 @@ class KifSettingsScreen
       text(b, 14, y0 + 27, W - 28, 22, n == 1 ? _INTL("1 setting") : _INTL("{1} settings", n), DIM)
       return
     end
-    text(b, 14, y0 + 1, 330, 26, PF.fit(PF::ROW, r.label, 330), TXT, PF::ROW)
+    title = r.label.to_s.empty? ? _INTL(@sections[@section][1]) : r.label
+    text(b, 14, y0 + 1, 330, 26, PF.fit(PF::ROW, title, 330), TXT, PF::ROW)
     x = W - 14
     if r.scope && r.section != :modules && r.section != :presets && !r.action
       x -= pill(b, x, y0 + 7, r.scope == :global ? _INTL("ALL SAVES") : _INTL("THIS SAVE"), PILL, true) + 6

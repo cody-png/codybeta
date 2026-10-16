@@ -531,7 +531,7 @@ module KIF
         options << o
       end
       # Mod settings kept by KIF (no Kanto Reloaded installed) are opened from
-      # Options > Modules > Mod Settings (module "Mod Settings").
+      # Options > KIF Settings > Mods (module "Mod Settings").
       return options
     rescue StandardError => e
       KIF.log("Mod options for the Options menu failed: #{e.class}: #{e.message}") if KIF.respond_to?(:log)

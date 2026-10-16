@@ -93,6 +93,7 @@ module KIF
 
     def self.entries
       list = []
+      add_source(NativeSource.new(File.join(".", FOLDER))) if @sources.empty?
       @sources.each do |s|
         begin
           list.concat(Array(s.entries))

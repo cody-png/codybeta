@@ -87,15 +87,98 @@ class Object
   alias kif_rand_is_legendary is_legendary unless method_defined?(:kif_rand_is_legendary) || private_method_defined?(:kif_rand_is_legendary)
 
   def calcBaseStatsSum(species)
+    v = KIF::Rand.fast_bst(species)
+    return v if v
     v = KIF::Rand.memo_bst(species)
     return v if v
     return KIF::Rand.memo_bst_set(species, kif_rand_calcBaseStatsSum(species))
   end
 
   def is_legendary(dex_num, printInfo = false)
+    v = KIF::Rand.fast_legendary(dex_num)
+    return v unless v.nil?
     v = KIF::Rand.memo_legend(dex_num)
     return v unless v.nil?
     return KIF::Rand.memo_legend_set(dex_num, kif_rand_is_legendary(dex_num, printInfo))
+  end
+end
+
+# PIF's is_legendary builds the whole fused species (FusedSpecies.new) for
+# every number it is asked about, then compares its head and body with the
+# legendary list; a trainer shuffle asks about thousands of fusions (~20 s).
+# For a plain dex number the answer only needs the head and body numbers.
+# Triple fusions and anything else go the old way.
+module KIF
+  module Rand
+    def self.fast_legendary(dex)
+      return nil unless dex.is_a?(Integer) && dex >= 1 && defined?(NB_POKEMON) && defined?(LEGENDARIES_LIST)
+      nb = NB_POKEMON
+      return nil if dex > nb * nb + nb
+      if @fast_legend_token != KIF::Perf.token || @fast_legend_list != LEGENDARIES_LIST.hash
+        @fast_legend_token = KIF::Perf.token
+        @fast_legend_list = LEGENDARIES_LIST.hash
+        @fast_legend = {}
+        LEGENDARIES_LIST.each do |sym|
+          d = (GameData::Species.try_get(sym) rescue nil)
+          @fast_legend[d.id_number] = true if d && d.id_number <= nb
+        end
+      end
+      return @fast_legend[dex] ? true : false if dex <= nb
+      body = (dex % nb == 0) ? dex / nb - 1 : dex / nb
+      head = dex - body * nb
+      head = nb if head == 0
+      return (@fast_legend[body] || @fast_legend[head]) ? true : false
+    end
+
+    # A fusion's base stats and types only, worked out by PIF's own
+    # FusedSpecies methods (the rest of the species data isn't built).
+    # nil for anything that isn't a plain two-part fusion.
+    LITE_LIMIT = 60_000
+
+    def self.lite_species(sp)
+      return nil unless defined?(NB_POKEMON) && defined?(GameData::FusedSpecies)
+      nb = NB_POKEMON
+      if sp.is_a?(Integer)
+        return nil if sp <= nb || sp > nb * nb + nb
+        body = (sp % nb == 0) ? sp / nb - 1 : sp / nb
+        head = sp - body * nb
+        head = nb if head == 0
+      elsif sp.is_a?(Symbol) && sp.to_s =~ /\AB(\d+)H(\d+)\z/
+        body = $1.to_i
+        head = $2.to_i
+      else
+        return nil
+      end
+      return nil unless body.between?(1, nb) && head.between?(1, nb)
+      if @lite_token != KIF::Perf.token
+        @lite_token = KIF::Perf.token
+        @lite = {}
+      end
+      key = body * nb + head
+      hit = @lite[key]
+      return hit if hit
+      b = GameData::Species.get(body)
+      h = GameData::Species.get(head)
+      o = GameData::FusedSpecies.allocate
+      o.instance_variable_set(:@body_pokemon, b)
+      o.instance_variable_set(:@head_pokemon, h)
+      o.instance_variable_set(:@type1, o.calculate_type1)
+      o.instance_variable_set(:@type2, o.calculate_type2)
+      stats = o.calculate_base_stats
+      stats.each_key { |k| stats[k] = 1 if !stats[k] || stats[k] <= 0 }
+      o.instance_variable_set(:@base_stats, stats)
+      @lite.clear if @lite.size >= LITE_LIMIT
+      return @lite[key] = o
+    rescue StandardError
+      return nil
+    end
+
+    def self.fast_bst(species)
+      o = lite_species(species)
+      return nil unless o
+      s = o.instance_variable_get(:@base_stats)
+      return s[:HP] + s[:ATTACK] + s[:DEFENSE] + s[:SPECIAL_ATTACK] + s[:SPECIAL_DEFENSE] + s[:SPEED]
+    end
   end
 end
 

@@ -11,7 +11,8 @@
 #   * effects with turns left (Taunt, Encore, Leech Seed, Substitute...);
 #   * weather, terrain, rooms and Gravity, screens and hazards per side,
 #     Future Sight and Wish.
-# Works the same in PIF's battle screen and EBDX's. Information module;
+# Works the same in PIF's battle screen and EBDX's. A base feature (no
+# module, Cody 2026-10-16);
 # "Battle Info" setting, On by default (Off for Classic KIF).
 # On also shows how to open it (Cody liked both mockups, "so long as they
 # aren't in the way"): a small "Z INFO" tab above the left end of PIF's
@@ -260,26 +261,165 @@ module KIF
 end
 
 #-------------------------------------------------------------------------------
-# The screen
+# Pages added 2026-10-16 (Cody: PokeRogue Redux style): Abilities, Moves,
+# Speed Order. Mods can add abilities to the Abilities page (the Innates mod
+# shows a Pokémon's innates there):
+#
+#   KIF::BattleInfo.register_abilities(:my_mod) do |battle, battler|
+#     [{ :label  => "INNATE",        # small label above the name
+#        :ability => :EFFECTSPORE,   # name and description come from the game
+#        :known  => true,            # false: shown as ??? (a foe's, not revealed)
+#        :worked => false }]         # true: "WORKED THIS BATTLE"
+#   end
+#
+# :name / :description can be given instead of :ability. A provider that
+# raises is skipped (and logged); the page still shows everything else.
+#-------------------------------------------------------------------------------
+module KIF
+  module BattleInfo
+    @ability_providers = {}
+
+    def self.register_abilities(id, &block)
+      @ability_providers[id] = block
+    end
+
+    def self.ability_providers
+      return @ability_providers
+    end
+
+    def self.ability_description(id)
+      return (GameData::Ability.get(id).description.to_s rescue "")
+    end
+
+    # The splash showed this ability for this Pokémon (Effectiveness.rb notes it)
+    def self.ability_worked?(battle, battler, id)
+      known = battle.instance_variable_get(:@cody_known_abilities) || {}
+      return known[battler.pokemon.object_id] == id
+    end
+
+    # [{label:, name:, desc:, known:, worked:}] – the main ability first
+    def self.ability_entries(battle, battler)
+      known = ability_known?(battle, battler)
+      out = [{ :label => _INTL("ABILITY"), :name => known ? battler.abilityName.to_s : "???",
+               :desc => known ? ability_description(battler.ability_id) : _INTL("Shown once the battle reveals it."),
+               :known => known, :worked => ability_worked?(battle, battler, battler.ability_id),
+               :main => true }]
+      @ability_providers.each do |id, prov|
+        begin
+          list = prov.call(battle, battler) || []
+          list.each do |e|
+            k = e[:known] != false
+            name = e[:name] || (e[:ability] && (GameData::Ability.get(e[:ability]).name rescue e[:ability].to_s))
+            desc = e[:description] || (e[:ability] && ability_description(e[:ability])) || ""
+            out << { :label => (e[:label] || _INTL("ABILITY")).to_s.upcase,
+                     :name => k ? name.to_s : "???",
+                     :desc => k ? desc.to_s : _INTL("Shown once it activates."),
+                     :known => k, :worked => k && e[:worked] }
+          end
+        rescue StandardError => ex
+          KIF.log("Battle Info: ability list from #{id} failed (#{ex.class}: #{ex.message})") if defined?(KIF.log)
+        end
+      end
+      return out
+    end
+
+    #---------------------------------------------------------------------------
+    # Moves: yours in full; a foe's only once it has used them
+    #---------------------------------------------------------------------------
+    def self.note_move(battler, move_id)
+      return unless battler && battler.pokemon && move_id
+      battle = battler.battle
+      seen = battle.instance_variable_get(:@kif_bi_moves)
+      battle.instance_variable_set(:@kif_bi_moves, seen = {}) unless seen
+      per = (seen[battler.pokemon.object_id] ||= {})
+      per[move_id] = per[move_id].to_i + 1
+    rescue StandardError
+    end
+
+    def self.times_used(battle, battler, move_id)
+      seen = battle.instance_variable_get(:@kif_bi_moves) || {}
+      return (seen[battler.pokemon.object_id] || {})[move_id].to_i
+    end
+
+    # [{name:, type:, cat:, power:, acc:, pp:}] or nil for an unseen foe move
+    def self.move_entries(battle, battler)
+      own = own?(battler)
+      battler.moves.compact.first(4).map do |m|
+        used = times_used(battle, battler, m.id)
+        next nil if !own && used == 0
+        cat = case m.category
+              when 0 then _INTL("Phys")
+              when 1 then _INTL("Spec")
+              else _INTL("Status")
+              end
+        { :name => m.name.to_s, :type => m.type, :cat => cat,
+          :power => (m.baseDamage.to_i > 1 ? m.baseDamage.to_s : "-"),
+          :acc => (m.accuracy.to_i > 0 ? m.accuracy.to_s : "-"),
+          :pp => own ? "#{m.pp}/#{m.total_pp}" : (used == 1 ? _INTL("used 1x") : _INTL("used {1}x", used)) }
+      end
+    end
+
+    #---------------------------------------------------------------------------
+    # Speed order this turn (priority moves aside): pbSpeed counts paralysis,
+    # Tailwind, items and abilities; Trick Room reverses it.
+    #---------------------------------------------------------------------------
+    def self.trick_room(battle)
+      return eff(battle.field.effects, :TrickRoom).to_i
+    end
+
+    def self.speed_order(battle)
+      list = battle.battlers.select { |b| b && !b.fainted? && b.pokemon }
+      sp = list.map { |b| [b, (b.pbSpeed rescue b.speed).to_i] }
+      sp.sort_by! { |b, s| [-s, b.index] }
+      sp.reverse! if trick_room(battle) > 0
+      return sp
+    end
+
+    def self.speed_note(b)
+      notes = []
+      notes << _INTL("Paralyzed") if b.status == :PARALYSIS
+      notes << _INTL("Tailwind") if eff(b.pbOwnSide.effects, :Tailwind).to_i > 0 rescue nil
+      notes << _INTL("Choice Scarf") if b.item == :CHOICESCARF && own?(b)
+      return notes.join(", ")
+    end
+  end
+end
+
+class PokeBattle_Battler
+  alias kif_bi_pbUseMove pbUseMove unless method_defined?(:kif_bi_pbUseMove)
+
+  def pbUseMove(choice, specialUsage = false)
+    ret = kif_bi_pbUseMove(choice, specialUsage)
+    KIF::BattleInfo.note_move(self, @lastMoveUsed) if @lastMoveUsed && !specialUsage
+    return ret
+  end
+end
+
+#-------------------------------------------------------------------------------
+# The screen (new look 2026-10-16: KIF pixel UI). Left / Right: the Pokémon
+# on the field, then Field and Speed. Up / Down: a Pokémon's pages (Stats,
+# Abilities, Moves). Back closes.
 #-------------------------------------------------------------------------------
 class KifBattleInfoScreen
+  include KIF::PixelUI
+
   W = 512
   H = 384
-  # Both solid (Monto: the battle showing through made the text hard to
-  # read). fill_rect replaces pixels instead of blending, so the old
-  # see-through panel colour (alpha 22) punched holes in the background.
-  BG       = Color.new(28, 36, 48, 255)
-  PANEL    = Color.new(46, 55, 68, 255)
-  TEXT     = Color.new(240, 240, 240)
-  SHADOW   = Color.new(40, 40, 48)
-  DIMTEXT  = Color.new(168, 176, 188)
-  TITLE    = Color.new(255, 216, 96)
-  UP       = Color.new(112, 216, 112)
-  DOWN     = Color.new(240, 112, 96)
+  PF = KIF::PixelFont
+  PAGES = [:stats, :abilities, :moves]
+
+  TYPE_COLORS = {
+    :NORMAL => [160, 160, 140], :FIRE => [230, 120, 60], :WATER => [90, 140, 230], :GRASS => [110, 180, 80],
+    :ELECTRIC => [230, 190, 50], :ICE => [110, 200, 210], :FIGHTING => [190, 70, 60], :POISON => [160, 80, 170],
+    :GROUND => [200, 170, 100], :FLYING => [150, 140, 230], :PSYCHIC => [230, 90, 130], :BUG => [150, 175, 40],
+    :ROCK => [180, 160, 80], :GHOST => [110, 90, 150], :DRAGON => [110, 70, 230], :DARK => [110, 90, 80],
+    :STEEL => [170, 170, 200], :FAIRY => [225, 130, 190]
+  }
 
   def initialize(battle)
     @battle = battle
-    @pages = KIF::BattleInfo.battlers(battle) + [:field]
+    @entries = KIF::BattleInfo.battlers(battle) + [:field, :speed]
+    @index = 0
     @page = 0
   end
 
@@ -287,17 +427,21 @@ class KifBattleInfoScreen
     @viewport = Viewport.new(0, 0, Graphics.width, Graphics.height)
     @viewport.z = 999_999
     @sprite = Sprite.new(@viewport)
-    @sprite.bitmap = Bitmap.new(Graphics.width, Graphics.height)
+    @sprite.bitmap = Bitmap.new(W, H)
     refresh
     loop do
       Graphics.update
       Input.update
       if Input.trigger?(Input::LEFT)
-        @page = (@page - 1) % @pages.length
+        @index = (@index - 1) % @entries.length
         pbPlayCursorSE
         refresh
       elsif Input.trigger?(Input::RIGHT)
-        @page = (@page + 1) % @pages.length
+        @index = (@index + 1) % @entries.length
+        pbPlayCursorSE
+        refresh
+      elsif (Input.trigger?(Input::UP) || Input.trigger?(Input::DOWN)) && battler?
+        @page = (@page + (Input.trigger?(Input::DOWN) ? 1 : -1)) % PAGES.length
         pbPlayCursorSE
         refresh
       elsif Input.trigger?(Input::BACK) || Input.trigger?(Input::ACTION) || Input.trigger?(Input::USE)
@@ -311,105 +455,225 @@ class KifBattleInfoScreen
     @viewport.dispose if @viewport
   end
 
-  def text(bmp, list)
-    pbDrawTextPositions(bmp, list)
+  def current
+    return @entries[@index]
   end
 
+  def battler?
+    return !current.is_a?(Symbol)
+  end
+
+  def type_color(t)
+    return Color.new(*(TYPE_COLORS[t] || [130, 130, 130]))
+  end
+
+  def type_name(t)
+    return (GameData::Type.get(t).name rescue t.to_s)
+  end
+
+  #---------------------------------------------------------------------------
   def refresh
-    bmp = @sprite.bitmap
-    bmp.clear
-    bmp.fill_rect(0, 0, bmp.width, bmp.height, BG)
-    pbSetSystemFont(bmp)
-    cur = @pages[@page]
-    title = cur == :field ? _INTL("Field") : cur.name
-    text(bmp, [[_INTL("Battle Info"), 16, 8, 0, TITLE, SHADOW],
-               ["< #{title} >", W / 2, 8, 2, TEXT, SHADOW],
-               ["#{@page + 1}/#{@pages.length}", W - 16, 8, 1, DIMTEXT, SHADOW]])
-    if cur == :field
-      draw_field(bmp)
+    b = @sprite.bitmap
+    b.fill_rect(0, 0, W, H, BG)
+    draw_top(b)
+    case current
+    when :field then draw_field(b)
+    when :speed then draw_speed(b)
     else
-      draw_battler(bmp, cur)
+      draw_battler_head(b, current)
+      case PAGES[@page]
+      when :stats then draw_stats(b, current)
+      when :abilities then draw_abilities(b, current)
+      when :moves then draw_moves(b, current)
+      end
     end
-    pbSetSmallFont(bmp)
-    text(bmp, [[_INTL("Left/Right: other Pokémon and the field    Back: close"), W / 2, H - 26, 2, DIMTEXT, SHADOW]])
-    pbSetSystemFont(bmp)
+    hints = [[:lr, _INTL("Pokémon")]]
+    hints << [:ud, _INTL("Page")] if battler?
+    hints << ["Esc", _INTL("Close")]
+    footer(b, hints)
   end
 
-  def draw_battler(bmp, b)
+  # chips: every Pokémon (green dot yours, red foes), then Field and Speed
+  def draw_top(b)
+    b.fill_rect(0, 0, W, 32, PANEL2)
+    b.fill_rect(0, 31, W, 1, LINE)
+    labels = @entries.map do |e|
+      case e
+      when :field then [_INTL("Field"), nil]
+      when :speed then [_INTL("Speed"), nil]
+      else [e.name.to_s, KIF::BattleInfo.own?(e) ? OWN : FOE]
+      end
+    end
+    max_name = 120
+    loop do
+      total = labels.sum { |n, dot| [PF.width(PF::TEXT, n), max_name].min + (dot ? 22 : 14) + 3 }
+      break if total <= W - 12 || max_name <= 30
+      max_name -= 6
+    end
+    x = 6
+    labels.each_with_index do |(name, dot), i|
+      name = PF.fit(PF::TEXT, name, max_name)
+      w = PF.width(PF::TEXT, name) + (dot ? 22 : 14)
+      act = (i == @index)
+      rbox(b, x, 5, x + w, 27, 5, act ? SEL : PANEL, act ? SELB : LINE)
+      tx = x + 7
+      if dot
+        rrect(b, x + 7, 13, x + 12, 18, 2, dot)
+        tx = x + 16
+      end
+      text(b, tx, 5, w, 22, name, act ? TXT : DIM)
+      x += w + 3
+    end
+  end
+
+  def draw_battler_head(b, bt)
+    x = 6
+    PAGES.each_with_index do |p, i|
+      label = { :stats => _INTL("Stats"), :abilities => _INTL("Abilities"), :moves => _INTL("Moves") }[p]
+      w = PF.width(PF::TEXT, label) + 16
+      act = (i == @page)
+      rbox(b, x, 36, x + w, 58, 4, act ? SEL : PANEL, act ? SELB : LINE)
+      text(b, x + 8, 36, w, 22, label, act ? TXT : DIM)
+      x += w + 4
+    end
+    own = KIF::BattleInfo.own?(bt)
+    hp = own ? "#{bt.hp}/#{bt.totalhp}" : "#{(100.0 * bt.hp / [bt.totalhp, 1].max).ceil}%"
+    st = bt.status && bt.status != :NONE ? (GameData::Status.get(bt.status).name rescue bt.status.to_s) : _INTL("OK")
+    xr = W - 8
+    types = (bt.pbTypes(true) rescue [bt.type1, bt.type2]).compact.uniq
+    types.reverse.each { |t| xr -= pill(b, xr, 41, type_name(t).upcase, type_color(t), true) + 4 }
+    info = _INTL("Lv.{1}  {2}  {3}", bt.level, hp, st)
+    info = PF.fit(PF::TEXT, info, xr - 4 - (x + 4))
+    text(b, xr - 4 - PF.width(PF::TEXT, info), 36, 300, 22, info, DIM)
+  end
+
+  #---------------------------------------------------------------------------
+  def draw_stats(b, bt)
     bi = KIF::BattleInfo
-    own = bi.own?(b)
-    side = !own ? _INTL("Foe") : ((b.pbOwnedByPlayer? rescue true) ? _INTL("Yours") : _INTL("Ally"))
-    hp = own ? "#{b.hp}/#{b.totalhp}" : "#{(100.0 * b.hp / [b.totalhp, 1].max).ceil}%"
-    status = b.status && b.status != :NONE ? (GameData::Status.get(b.status).name rescue b.status.to_s) : _INTL("No status")
-    text(bmp, [[_INTL("Lv. {1}  ·  {2}", b.level, side), 16, 40, 0, DIMTEXT, SHADOW],
-               [_INTL("HP {1}  ·  {2}", hp, status), 16, 64, 0, TEXT, SHADOW]])
-    # types as they are now (Soak, Roost, Forest's Curse...)
-    x = W - 16 - 64
-    types = (b.pbTypes(true) rescue [b.type1, b.type2]).compact.uniq.reverse
-    imagepos = []
-    types.each do |t|
-      n = (GameData::Type.get(t).id_number rescue nil)
-      next unless n
-      imagepos << ["Graphics/Pictures/types", x, 44, 0, n * 28, 64, 28]
-      x -= 68
+    rbox(b, 6, 62, 250, H - 30, 6, PANEL)
+    heading(b, 14, 242, 68, _INTL("Stat changes"))
+    y = 86
+    bi.stage_rows(bt).each do |label, stage, m, value|
+      col = stage > 0 ? UP : (stage < 0 ? DOWN : DIM)
+      text(b, 16, y, 110, 22, _INTL(label), TXT)
+      text(b, 118, y, 30, 22, stage > 0 ? "+#{stage}" : stage.to_s, col, PF::TEXT, 1)
+      text(b, 156, y, 50, 22, bi.mult_text(m), col)
+      text(b, 200, y, 42, 22, value.to_s, TXT, PF::TEXT, 1) if value
+      y += 25
     end
-    pbDrawImagePositions(bmp, imagepos) unless imagepos.empty?
-    # stat changes
-    bmp.fill_rect(12, 96, 236, 238, KifBattleInfoScreen::PANEL)
-    rows = [[_INTL("Stat changes"), 20, 100, 0, TITLE, SHADOW]]
-    mults = []
-    y = 128
-    bi.stage_rows(b).each do |label, stage, m, value|
-      col = stage > 0 ? UP : (stage < 0 ? DOWN : DIMTEXT)
-      rows << [_INTL(label), 20, y, 0, TEXT, SHADOW]
-      rows << [(stage > 0 ? "+#{stage}" : stage.to_s), 140, y, 1, col, SHADOW]
-      mults << [bi.mult_text(m), 196, y + 3, 1, col, SHADOW]
-      rows << [value.to_s, 242, y, 1, TEXT, SHADOW] if value
-      y += 28
-    end
-    text(bmp, rows)
-    pbSetSmallFont(bmp)
-    text(bmp, mults)
-    pbSetSystemFont(bmp)
-    # ability, item, effects
-    bmp.fill_rect(256, 96, 244, 238, KifBattleInfoScreen::PANEL)
-    ab = bi.ability_known?(@battle, b) ? b.abilityName : "???"
-    it = bi.item_text(@battle, b) || "???"
-    lines = [[_INTL("Ability"), 264, 100, 0, DIMTEXT, SHADOW], [ab.to_s, 492, 100, 1, TEXT, SHADOW],
-             [_INTL("Item"), 264, 126, 0, DIMTEXT, SHADOW], [it.to_s, 492, 126, 1, TEXT, SHADOW],
-             [_INTL("Effects"), 264, 156, 0, TITLE, SHADOW]]
-    effects = bi.battler_effects(@battle, b)
+    rbox(b, 256, 62, W - 6, H - 30, 6, PANEL)
+    ab = bi.ability_known?(@battle, bt) ? bt.abilityName : "???"
+    it = bi.item_text(@battle, bt) || "???"
+    heading(b, 264, W - 14, 68, _INTL("Ability"))
+    text(b, 266, 82, 236, 22, PF.fit(PF::TEXT, ab, 232), ab == "???" ? DIM : TXT)
+    heading(b, 264, W - 14, 110, _INTL("Held item"))
+    text(b, 266, 124, 236, 22, PF.fit(PF::TEXT, it, 232), it == "???" ? DIM : TXT)
+    heading(b, 264, W - 14, 152, _INTL("Effects"))
+    effects = bi.battler_effects(@battle, bt)
     effects = [_INTL("None")] if effects.empty?
-    pbSetSmallFont(bmp)
-    text(bmp, lines.first(4))
-    pbSetSystemFont(bmp)
-    text(bmp, [lines[4]])
-    pbSetSmallFont(bmp)
-    ey = 182
-    shown = effects.first(7)
-    shown[-1] = _INTL("...and {1} more", effects.length - 6) if effects.length > 7
-    text(bmp, shown.map { |l| y0 = ey; ey += 21; [l, 264, y0, 0, TEXT, SHADOW] })
-    pbSetSystemFont(bmp)
+    max = 8
+    shown = effects.first(max)
+    shown[-1] = _INTL("...and {1} more", effects.length - max + 1) if effects.length > max
+    y = 166
+    shown.each do |l|
+      text(b, 266, y, 236, 22, PF.fit(PF::TEXT, l, 232), effects == [_INTL("None")] ? DIM : TXT)
+      y += 21
+    end
   end
 
-  def draw_field(bmp)
+  def draw_abilities(b, bt)
+    rbox(b, 6, 62, W - 6, H - 30, 6, PANEL)
+    list = KIF::BattleInfo.ability_entries(@battle, bt)
+    room = (H - 30 - 66) / 64
+    shown = list.first(room)
+    y = 66
+    shown.each do |e|
+      rbox(b, 12, y, W - 12, y + 60, 5, PANEL2)
+      text(b, 22, y + 3, 200, 13, e[:label], e[:main] ? ACC : INNATE, PF::TINY)
+      if e[:worked]
+        pill(b, W - 22, y + 5, _INTL("WORKED THIS BATTLE"), Color.new(70, 120, 90), true)
+      elsif e[:known] && !KIF::BattleInfo.own?(bt) && !e[:main]
+        pill(b, W - 22, y + 5, _INTL("REVEALED"), Color.new(70, 120, 90), true)
+      end
+      text(b, 22, y + 13, 400, 26, e[:name], e[:known] ? TXT : DIM, PF::ROW)
+      text(b, 22, y + 37, W - 46, 22, PF.fit(PF::TEXT, e[:desc], W - 46), e[:known] ? TXT : DIM)
+      y += 64
+    end
+    if list.length > shown.length
+      text(b, W - 18, H - 46, 0, 13, _INTL("+{1} more", list.length - shown.length), DIM, PF::TINY, 1)
+    end
+  end
+
+  def draw_moves(b, bt)
+    own = KIF::BattleInfo.own?(bt)
+    rbox(b, 6, 62, W - 6, H - 30, 6, PANEL)
+    [[_INTL("MOVE"), 22, 0], [_INTL("TYPE"), 200, 0], [_INTL("CAT"), 280, 0], [_INTL("POW"), 350, 1],
+     [_INTL("ACC"), 396, 1], [own ? _INTL("PP") : _INTL("SEEN"), W - 22, 1]].each do |label, x, al|
+      text(b, x, 67, 0, 13, label, ACC, PF::TINY, al)
+    end
+    y = 84
+    KIF::BattleInfo.move_entries(@battle, bt).each do |m|
+      rbox(b, 12, y, W - 12, y + 60, 5, PANEL2)
+      if m.nil?
+        text(b, 22, y + 17, 100, 26, "???", DIM, PF::ROW)
+        text(b, W - 22, y + 19, 0, 22, _INTL("not used yet"), DIM, PF::TEXT, 1)
+      else
+        text(b, 22, y + 17, 176, 26, PF.fit(PF::ROW, m[:name], 172), TXT, PF::ROW)
+        pill(b, 200, y + 23, type_name(m[:type]).upcase, type_color(m[:type]))
+        text(b, 280, y + 19, 60, 22, m[:cat], TXT)
+        text(b, 350, y + 19, 0, 22, m[:power], TXT, PF::TEXT, 1)
+        text(b, 396, y + 19, 0, 22, m[:acc], TXT, PF::TEXT, 1)
+        text(b, W - 22, y + 19, 0, 22, m[:pp], TXT, PF::TEXT, 1)
+      end
+      y += 66
+    end
+  end
+
+  #---------------------------------------------------------------------------
+  def draw_field(b)
     bi = KIF::BattleInfo
-    bmp.fill_rect(12, 40, W - 24, 92, KifBattleInfoScreen::PANEL)
-    rows = []
-    y = 44
-    bi.field_lines(@battle).first(4).each { |l| rows << [l, 20, y, 0, TEXT, SHADOW]; y += 22 }
-    pbSetSmallFont(bmp)
-    text(bmp, rows)
-    pbSetSystemFont(bmp)
-    [[_INTL("Your side"), 0, 12], [_INTL("Foe's side"), 1, 256]].each do |label, idx, x|
-      bmp.fill_rect(x, 140, 244, 194, KifBattleInfoScreen::PANEL)
-      text(bmp, [[label, x + 8, 144, 0, TITLE, SHADOW]])
+    rbox(b, 6, 36, W - 6, 136, 6, PANEL)
+    heading(b, 14, W - 14, 42, _INTL("Field"))
+    y = 56
+    bi.field_lines(@battle).first(4).each { |l| text(b, 16, y, W - 32, 22, l, TXT); y += 19 }
+    [[_INTL("Your side"), 0, 6, 252], [_INTL("Foe's side"), 1, 260, W - 6]].each do |label, idx, x0, x1|
+      rbox(b, x0, 142, x1, H - 30, 6, PANEL)
+      heading(b, x0 + 8, x1 - 8, 148, label)
       lines = bi.side_effects(@battle.sides[idx])
-      lines = [_INTL("Nothing")] if lines.empty?
-      pbSetSmallFont(bmp)
-      ly = 172
-      text(bmp, lines.first(7).map { |l| y0 = ly; ly += 21; [l, x + 8, y0, 0, TEXT, SHADOW] })
-      pbSetSystemFont(bmp)
+      none = lines.empty?
+      lines = [_INTL("Nothing")] if none
+      ly = 162
+      lines.first(8).each do |l|
+        text(b, x0 + 10, ly, x1 - x0 - 16, 22, PF.fit(PF::TEXT, l, x1 - x0 - 20), none ? DIM : TXT)
+        ly += 21
+      end
+    end
+  end
+
+  def draw_speed(b)
+    bi = KIF::BattleInfo
+    rbox(b, 6, 36, W - 6, H - 30, 6, PANEL)
+    text(b, 16, 38, W - 32, 22, PF.fit(PF::TEXT, _INTL("Turn order (priority moves still go first)"), W - 32), DIM)
+    y = 64
+    order = bi.speed_order(@battle)
+    rows = order.first(6)
+    rh = rows.length > 4 ? 38 : 44
+    rows.each_with_index do |(bt, spd), i|
+      own = bi.own?(bt)
+      rbox(b, 12, y, W - 12, y + rh - 4, 5, PANEL2)
+      cy = y + (rh - 4 - 26) / 2
+      text(b, 22, cy, 20, 26, (i + 1).to_s, ACC, PF::ROW)
+      rrect(b, 44, cy + 10, 49, cy + 15, 2, own ? OWN : FOE)
+      text(b, 56, cy, 180, 26, PF.fit(PF::ROW, bt.name.to_s, 170), TXT, PF::ROW)
+      note = own ? bi.speed_note(bt) : ""
+      text(b, 236, cy + 2, 150, 22, note, WARN) unless note.empty?
+      text(b, W - 22, cy + 2, 0, 22, own ? _INTL("Speed {1}", spd) : _INTL("Speed ???"), own ? TXT : DIM, PF::TEXT, 1)
+      y += rh
+    end
+    tr = bi.trick_room(@battle)
+    if tr > 0
+      w = pill(b, 14, y + 4, _INTL("TRICK ROOM: {1}", bi.turns(tr).upcase), Color.new(150, 90, 200))
+      text(b, 14 + w + 8, y, 260, 22, _INTL("slower Pokémon go first"), DIM)
     end
   end
 end

@@ -1,5 +1,7 @@
-KIF Beta 0.21.46
-Multi-Battle Radar (Mixed): the other Pokemon in a radar 2v2/3v3 now roll their shininess with the chain's chance too, like Same Species.
-Trade bubbles: every NPC who offers a trade now shows the trade bubble (PIF only had it on some, e.g. not the Cerulean trade).
-PC: switching between full boxes is faster. A fusion's box icon is made much faster the first time it's shown, and a new box no longer draws its icons twice.
-Shiny fusion icons: the party and the PC no longer mix up which half is shiny.
+KIF Beta 0.21.47
+Battle Info has a new look with sharp, easy-to-read text, and new pages. Left/Right picks a Pokemon (or Field / Speed), Up/Down switches its pages:
+- Stats: stat changes, ability, held item and effects, as before.
+- Abilities: its ability with a description, plus extra abilities from mods (the Innates mod's innates). A foe's stay ??? until the battle shows them.
+- Moves: type, category, power, accuracy and PP. A foe's moves show once it has used them, with how often.
+- Speed: who moves first this turn (Trick Room, Tailwind, paralysis counted). Foes' Speed stays hidden.
+Battle Info is now a standard feature: it no longer belongs to the Information module, so turning that module Off keeps it.

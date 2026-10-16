@@ -37,7 +37,8 @@
 #   adds 1 to the chain, however many foes it had (Cody, 2026-10-15: a 3v3
 #   adding 3 was too much). Shininess:
 #   the shaking patch only decides the radar Pokémon's; every other Pokémon
-#   rolls its own (Same Species: with the chain's chance; Mixed: normal odds).
+#   rolls its own with the chain's chance, as if it had its own shaking patch
+#   (both modes; Mixed used normal odds until Cody's call, 2026-10-15).
 #   A milestone passed by a jump of more than 1 is still announced.
 #
 # 6.8.2 adaptations: pbPokeRadarHighlightGrass is a guarded copy. The chain-break is in an
@@ -374,7 +375,7 @@ module KIF
       ensure
         r[3] = saved if r
       end
-      if m[:mode] == 1 && pkmn && !pkmn.shiny?
+      if pkmn && !pkmn.shiny?
         d = odds_denominator(chain, shiny_odds)
         if d <= 1 || rand(d) == 0
           pkmn.shiny = true

@@ -36,11 +36,11 @@ Download the installer for your system from the [Releases page](https://github.c
 
 Your saves are in `%APPDATA%\KIF` and the installer never touches them. Running it again repairs a damaged install and keeps your saves, mods and imported sprites.
 
-After that, KIF updates itself: at start-up it offers new versions and downloads only what changed (Options > KIF Settings > General settings > Updates).
+After that, KIF updates itself: at start-up it offers new versions and downloads only what changed (Options > KIF Settings > System > Updates).
 
 # Features
 
-**Every feature and option is explained in [KIF_Features.md](KIF_Features.md).** The guide follows the in-game menu order: Options → KIF Settings. It also ships with the game, next to InfiniteFusion.exe.
+**Every feature and option is explained in [KIF_Features.md](KIF_Features.md).** The guide follows the in-game menu: Options → KIF Settings. It also ships with the game, next to InfiniteFusion.exe.
 
 Highlights:
 

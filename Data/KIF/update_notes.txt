@@ -1,7 +1,6 @@
-KIF Beta 0.21.47
-Battle Info has a new look with sharp, easy-to-read text, and new pages. Left/Right picks a Pokemon (or Field / Speed), Up/Down switches its pages:
-- Stats: stat changes, ability, held item and effects, as before.
-- Abilities: its ability with a description, plus extra abilities from mods (the Innates mod's innates). A foe's stay ??? until the battle shows them.
-- Moves: type, category, power, accuracy and PP. A foe's moves show once it has used them, with how often.
-- Speed: who moves first this turn (Trick Room, Tailwind, paralysis counted). Foes' Speed stays hidden.
-Battle Info is now a standard feature: it no longer belongs to the Information module, so turning that module Off keeps it.
+KIF Beta 0.21.48
+KIF Settings is rebuilt: one screen with sections on the left (Shinies, Battles, Pokemon, Graphics, Self-Battle, Challenges, Game, System, Modules, Mods, Presets) and sharp, easy-to-read text.
+- Every setting shows its choices as a bar; Left/Right changes it. Names are shorter under their heading (Auto-Battle > Stop on Shiny).
+- An orange dot marks a setting you changed; Z sets it back to its default. The bottom bar explains the setting and shows its default.
+- A (or F / Tab) searches every setting by name and description.
+- Modules, Mods and Presets are sections of the same screen. Options has one KIF Settings button.

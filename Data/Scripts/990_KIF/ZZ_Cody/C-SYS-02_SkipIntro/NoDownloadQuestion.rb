@@ -1,6 +1,6 @@
 #===============================================================================
 # C-SYS-02 – No "where did you download the game?" question; game mode menu
-#   on the first game too (Cody, 2026-10-09)
+#   on the first game too (2026-10-09)
 #   With no save files, PIF's intro (map 295, event 4) calls common event 108
 #   "gameDownload Warning" instead of the game mode menu: a question about
 #   where the game was downloaded, then a scam warning (and, for "Other",

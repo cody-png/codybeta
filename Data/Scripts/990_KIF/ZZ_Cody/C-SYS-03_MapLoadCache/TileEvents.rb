@@ -7,7 +7,7 @@
 #   PNG for every tile it hasn't cut yet (~80 ms for Outdoor) and throws it
 #   away again. RPG::Cache is emptied often (100 entries), so walking into
 #   Cerulean / Route 24 / through a door paid ~80 ms per such event: the
-#   one-step stutters in Cody's frame logs.
+#   one-step stutters in the frame logs.
 #   Here the tile is cut from the tileset picture the map renderer already
 #   has in memory (it loads it before the map's events, wrapped mega
 #   tilesets included), and each cut tile is kept so a later visit doesn't

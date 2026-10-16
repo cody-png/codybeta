@@ -1,5 +1,5 @@
 #===============================================================================
-# C-SYS-02 – No PIF start-up announcement (Cody, 2026-10-11)
+# C-SYS-02 – No PIF start-up announcement (2026-10-11)
 #   PIF shows Settings::STARTUP_MESSAGES_KANTO / _HOENN on the load screen
 #   (052_InfiniteFusion/System/MultiSaves.rb pbStartLoadScreen). The texts
 #   come from Data/Scripts/DownloadedSettings.rb, which the game re-downloads
@@ -13,7 +13,7 @@
 #   game's installer..." when LATEST_GAME_RELEASE (same downloaded file) is
 #   above PIF's own version: that would send KIF players to PIF's installer,
 #   so find_newer_available_version answers nil (logged once when it would
-#   have fired). KIF gets its own updater later (Cody, 2026-10-11).
+#   have fired). KIF gets its own updater later.
 #===============================================================================
 module KIF
   module SkipIntro

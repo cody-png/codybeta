@@ -85,7 +85,7 @@ def pbDayCareGetCompat
 end
 
 #-------------------------------------------------------------------------------
-# Gender (found in Cody's play test 2026-10-05: Mew/Murkrow + Murkrow said
+# Gender (a Mew/Murkrow + Murkrow at the Day Care said
 # "prefer to play with other Pokémon"). 6.8.2 makes a fusion genderless when
 # either part is genderless, and genderless Pokémon only breed with Ditto.
 # Legendary heads are almost all genderless, so with the option On such a
@@ -125,7 +125,7 @@ class Pokemon
 end
 
 #-------------------------------------------------------------------------------
-# Crash fix (Cody's play test 2026-10-05: "undefined method include? for
+# Crash fix ("undefined method include? for
 # :Undiscovered:Symbol" at the Day Care). 6.8.2 FusedSpecies#calculate_egg_groups
 # returns the bare Symbol :Undiscovered (not an Array) when a part is
 # unbreedable, and pbIsDitto? (007_Overworld_DayCare.rb:116) calls include? on

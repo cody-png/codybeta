@@ -1,5 +1,5 @@
 #===============================================================================
-# C-SYS-03 – Map load cache (Cody, 2026-10-08)
+# C-SYS-03 – Map load cache (2026-10-08)
 #   Walking between connected maps (Cerulean <-> Route 5, Route 24...) PIF
 #   loads the next map's tileset picture from disk every time it comes into
 #   view (~60 ms, a visible hitch) and throws it away again as soon as it is

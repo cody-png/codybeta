@@ -1,5 +1,5 @@
 #===============================================================================
-# F-BATTLE-03 – Value of trapping moves for both battle AIs (Cody, 2026-10-14)
+# F-BATTLE-03 – Value of trapping moves for both battle AIs (2026-10-14)
 #
 # Mean Look / Block / Spider Web (function "0EF", status moves) only change
 # a foe's options, so neither AI gave them any value: PIF's AI scored them

@@ -1,5 +1,5 @@
 #===============================================================================
-# C-RAND-01 – Randomizer chunk 3: Pokémon data (Cody, 2026-10-06)
+# C-RAND-01 – Randomizer chunk 3: Pokémon data (2026-10-06)
 # Types, moves that follow the new type, TM compatibility, abilities, base
 # stats, evolutions and exclusion lists. Only the base Pokémon (dex 1-576)
 # are changed; fusions are built from their two parts, so they follow.
@@ -10,7 +10,7 @@
 # the original data back. Pokémon you already have keep their moves; their
 # stats are recalculated.
 #
-# Rules (Cody):
+# Rules:
 #   * Types follow the evolution family: each original type gets one new
 #     type in the family (Charmander Fire->Ice, Charizard Fire/Flying ->
 #     Ice/X). "Dual" gives single-type families a second type.

@@ -1,5 +1,5 @@
 #===============================================================================
-# C-BATTLE-02 – Trainer teams keep their rolls (Cody, 2026-10-11)
+# C-BATTLE-02 – Trainer teams keep their rolls (2026-10-11)
 # PIF rolls a trainer's Pokémon afresh every battle: the personal ID decides
 # the ability when the trainer file doesn't (a Ralts fusion had Synchronize
 # the first time and not in the rematch), and KIF's Shiny Trainer Pokémon

@@ -134,7 +134,7 @@ class PokeBattle_Battle
   # Exp gained by a non-participant through Exp All (only reached when Exp All
   # is active: the EXPALL item, or Easy difficulty in Kanto – unchanged PIF
   # rule). KIF 0.20.7 (Trapstarr) 004_Battle_ExpAndMoveLearning.rb:129-153,
-  # with one fix (Cody, 2026-10-05: "KIF, fixed"):
+  # with one fix:
   #   r = slider 1..10 (0 = Off: everyone gets PIF's a/2)
   #   e = 1 + 0.05 + r^1.1 / 1000           (the slider only bends the curve)
   #   gap_i = highest party level - level_i

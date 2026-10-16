@@ -1,6 +1,6 @@
 #===============================================================================
-# SCOPE-02 – PIF fixes: faster PC box switching (Cody, 2026-10-15; Monto's
-# stutter switching between two full boxes)
+# SCOPE-02 – PIF fixes: faster PC box switching (switching between two full
+# boxes stuttered)
 #
 # 1. Fusion icons the first time they're shown. PIF builds a fusion's icon
 #    (head icon's top half + body icon's bottom half) pixel by pixel:

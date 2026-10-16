@@ -1,5 +1,5 @@
 #===============================================================================
-# C-GYM-01 – Gym Leader teams (Cody)
+# C-GYM-01 – Gym Leader teams
 # Cody Settings → Battles (per save file):
 #   * Gym Leader teams: Normal / +1 / +2 / Full – Gym Leaders bring extra
 #     Pokémon to every battle (gym, rematch or story battle).
@@ -87,8 +87,8 @@ module KIF
     #---------------------------------------------------------------------------
     # The gym's type: the randomizer's roll when gym types are randomized,
     # PIF's gym list in Classic, and in Remix / Expert (the leaders' teams
-    # are mixed there) the type the leader's own team uses most (Cody,
-    # 2026-10-11: Brock got Rock extras in Remix).
+    # are mixed there) the type the leader's own team uses most (otherwise
+    # Brock got Rock extras in Remix).
     def self.gym_type(tr_type, party)
       idx = GYM_INDEX[tr_type.to_sym]
       if idx

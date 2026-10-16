@@ -1,5 +1,5 @@
 #===============================================================================
-# C-RAND-01 – Randomizer: Leader team size (Cody, 2026-10-07)
+# C-RAND-01 – Randomizer: Leader team size (2026-10-07)
 #   Gyms page → Leader team size: Same / +1 / +2 / Full. Only Gym Leaders
 #   (every battle with them); the Trainers page's Team size no longer adds to
 #   Gym Leaders. With random trainers this decides instead of Cody Settings'

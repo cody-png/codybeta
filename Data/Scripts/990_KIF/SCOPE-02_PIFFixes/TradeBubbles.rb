@@ -1,6 +1,6 @@
 #===============================================================================
 # SCOPE-02 – PIF fix: every in-game trade offer shows the trade bubble
-# (Monto / Cody, 2026-10-15)
+# (2026-10-15)
 # PIF shows the trade bubble over an NPC whose event page has a "tradeIcon"
 # comment (052_InfiniteFusion/Gameplay/Quests/QuestIcons.rb). Only 18 of the
 # 46 pages that offer a trade (pbStartTrade) have that comment; the others -

@@ -1,5 +1,5 @@
 #===============================================================================
-# C-SYS-05 – KIF's own save folder (Cody, 2026-10-09)
+# C-SYS-05 – KIF's own save folder (2026-10-09)
 #   KIF Beta keeps its saves in %APPDATA%\KIF (Game.ini Title = KIF), apart
 #   from old KIF's %APPDATA%\kurayinfinitefusion. On the very first launch,
 #   if the old folder has saves and the new one has none, the game offers to

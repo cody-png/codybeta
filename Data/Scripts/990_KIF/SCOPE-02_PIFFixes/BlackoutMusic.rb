@@ -1,6 +1,6 @@
 #===============================================================================
 # SCOPE-02 – PIF fix: gym music kept playing in the Pokémon Center after
-# losing to Misty (2026-10-14, tester report)
+# losing to Misty (2026-10-14)
 # Misty's event (Map004 Cerulean City Gym, event 3) memorizes the music
 # (command 247), plays her theme and battles; its last commands restore the
 # memorized music (command 248). On a loss pbStartOver moves the player to the

@@ -97,7 +97,7 @@ KIF::PCActions.add(:evolock,
   })
 
 #-------------------------------------------------------------------------------
-# Indicator (Cody, 2026-10-05): a small padlock next to the level in the
+# Indicator: a small padlock next to the level in the
 # Summary header (every page) while the Pokémon is evolution-locked and the
 # option is On. Drawn with rectangles, so no new image is needed.
 #-------------------------------------------------------------------------------
@@ -133,7 +133,7 @@ class PokemonSummary_Scene
   end
 end
 
-# Party screen (Cody, 2026-10-05): same padlock in the empty space between
+# Party screen: same padlock in the empty space between
 # the level and the HP numbers (status icons sit at x 78-122, HP text starts
 # around x 150).
 class PokemonPartyPanel
@@ -148,7 +148,7 @@ class PokemonPartyPanel
       return unless @overlaysprite && !@overlaysprite.disposed? && @overlaysprite.bitmap
       pos = [130, 64]
       if defined?(KIF::BigIcons) && KIF::BigIcons.party_layout?(@pokemon, @text)
-        pos = KIF::BigIcons::PARTY_LOCK_POS   # big icons: over the icon (Cody)
+        pos = KIF::BigIcons::PARTY_LOCK_POS   # big icons: over the icon
       end
       KIF.draw_evolock_icon(@overlaysprite.bitmap, pos[0], pos[1])
     rescue => e

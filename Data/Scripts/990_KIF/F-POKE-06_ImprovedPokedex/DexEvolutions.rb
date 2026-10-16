@@ -4,7 +4,7 @@
 #         "Lv X" lines, "Item", "Other"; owned species only).
 #
 # 6.8.2 redesigned the info page and uses KIF's box area for height/weight and
-# the sprite/entry credits. Cody chose (2026-10-05): the ACTION button (same
+# the sprite/entry credits. Here the ACTION button (same
 # key as Run: Z/Shift, a face button on controllers) swaps the credits box for
 # evolution lines; a small "RUN: Evolutions" / "RUN: Credits" hint sits in the
 # title bar.

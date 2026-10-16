@@ -4,7 +4,7 @@
 # * Text uses KIF::PixelFont (013_KIF_PixelFont.rb): each glyph is built once
 #   per colour as a tiny bitmap and copied with blt, so letters are never
 #   smoothed, squeezed or broken the way the engine's draw_text draws Power
-#   Green at in-between sizes (Cody, 2026-10-16: "focus on readable text").
+#   Green at in-between sizes.
 # * Shapes are made of fill_rect strips. fill_rect replaces pixels (no
 #   blending), so every colour here is solid.
 #===============================================================================

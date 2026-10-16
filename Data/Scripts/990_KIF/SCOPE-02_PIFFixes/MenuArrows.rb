@@ -1,5 +1,5 @@
 #===============================================================================
-# SCOPE-02 – Scroll arrows left on screen (Cody, 2026-10-10)
+# SCOPE-02 – Scroll arrows left on screen (2026-10-10)
 #   A list window's up/down scroll arrows are separate sprites whose
 #   visibility is only recalculated in the window's update. Hiding the window
 #   (e.g. the pause menu's pbHideMenu before Outfit, Save or Title) left an

@@ -1,6 +1,6 @@
 #===============================================================================
-# Port debugging aid (not a KIF feature; Cody 2026-10-05: crash text couldn't
-# be copied and no errorlog.txt was found).
+# Port debugging aid (not a KIF feature; crash text couldn't be
+# copied and no errorlog.txt was found).
 #
 # 1. Crashes while the KIF port's scripts load: PIF's script loader
 #    (Data/Scripts.rxdata, load_scripts_from_folder) shows mkxp's plain error

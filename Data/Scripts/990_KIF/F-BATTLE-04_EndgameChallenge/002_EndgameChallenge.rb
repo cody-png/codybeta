@@ -15,7 +15,7 @@
 #   * foes have double PP; singles only; no items in trainer battles;
 #     switch style "Set"; no damage roll (F-BATTLE-03 Damage Variance);
 #     accuracy x1.2 for your damaging moves, x1.3 for the foe's;
-#     2-5-hit moves hit 3-5 times (Cody: challenge only – KIF did this in
+#     2-5-hit moves hit 3-5 times (challenge only – KIF did this in
 #     every battle);
 #   * beating Blue gives the next emblem (Bronze/Silver/Gold, PIF common
 #     event 42) once; the Silver Emblem opens Cynthia's fight in the Mt.
@@ -23,7 +23,7 @@
 #     team ends with a Hall of Fame entry "You completed the challenge!".
 #   Talk to Dem again to turn it off/on or spar.
 #
-# Port structure (modular, Cody 2026-10-05):
+# Port structure (modular):
 #   * No base map files change: the KIF events/pages are added when a map
 #     loads (KIF::MapPatches, 000_Core/008). Data: 001_EndgameEvents_data.rb,
 #     generated from KIF's maps.
@@ -208,7 +208,7 @@ class PokeBattle_Move
   end
 end
 
-# KIF :367-378 – 2-5 hits become 3-5 (challenge only, Cody)
+# KIF :367-378 – 2-5 hits become 3-5 (challenge only)
 class PokeBattle_Move_0C0 < PokeBattle_Move
   alias kif_egc_pbNumHits pbNumHits unless method_defined?(:kif_egc_pbNumHits)
 

@@ -31,7 +31,7 @@
 #     Magic Guard also take no poison damage while walking (Immunity already
 #     doesn't); On+Healing – Poison Heal heals 1 HP instead.
 #
-# Choices (Cody, 2026-10-05):
+# Choices:
 #   * Frostbite doesn't stop the Pokémon from moving (Gen 9 style, as the
 #     option text says). In KIF it still couldn't move 80% of the time, like
 #     Frozen. It is cured the same ways (Fire moves that thaw, Ice Heal, ...).

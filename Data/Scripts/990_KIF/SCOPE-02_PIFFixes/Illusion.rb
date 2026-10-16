@@ -2,7 +2,7 @@
 # SCOPE-02 – PIF fix: Illusion never copies an Egg or a fainted Pokémon
 # PIF 6.8.2's PokeBattle_Battle#pbLastInTeam has the Essentials check
 # `|| !pkmn.able?` commented out, so a Zoroark line fusion came out looking
-# like the Egg at the end of the party ("What will Egg do?", Cody 2026-10-11).
+# like the Egg at the end of the party ("What will Egg do?").
 # Copy of the base method with that check back. Always on (a bug fix).
 #===============================================================================
 KIF.guard_base("011_Battle/003_Battle/002_PokeBattle_Battle.rb", 2321919076,

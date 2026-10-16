@@ -3,8 +3,8 @@
 # pbAbilitiesOnSwitchOut marks a switched-out battler as fainted ("Treat self
 # as fainted", Essentials) and the replacement only comes in later, so the
 # Exp check at the end of the move (pbGainExp: fainted? or captured) paid out
-# for a foe that left through Wimp Out / Emergency Exit (Cody's playthrough,
-# 2026-10-11: "Minipod went back to Rick!" then 344 Exp). Same for any other
+# for a foe that left through Wimp Out / Emergency Exit (e.g.
+# "Minipod went back to Rick!" then 344 Exp). Same for any other
 # forced switch of a trainer's Pokémon. The battler is tagged while it is
 # only switched out; pbGainExp leaves it alone until a real Pokémon fills
 # the slot again. Always on (a bug fix; happens with every module Off too).

@@ -6,8 +6,8 @@
 #   (016_UI/015_UI_Options.rb:2149); the AI itself was always on.
 #
 # Option Battles > "Battle AI" PIF / DemICE (per save, default DemICE) – port
-#   addition (Cody, 2026-10-05). Named as a choice between two AIs rather
-#   than "harder" (Cody, play test 6). With $DEBUG on (KIF Debug option) and
+#   addition. Named as a choice between two AIs rather than "harder".
+#   With $DEBUG on (KIF Debug option) and
 #   the console open, DemICE's AI prints its move/switch scores ("Switch
 #   score for: ...") – a way to see it is the one deciding.
 #

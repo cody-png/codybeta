@@ -1,6 +1,6 @@
 #===============================================================================
 # C-RAND-01 – PIF's other randomizer menus open the Randomizer screen
-# (Cody, 2026-10-07). Rolls follow the seed, so PIF's "reshuffle" buttons
+# (2026-10-07). Rolls follow the seed, so PIF's "reshuffle" buttons
 # would give the same result again; changing things goes through the screen
 # (new seed, settings, Randomize now) instead.
 #   * Update Man → Advanced options → Randomizer options (Common Event 17,

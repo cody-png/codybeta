@@ -83,9 +83,8 @@ class PokeBattle_FakeBattler
 end
 
 #===============================================================================
-# Pizza in the gender selectors (port addition, Cody 2026-10-05 play test 6:
-# "Any Gender Selector should be able to select Pizza gender only while
-# Kuray's Shenanigans is enabled.")
+# Pizza in the gender selectors (port addition): any gender selector can
+# pick the pizza gender, only while Kuray's Shenanigans is enabled.
 #   * Transgender Stone and Debug > Set gender get "Make pizza" while
 #     Shenanigans is On; a pizza Pokémon can then be made male / female /
 #     genderless again.

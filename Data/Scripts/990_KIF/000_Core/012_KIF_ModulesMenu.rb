@@ -1,11 +1,11 @@
 #===============================================================================
-# Options > Modules and Options > KIF Settings (Cody, 2026-10-10; split
+# Options > Modules and Options > KIF Settings (2026-10-10; split
 # 2026-10-14 so the settings don't sit below the whole module list)
 # Modules sets each module Off / On / Hidden (011_KIF_Modules.rb).
 # KIF Settings opens the settings of the modules that are On, General
 # settings (always-on features), Mod Settings (other mods' settings, when KIF
 # provides them and that module is On), Settings Presets, Increment Slider by
-# and DEBUG. Settings come from every KIF and Cody menu, sorted by the module
+# and DEBUG. Settings come from every KIF and Cody Settings menu, sorted by the module
 # their code belongs to.
 #===============================================================================
 class KifModuleSettingsScene < KifOptionsBaseScene
@@ -145,7 +145,7 @@ end
 
 module KIF
   module Options
-    # Every menu settings can be registered in (KIF's and Cody's)
+    # Every menu settings can be registered in (KIF's and Cody Settings)
     def self.all_menu_ids
       return MENUS.keys + @extra_menus.keys
     end

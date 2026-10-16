@@ -214,7 +214,7 @@ class PokemonStorageScreen
 end
 
 #===============================================================================
-# The same "Kuray Actions" in the party menu (Cody, 2026-10-05).
+# The same "Kuray Actions" in the party menu.
 # PokemonPartyScreen#pbPokemonScreen is one long method, so the entry is
 # inserted before "Cancel" when the scene shows the "Do what with X?" list.
 # Picking it runs the actions and hands the base method "Cancel", which just

@@ -6,8 +6,8 @@
 # KIF's feed holds one gift: "Fire Misbok!", a shiny Lv20 B24H200 with KIF
 # shiny colours (gift id 18). It is bundled with the port
 # (Data/KIF/MysteryGift_KIF.txt, KIF's file unchanged) and shows up in PIF's
-# "Search for public gifts" next to PIF's own gifts, once per save (Cody,
-# 2026-10-05). It works offline too.
+# "Search for public gifts" next to PIF's own gifts, once per save. It
+# works offline too.
 #
 # 6.8.2 adaptations: 6.8.2's gift ids are strings from its JSON feed; KIF's
 # gifts get ids "KIF-<n>" so they can't clash. KIF's file uses the old

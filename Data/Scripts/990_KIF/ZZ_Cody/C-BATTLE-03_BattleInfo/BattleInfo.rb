@@ -1,5 +1,5 @@
 #===============================================================================
-# C-BATTLE-03 – Battle Info (Cody, 2026-10-14)
+# C-BATTLE-03 – Battle Info (2026-10-14)
 # While choosing Fight / Bag / Pokémon / Run, the Action button (Z / Shift)
 # opens a screen with what the battle knows, one page per Pokémon on the
 # field plus a Field page (Left / Right to switch, Back to close):
@@ -12,10 +12,9 @@
 #   * weather, terrain, rooms and Gravity, screens and hazards per side,
 #     Future Sight and Wish.
 # Works the same in PIF's battle screen and EBDX's. A base feature (no
-# module, Cody 2026-10-16);
+# module);
 # "Battle Info" setting, On by default (Off for Classic KIF).
-# On also shows how to open it (Cody liked both mockups, "so long as they
-# aren't in the way"): a small "Z INFO" tab above the left end of PIF's
+# On also shows how to open it, kept out of the way: a small "Z INFO" tab above the left end of PIF's
 # command box (the right end has your Pokémon's battle box), and a 5th INFO
 # button in EBDX's command row (EBDX fits 5; not added when its DEBUG button
 # already takes the 5th place). "On, no button" keeps only the key.
@@ -261,7 +260,7 @@ module KIF
 end
 
 #-------------------------------------------------------------------------------
-# Pages added 2026-10-16 (Cody: PokeRogue Redux style): Abilities, Moves,
+# Pages added 2026-10-16 (PokeRogue Redux style): Abilities, Moves,
 # Speed Order. Mods can add abilities to the Abilities page (the Innates mod
 # shows a Pokémon's innates there):
 #

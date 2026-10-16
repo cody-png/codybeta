@@ -1,5 +1,5 @@
 #===============================================================================
-# PIF 6.8.2 fix – option screens (Cody approved 2026-10-05)
+# PIF 6.8.2 fix – option screens (2026-10-05)
 #
 # 1. Most option sub-screens create a second title window over the "Options"
 #    one in pbStartScene (e.g. GameplayOptions.rb:14); the old window stays and

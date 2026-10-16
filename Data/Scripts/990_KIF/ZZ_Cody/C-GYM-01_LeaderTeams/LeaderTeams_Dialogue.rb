@@ -1,5 +1,5 @@
 #===============================================================================
-# C-GYM-01 – Gym Leader lines follow the team sizes (Cody, 2026-10-07)
+# C-GYM-01 – Gym Leader lines follow the team sizes (2026-10-07)
 # When "Gym Leader teams" (or the Randomizer's Leader team size) or "Your
 # Pokémon in gyms" changes a Kanto Gym Leader battle, the leader's lines say
 # the real numbers, in words. When both sides differ, lines name both counts;

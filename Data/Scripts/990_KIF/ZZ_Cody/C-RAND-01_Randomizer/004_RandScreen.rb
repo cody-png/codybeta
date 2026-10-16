@@ -57,7 +57,7 @@ module KIF
       return enum(key, name, [_INTL("Off"), _INTL("On")], [desc_off, desc_on])
     end
 
-    # 3-digit number (each digit 0-9) instead of a slider (Cody)
+    # 3-digit number (each digit 0-9) instead of a slider
     def self.slider(key, name, desc)
       return DynButton.new(proc { KIF::Rand.mark(key, sprintf("%s: %03d", name, KIF::Rand.get(key))) },
                            proc {
@@ -544,7 +544,7 @@ end
 
 #-------------------------------------------------------------------------------
 # Description box: text too long for its two lines scrolls slowly downwards
-# like a car radio display, then starts over (Cody)
+# like a car radio display, then starts over
 #-------------------------------------------------------------------------------
 module KifScrollText
   HOLD  = 1.5    # s shown still at the top and at the bottom

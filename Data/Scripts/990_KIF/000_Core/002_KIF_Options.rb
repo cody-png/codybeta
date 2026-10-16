@@ -192,7 +192,7 @@ class KifOptionsBaseScene < PokemonOption_Scene
     super
   end
 
-  # Play test 2026-10-05: the title used to be drawn as a second window over
+  # The title used to be drawn as a second window over
   # PIF's "Options" title (it showed through), and the list ran 32px under
   # the description box (last row cut off). Same layout as PIF otherwise.
   def initUIElements

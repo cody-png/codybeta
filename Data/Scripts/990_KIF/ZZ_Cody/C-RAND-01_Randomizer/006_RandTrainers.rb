@@ -1,5 +1,5 @@
 #===============================================================================
-# C-RAND-01 – Randomizer, chunk 4: trainers (Cody, 2026-10-06)
+# C-RAND-01 – Randomizer, chunk 4: trainers (2026-10-06)
 #   * Trainers: Off / Random / Follow wild (trainer Pokémon use the wild swap
 #     table, fusions part by part).
 #   * Class themes: Off / On – every Pokémon of a themed class has the class's
@@ -39,7 +39,7 @@ module KIF
     DATA_DEFAULTS[:class_themes] = 1
     DATA_DEFAULTS[:extra_themes] = 1
 
-    # Extra class themes (Cody: a toggle of their own); picked from their
+    # Extra class themes (a toggle of their own); picked from their
     # FireRed/LeafGreen teams
     EXTRA_THEMES = [:SCIENTIST, :ROBOT, :JUGGLER, :BURGLAR, :BIKER, :ROUGHNECK,
                     :CUEBALL, :AROMALADY, :PAINTER, :TUBER_F]

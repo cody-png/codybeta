@@ -1,5 +1,5 @@
 #===============================================================================
-# C-SYS-06 – KIF updater (Cody, 2026-10-11; replaces PIF's "use the
+# C-SYS-06 – KIF updater (2026-10-11; replaces PIF's "use the
 # installer" prompt, which C-SYS-02 hides)
 #
 # At the load screen (where PIF asked about its own versions) KIF reads the
@@ -26,7 +26,7 @@
 # file at a time itself.
 #
 # Where builds come from (github.com/cody-png/codybeta):
-#   Stable - the "release" branch (moves only when Cody publishes a release)
+#   Stable - the "release" branch (moves only when a release is published)
 #   Beta   - the "beta-testing" branch (test builds)
 # Options > KIF Settings > General settings > "Updates": Stable / Beta / Off (default: the channel of
 # the build that is installed) and "Check for Updates" (any time).
@@ -574,7 +574,7 @@ module KIF
       return moved
     end
 
-    # Wine/Proton (2026-10-14, Cody: no "close it and start it again"): the
+    # Wine/Proton (no "close it and start it again" message): the
     # files are already moved in, so a new copy of the game is started and
     # this one closes. Without Windows' process API: the old message.
     def restart_after_apply(version)

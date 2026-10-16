@@ -1,5 +1,5 @@
 #===============================================================================
-# C-RAND-01 – Randomizer: trades and NPC requests (Cody, 2026-10-06)
+# C-RAND-01 – Randomizer: trades and NPC requests (2026-10-06)
 #   * Trades: Off / Swap (what the Pokémon became; fusions part by part –
 #     PIF never randomized the 22 fusion trades) / Random (each trade rolls its
 #     own within the Strength range, fixed by the seed and the trade).

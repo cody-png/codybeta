@@ -1,5 +1,5 @@
 #===============================================================================
-# C-SYS-07 – How do you want to play? (Cody, 2026-10-12)
+# C-SYS-07 – How do you want to play? (2026-10-12)
 #   New players used to start with every module Off, so KIF Beta played like
 #   plain PIF until they found Options > Modules. The first time the load
 #   screen shows (no module chosen yet), KIF asks once:
@@ -57,7 +57,7 @@ module KIF
     end
 
     # Classic KIF = KIF 0.20.7 as it was: features KIF never had, but that
-    # default to On inside their module, are switched off (Cody, 2026-10-12)
+    # default to On inside their module, are switched off
     NEW_ON_BY_DEFAULT = [:mp_ebdx_enabled, :cody_effectiveness, :cody_fusionscreen, :cody_battleinfo]
 
     def classic_only!

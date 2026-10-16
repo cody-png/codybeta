@@ -1,5 +1,5 @@
 #===============================================================================
-# F-CORE-04 – Mods menu (Cody, 2026-10-14)
+# F-CORE-04 – Mods menu (2026-10-14)
 # Options > KIF Settings > Mods: every installed mod with On/Off (applies at
 # the next start) and, for mods that added settings while loading, a page
 # with just their settings. "Settings by category" keeps the old Mod Settings

@@ -27,9 +27,9 @@
 #   * Pools cover 6.8.2's base species (1-NB_POKEMON, now 576).
 #   * Port fix: with the PC boxes full the egg is not used up (KIF consumed
 #     it and gave nothing).
-#   * Port addition (Cody, 2026-10-05): "Hoenn K-Egg" (item 2033), only the
+#   * Port addition: "Hoenn K-Egg" (item 2033), only the
 #     species 6.8.2 added after KIF (dex 502-576), as a test egg. No longer
-#     sold (Cody, 2026-10-12: debug testing only); the item stays defined so
+#     sold (it was for debug testing only); the item stays defined so
 #     eggs already in a bag still work.
 #===============================================================================
 KIF::Options.define(:kurayeggs_fusionpool, 0, :save)
@@ -103,7 +103,7 @@ module KIF
                  "Egg with a Pokémon who's BST is between #{MINBSTSHOW[t]} and #{MAXBSTSHOW[t]}. 10x shiny odds.")
       end
       add.call("Legendary", BASE_PRICE * 5, "Egg with a LEGENDARY Pokémon. 10x shiny odds.")
-      # Port addition (Cody): 6.8.2's new species only
+      # Port addition: 6.8.2's new species only
       add.call("Hoenn", BASE_PRICE * 4, "Egg with a Pokémon new to PIF 6.8.2 (Dex 502-576). 10x shiny odds.")
       @defs = defs
       return defs
@@ -260,8 +260,8 @@ module KIF
       return 0
     end
 
-    # pbAddPokemon, plus what catching a new species does (Cody, 2026-10-10,
-    # tester request): "data was added to the Pokédex" and the Pokédex entry,
+    # pbAddPokemon, plus what catching a new species does:
+    # "data was added to the Pokédex" and the Pokédex entry,
     # which opens the sprite picker when Dex Sprite Select is on - before the
     # nickname question, the same order as a catch. An egg skips it (hatching
     # shows the entry itself).

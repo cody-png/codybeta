@@ -1,6 +1,6 @@
 #===============================================================================
 # SCOPE-02 – PIF fix: the Poké Radar's row of Pokémon stayed on the title
-# screen (Monto, 2026-10-15)
+# screen (2026-10-15)
 # The radar's banner (PokeRadar_UI: the Pokémon of the area along the top) is
 # only removed by pbPokeRadarCancel. Going back to the title screen with a
 # radar chain running left it drawn over the title, and $PokemonTemp (which

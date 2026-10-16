@@ -1,7 +1,7 @@
 #===============================================================================
-# KIF Modules (Cody, 2026-10-10)
+# KIF Modules (2026-10-10)
 #
-# Every KIF / Cody feature belongs to a module. Options > Modules sets each
+# Every KIF / Cody's additions feature belongs to a module. Options > Modules sets each
 # module to:
 #   Off    - the feature does nothing: the game uses PIF's own behaviour, and
 #            its settings, pause menu / PC entries are hidden
@@ -23,7 +23,8 @@
 #
 # Always on (no module): the core, save compatibility, mod loading and mod
 # compatibility, Mystery Gift, debug tools, settings presets, PIF fixes,
-# map load cache, sprite import, save folder and Cody's debug tools.
+# map load cache, sprite import, save folder and the Cody's additions debug
+# tools.
 # Things a module changes while the game starts (data tables, constants)
 # stay changed; their effects are listed in KIF_Features.md.
 #===============================================================================
@@ -42,7 +43,7 @@ module KIF
                         %w[F-BATTLE-12 F-BATTLE-07 C-BATTLE-01 F-UI-02 F-UI-03 F-UI-11]],
       :information  => ["Information",
                         "Fusion preview and screen, Pokédex evolutions, IVs and EVs.",
-                        %w[F-FUSION-03 C-FUSION-02 F-POKE-06 F-UI-04]],   # Battle Info: base feature (Cody, 2026-10-16)
+                        %w[F-FUSION-03 C-FUSION-02 F-POKE-06 F-UI-04]],   # Battle Info: base feature
       :battles      => ["Battles & Challenges",
                         "Battle format, AI, challenges, level caps, EXP modes, gym teams.",
                         %w[F-BATTLE-01 F-BATTLE-03 F-BATTLE-04 F-BATTLE-05 F-BATTLE-06 F-BATTLE-08 F-BATTLE-09 F-BATTLE-10 F-BATTLE-11 C-GYM-01 C-BATTLE-02]],

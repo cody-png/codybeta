@@ -20,7 +20,7 @@
 # 6.8.2 adaptations:
 #   * KIF's version also handled its "Individual Custom Sprites"
 #     (kuraycustomfile); 6.8.2's own per-Pokémon sprite (pif_sprite) is used
-#     instead (Cody: ICS is covered by PIF).
+#     instead (ICS is covered by PIF).
 #   * KIF hid the PC party icons whenever the party tab was closed (big icons
 #     stick out above it); here they hide whenever the tab is off screen.
 #
@@ -92,7 +92,7 @@ module KIF
       key = cache_key(pkmn) rescue nil
       # a sprite that couldn't be loaded (missing file, a download that
       # failed) is not tried again on every refresh: that made the PC and
-      # party pause for a moment on each such Pokémon (tester report)
+      # party pause for a moment on each such Pokémon
       return nil if key && @failed[key]
       if key && (hit = @cache[key]) && !hit.disposed?
         @cache.delete(key); @cache[key] = hit
@@ -236,7 +236,7 @@ end
 
 # Party: no Poké Ball under a big icon (KIF 005_UI_Party.rb:224-229)
 #
-# Party layout with big icons (port addition, Cody's mock-ups 2026-10-05):
+# Party layout with big icons (port addition):
 #   * the icon sits 20 px lower;
 #   * the level moves 52 px right, just before the HP numbers;
 #   * the status badge (SLP/PSN/.../FNT) is drawn over the bottom of the icon;

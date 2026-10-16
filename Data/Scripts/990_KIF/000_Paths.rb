@@ -1,8 +1,8 @@
 #===============================================================================
-# Where KIF's own folders are (Cody, 2026-10-10)
+# Where KIF's own folders are (2026-10-10)
 #   Logs: every KIF log goes to a "Logs" folder next to the game's .exe
 #   (session log, error log, frame log, Entrances returns, AI compare), so a
-#   tester sends one folder. Saves stay in %APPDATA%\KIF.
+#   bug report needs one folder. Saves stay in %APPDATA%\KIF.
 #   "root" is the game folder; if the game is started inside a folder named
 #   "Game Files" (a tidier release layout being tried), root is the folder
 #   above it, so Logs and Import Sprites stay next to the .exe.

@@ -181,7 +181,7 @@ module KIF
       ["Sort by HP", :totalhp], ["Sort by Atk", :attack],
       ["Sort by Def", :defense], ["Sort by SpA", :spatk],
       ["Sort by SpD", :spdef], ["Sort by Spe", :speed],
-      ["Sort by BST", :bst],   # port addition (Cody, 2026-10-05)
+      ["Sort by BST", :bst],   # port addition
       ["Sort by Caught Date", :timeReceived], ["Sort by Shiny", :shiny],
       ["Sort by OT", :OT], ["Sort by Gender", :gender],
       ["Sort by Ability", :ability], ["Sort by Nature", :nature],
@@ -232,7 +232,7 @@ module KIF
       pairs = pokes.each_with_index.map { |p, i| [value(p, attr), i] }
       pairs.sort! { |a, b| compare(a, b) }
       descending = (order == 1)
-      descending = !descending if attr == :bst   # BST: Normal = highest first (Cody)
+      descending = !descending if attr == :bst   # BST: Normal = highest first
       pairs.reverse! if descending
       return pairs.map { |_, i| pokes[i] }
     end

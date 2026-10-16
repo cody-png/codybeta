@@ -1,7 +1,7 @@
 #===============================================================================
 # F-BATTLE-12 – EBDX battle visuals
 # Elite Battle DX (Luka S.J.) as it ships inside KIF Multiplayer 6.7.0 by
-# Aleks, included in KIF Beta since 0.21.27 (Cody, 2026-10-11, with Aleks's
+# Aleks, included in KIF Beta since 0.21.27 (with Aleks's
 # permission): Data/Scripts/660_EBDX and 661_BossUIHooks/003_EBDX_UIFixes.rb
 # copied as they are, graphics in Graphics/EBDX, sounds in Audio/*/EBDX and
 # the Audio/SE/Anim files PIF lacked. The two files are never edited here.
@@ -43,7 +43,7 @@ if KIF::EBDX.installed?
   KIF::Modules.no_gate(KIF::EBDX::ToggleModule) if defined?(KIF::Modules)
   KIF::Options.define(:mp_ebdx_enabled, 0, :global)
 
-  # EBDX is opt-in (Cody, 2026-10-12): EBDX's own PokemonSystem#initialize
+  # EBDX is opt-in: EBDX's own PokemonSystem#initialize
   # (660_EBDX/001, unchanged) sets it On for every new player, so a new
   # player's setting is put back to Off here. Saved settings keep their value.
   class ::PokemonSystem

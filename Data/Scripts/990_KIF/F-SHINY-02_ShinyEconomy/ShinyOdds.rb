@@ -10,7 +10,7 @@
 #     ((pid ^ ownerId) low16 XOR high16) < shinyodds, i.e. shinyodds / 65536.
 #     Each Pokémon keeps the odds that were set when it was generated
 #     (@kif_odds): changing the setting only affects Pokémon met afterwards,
-#     never ones already caught (Cody, 2026-10-10). Pokémon from before the
+#     never ones already caught. Pokémon from before the
 #     port, or from 0.21.21 and earlier (@kif_new_odds only), use PIF's
 #     16/65536. As in PIF, any shiny made with odds other than 16
 #     (S_CHANCE_VALIDATOR) is flagged debug_shiny (different star icon).

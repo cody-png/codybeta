@@ -1,5 +1,5 @@
 #===============================================================================
-# C-RAND-01 – Randomizer: Entrances (Cody, 2026-10-07)
+# C-RAND-01 – Randomizer: Entrances (2026-10-07)
 #   Doors between Kanto's outdoor maps and the places behind them are
 #   shuffled (Johto's and the Sevii Islands' too with "And Johto?" / "And
 #   Sevii?", mixed with Kanto's). The layout is built at Randomize now from Data/KIF/entrances.dat

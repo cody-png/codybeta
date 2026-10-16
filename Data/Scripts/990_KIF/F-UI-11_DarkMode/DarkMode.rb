@@ -1,5 +1,5 @@
 #===============================================================================
-# Dark Mode switch (port addition, Cody 2026-10-05)
+# Dark Mode switch (port addition)
 #
 # PIF 6.8.2 has a dark mode for the Pokédex, Summary and PokéNav screens
 # (isDarkMode, 052_InfiniteFusion/Gameplay/0_Utilities/MenuUtils.rb:420), but

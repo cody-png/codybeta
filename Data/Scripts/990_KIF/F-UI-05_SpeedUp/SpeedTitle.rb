@@ -3,7 +3,7 @@
 # Source: KIF 0.20.7 052_AddOns/Spped Up.rb:42-55 (updateTitle), :97-130
 #         (AUX1 = L: speed +1, AUX2 = R: back to 1x)
 #
-# Window title (Cody, 2026-10-05: KIF version = this port's version):
+# Window title (KIF version = this port's version):
 #   "Kuray's Infinite Fusion (KIF) | Version: <KIF::PORT_VERSION> |
 #    PIF Version: <6.8.2> | Speed: xN"
 #   plus KIF's "Auto-Battler (ON/OFF) | Loop Self-Battle (ON/OFF)".
@@ -13,7 +13,7 @@
 #   Only in Toggle speed-up mode (6.8.2's Hold mode has no stored speed).
 #   Only on the map (no menu, message or event running) and in battles –
 #   6.8.2 menus use L/R themselves (Pokédex pages, quest log, clothes shop);
-#   KIF reacted everywhere (Cody chose map/battle only, 2026-10-05). Also off
+#   KIF reacted everywhere. Also off
 #   while placing secret-base furniture (L/R rotate it).
 #===============================================================================
 module KIF

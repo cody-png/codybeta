@@ -29,12 +29,12 @@
 #   shown in battle while Auto-Battle and Battle Loop are on; folder battles
 #   also append "player folder,enemy folder,result" to
 #   ExportedPokemons/Data.csv.
-# Multi-select "Release" is available outside Debug mode, like KIF (Cody,
-#   2026-10-05; 6.8.2 limits it to Debug).
+# Multi-select "Release" is available outside Debug mode, like KIF
+#   (6.8.2 limits it to Debug).
 #
 # 6.8.2 adaptations (see PORT_LOG):
 #   * KIF toggled the loop in battle with Y; the port has no battle key for it
-#     (Cody, 2026-10-05): "Battle Loop" is an option, stopped with B.
+#     instead "Battle Loop" is an option, stopped with B.
 #   * Copies are made with Marshal (KIF went through its .json format).
 #   * 6.8.2's "nomoney" battle rule replaces KIF's money patches; nomoneylost
 #     is still set during the battle for Rocket Mode.

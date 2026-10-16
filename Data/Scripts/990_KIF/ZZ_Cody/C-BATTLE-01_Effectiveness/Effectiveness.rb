@@ -1,9 +1,9 @@
 #===============================================================================
-# C-BATTLE-01 – Move effectiveness indicator (Cody)
+# C-BATTLE-01 – Move effectiveness indicator
 # Cody Settings → Battles → "Move Effectiveness" (all saves, default On).
 #
 # Fight menu, for damaging moves only (foe names too long for the box
-# scroll like a car radio display, one character every 0.3 s - Cody):
+# scroll like a car radio display, one character every 0.3 s):
 #   * a marker on each move button: green ▲ super effective, orange ▼ resisted,
 #     grey ✕ no effect, nothing when neutral (pixel art at the game's 2x scale);
 #   * the highlighted move's info box adds "Super eff." / "Resisted" /
@@ -12,7 +12,7 @@
 # With several foes the marker shows the best result among them.
 # Uses the battle's own type calculation (in-battle types, KIF type buffs,
 # Scrappy, Ring Target, grounded Flying types, ...). Status moves show nothing.
-# Abilities stay hidden until the battle reveals them (Cody, 2026-10-06): once
+# Abilities stay hidden until the battle reveals them: once
 # a foe's ability has been shown (ability pop-up / message), its immunity
 # counts – Levitate (Ground), Flash Fire, Volt/Water Absorb, Lightning Rod,
 # Motor Drive, Sap Sipper, Storm Drain, Dry Skin, Soundproof, Bulletproof,
@@ -195,7 +195,7 @@ class FightMenuDisplay
       pbSetNarrowFont(bmp)
     else
       # Several foes: PP and type icon move up, one line per foe. Names too
-      # long for the box scroll like a car radio display (Cody).
+      # long for the box scroll like a car radio display.
       @typeIcon.y = self.y + 6
       @cody_pp = nil
       if move.total_pp > 0
@@ -206,7 +206,7 @@ class FightMenuDisplay
       pbSetSmallFont(bmp)
       @cody_lines = []
       # one line per foe; foes with the same name and result share a line
-      # (three Ekans showed three overlapping "Ekans x1/2", Monto 2026-10-15)
+      # (three Ekans used to show three overlapping "Ekans x1/2" lines)
       entries = []
       foes.each do |f|
         val = KIF::MoveEffect.value(move, @battler, f)

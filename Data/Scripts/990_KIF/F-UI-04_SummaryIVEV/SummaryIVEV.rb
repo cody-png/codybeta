@@ -14,7 +14,7 @@
 #   * The Hoenn contest lobby summary (053_PIF_Hoenn/.../014_Summary.rb, which
 #     aliases drawPageThree) keeps its condition page.
 #   * Stat values use 6.8.2's dark-mode aware text colours.
-#   * Small +/- marks for the nature's raised/lowered stat (Cody, 2026-10-05).
+#   * Small +/- marks for the nature's raised/lowered stat.
 #===============================================================================
 KIF::Options.define(:summary_ivev, 1, :global)
 
@@ -102,7 +102,7 @@ class PokemonSummary_Scene
   end
 
   # Small "+" (raised) / "-" (lowered) left of the stat names, for the
-  # nature (Cody's request 2026-10-05; mock-up in the play-test notes).
+  # nature.
   def kif_draw_nature_marks(overlay, stats, ys)
     return if @pokemon.shadowPokemon? && @pokemon.heartStage <= 3
     nature = @pokemon.nature_for_stats

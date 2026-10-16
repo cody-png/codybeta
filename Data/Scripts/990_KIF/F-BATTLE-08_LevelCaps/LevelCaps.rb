@@ -34,7 +34,7 @@
 #   * Pokémon above the cap (cap lowered, difficulty raised, option turned
 #     on) are brought down to it when the cap changes or a save loads; their
 #     extra Exp is saved like Smart's and returns when the cap rises. KIF
-#     clamped too but threw that Exp away in Lock/RC (Cody, 2026-10-05).
+#     clamped too but threw that Exp away in Lock/RC.
 #   * While the KIF cap is on, 6.8.2's own "Level caps" rule (no Exp, or
 #     60% Exp past the cap) is skipped so the two don't stack.
 #===============================================================================

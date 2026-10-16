@@ -1,9 +1,9 @@
 #===============================================================================
-# F-CORE-08 – Settings presets (tester request, 2026-10-10)
+# F-CORE-08 – Settings presets (2026-10-10)
 # Source: KIF 0.20.7 016_UI/015_UI_Options.rb:1599-1690 (SLOptionsScene:
 #   12 named slots, Load / Save / Name, Options_<n>.kro in the save folder)
 #
-# Per-save settings (every KIF and Cody setting that resets on New Game) can
+# Per-save settings (every KIF and Cody's additions setting that resets on New Game) can
 # be saved into one of 12 named presets and loaded into another save, so a
 # new run doesn't need every setting toggled again. KIF Settings > Settings
 # Presets. Global settings are shared by every save already, so a preset

@@ -61,6 +61,7 @@ module KIF
 
     def self.item_randomizable?(it)
       return tm_ok?(it) if it.is_machine?
+      return false if NON_RANDOMIZE_ITEMS.include?(it.id)   # story items (Cell Battery, Magnet Stone...)
       return itemCanBeRandomized(it)
     end
 
@@ -191,7 +192,7 @@ module KIF
       it = (GameData::Item.get(item) rescue nil)
       return item unless it
       return item if dget(:shop_basics) == 1 && shop_basic?(it)
-      return item if it.is_machine? || !itemCanBeRandomized(it)
+      return item if it.is_machine? || !item_randomizable?(it)
       new = dynamic_items? ? roll_item(it, :shop, map_id, event_id, slot) : mapped_item(it)
       ni = (GameData::Item.get(new) rescue nil)
       return item unless ni && ni.price > 0 && !Settings::EXCLUDE_FROM_RANDOM_SHOPS.include?(ni.id)
@@ -234,13 +235,14 @@ module KIF
     #---------------------------------------------------------------------------
     ITEM_CALL = /pb(ItemBall|ReceiveItem)\(\s*(?::|PBItems::)(\w+)/
 
-    # Every item ball / gift in the maps' events: [map id, map name, event id,
-    # :found/:given, item id]. Map files never change while the game runs,
-    # so they're read once (the log is written after every shuffle).
+    # Map files never change while the game runs, so the spoiler log's lists
+    # (item spots here, trades in 009) come from one read of every map
+    # (the log is written after every shuffle).
     @item_spots = nil
-    def self.item_spots
-      return @item_spots if @item_spots
-      spots = []
+    @trade_spots = nil
+    def self.scan_maps
+      items = []
+      trades = []
       infos = (load_data("Data/MapInfos.rxdata") rescue {})
       infos.keys.sort.each do |mid|
         map = (load_data(sprintf("Data/Map%03d.rxdata", mid)) rescue nil)
@@ -248,27 +250,38 @@ module KIF
         name = (pbGetMapNameFromId(mid) rescue mid.to_s)
         map.events.keys.sort.each do |eid|
           ev = map.events[eid]
-          seen = {}
-          ev.pages.each do |page|
-            page.list.each do |cmd|
-              text = case cmd.code
-                     when 355, 655 then cmd.parameters[0].to_s
-                     when 111 then cmd.parameters[0] == 12 ? cmd.parameters[1].to_s : ""
-                     else ""
-                     end
-              text.scan(ITEM_CALL) do |kind, item|
-                next if seen[[kind, item]]
-                seen[[kind, item]] = true
-                it = (GameData::Item.get(item.to_sym) rescue nil)
-                next unless it
-                spots << [mid, name, eid, (kind == "ItemBall") ? :found : :given, it.id]
-              end
-            end
+          item_spots_in(ev, [mid, name, eid], items)
+          trade_spots_in(ev, [mid, name, eid], trades) if respond_to?(:trade_spots_in)
+        end
+      end
+      @item_spots = items
+      @trade_spots = trades
+    end
+
+    # Every item ball / gift: [map id, map name, event id, :found/:given, item id]
+    def self.item_spots
+      scan_maps unless @item_spots
+      return @item_spots
+    end
+
+    def self.item_spots_in(ev, where, spots)
+      seen = {}
+      ev.pages.each do |page|
+        page.list.each do |cmd|
+          text = case cmd.code
+                 when 355, 655 then cmd.parameters[0].to_s
+                 when 111 then cmd.parameters[0] == 12 ? cmd.parameters[1].to_s : ""
+                 else ""
+                 end
+          text.scan(ITEM_CALL) do |kind, item|
+            next if seen[[kind, item]]
+            seen[[kind, item]] = true
+            it = (GameData::Item.get(item.to_sym) rescue nil)
+            next unless it
+            spots << where + [(kind == "ItemBall") ? :found : :given, it.id]
           end
         end
       end
-      @item_spots = spots
-      return spots
     end
 
     def self.dynamic_item_lines

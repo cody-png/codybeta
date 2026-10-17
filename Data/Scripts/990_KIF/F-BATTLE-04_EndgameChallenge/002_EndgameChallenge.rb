@@ -6,17 +6,19 @@
 #
 # How it plays (as KIF): after beating the champion a third time, "Dem"
 # waits in the Pokémon League lobby. Beat his sample team to turn the
-# challenge on (switch 850, PIF's own "DEM'S HARD MODE" switch). While on,
-# on the League maps, the Fighting Arena and Mt. Silver's summit:
+# challenge on (switch 850, PIF's own "DEM'S HARD MODE" switch).
+# On the League maps, the Fighting Arena and Mt. Silver's summit (challenge_map?):
 #   * the Elite Four, Blue, the 16 Fighting Arena gym leaders, Gold, Cynthia
 #     and Dem use the challenge teams (Lv100 fusions, tuned to your party:
 #     your highest level (min 60), heavy EVs, moves against Wonder Guard –
 #     003_ChallengeTeams.rb);
-#   * foes have double PP; singles only; no items in trainer battles;
-#     switch style "Set"; no damage roll (F-BATTLE-03 Damage Variance);
-#     accuracy x1.2 for your damaging moves, x1.3 for the foe's;
-#     2-5-hit moves hit 3-5 times (challenge only – KIF did this in
-#     every battle);
+#   * foes have double PP; singles only.
+# Everywhere while the switch is on (on?, as KIF):
+#   * no items and switch style "Set" in trainer battles;
+#   * no damage roll (F-BATTLE-03 Damage Variance); dominant fusion types,
+#     no self-fusion boost (F-FUSION-01);
+#   * accuracy x1.2 for your damaging moves, x1.3 for the foe's;
+#   * 2-5-hit moves hit 3-5 times;
 #   * beating Blue gives the next emblem (Bronze/Silver/Gold, PIF common
 #     event 42) once; the Silver Emblem opens Cynthia's fight in the Mt.
 #     Silver vortex, the Gold battle in the future summit; Dem's own final

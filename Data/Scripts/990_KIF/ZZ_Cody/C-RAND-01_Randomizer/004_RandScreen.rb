@@ -726,13 +726,13 @@ class RandomizerOptionsScene < PokemonOption_Scene
     super
     KIF::Rand.sync_masters
     if $game_switches[SWITCH_DURING_INTRO]
-      KIF::Rand.screen_closed!
       # The intro's events shuffle the Pokédex/trainers next; the Pokémon data
       # is made first so those shuffles see the new base stats
       if KIF::Rand.data_on?
         KIF::Rand.randomize_data
         KIF::Rand.write_log   # the intro shuffles rewrite it if they run
       end
+      KIF::Rand.screen_closed!   # after the data: the 5 s prompt window starts when the intro resumes
     end
   end
 end

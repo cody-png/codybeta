@@ -59,6 +59,8 @@ module KIF
       end
       fused.save_to_png(out_path)
       fused.dispose
+      head.dispose
+      body.dispose
       return AnimatedBitmap.new(out_path)
     end
 

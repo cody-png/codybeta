@@ -389,6 +389,12 @@ module KIF
       return @bitmaps[path]
     end
 
+    # icons are only cached while the Pokédex entry is open
+    def self.clear_bitmaps
+      @bitmaps.each_value { |b| b.dispose if b && !b.disposed? }
+      @bitmaps = {}
+    end
+
     def self.draw_line(bmp, x1, y1, x2, y2, color)
       steps = [(x2 - x1).abs, (y2 - y1).abs, 1].max
       (0..steps).each do |i|
@@ -456,6 +462,12 @@ end
 class PokemonPokedexInfo_Scene
   alias kif_tree_drawEntryText drawEntryText unless method_defined?(:kif_tree_drawEntryText)
   alias kif_tree_changeEntryPage changeEntryPage unless method_defined?(:kif_tree_changeEntryPage)
+  alias kif_tree_pbEndScene pbEndScene unless method_defined?(:kif_tree_pbEndScene)
+
+  def pbEndScene(*args)
+    kif_tree_pbEndScene(*args)
+    KIF::DexTree.clear_bitmaps
+  end
 
   # The chart replaces the entry text (and its page number)
   def drawEntryText(overlay, species_data, *args)

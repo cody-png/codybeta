@@ -72,6 +72,18 @@ end
 #-------------------------------------------------------------------------------
 # Transgender Stone: choose female / genderless / male
 #-------------------------------------------------------------------------------
+module KIF
+  # 0 male, 1 female, 2 genderless (kept genderless by Head Legendary Breeding);
+  # also used by F-UI-10 Shenanigans' stone
+  def self.stone_gender(pokemon, g, scene)
+    pokemon.instance_variable_set(:@gender, g)
+    pokemon.instance_variable_set(:@kif_forced_genderless, g == 2)
+    scene.pbRefresh
+    scene.pbDisplay([_INTL("The Pokémon became male!"), _INTL("The Pokémon became female!"),
+                     _INTL("The Pokémon became genderless!")][g])
+  end
+end
+
 ItemHandlers::UseOnPokemon.add(:TRANSGENDERSTONE, proc { |item, pokemon, scene|
   commands = []
   cmdFemale = cmdGenderless = cmdMale = -1
@@ -80,26 +92,10 @@ ItemHandlers::UseOnPokemon.add(:TRANSGENDERSTONE, proc { |item, pokemon, scene|
   commands[cmdMale = commands.length] = _INTL("Make male") if pokemon.gender != 0
   commands << _INTL("Cancel")
   choice = scene.pbShowCommands(_INTL("Transgender to which gender?"), commands)
-  if cmdFemale >= 0 && choice == cmdFemale
-    pokemon.instance_variable_set(:@gender, 1)
-    pokemon.instance_variable_set(:@kif_forced_genderless, false)
-    scene.pbRefresh
-    scene.pbDisplay(_INTL("The Pokémon became female!"))
-    next true
-  elsif cmdMale >= 0 && choice == cmdMale
-    pokemon.instance_variable_set(:@gender, 0)
-    pokemon.instance_variable_set(:@kif_forced_genderless, false)
-    scene.pbRefresh
-    scene.pbDisplay(_INTL("The Pokémon became male!"))
-    next true
-  elsif cmdGenderless >= 0 && choice == cmdGenderless
-    pokemon.instance_variable_set(:@gender, 2)
-    pokemon.instance_variable_set(:@kif_forced_genderless, true)   # Head Legendary Breeding leaves it genderless
-    scene.pbRefresh
-    scene.pbDisplay(_INTL("The Pokémon became genderless!"))
-    next true
-  end
-  next false
+  g = { cmdFemale => 1, cmdMale => 0, cmdGenderless => 2 }[choice]
+  next false if g.nil? || choice < 0
+  KIF.stone_gender(pokemon, g, scene)
+  next true
 })
 
 #-------------------------------------------------------------------------------

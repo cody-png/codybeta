@@ -1950,6 +1950,7 @@ class PokeBattle_AI
 				maxownspeed=0
 				ownparty = @battle.pbParty(user.index)
 				ownparty.each_with_index do |pkmn, idxParty|
+					next if !pkmn
 					maxownspeed = pkmn.speed if pkmn.speed>maxownspeed
 				end
 				party = @battle.pbParty(target.index)

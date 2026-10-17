@@ -81,7 +81,7 @@ KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Import Without Deletion"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.importnodelete },
                  proc { |value| $PokemonSystem.importnodelete = value },
-                 [_INTL("Imported Pokemons will have their .json deleted."),
+                 [_INTL("Imported Pokemons' .json files are renamed to .json.imported."),
                   _INTL("Imported Pokemons will remain as .json in Import folder.")])
 }
 KIF::Options.add(:selfbattle, :save) {
@@ -316,7 +316,7 @@ module KIF
       ability_index ability ability2_index ability2 nature nature_for_stats item mail
       cool beauty cute smart tough sheen pokerus name happiness poke_ball markings iv ivMaxed
       ev hiddenPowerType glitter obtain_method obtain_map obtain_level obtain_text
-      hatched_map timeReceived timeEggHatched fused personalID hp totalhp first_moves
+      hatched_map timeReceived timeEggHatched personalID hp totalhp first_moves
       head_gender head_nickname head_shiny head_shinyhue head_shinyr head_shinyg head_shinyb
       head_shinykrs body_shiny body_shinyhue body_shinyr body_shinyg body_shinyb body_shinykrs
       kuray_no_evo ribbons spriteform_body spriteform_head type1kuray type2kuray typeoverwrite
@@ -509,9 +509,13 @@ module KIF
         when "ribbons"   then v = Array(v).map { |m| sym(m) }
         when "timeReceived", "timeEggHatched", "personalID" then v = v.to_i
         when "name"      then v = v.is_a?(String) ? v : nil
+        when "type1kuray", "type2kuray" then v = valid?(GameData::Type, v) ? sym(v) : nil
         when "heal_status", "mail" then next
         end
         next unless plain_ok.call(v)
+        # a number field gets a number (a hand-edited "0" would crash egg? / happiness later)
+        cur = pkmn.instance_variable_get("@#{k}")
+        next if cur.is_a?(Integer) && !v.nil? && !v.is_a?(Integer)
         pkmn.instance_variable_set("@#{k}", v)
       end
       pkmn.exp = h["exp"] if h["exp"].is_a?(Integer)
@@ -696,8 +700,9 @@ module KIF
         prepare_import(pkmn, file)
         b, i = slots.shift
         storage[b, i] = pkmn
+        # renamed, not deleted: the save doesn't hold the Pokémon until the game is saved
         begin
-          File.delete(file) if delete
+          File.rename(file, file + ".imported") if delete
         rescue
           nil
         end

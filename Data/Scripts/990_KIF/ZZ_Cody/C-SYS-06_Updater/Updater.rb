@@ -100,6 +100,8 @@ module KIF
         next if l.empty?
         sha, size, path = l.split(" ", 3)
         next unless path && sha =~ /\A[0-9a-f]{40}\z/
+        # only plain paths inside the game folder ("Audio/ME/x..mp3" is fine, a ".." part is not)
+        next if path.start_with?("/") || path =~ /\A[A-Za-z]:/ || path.include?("\\") || path.split("/").include?("..")
         files[path] = [sha, size.to_i]
       end
       return nil if info["files"].to_i != files.length   # cut short
@@ -238,7 +240,8 @@ module KIF
       if local
         local.files.each_key do |path|
           next if remote.files.has_key?(path) || !removable?(path)
-          removals << path if File.exist?(File.join(dir, path))
+          # only files still as shipped (a sprite the player replaced is theirs)
+          removals << path if File.exist?(File.join(dir, path)) && good_file?(File.join(dir, path), *local.files[path])
         end
       end
       return { :downloads => downloads, :removals => removals,
@@ -252,20 +255,10 @@ module KIF
       return format("%.2f GB", bytes / 1073741824.0)
     end
 
-    def mkdir_p(dir)
-      return if dir.nil? || dir.empty? || File.directory?(dir)
-      mkdir_p(File.dirname(dir))
-      Dir.mkdir(dir) unless File.directory?(dir)
-    end
+    def mkdir_p(dir); KIF.mkdir_p(dir); end
 
     def rm_tree(path)
-      return unless File.exist?(path)
-      if File.directory?(path) && !File.symlink?(path)
-        Dir.children(path).each { |c| rm_tree(File.join(path, c)) }
-        Dir.rmdir(path)
-      else
-        File.delete(path)
-      end
+      KIF.rm_tree(path)
     rescue StandardError => e
       log("couldn't remove #{path} (#{e.class})")
     end
@@ -544,6 +537,8 @@ module KIF
     # them from the next start
     def apply_in_ruby(dir)
       files = File.join(dir, "files")
+      failed = File.join(dir, "failed.txt")
+      File.open(failed, "wb") { |f| f.write("moving") }   # stays if anything below raises
       moved = 0
       walk = lambda do |sub|
         Dir.children(File.join(files, sub)).each do |c|
@@ -570,6 +565,7 @@ module KIF
           File.delete(p) if File.file?(p)
         end
       end
+      File.delete(failed) if File.file?(failed)
       File.open(File.join(dir, "done.txt"), "wb") { |f| f.write("ok") }
       return moved
     end
@@ -605,7 +601,8 @@ module KIF
         return false
       end
       status(_INTL("Updating to KIF Beta {1}", version), _INTL("Reading the file list..."))
-      remote = parse_manifest(fetch(url_for(base, MANIFEST)))
+      body = fetch(url_for(base, MANIFEST))
+      remote = parse_manifest(body)
       if !remote || remote.version.to_s != version
         hide_status
         pbMessage(_INTL("The file list for KIF Beta {1} couldn't be read. Try again later.", version))
@@ -639,7 +636,7 @@ module KIF
       end
       man = staged(dir, MANIFEST)
       mkdir_p(File.dirname(man))
-      File.open(man, "wb") { |f| f.write(fetch(url_for(base, MANIFEST))) }
+      File.open(man, "wb") { |f| f.write(body) }   # the list the plan was made from
       File.open(File.join(dir, "remove.txt"), "wb") { |f| f.write(plan[:removals].map { |p| win_path(p) }.join("\r\n")) }
       File.open(File.join(dir, "version.txt"), "wb") { |f| f.write(version) }
       log("#{version}: #{n} files (#{size_text(plan[:bytes])}) downloaded, #{plan[:removals].length} to remove")
@@ -744,7 +741,9 @@ module KIF
             cmd = pbMessage(_INTL("KIF Beta was updated to {1}.", v), [_INTL("OK"), _INTL("What's new")], 1)
             show_notes(nil) if cmd == 1
           end
-        elsif File.file?(File.join(dir, "apply.cmd")) && !newer?(current_version, v) && v != current_version
+        # failed.txt: the move stopped partway (the scripts, and so the version, may already be new)
+        elsif !newer?(current_version, v) &&
+              (File.file?(File.join(dir, "failed.txt")) || (File.file?(File.join(dir, "apply.cmd")) && v != current_version))
           cmd = pbMessage(_INTL("The update to KIF Beta {1} didn't finish (a file was in use).", v),
                           [_INTL("Try again"), _INTL("Discard it")], 0)
           if cmd == 0 && !update_window?

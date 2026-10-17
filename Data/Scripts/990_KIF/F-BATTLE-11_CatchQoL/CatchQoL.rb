@@ -50,7 +50,7 @@ class PokeBattle_Battler
     @effects[PBEffects::Unburden]   = true if self.item
 
     if permanent && self.item == self.initialItem
-      if !self.opposes? && !(defined?(KIF::SelfBattle) && KIF::SelfBattle.active) && $PokemonBag.pbQuantity(self.initialItem) >= 1   # KIF (not in a Self-Battle: copies)
+      if pbOwnedByPlayerSerious? && !(defined?(KIF::SelfBattle) && KIF::SelfBattle.active) && $PokemonBag.pbQuantity(self.initialItem) >= 1   # KIF (not in a Self-Battle: copies)
         $PokemonBag.pbDeleteItem(self.initialItem)
       else
         setInitialItem(nil)
@@ -63,7 +63,8 @@ class PokeBattle_Battler
 
   def pbConsumeItem(recoverable = true, symbiosis = true, belch = true)
     if recoverable && @item_id && $PokemonSystem.recover_consumables == 1 &&
-       !self.opposes? && $PokemonBag.pbCanStore?(@item_id, 1)
+       pbOwnedByPlayerSerious? && !(defined?(KIF::SelfBattle) && KIF::SelfBattle.active) &&
+       $PokemonBag.pbCanStore?(@item_id, 1)   # not a partner's item, not a Self-Battle copy
       $PokemonBag.pbStoreItem(@item_id, 1)
     end
     kif_pbConsumeItem(recoverable, symbiosis, belch)

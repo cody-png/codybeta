@@ -243,7 +243,10 @@ module KIF
       end
       odds = $PokemonSystem.shinyodds.to_i * 10
       odds *= 4 if sparkling
-      pkmn.shiny = true if rand(65536) < odds
+      if rand(65536) < odds
+        pkmn.shiny = true
+        KIF.ensure_fusion_shiny_parts(pkmn)   # a shiny fused egg otherwise shows normal colours
+      end
       pkmn.time_form_set = nil
       pkmn.form          = 0 if pkmn.isSpecies?(:SHAYMIN)
       pkmn.heal

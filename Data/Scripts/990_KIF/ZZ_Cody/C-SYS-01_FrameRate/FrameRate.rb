@@ -60,6 +60,7 @@ module KIF
     @phase   = 0        # where the next drawn frame falls, in 1/@rate-of-a-step units
     @delta   = nil      # time the last step took, for Graphics.delta
     @booted  = false
+    @window = @slow = @good = 0   # watch_speed can run before boot (a debug start that compiles)
     @sprites = ObjectSpace::WeakMap.new   # sprites on the map's viewport
 
     class << self
@@ -161,6 +162,7 @@ module KIF
       work = @step_end ? start - @step_end : 0.0   # the game's own work since the last step was shown
       watch_speed(work) if @logic == BASE && (@target > BASE || $DEBUG)
       if $DEBUG
+        install_probes unless @probes_installed   # first debug step: a normal game never pays for the wrappers
         @probes = {}
         @gc_count = GC.count
         @gc_time = (GC.stat(:time) rescue nil)   # ms spent in GC so far (Ruby 3.1+)
@@ -693,6 +695,7 @@ module KIF
     }
 
     def self.install_probes
+      @probes_installed = true
       PROBES.each do |klass, meths|
         next unless Object.const_defined?(klass)
         k = Object.const_get(klass)
@@ -736,6 +739,5 @@ module KIF
         end
       end
     end
-    install_probes
   end
 end

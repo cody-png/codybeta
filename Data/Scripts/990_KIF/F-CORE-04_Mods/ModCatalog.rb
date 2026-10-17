@@ -86,10 +86,10 @@ module KIF
         return KIF::PixelFont.utf8(d.to_s)
       end
       def dependencies
-        return Array(@json["dependencies"]).map { |x| x.is_a?(Hash) ? x["id"].to_s : x.to_s }.reject(&:empty?)
+        return KIF::ModRules.ids_in(@json["dependencies"])
       end
       def incompatible
-        return Array(@json["incompatible"]).map { |x| x.is_a?(Hash) ? x["id"].to_s : x.to_s }.reject(&:empty?)
+        return KIF::ModRules.ids_in(@json["incompatible"])
       end
     end
 
@@ -183,6 +183,7 @@ module KIF
     #---------------------------------------------------------------------------
     def load(force = false)
       return @items if @items && !force && @checked && Time.now - @checked < CACHE_TIME
+      @installed_index = nil
       @error = nil
       @failed = []
       list = []
@@ -244,7 +245,10 @@ module KIF
       text.scan(/\{"path":"((?:[^"\\]|\\.)*)","mode":"\d+","type":"blob","sha":"([0-9a-f]{40})","size":(\d+)/) do |p, sha, size|
         out[unescape(p)] = [sha, size.to_i]
       end
-      log("tree listing was cut short by GitHub") if text.include?('"truncated":true')
+      if text.include?('"truncated":true')
+        log("tree listing was cut short by GitHub")
+        return nil   # a partial list would offer mods with missing files
+      end
       return out.empty? ? nil : out
     end
 
@@ -270,22 +274,33 @@ module KIF
     #---------------------------------------------------------------------------
     # What is installed
     #---------------------------------------------------------------------------
+    # the installed copy's folder (by folder name, then by id), so an update
+    # lands on the copy the player has even when they renamed its folder
     def folder_of(item)
-      return File.join(mods_dir, item.folder)
+      own = File.join(mods_dir, item.folder)
+      return own if File.file?(File.join(own, "mod.json"))
+      c = installed_index[item.id]
+      return c ? File.join(mods_dir, c) : own
     end
 
-    # the mod.json of the installed copy (looked up by folder, then by id)
-    def installed_json(item)
-      j = File.join(folder_of(item), "mod.json")
-      return KIF::Mods.read_json(j) || {} if File.file?(j)
-      return nil unless File.directory?(mods_dir)
-      Dir.children(mods_dir).each do |c|
+    # mod id => folder, read once (cleared on load and after an install)
+    def installed_index
+      return @installed_index if @installed_index
+      @installed_index = {}
+      return @installed_index unless File.directory?(mods_dir)
+      Dir.children(mods_dir).sort.each do |c|
         j = File.join(mods_dir, c, "mod.json")
         next unless File.file?(j)
-        h = KIF::Mods.read_json(j) || {}
-        return h if h["id"].to_s == item.id
+        id = ((KIF::Mods.read_json(j) || {})["id"] || c).to_s
+        @installed_index[id] ||= c
       end
-      return nil
+      return @installed_index
+    end
+
+    # the mod.json of the installed copy
+    def installed_json(item)
+      j = File.join(folder_of(item), "mod.json")
+      return File.file?(j) ? (KIF::Mods.read_json(j) || {}) : nil
     end
 
     def size_label(item)
@@ -446,6 +461,7 @@ module KIF
         File.open(File.join(folder_of(item), ASSETS), "wb") { |f| f.write(assets.join("\n") + "\n") }
       end
       KIF::Mods.sources.each { |s| s.instance_variable_set(:@entries, nil) if s.is_a?(KIF::Mods::NativeSource) }
+      @installed_index = nil
     end
   end
 end

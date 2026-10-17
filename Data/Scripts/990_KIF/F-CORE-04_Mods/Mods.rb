@@ -222,11 +222,7 @@ module KIF
     # .zip mods: unpacked into Mods/<name>/ (a zip holding one folder gives
     # that folder's contents), then moved to Mods/Imported
     #---------------------------------------------------------------------------
-    def self.mkdir_p(dir)
-      return if dir.nil? || dir.empty? || File.directory?(dir)
-      mkdir_p(File.dirname(dir))
-      Dir.mkdir(dir) unless File.directory?(dir)
-    end
+    def self.mkdir_p(dir); KIF.mkdir_p(dir); end
 
     def self.unpack_zips(dir)
       Dir.children(dir).sort.each do |c|
@@ -290,15 +286,7 @@ module KIF
       return written
     end
 
-    def self.rm_tree(path)
-      return unless File.exist?(path)
-      if File.directory?(path)
-        Dir.children(path).each { |c| rm_tree(File.join(path, c)) }
-        Dir.rmdir(path)
-      else
-        File.delete(path)
-      end
-    end
+    def self.rm_tree(path); KIF.rm_tree(path); end
 
     #---------------------------------------------------------------------------
     # KIF's own mods: Mods/*.rb and Mods/<folder>/
@@ -363,7 +351,7 @@ module KIF
         list.each do |e|
           json = File.join(e.path.to_s, "mod.json")
           h = (e.kind == :folder && File.file?(json)) ? (KIF::Mods.read_json(json) || {}) : {}
-          d = Array(h["dependencies"]).map { |x| x.is_a?(Hash) ? x["id"].to_s : x.to_s }
+          d = KIF::ModRules.ids_in(h["dependencies"])
           # dependencies name mod.json ids; match them to folders by id or name
           deps[e.id] = list.select { |o| o != e && d.any? { |x| x == o.id || x == (KIF::Mods.read_json(File.join(o.path.to_s, "mod.json")) || {})["id"].to_s } }.map(&:id)
         end

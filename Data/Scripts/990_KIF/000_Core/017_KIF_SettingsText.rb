@@ -300,7 +300,7 @@ module KIF
         "Imported Pokémon stay as they are.",
         "Imported Pokémon arrive as Eggs."],
       "Import Without Deletion" => [
-        "A Pokémon's file is deleted once it's imported.",
+        "A Pokémon's file is renamed to .json.imported once it's imported (delete those yourself).",
         "A Pokémon's file stays in the folder after it's imported."],
       "Import Sprite on Import" => [
         "The Pokémon's .png sprite is imported with it.",

@@ -355,8 +355,13 @@ module KIF
       return evolve_n(map[base], stage - 1)
     end
 
+    # the rival's "your starter" slot (a species symbol in Settings; parties hold dex numbers)
+    def self.rival_placeholder
+      @rival_placeholder ||= dex_of(Settings::RIVAL_STARTER_PLACEHOLDER_SPECIES)
+    end
+
     def self.rival_pick(map, old)
-      return old if old == Settings::RIVAL_STARTER_PLACEHOLDER_SPECIES || old >= Settings::ZAPMOLCUNO_NB
+      return old if old == rival_placeholder || old >= Settings::ZAPMOLCUNO_NB
       if fused?(old)
         b, hd = parts_of(old)
         return fuse(rival_part(map, b), rival_part(map, hd))
@@ -443,7 +448,7 @@ module KIF
             end
           else
             th = theme
-            if i < olds.length && (old == Settings::RIVAL_STARTER_PLACEHOLDER_SPECIES || old >= Settings::ZAPMOLCUNO_NB)
+            if i < olds.length && (old == rival_placeholder || old >= Settings::ZAPMOLCUNO_NB)
               dex = old
             elsif trainer_mode == 2
               dex = follow_wild(old)
@@ -451,7 +456,7 @@ module KIF
             else
               dex = trainer_pick(old, th, customs)
             end
-            dex = fuse_pick(dex, th) if dget(:trainer_fuse) == 1 && dex != Settings::RIVAL_STARTER_PLACEHOLDER_SPECIES
+            dex = fuse_pick(dex, th) if dget(:trainer_fuse) == 1 && dex_of(dex) != rival_placeholder
           end
           dex = dex_of(dex)
           unless valid_dex?(dex) || dex == old

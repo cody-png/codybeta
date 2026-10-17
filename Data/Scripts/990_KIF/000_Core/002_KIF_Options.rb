@@ -214,7 +214,8 @@ module KIF
     # the value as the setting stores it (true -> 1 for On/Off settings...)
     def self.fit(key, value)
       d = KIF::Options.defaults[key]
-      cur = d.nil? ? ($PokemonSystem.send(key) rescue nil) : d
+      # mods lock settings at load, before $PokemonSystem exists: read a fresh one
+      cur = d.nil? ? (($PokemonSystem || PokemonSystem.new).send(key) rescue nil) : d
       if cur.is_a?(Integer)
         return 1 if value == true
         return 0 if value == false

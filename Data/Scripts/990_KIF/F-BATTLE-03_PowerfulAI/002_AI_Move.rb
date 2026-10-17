@@ -363,7 +363,7 @@ class PokeBattle_AI
 			"0C6", "0C8", "0C3",  # v Meteor Beam placeholder
 			"111", "TwoTurnAttackChargeRaiseUserSpAtk1"].include?(move.function)  ||
 			(move.function=="0C4" && @battle.pbWeather != :Sun)) && !user.hasActiveItem?(:POWERHERB))
-		  realDamage *= 2 / 3   # Not halved because semi-invulnerable during use or hits first turn
+		  realDamage *= 2 / 3.0   # Not halved because semi-invulnerable during use or hits first turn
 		  realDamage = 0 if target.pbHasMoveFunction?("0AA", "14C", "168" , "14B") # protect moves
 		end
 		if move.function == "0C2" # Use hyper beam as a last resort.
@@ -908,9 +908,9 @@ class PokeBattle_AI
 			hasOtherMoves = false
 			hasUnusedMoves = false
 			user.eachMove do |m|
-				hasThisMove    = true if m.id == @id
-				hasOtherMoves  = true if m.id != @id
-				hasUnusedMoves = true if m.id != @id && !user.movesUsed.include?(m.id)
+				hasThisMove    = true if m.id == move.id
+				hasOtherMoves  = true if m.id != move.id
+				hasUnusedMoves = true if m.id != move.id && !user.movesUsed.include?(m.id)
 			end
 			if !hasThisMove || !hasOtherMoves || hasUnusedMoves
 				return true

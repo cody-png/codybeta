@@ -58,6 +58,15 @@ module KIF
       KIF.log("Save backup failed: #{e.message}")
     end
 
+    # oldest unnamed backups beyond Settings::SAVEFILE_NB_BACKUPS
+    def self.trim(save_path, slot)
+      dir = slot_dir(save_path, slot)
+      plain = Dir.children(dir).select { |c| c =~ /\A#{Regexp.escape(slot.to_s)}_\d{14}\.rxdata\z/ }.sort
+      plain[0...[plain.length - Settings::SAVEFILE_NB_BACKUPS, 0].max].each { |c| File.delete(File.join(dir, c)) }
+    rescue => e
+      KIF.log("Save backup clean-up failed: #{e.message}")
+    end
+
     def self.open_folder
       path = SaveData::SAVE_DIR.to_s
       if System.platform[/Windows/]
@@ -78,10 +87,12 @@ module Game
     alias kif_bk_backup_savefile backup_savefile unless method_defined?(:kif_bk_backup_savefile)
     alias kif_bk_save save unless method_defined?(:kif_bk_save)
 
-    # Infinite: back up without 6.8.2's clean-up of old backups
+    # Infinite: back up without 6.8.2's clean-up of old backups.
+    # PIF: 6.8.2's limit, but named backups are never trimmed (6.8.2 deleted
+    # any *.rxdata in the folder)
     def backup_savefile(save_path, slot)
-      return kif_bk_backup_savefile(save_path, slot) unless KIF::SaveBackups.infinite?
       KIF::SaveBackups.copy(save_path, slot)
+      KIF::SaveBackups.trim(save_path, slot) unless KIF::SaveBackups.infinite?
     end
 
     # A named backup is a copy of the save just written (KIF)

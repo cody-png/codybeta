@@ -18,6 +18,24 @@ module KIF
     return false
   end
 
+  # mkdir -p / rm -r (no FileUtils in the game's Ruby). rm_tree never follows
+  # a folder link into what it points at.
+  def self.mkdir_p(dir)
+    return if dir.nil? || dir.empty? || File.directory?(dir)
+    mkdir_p(File.dirname(dir))
+    Dir.mkdir(dir) unless File.directory?(dir)
+  end
+
+  def self.rm_tree(path)
+    return unless File.exist?(path) || File.symlink?(path)
+    if File.directory?(path) && !File.symlink?(path)
+      Dir.children(path).each { |c| rm_tree(File.join(path, c)) }
+      Dir.rmdir(path)
+    else
+      File.delete(path)
+    end
+  end
+
   # True when the player is in the overworld of a loaded save (KIF only shows
   # per-save options in that case).
   def self.in_game?

@@ -220,11 +220,8 @@ module KIF
       return if dir.nil? || dir.empty?
       @dirs_made ||= {}
       return if @dirs_made[dir]
-      unless Dir.exist?(dir)
-        mkdir_p(File.dirname(dir))
-        Dir.mkdir(dir) rescue nil
-      end
-      @dirs_made[dir] = true
+      (KIF.mkdir_p(dir) rescue nil) unless Dir.exist?(dir)
+      @dirs_made[dir] = true if Dir.exist?(dir)   # a folder that couldn't be made is tried again
     end
 
     #---------------------------------------------------------------------------
@@ -237,7 +234,7 @@ module KIF
     #   second copy  -> left (the first one of a name wins)
     #---------------------------------------------------------------------------
     def reset_tally
-      @tally = { moved: 0, same: 0, eggs: 0, skipped: 0, conflicts: {}, placed: {} }
+      @tally = { moved: 0, same: 0, eggs: 0, skipped: 0, errors: 0, conflicts: {}, placed: {} }
       @dirs_made = {}
     end
 
@@ -277,7 +274,7 @@ module KIF
       t[:moved] += 1
       bump
     rescue SystemCallError, IOError
-      t[:skipped] += 1
+      t[:errors] += 1   # a sprite that couldn't be written (disk full, locked): its archive is kept
     end
 
     # Every file under a folder (skipping our own _done / _unpacking)
@@ -358,7 +355,8 @@ module KIF
             found = true
             status("Unpacking #{File.basename(path)}...", 0)
             work = file_after(File.join(root, WORK_DIR), File.basename(path, ".*"))
-            if unpack(path, work, root)
+            errors = tally[:errors]
+            if unpack(path, work, root) && tally[:errors] == errors
               finish_archive(path)   # unpacked: deleted (or kept, if the player asked)
             else
               failed << path
@@ -388,8 +386,11 @@ module KIF
         if Dir.exist?(work)
           leftovers = 0
           each_file(work, false) { |_f| leftovers += 1 }
-          remove_tree(work)
-          @leftovers += leftovers
+          # sprites that couldn't be moved stay for the next start
+          if tally[:errors] == 0
+            remove_tree(work)
+            @leftovers += leftovers
+          end
         end
         prune(root)
       end
@@ -397,7 +398,7 @@ module KIF
       @same = t[:same]
       @eggs = t[:eggs]
       # archive files that were never written (not sprites) count as discarded too
-      return [t[:moved], t[:conflicts], t[:skipped], failed.map { |f| File.basename(f) }, @leftovers.to_i + not_written]
+      return [t[:moved], t[:conflicts], t[:skipped] + t[:errors], failed.map { |f| File.basename(f) }, @leftovers.to_i + not_written]
     ensure
       hide_status
     end
@@ -591,9 +592,10 @@ module KIF
             next unless h && h[0, 4] == "PK\x03\x04".b
             nlen, xlen = h[26, 4].unpack("vv")
             f.seek(offset + 30 + nlen + xlen)
+            # a packing this reader doesn't know (Deflate64, BZip2, LZMA): give the archive to tar
+            return false unless method == 0 || method == 8
             data = f.read(csize)
             data = Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(data) if method == 8
-            next unless method == 0 || method == 8
             if direct && dest
               held = File.join(direct, KIF::SpriteImport::HOLD_DIR, File.basename(into), *safe)
               KIF::SpriteImport.place(dest, held, data: data)
@@ -607,7 +609,8 @@ module KIF
             rescue SystemCallError, IOError => e
               # one file that can't be written (path too long, odd name)
               # doesn't stop the rest of the pack
-              KIF::SpriteImport.not_written += 1
+              # a sprite counts as an error (the archive is kept), anything else is just not written
+              dest ? KIF::SpriteImport.tally[:errors] += 1 : KIF::SpriteImport.not_written += 1
               KIF.log("Sprite import: skipped #{safe.last} (#{e.class})") if defined?(KIF.log)
               next
             end

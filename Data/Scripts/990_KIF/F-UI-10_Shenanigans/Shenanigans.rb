@@ -128,28 +128,14 @@ ItemHandlers::UseOnPokemon.add(:TRANSGENDERSTONE, proc { |item, pokemon, scene|
   choices << [:pizza, _INTL("Make pizza")] if !pizza
   cmd = scene.pbShowCommands(_INTL("Transgender to which gender?"), choices.map { |c| c[1] } + [_INTL("Cancel")])
   next false if cmd.nil? || cmd < 0 || cmd >= choices.length
-  case choices[cmd][0]
-  when :pizza
+  if choices[cmd][0] == :pizza
     KIF::Shenanigans.make_pizza(pokemon)
-    msg = _INTL("The Pokémon became pizza!")
-  when :female
-    KIF::Shenanigans.unpizza(pokemon)
-    pokemon.instance_variable_set(:@gender, 1)
-    pokemon.instance_variable_set(:@kif_forced_genderless, false)
-    msg = _INTL("The Pokémon became female!")
-  when :male
-    KIF::Shenanigans.unpizza(pokemon)
-    pokemon.instance_variable_set(:@gender, 0)
-    pokemon.instance_variable_set(:@kif_forced_genderless, false)
-    msg = _INTL("The Pokémon became male!")
-  when :genderless
-    KIF::Shenanigans.unpizza(pokemon)
-    pokemon.instance_variable_set(:@gender, 2)
-    pokemon.instance_variable_set(:@kif_forced_genderless, true)
-    msg = _INTL("The Pokémon became genderless!")
+    scene.pbRefresh
+    scene.pbDisplay(_INTL("The Pokémon became pizza!"))
+    next true
   end
-  scene.pbRefresh
-  scene.pbDisplay(msg)
+  KIF::Shenanigans.unpizza(pokemon)
+  KIF.stone_gender(pokemon, { female: 1, male: 0, genderless: 2 }[choices[cmd][0]], scene)
   next true
 })
 

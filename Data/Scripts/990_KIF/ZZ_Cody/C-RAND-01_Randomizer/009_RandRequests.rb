@@ -94,7 +94,8 @@ module KIF
       return nil unless list && $PokemonGlobal && pokemon_parts_on?
       @req_cache ||= {}
       key = [list.object_id, seed, get(:wild_mode), get(:trades), dget(:npc_requests), data[:visit].to_i, map_id]
-      return @req_cache[key] if @req_cache.key?(key)
+      hit = @req_cache[key]
+      return hit[1] if hit && hit[0].equal?(list)   # an object_id can be reused once its list is freed
       @req_cache.clear if @req_cache.length > 64
       text = event_script_text(list)
       subs = []
@@ -112,8 +113,8 @@ module KIF
         to = trade_result(sp)
         subs << [sp, to, :trade] if to
       end
-      @req_cache[key] = subs.empty? ? nil : subs
-      return @req_cache[key]
+      @req_cache[key] = [list, subs.empty? ? nil : subs]
+      return @req_cache[key][1]
     end
 
     @req_ctx = nil
@@ -181,28 +182,22 @@ module KIF
     #---------------------------------------------------------------------------
     # Spoiler log: every in-game trade
     #---------------------------------------------------------------------------
+    # [map id, map name, event id, species] (maps are read by scan_maps, 007)
     def self.trade_spots
-      return @trade_spots if @trade_spots
-      spots = []
-      infos = (load_data("Data/MapInfos.rxdata") rescue {})
-      infos.keys.sort.each do |mid|
-        map = (load_data(sprintf("Data/Map%03d.rxdata", mid)) rescue nil)
-        next unless map && map.events
-        name = (pbGetMapNameFromId(mid) rescue mid.to_s)
-        map.events.keys.sort.each do |eid|
-          seen = {}
-          map.events[eid].pages.each do |page|
-            event_script_text(page.list).scan(TRADE_RE) do |m|
-              sp = m[0].to_sym
-              next if seen[sp] || !GameData::Species.exists?(sp)
-              seen[sp] = true
-              spots << [mid, name, eid, sp]
-            end
-          end
+      scan_maps unless @trade_spots
+      return @trade_spots
+    end
+
+    def self.trade_spots_in(ev, where, spots)
+      seen = {}
+      ev.pages.each do |page|
+        event_script_text(page.list).scan(TRADE_RE) do |m|
+          sp = m[0].to_sym
+          next if seen[sp] || !GameData::Species.exists?(sp)
+          seen[sp] = true
+          spots << where + [sp]
         end
       end
-      @trade_spots = spots
-      return spots
     end
 
     def self.trade_lines

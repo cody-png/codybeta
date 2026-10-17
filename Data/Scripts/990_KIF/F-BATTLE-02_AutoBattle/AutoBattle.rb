@@ -3,7 +3,9 @@
 # Source: KIF 0.20.7
 #   011_Battle/003_Battle/002_PokeBattle_Battle.rb:287-290  pbOwnedByPlayer?
 #     returns false while Auto-Battle is on, so the AI picks the player's moves
-#     and replacements ("Ally controls player pokemon")
+#     and replacements ("Ally controls player pokemon"). Here only while the
+#     battle is choosing (command phase, replacements): KIF lied all battle,
+#     which also dropped badge boosts, Pickup and the like.
 #   011_Battle/003_Battle/003_Battle_StartAndEnd.rb:161-185  Shiny Stop
 #   011_Battle/005_Battle scene/006_PokeBattle_Scene.rb:200, :242  battle
 #     messages advance on their own
@@ -62,8 +64,22 @@ class PokeBattle_Battle
   alias kif_auto_pbStartBattleSendOut pbStartBattleSendOut unless method_defined?(:kif_auto_pbStartBattleSendOut)
 
   def pbOwnedByPlayer?(idxBattler)
-    return false if KIF::AutoBattle.on? && !opposes?(idxBattler)
+    return false if @kif_auto_choosing.to_i > 0 && KIF::AutoBattle.on? && !opposes?(idxBattler)
     return kif_auto_pbOwnedByPlayer?(idxBattler)
+  end
+
+  # where the AI chooses for the player
+  [:pbCommandPhase, :pbEORSwitch, :pbSwitchInBetween].each do |m|
+    orig = :"kif_auto_ch_#{m}"
+    alias_method orig, m unless method_defined?(orig)
+    define_method(m) do |*args, &blk|
+      @kif_auto_choosing = @kif_auto_choosing.to_i + 1
+      begin
+        return send(orig, *args, &blk)
+      ensure
+        @kif_auto_choosing -= 1
+      end
+    end
   end
 
   # KIF battleStartShinyCheck (wild battles)

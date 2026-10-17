@@ -40,6 +40,9 @@ module KIF
     def self.restore(pkmn, vals)
       FIELDS.each_with_index do |f, i|
         v = vals[i]
+        # an evolved rematch: a stored ability its new species can't have is
+        # dropped, so it's worked out again from the restored slot
+        v = nil if f == :@ability && v && !(pkmn.getAbilityList.any? { |a, _i| a == v } rescue true)
         if v.nil?
           pkmn.remove_instance_variable(f) if pkmn.instance_variable_defined?(f)
         else

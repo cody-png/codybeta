@@ -238,7 +238,11 @@ module KIF
                              proc { |v| @mods_view = v },
                              _INTL("Left/Right: your mods, the KIF-Mods catalog, or updates for the mods you have."))
         rows << Row.new(:opt, opt, nil, opt.name, :mods, nil, 0, nil)
-        if view > 0 && KIF::ModCatalog.items.nil? && !@mods_loading
+        # once per tab visit: a failed read waits for "Try again" instead of
+        # contacting GitHub on every redraw
+        @mods_tried = nil if view == 0
+        if view > 0 && KIF::ModCatalog.items.nil? && !@mods_loading && @mods_tried != view
+          @mods_tried = view
           @mods_loading = true
           begin
             KIF::ModCatalog.load

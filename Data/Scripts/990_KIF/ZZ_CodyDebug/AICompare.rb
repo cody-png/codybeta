@@ -24,6 +24,7 @@ module KIF
       def log_path;    KIF::Paths.log(LOG);             end
 
       def on?
+        return false unless $DEBUG   # a leftover marker must not slow a normal game
         @on = File.exist?(marker_path) if @on.nil?
         return @on
       end

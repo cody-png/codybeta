@@ -199,6 +199,7 @@ module KIF
       when :badges
         n = choose(_INTL("Badges"), [[_INTL("8 (Kanto)"), nil, 8], [_INTL("16 (Kanto + Johto)"), nil, 16]])
         return nil unless n
+        return nil unless pbConfirmMessage(_INTL("Give {1} badges? This can't be undone.", n))
         n.times { |i| $Trainer.badges[i] = true }
         pbMessage(_INTL("You have {1} badges.", $Trainer.badge_count))
       when :money
@@ -334,11 +335,13 @@ module KIF
                  _INTL("Level factor x{1}; cap {2}; trainer cap {3}", er.level_factor(m).round(2), er.level_cap(m).inspect, er.trainer_cap(m).inspect)]
         pbMessage(lines.join("\n"))
       when :all
+        return nil unless pbConfirmMessage(_INTL("Mark every door found? This can't be undone."))
         s = er.state
         s[:seen] ||= []
         s[:in].each_key { |id| s[:seen] << [id, :in] unless s[:seen].include?([id, :in]) }
         pbMessage(_INTL("All {1} doors marked found.", s[:in].length))
       when :forget
+        return nil unless pbConfirmMessage(_INTL("Forget every found door? This can't be undone."))
         er.state[:seen] = []
         pbMessage(_INTL("Entrance log emptied."))
       end

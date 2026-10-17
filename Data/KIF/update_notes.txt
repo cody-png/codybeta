@@ -1,8 +1,18 @@
-KIF Beta 0.21.52
-Mods can now change KIF without replacing it:
-- A mod can take over one KIF feature (for example Level Caps). Only that feature steps aside; the rest of KIF keeps working.
-- A mod can set some settings or modules while it's On. Those rows show LOCKED and say which mod set them. Switch the mod Off and your own settings come back - they were kept the whole time.
-- A mod made for another KIF version, or one that doesn't work with a mod you have On, isn't started. Options > Mods shows it as BLOCKED with the reason.
-- Browse warns before you install a mod that won't start (WON'T START) or clashes with one you have (CLASH).
-- Browse can list more than one catalog: other modders' catalogs show under KIF-Mods.
-Key hints on the other screens (Pokédex, Fusion screen, Randomizer, Battle Info, updates) show the keys you have bound instead of letters like "A:" or "Z/Shift".
+KIF Beta 0.21.53
+A big round of fixes from a full code check:
+- Banning every legendary in the Randomizer no longer freezes the game: legendaries then become any allowed Pokémon.
+- The Cell Battery and Magnet Stone (story items) are no longer shuffled by the item randomizer.
+- The rival's "your starter" slot is kept again in randomized trainer teams.
+- Updating a mod from Browse updates the copy you have, even if you renamed its folder. Options > Mods no longer contacts GitHub over and over after a failed Browse.
+- The updater: a cut-short file list or a list with odd paths is refused; files you added are never removed; an update that stopped halfway is tried again on the next start.
+- Sprite packs: a pack whose sprites couldn't all be written is kept (it was deleted), and packs that use an unsupported zip packing are handed to the backup unpacker.
+- Import/Export: fusions, KIF types and number fields come back correctly; an imported file is renamed to .json.imported instead of deleted.
+- Settings presets are written whole (a crash can't leave a broken file); a damaged one is kept as .bad.
+- Save Backups (PIF): backups you named are never removed.
+- Auto-Battle: your Pokémon keep badge boosts, Pickup and the like while the AI fights.
+- Recover Consumables no longer gives you a partner trainer's items, or items from a Self-Battle copy.
+- Trainer rematches: an evolved Pokémon no longer keeps an ability its new form can't have.
+- Shiny fused Pokémon from K-Eggs show their shiny colours.
+- The Randomizer's "skip prompts" window starts after the new data is made (it could run out on slow PCs).
+- Powerful AI: a crash with Sticky Web and a damage estimate for some moves are fixed.
+- Smaller: the frame-rate probes only run in debug mode; fewer leftover bitmaps after the Pokédex and fusion icons.

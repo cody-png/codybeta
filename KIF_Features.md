@@ -78,7 +78,7 @@ All options in this menu are per-save.
 
 - **Battle Format** – 1v1 / 2v2 / 3v3 *(1v1)*. Turns battles into doubles or triples whenever the game allows it.
 - **Format Applies To** – Wild / Trainers / Both *(Wild)*. Which battles Battle Format affects.
-- **Auto-Battle** – Off / On *(Off)*. Trapstarr's Auto-Battler: an ally AI picks your moves for you.
+- **Auto-Battle** – Off / On *(Off)*. Trapstarr's Auto-Battler: an ally AI picks your moves and replacements for you. Your Pokémon still count as yours the rest of the time (badge boosts, Pickup, Pay Day).
 - **Auto-Battle Shiny Stop** – Off / On *(Off)*. Turns Auto-Battle off as soon as a shiny wild Pokémon appears.
 - **Auto-Battle Switching** – Ask / AI decides / Stay in *(AI decides)*. When a trainer is about to send in a Pokémon: with AI decides, the battle AI (PIF's or DemICE's, whichever is set) looks at the new Pokémon and decides whether yours switches out, and into whom.
 - **Auto-Battle Level Up** – Show stats / Continue *(Continue)*. Whether the level-up stat windows wait for you.
@@ -178,7 +178,7 @@ All options in this menu are per-save. They control the PC's **Battle** and **Im
 - **Import Level** – Default / 1 / 5 / 50 / 100 *(Default)*. Sets the level of imported Pokémon, or keeps their original level.
 - **Import De-Evolve** – Off / On *(Off)*. Imported Pokémon become their baby form.
 - **Import as Egg** – Off / On *(Off)*. Imported Pokémon arrive as Eggs.
-- **Import Without Deletion** – Off / On *(Off)*. Keeps the file in the import folder after importing, so it can be imported again.
+- **Import Without Deletion** – Off / On *(Off)*. Keeps the file in the import folder after importing, so it can be imported again. Off: the file is renamed to `.json.imported` (nothing is deleted; remove those yourself).
 - **Delete on Export** – Off / On *(Off)*. Removes the Pokémon from your game when you export it.
 - **Export Sprite on Export** – On / Off / Shiny *(On)*.
   - On: saves the Pokémon's picture (.png) next to its file.
@@ -225,7 +225,7 @@ All options in this menu are per-save.
 
 ### Global
 
-- **Save Backups** – Infinite / PIF *(Infinite)*. Infinite: every save makes a backup and none are ever deleted. PIF: only the newest ones are kept. The Save menu also gains:
+- **Save Backups** – Infinite / PIF *(Infinite)*. Infinite: every save makes a backup and none are ever deleted. PIF: only the newest ones are kept (backups you named are never removed). The Save menu also gains:
   - **Name the next backup:** gives that backup a label in the load-backup list.
   - **Open the save folder.**
 - **Debug Exclusive** – Off / On *(Off)*. On: Import/Export and other tools need Debug mode.

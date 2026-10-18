@@ -1,18 +1,5 @@
-KIF Beta 0.21.53
-A big round of fixes from a full code check:
-- Banning every legendary in the Randomizer no longer freezes the game: legendaries then become any allowed Pokémon.
-- The Cell Battery and Magnet Stone (story items) are no longer shuffled by the item randomizer.
-- The rival's "your starter" slot is kept again in randomized trainer teams.
-- Updating a mod from Browse updates the copy you have, even if you renamed its folder. Options > Mods no longer contacts GitHub over and over after a failed Browse.
-- The updater: a cut-short file list or a list with odd paths is refused; files you added are never removed; an update that stopped halfway is tried again on the next start.
-- Sprite packs: a pack whose sprites couldn't all be written is kept (it was deleted), and packs that use an unsupported zip packing are handed to the backup unpacker.
-- Import/Export: fusions, KIF types and number fields come back correctly; an imported file is renamed to .json.imported instead of deleted.
-- Settings presets are written whole (a crash can't leave a broken file); a damaged one is kept as .bad.
-- Save Backups (PIF): backups you named are never removed.
-- Auto-Battle: your Pokémon keep badge boosts, Pickup and the like while the AI fights.
-- Recover Consumables no longer gives you a partner trainer's items, or items from a Self-Battle copy.
-- Trainer rematches: an evolved Pokémon no longer keeps an ability its new form can't have.
-- Shiny fused Pokémon from K-Eggs show their shiny colours.
-- The Randomizer's "skip prompts" window starts after the new data is made (it could run out on slow PCs).
-- Powerful AI: a crash with Sticky Web and a damage estimate for some moves are fixed.
-- Smaller: the frame-rate probes only run in debug mode; fewer leftover bitmaps after the Pokédex and fusion icons.
+KIF Beta 0.21.54
+- F12 (soft reset) now restarts the game properly. Before, F12 during a battle could break the foe's AI (errors every turn, the foe couldn't attack) and later saves could miss changes to your team.
+- Animated sprites (sprites drawn as a strip of frames) no longer show every frame side by side; you see the first frame.
+- Battle Info: the Speed page shows the foe's Speed too, so you can plan around it.
+- Battle AI: Last Resort is no longer chosen while it can't work (a Pokémon that knew only Metronome and Last Resort used Last Resort every turn and failed).

@@ -56,6 +56,9 @@ class PokeBattle_AI
     # KIF fix: status moves into an ability or effect that blocks them
     # (Thunder Wave into Volt Absorb...); 6.8.2 checked damaging moves only
     return 0 if skill >= PBTrainerAI.mediumSkill && kif_pif_status_move_blocked?(move, user, target, skill)
+    # KIF fix: 6.8.2 scored Last Resort like any 140-power move, so a Pokémon
+    # that hadn't used its other moves yet kept choosing it and failing
+    return 0 if move.function == "125" && KIF.last_resort_fails?(user, move)
     if skill >= PBTrainerAI.mediumSkill
       # Prefer damaging moves if AI has no more Pokémon or AI is less clever
       if @battle.pbAbleNonActiveCount(user.idxOwnSide) == 0

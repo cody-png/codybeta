@@ -664,9 +664,11 @@ class KifBattleInfoScreen
       text(b, 22, cy, 20, 26, (i + 1).to_s, ACC, PF::ROW)
       rrect(b, 44, cy + 10, 49, cy + 15, 2, own ? OWN : FOE)
       text(b, 56, cy, 180, 26, PF.fit(PF::ROW, bt.name.to_s, 170), TXT, PF::ROW)
-      note = own ? bi.speed_note(bt) : ""
+      # foes too: their Speed this turn, so you can plan around it (a foe's
+      # Choice Scarf is only named once revealed - speed_note checks own?)
+      note = bi.speed_note(bt)
       text(b, 236, cy + 2, 150, 22, note, WARN) unless note.empty?
-      text(b, W - 22, cy + 2, 0, 22, own ? _INTL("Speed {1}", spd) : _INTL("Speed ???"), own ? TXT : DIM, PF::TEXT, 1)
+      text(b, W - 22, cy + 2, 0, 22, _INTL("Speed {1}", spd), TXT, PF::TEXT, 1)
       y += rh
     end
     tr = bi.trick_room(@battle)

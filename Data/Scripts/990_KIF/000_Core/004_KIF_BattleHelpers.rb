@@ -17,6 +17,16 @@ class PokeBattle_Battler
 end
 
 module KIF
+  # Last Resort fails until every other move it knows has been used since it
+  # came in (PokeBattle_Move_125#pbFailsAgainstTarget?, without the message).
+  # Both AIs ask this so they don't pick it while it can't work.
+  def self.last_resort_fails?(user, move)
+    others = []
+    has_it = false
+    user.eachMove { |m| m.id == move.id ? (has_it = true) : (others << m.id) }
+    return !has_it || others.empty? || others.any? { |id| !user.movesUsed.include?(id) }
+  end
+
   # DemICE's Endgame Challenge (switch 850). Redefined by F-BATTLE-04
   # (002_EndgameChallenge.rb); false only if that folder is removed.
   def self.endgame_challenge_active?

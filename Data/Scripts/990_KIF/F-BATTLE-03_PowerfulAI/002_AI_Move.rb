@@ -903,19 +903,7 @@ class PokeBattle_AI
 			end
 		end
 		# DemICE: Yes i had to move Last Resort here to make its score return 0 otherwise it just never became 0.
-		if move.function == "125"
-			hasThisMove = false
-			hasOtherMoves = false
-			hasUnusedMoves = false
-			user.eachMove do |m|
-				hasThisMove    = true if m.id == move.id
-				hasOtherMoves  = true if m.id != move.id
-				hasUnusedMoves = true if m.id != move.id && !user.movesUsed.include?(m.id)
-			end
-			if !hasThisMove || !hasOtherMoves || hasUnusedMoves
-				return true
-			end
-		end
+		return true if move.function == "125" && KIF.last_resort_fails?(user, move)
 		# DemICE same as last resort above, but for Burn Up
 		return true if move.function == "162" && !user.pbHasType?(:FIRE)
 		# OHKO Moves

@@ -536,6 +536,20 @@ module KIF
       @disk_failures = @disk_failures.to_i + 1
     end
 
+    # An animated sprite (its frames side by side, each as wide as it is tall,
+    # e.g. 191.208 is 48 frames of 288) is drawn as its first frame; PIF
+    # only cuts frames for files named "[n]...", so it showed the whole strip.
+    # shortcut: no animation, only the first frame; animate them if wanted.
+    def first_frame(bmp)
+      w = bmp.width
+      h = bmp.height
+      return bmp unless h > 0 && w > h && w % h == 0
+      frame = Bitmap.new(h, h)
+      frame.blt(0, 0, bmp, Rect.new(0, 0, h, h))
+      bmp.dispose
+      return frame
+    end
+
     def load_local(path)
       # a private copy: PIF's shiny code recolours the bitmap it gets in place,
       # and RPG::Cache would hand the same one to the next Pokémon
@@ -552,7 +566,7 @@ module KIF
           return AnimatedBitmap.from_bitmap(disk)
         end
       end
-      bmp = AnimatedBitmap.from_bitmap(Bitmap.new(path))
+      bmp = AnimatedBitmap.from_bitmap(first_frame(Bitmap.new(path)))
       bmp.scale_bitmap(3) if bmp.bitmap.width < 150   # a 96 px sprite: game size is 288
       if mode != 2
         keep_bitmap(path, bmp.bitmap)
@@ -826,6 +840,26 @@ module KIF
 end
 
 PIFSpriteExtracter.prepend(KIF::SpriteImport::LocalFirst) if defined?(PIFSpriteExtracter)
+
+# Files PIF opens itself (a sprite's own path: Pokédex alt sprites, special
+# sprites) get the same first-frame treatment
+module KIF
+  module SpriteImport
+    module StripFrames
+      def load_pif_sprite_directly(pif_sprite)
+        ret = super
+        b = (ret.bitmap rescue nil)
+        return ret unless b && b.height > 0 && b.width > b.height && b.width % b.height == 0
+        frame = Bitmap.new(b.height, b.height)
+        frame.blt(0, 0, b, Rect.new(0, 0, b.height, b.height))
+        ret.dispose
+        return AnimatedBitmap.from_bitmap(frame)
+      end
+    end
+  end
+end
+
+BattleSpriteLoader.prepend(KIF::SpriteImport::StripFrames) if defined?(BattleSpriteLoader)
 
 #-------------------------------------------------------------------------------
 # Pokédex sprites page: a sprite that is both on a sheet and a file was listed

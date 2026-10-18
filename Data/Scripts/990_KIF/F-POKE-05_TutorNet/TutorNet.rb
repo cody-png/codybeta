@@ -694,7 +694,7 @@ class PokemonTutorNetScreen
     @scene.pbStartScene(realcommands, $Trainer.party,commands)
     if !$Trainer.tutornet_old_user
       pbMessage(_INTL("This is your first time logging in Tutor.net! Welcome!"))
-      pbMessage(_INTL("By pressing SHIFT (or L/R) and selecting a party member you can view only the moves that specific member can learn!"))
+      pbMessage(_INTL("By pressing Shift (or {1}/{2}) and selecting a party member you can view only the moves that specific member can learn!", KIF::Keys.name(Input::AUX1), KIF::Keys.name(Input::AUX2)))
       pbMessage(_INTL("By pressing {1} you can view information of the move the cursor currently points to.", KIF::Keys.name(Input::ACTION)))
       $Trainer.tutornet_old_user=true
     end

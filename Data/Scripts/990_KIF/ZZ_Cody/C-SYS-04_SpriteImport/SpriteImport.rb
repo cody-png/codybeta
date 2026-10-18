@@ -540,7 +540,49 @@ module KIF
     # An animated sprite (its frames side by side, each as wide as it is tall,
     # e.g. 191.208 is 48 frames of 288) is drawn as its first frame; PIF
     # only cuts frames for files named "[n]...", so it showed the whole strip.
-    # shortcut: no animation, only the first frame; animate them if wanted.
+    # In battle, C-BATTLE-04 asks for the whole strip (keep_strips) and
+    # plays it.
+    MAX_STRIP_FRAMES = 48   # 288 px frames: 13,824 px wide, under the engine's 16,384 limit
+
+    def keep_strips?; return @keep_strips ? true : false; end
+
+    def keep_strips
+      old = @keep_strips
+      @keep_strips = true
+      return yield
+    ensure
+      @keep_strips = old
+    end
+
+    # true when the file's PNG header says it's a strip (no decoding)
+    def strip_file?(path)
+      @strip_file ||= {}
+      return @strip_file[path] if @strip_file.has_key?(path)
+      head = (File.binread(path, 24) rescue nil)
+      ok = false
+      if head && head.bytesize == 24 && head[0, 8] == "\x89PNG\r\n\x1A\n".b
+        w, h = head[16, 8].unpack("NN")
+        ok = h > 0 && w > h && w % h == 0
+      end
+      return @strip_file[path] = ok
+    end
+
+    # the whole strip, at most MAX_STRIP_FRAMES frames, scaled like a sprite
+    def load_strip(path)
+      bmp = Bitmap.new(path)
+      h = bmp.height
+      n = [bmp.width / h, MAX_STRIP_FRAMES].min
+      if n * h < bmp.width
+        cut = Bitmap.new(n * h, h)
+        cut.blt(0, 0, bmp, Rect.new(0, 0, n * h, h))
+        bmp.dispose
+        bmp = cut
+      end
+      anim = AnimatedBitmap.from_bitmap(bmp)
+      anim.scale_bitmap(3) if h < 150   # 96 px frames: game size is 288
+      return anim
+    end
+
     def first_frame(bmp)
       w = bmp.width
       h = bmp.height
@@ -554,6 +596,7 @@ module KIF
     def load_local(path)
       # a private copy: PIF's shiny code recolours the bitmap it gets in place,
       # and RPG::Cache would hand the same one to the next Pokémon
+      return load_strip(path) if keep_strips? && strip_file?(path)   # not cached: battle only
       mode = cache_mode
       if mode != 2
         kept = cached_bitmaps[path]
@@ -851,8 +894,11 @@ module KIF
         ret = super
         b = (ret.bitmap rescue nil)
         return ret unless b && b.height > 0 && b.width > b.height && b.width % b.height == 0
-        frame = Bitmap.new(b.height, b.height)
-        frame.blt(0, 0, b, Rect.new(0, 0, b.height, b.height))
+        keep = KIF::SpriteImport.keep_strips?   # battle: the strip, at most MAX_STRIP_FRAMES
+        return ret if keep && b.width / b.height <= KIF::SpriteImport::MAX_STRIP_FRAMES
+        w = keep ? b.height * KIF::SpriteImport::MAX_STRIP_FRAMES : b.height
+        frame = Bitmap.new(w, b.height)
+        frame.blt(0, 0, b, Rect.new(0, 0, w, b.height))
         ret.dispose
         return AnimatedBitmap.from_bitmap(frame)
       end

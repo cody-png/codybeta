@@ -2,7 +2,7 @@
 # F-UI-06 – Quicksave
 # Source: KIF 0.20.7 052_AddOns/Quicksave.rb ("by Marin, updated by CrystalStar")
 #
-# "Quicksave with S" (quicksave, global, default On): pressing S on the map
+# "Quicksave" (quicksave, global, default On): pressing S on the map
 # opens the normal save screen.
 # Key: KIF checked Input::JUMPDOWN, which KIF had defined as Input::Y (the S key
 # in RMXP/mkxp default bindings). PIF 6.8.2 redefines JUMPDOWN = Input::R (not
@@ -21,10 +21,10 @@
 KIF::Options.define(:quicksave, 1, :global)
 
 KIF::Options.add(:others, :global) {
-  EnumOption.new(_INTL("Quicksave with S"), [_INTL("Off"), _INTL("On")],
+  EnumOption.new(_INTL("Quicksave"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.quicksave },
                  proc { |value| $PokemonSystem.quicksave = value },
-                 _INTL("Quicksave with S"))
+                 _INTL("Press {1} on the map to save.", KIF::Keys.name(Input::Y)))
 }
 
 class Scene_Map

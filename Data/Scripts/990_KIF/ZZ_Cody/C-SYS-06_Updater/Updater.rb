@@ -364,6 +364,17 @@ module KIF
         api("kernel32", "CloseHandle", %w[L], "i").call(h)
       end
 
+      # Ends this game at once. Kernel.exit! alone left the game open after
+      # an update (Cody, 0.21.56), so the update window waited for ever.
+      def quit_now
+        me = api("kernel32", "GetCurrentProcess", [], "L").call
+        api("kernel32", "TerminateProcess", %w[L L], "i").call(me, 0)
+      rescue StandardError, NameError
+        nil
+      ensure
+        Kernel.exit!(0)
+      end
+
       def exe_path
         buf = "\0" * 2048
         n = api("kernel32", "GetModuleFileNameW", %w[L p L], "L").call(0, buf, 1024)
@@ -512,9 +523,16 @@ module KIF
       lines << "chcp 65001 >nul"
       lines << "title KIF update"
       lines << "echo Finishing the KIF Beta #{version} update. This window closes by itself."
+      # the game closes itself; one still open after 20 s is closed here
+      lines << "set /a waited=0"
       lines << ":wait"
       lines << "tasklist /FI \"PID eq #{pid}\" 2>nul | find \"#{pid}\" >nul"
-      lines << "if not errorlevel 1 ( timeout /t 1 /nobreak >nul & goto wait )"
+      lines << "if errorlevel 1 goto go"
+      lines << "set /a waited+=1"
+      lines << "if %waited% GEQ 20 taskkill /PID #{pid} /F >nul 2>&1"
+      lines << "timeout /t 1 /nobreak >nul"
+      lines << "goto wait"
+      lines << ":go"
       lines << "robocopy \"#{s}\\files\" \"#{r}\" /E /MOVE /R:10 /W:1 /NFL /NDL /NJH /NJS /NP >nul"
       lines << "if errorlevel 8 goto fail"
       lines << "if exist \"#{s}\\remove.txt\" for /f \"usebackq delims=\" %%f in (\"#{s}\\remove.txt\") do if exist \"#{r}\\%%f\" del /f /q \"#{r}\\%%f\""
@@ -584,7 +602,7 @@ module KIF
           Win.close(h)
           log("#{version}: moved in by the game, restarted")
           (KIF::SessionLog.finish rescue nil) if defined?(KIF::SessionLog)
-          Kernel.exit!(0) rescue exit
+          Win.quit_now
           return true
         end
         log("#{version}: the game couldn't start itself again")
@@ -648,7 +666,7 @@ module KIF
         if start_apply(dir)
           pbMessage(_INTL("KIF Beta {1} is ready. The game closes now and starts again in a moment.", version))
           (KIF::SessionLog.finish rescue nil) if defined?(KIF::SessionLog)
-          Kernel.exit!(0) rescue exit
+          Win.quit_now
           return true
         end
         pbMessage(_INTL("The update window couldn't be started. The new files are in \"{1}\".", STAGE_DIR))
@@ -760,7 +778,7 @@ module KIF
             File.open(File.join(dir, "apply.cmd"), "wb") { |f| f.write(apply_script(dir, v, Process.pid, exe)) }
             if start_apply(dir)
               (KIF::SessionLog.finish rescue nil) if defined?(KIF::SessionLog)
-              Kernel.exit!(0) rescue exit
+              Win.quit_now
             end
           else
             rm_tree(dir)

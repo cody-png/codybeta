@@ -1,17 +1,7 @@
-KIF Beta 0.21.55
-- Old KIF saves: Pokémon that were set aside (their species wasn't in the game) come back to your PC boxes by themselves once the game has them. A party is never left with only Eggs.
-- Recover Consumables no longer gives you a free copy of a berry your Pokémon picked up or stole in battle.
-- Frostbite and Drowsy: multi-hit moves (Double Kick and others) hit every time again.
-- Save backups: autosaves keep their newest 10; backups of the saves you make are kept as before.
-- Copied saves (Import Old Saves) get the same Modules setup as any other save, so modules no longer start Off.
-- Rocket Mode works again: a thrown ball was always blocked by the trainer, even with Rocket Mode on. Stolen Pokémon now follow the Level Cap: one above it is held at the cap, and its extra Exp is saved for later.
-- Level caps (RC): Rare Candies that don't fit in a full Bag go to your PC instead of being lost.
-- Mods: a loose copy of a mod script is no longer loaded twice; a mod update that can't finish keeps the old files.
-- Updater: the game folder is found correctly in every install; a retried update no longer waits on a closed game.
-- Battle AI (Powerful AI): fixes for Rest, Spore and other sleep moves, Trick Room, Intimidate, type immunities, Full Heal, Whirlwind, Dragon Tail, Protect, Bide, Counter, Mirror Coat, Metal Burst, Minimize and Baton Pass. In Double Battles it no longer aims at a fainted foe or switches in the Pokémon its partner is sending out.
-- Battle Info remembers abilities seen in battle even with Graphical Changes Off. Loading a settings preset or a save with locked settings updates your Pokémon's stats right away.
-- Randomizer: Random Trainers shuffle again when only trainers are randomized; loading a save puts back only what the randomizer changed; the route cache notices new bans.
-- Gym Leader lines follow the Randomizer's Leader team size even with Battles & Challenges Off.
-- Shiny party icons (Big Icons off) show one frame again instead of two side by side.
-- tutor.net no longer crashes on a move or item from a mod that was removed.
-- Caches for sprites and shinies are capped, and the frame log keeps the previous session.
+KIF Beta 0.21.56
+- Animated sprites now move in battle. Outside battle they still show their first frame.
+- Quicksave and other key hints now show the key you actually set in the controls, not a fixed letter (the setting is now just called "Quicksave").
+- Tutor.net and the randomizer's spoiler log name your real keys too.
+- The Mod Browser also lists mods that were only shared on Discord (the "Discord Mods" catalog).
+- After an update the game now really closes, so the update window finishes and starts the game by itself (it used to wait until you closed it). This works from the next update on.
+- Long mod names in Settings no longer run under the OPEN button; they end in "...".

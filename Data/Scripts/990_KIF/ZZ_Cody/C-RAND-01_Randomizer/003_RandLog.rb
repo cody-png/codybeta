@@ -398,7 +398,7 @@ module KIF
         rows[top, per].each_with_index do |r, k|
           pbDrawShadowText(win.contents, 4, k * lh, cw - 8, lh, r, base, shadow)
         end
-        pos = rows.length > per ? "#{top + 1}-#{[top + per, rows.length].min}/#{rows.length}  Z: jump" : ""
+        pos = rows.length > per ? "#{top + 1}-#{[top + per, rows.length].min}/#{rows.length}  #{KIF::Keys.short(Input::ACTION)}: jump" : ""
         head.text = pos.empty? ? title : "#{title}  (#{pos})"
       }
       draw.call

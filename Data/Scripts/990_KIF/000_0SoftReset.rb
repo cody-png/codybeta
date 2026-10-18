@@ -21,7 +21,7 @@ module KIF
         win.close(h)
         KIF.log("F12: the game started again as a new copy") if KIF.respond_to?(:log)
         (KIF::SessionLog.finish rescue nil) if defined?(KIF::SessionLog)
-        Kernel.exit!(0)
+        win.respond_to?(:quit_now) ? win.quit_now : Kernel.exit!(0)
       end
     end
     KIF.log("F12: couldn't start a new copy of the game; soft reset as before (restart the game if anything acts up)") if KIF.respond_to?(:log)

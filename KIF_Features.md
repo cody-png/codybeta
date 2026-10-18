@@ -233,7 +233,7 @@ All options in this menu are per-save.
 - **Dex Sprite Select** – Off / On *(On)*. Each newly registered Pokémon or fusion asks which sprite to use.
 - **Summary IVs/EVs** – Off / On *(On)*. The Summary's Skills page shows IVs, EVs and base stats next to each stat.
 - **Speed-up Limit (Toggle)** – slider, 1–10 *(3)*. The top speed when speed-up is in Toggle mode. PIF stops at 3x.
-- **Quicksave with S** – Off / On *(On)*. Press S on the map to save instantly.
+- **Quicksave** – Off / On *(On)*. Press S (or the key you set for it in the controls) on the map to save instantly.
 
 ### Per-save
 
@@ -339,7 +339,7 @@ Only on saves started as randomized saves: **Options → Game → Randomizer** (
 ### Interface
 - **Frame rate** – 40 / 60 / 80 / 100 / 120 / Match monitor *(40, global, experimental)*. The game still runs at PIF's 40 steps a second, so all timing (walking, events, battles, menus, key repeat, play time) is exactly as in PIF. Above 40, extra frames are drawn in between, showing the overworld part of the way from one step to the next (camera, characters, shadows, weather), so walking and scrolling are smoother. Battles and menus look the same as at 40. Match monitor uses the screen's refresh rate (up to 120, the engine's limit). If the computer can't keep up, the rate steps down by itself and tries again later.
 - **Skip intro** – Off / On *(On, global)*. On: the game starts at the title screen without the opening movie (Gengar and Nidorino). The title screen and its music stay.
-- **Animated sprites** *(always on)*. A sprite drawn as an animation strip (its frames side by side) shows its first frame instead of the whole strip.
+- **Animated sprites** *(always on)*. A sprite drawn as an animation strip (its frames side by side) moves in battle, at 10 frames a second (the first 48 frames). Everywhere else it shows its first frame instead of the whole strip. Shinies coloured by PIF's Improved Shinies palettes always show their first frame.
 - **Soft reset (F12)** *(always on)*. Starts the game again as if you closed and reopened it. Unsaved progress is lost, as with any soft reset.
 - **Map load cache** *(always on)*. Walking back and forth between connected maps no longer reloads the next map's tileset each time it comes into view (PIF did, ~60 ms each time, a visible hitch). The last few tilesets and animated tiles no longer on screen are kept.
 

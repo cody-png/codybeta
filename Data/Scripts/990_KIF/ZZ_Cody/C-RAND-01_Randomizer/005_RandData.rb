@@ -139,6 +139,7 @@ module KIF
     def self.originals
       if !@orig || @orig_for != GameData::Species.get(1).object_id
         @orig = {}
+        @written = {}
         base_species.each do |sp|
           @orig[sp.species] = FIELDS.map { |f| [f, Marshal.load(Marshal.dump(sp.instance_variable_get(f)))] }.to_h
         end
@@ -174,17 +175,31 @@ module KIF
     #---------------------------------------------------------------------------
     # Putting a save's changes on the game data
     #---------------------------------------------------------------------------
+    # Only fields this save randomizes are written, and only fields written
+    # earlier are put back: the rest belong to the game (and KIF's own species
+    # tweaks, F-DATA-01, which come and go with their module).
     def self.apply_data(changes = nil)
       changes ||= (data[:species] || {})
+      written = (@written ||= {})
+      changed = false
       originals.each do |s, fields|
         sp = GameData::Species.get(s)
         ch = changes[s] || {}
         fields.each do |f, v|
-          val = ch.key?(f) ? ch[f] : v
+          if ch.key?(f)
+            val = ch[f]
+            written[[s, f]] = true
+          elsif written.delete([s, f])
+            val = v
+          else
+            next
+          end
           next if sp.instance_variable_get(f) == val   # already right: no copy
           sp.instance_variable_set(f, Marshal.load(Marshal.dump(val)))
+          changed = true
         end
       end
+      return unless changed   # nothing moved: cached fusions and saved stats are still right
       KIF::Perf.bump_token if defined?(KIF::Perf)
       recalc_owned
     end
@@ -227,8 +242,8 @@ module KIF
     end
 
     def self.type_pool
-      return GameData::Type.each.to_a.reject { |t| t.pseudo_type || t.id == :QMARKS || t.id == :SHADOW }.map(&:id) rescue
-             [:NORMAL, :FIGHTING, :FLYING, :POISON, :GROUND, :ROCK, :BUG, :GHOST, :STEEL, :FIRE, :WATER,
+      # the 18 main types, in this order (seeded rolls depend on it)
+      return [:NORMAL, :FIGHTING, :FLYING, :POISON, :GROUND, :ROCK, :BUG, :GHOST, :STEEL, :FIRE, :WATER,
               :GRASS, :ELECTRIC, :PSYCHIC, :ICE, :DRAGON, :DARK, :FAIRY]
     end
 

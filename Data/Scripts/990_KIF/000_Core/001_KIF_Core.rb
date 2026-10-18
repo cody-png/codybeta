@@ -26,6 +26,18 @@ module KIF
     Dir.mkdir(dir) unless File.directory?(dir)
   end
 
+  # Keeps a disk cache folder from only growing: past `keep` files, the
+  # oldest half (by time) is removed. Called once per session per cache.
+  def self.trim_cache_dir(dir, keep)
+    return unless File.directory?(dir)
+    files = Dir.children(dir).map { |c| File.join(dir, c) }.select { |p| File.file?(p) }
+    return if files.length <= keep
+    files.sort_by { |p| File.mtime(p) }.first(files.length - keep / 2).each { |p| File.delete(p) rescue nil }
+    log("Cache #{dir}: trimmed to #{keep / 2} files") if respond_to?(:log)
+  rescue SystemCallError
+    nil
+  end
+
   def self.rm_tree(path)
     return unless File.exist?(path) || File.symlink?(path)
     if File.directory?(path) && !File.symlink?(path)

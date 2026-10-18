@@ -291,7 +291,7 @@ class PokeBattle_AI
 				if user.statStageAtMax?(:EVASION) || user.hasActiveAbility?(:CONTRARY)
 					score -= 200
 				else
-					target==user.pbDirectOpposing(true)
+					target=user.pbDirectOpposing(true)   # KIF: was ==
 					bestmove=bestMoveVsTarget(target,user,skill) # [maxdam,maxmove,maxprio,physorspec]
 					maxdam=bestmove[0]
 					maxmove=bestmove[1]
@@ -1214,7 +1214,7 @@ class PokeBattle_AI
 							end
 						end
 						tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
-						tempdam = 0 if pbCheckMoveImmunity(1,j,target,user,100)
+						tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)   # KIF: was (j,target,user)
 						if tempdam>priodam
 							priodam=tempdam
 							priomove=j
@@ -1527,7 +1527,7 @@ class PokeBattle_AI
 							end
 						end
 						tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
-						tempdam = 0 if pbCheckMoveImmunity(1,j,target,user,100)
+						tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)   # KIF: was (j,target,user)
 						if tempdam>priodam
 							priodam=tempdam
 							priomove=j
@@ -1604,7 +1604,7 @@ class PokeBattle_AI
 				maxmove=bestmove[1]
 				maxphys=(bestmove[3]=="physical")
 				maxowndam=0
-				for j in target.moves
+				for j in user.moves   # KIF: was target.moves (the user's own damage)
 					tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
 					tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)
 					maxowndam=tempdam if tempdam>maxowndam
@@ -1638,7 +1638,7 @@ class PokeBattle_AI
 				maxmove=bestmove[1]
 				maxspec=(bestmove[3]=="special")
 				maxowndam=0
-				for j in target.moves
+				for j in user.moves   # KIF: was target.moves (the user's own damage)
 					tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
 					tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)
 					maxowndam=tempdam if tempdam>maxowndam
@@ -1671,7 +1671,7 @@ class PokeBattle_AI
 				maxdam=bestmove[0]
 				maxmove=bestmove[1]
 				maxowndam=0
-				for j in target.moves
+				for j in user.moves   # KIF: was target.moves (the user's own damage)
 					tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
 					tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)
 					maxowndam=tempdam if tempdam>maxowndam
@@ -1696,11 +1696,11 @@ class PokeBattle_AI
 						score-=90
 					end
 				end
-				score=5 if ((aspeed<ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
+				score=5 if !((aspeed<ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))   # KIF: moving first, Metal Burst fails (was reversed)
 				score-=200 if pbAIRandom(100) < 50
 			end
 			#---------------------------------------------------------------------------
-		when "073"  # Bide
+		when "0D4"  # Bide (KIF: was "073", Metal Burst's code)
 			target=user.pbDirectOpposing(true)
 			if target.effects[PBEffects::HyperBeam] > 0
 				score -= 90
@@ -1709,7 +1709,7 @@ class PokeBattle_AI
 				maxdam=bestmove[0]
 				maxmove=bestmove[1]
 				maxowndam=0
-				for j in target.moves
+				for j in user.moves   # KIF: was target.moves (the user's own damage)
 					tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
 					tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)
 					maxowndam=tempdam if tempdam>maxowndam
@@ -1771,7 +1771,7 @@ class PokeBattle_AI
 				@battle.allOtherSideBattlers(user.index).each do |b|
 					if b.hasActiveAbility?(:WONDERGUARD) &&
 							(user.pbOpposingSide.effects[PBEffects::StealthRock] ||
-							user.pbOpposingSide.effects[PBEffects::ToxicSpikes] >0
+							user.pbOpposingSide.effects[PBEffects::ToxicSpikes] >0 ||   # KIF: the || was missing
 							user.pbOpposingSide.effects[PBEffects::Spikes] >0)
 						score+=50
 					end
@@ -1796,7 +1796,7 @@ class PokeBattle_AI
 					@battle.allOtherSideBattlers(user.index).each do |b|
 						if b.hasActiveAbility?(:WONDERGUARD) &&
 								(user.pbOpposingSide.effects[PBEffects::StealthRock] ||
-								user.pbOpposingSide.effects[PBEffects::ToxicSpikes] >0
+								user.pbOpposingSide.effects[PBEffects::ToxicSpikes] >0 ||   # KIF: the || was missing
 								user.pbOpposingSide.effects[PBEffects::Spikes] >0)
 							score+=1000
 						end
@@ -2623,7 +2623,7 @@ class PokeBattle_AI
 			opponent=user.pbDirectOpposing(true)
 			aspeed = pbRoughStat(user,:SPEED,skill)
 			ospeed = pbRoughStat(opponent,:SPEED,skill)
-			bestmove=bestMoveVsTarget(target,user,skill) # [maxdam,maxmove,maxprio,physorspec]
+			bestmove=bestMoveVsTarget(attacker,opponent,skill)   # KIF: was (target,user): the user against itself
 			maxdam=bestmove[0]
 			maxmove=bestmove[1]
 			maxoppdam=0
@@ -2750,7 +2750,7 @@ class PokeBattle_AI
 				pspeed=0
 				espeed=0
 				if skill>=PBTrainerAI.highSkill
-					minspeed=0
+					minspeed=999999   # KIF: was 0, so "our slowest" was always 0
 					@battle.allSameSideBattlers(user.index).each do |b|
 						pspeed = pbRoughStat(b,:SPEED,skill)
 						pspeed*=1.5 if b.hasActiveAbility?(:SPEEDBOOST)
@@ -2785,7 +2785,7 @@ class PokeBattle_AI
 				pspeed=0
 				espeed=0
 				if skill>=PBTrainerAI.highSkill
-					minspeed=0
+					minspeed=999999   # KIF: was 0, so "our slowest" was always 0
 					@battle.allSameSideBattlers(user.index).each do |b|
 						pspeed = pbRoughStat(b,:SPEED,skill)
 						pspeed*=1.5 if b.hasActiveAbility?(:SPEEDBOOST)
@@ -2853,9 +2853,9 @@ class PokeBattle_AI
 						end
 					end
 					bestownmove=bestMoveVsTarget(user,target,skill) # [maxdam,maxmove,maxprio,physorspec]
-					maxowndam=bestmove[0]
-					maxownmove=bestmove[1]
-					maxownprio=bestmove[2]
+					maxowndam=bestownmove[0]   # KIF: read bestmove (the foe's)
+					maxownmove=bestownmove[1]
+					maxownprio=bestownmove[2]
 					if target.effects[PBEffects::Rollout] > 0 && maxdam>0
 						if ((aspeed<=ospeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 							score+=140
@@ -3261,8 +3261,7 @@ class PokeBattle_AI
 
 			#---------------------------------------------------------------------------
 		when "0D9" # Rest
-			if user.hp == user.totalhp
-				!user.pbCanSleep?(user, false, nil, true)
+			if user.hp == user.totalhp || !user.pbCanSleep?(user, false, nil, true)   # KIF: the sleep check was a lone line
 			   score -= 200
 			else
 				target=user.pbDirectOpposing(true)
@@ -3408,7 +3407,8 @@ class PokeBattle_AI
 				if @battle.pbWeather==:Sandstorm && !(user.pbHasType?(:ROCK) || user.pbHasType?(:STEEL) || user.pbHasType?(:GROUND)) && !(user.hasWorkingAbility(:SANDVEIL) || user.hasWorkingAbility(:SANDFORCE) || user.hasWorkingAbility(:SANDRUSH))
 					weatherchip += 0.0625
 				end
-				if @battle.pbWeather==:Hail && !(user.pbHasType?(:ICE)) && !(user.hasWorkingAbility(:ICEBODY) || user.hasWorkingAbility(:SNOWCLOAK) || user.hasWorkingAbility(:SLUSHRUSH))
+				# KIF: Modern Hail = Snow (F-BATTLE-06) deals no hail damage
+				if @battle.pbWeather==:Hail && !(defined?(KIF::Mechanics) && KIF::Mechanics.snow?) && !(user.pbHasType?(:ICE)) && !(user.hasWorkingAbility(:ICEBODY) || user.hasWorkingAbility(:SNOWCLOAK) || user.hasWorkingAbility(:SLUSHRUSH))
 					weatherchip += 0.0625
 				end
 				chip += weatherchip
@@ -3465,7 +3465,7 @@ class PokeBattle_AI
 		return false if opponent.effects[PBEffects::Substitute]>0
 		return false if berry && (opponent.status==:SLEEP)# && opponent.statusCount>1)
 		return false if (opponent.hasActiveItem?(:LUMBERRY) || opponent.hasActiveItem?(:CHESTOBERRY)) && berry
-		return false if opponent.pbCanSleep?(attacker,false)
+		return false if !opponent.pbCanSleep?(attacker,false)   # KIF: was inverted
 		return false if opponent.pbOwnSide.effects[PBEffects::Safeguard] > 0 && !attacker.hasActiveAbility?(:INFILTRATOR)
 		for move in attacker.moves
 			if ["003", "004"].include?(move.function)
@@ -3624,11 +3624,18 @@ class PokeBattle_Battle
 		if party[idxParty].fainted?
 		  return false
 		end
-		# if pbFindBattler(idxParty, idxBattler)
-		#   partyScene.pbDisplay(_INTL("{1} is already in battle!",
-		# 							 party[idxParty].name)) if partyScene
-		#   return false
-		# end
+		# KIF: the partner's active Pokémon can't be switched to (doubles): it
+		# scored best, pbRegisterSwitch refused it and the AI stayed in. Its own
+		# active one stays allowed ("no better switch" check).
+		found = pbFindBattler(idxParty, idxBattler)
+		return false if found && found.index != idxBattler
+		# KIF: nor one the partner already chose to switch to this turn (as
+		# pbCanSwitch? checks): pbRegisterSwitch refused it and the AI stayed in
+		eachSameSideBattler(idxBattler) do |b|
+			c = @choices[b.index]
+			next if b.index == idxBattler || !c
+			return false if c[0] == :SwitchOut && c[1] == idxParty
+		end
 		return true
 	  end
 end
@@ -3646,17 +3653,7 @@ class PokeBattle_Battler
 		return @battle.allSameSideBattlers(@index).reject { |b| b.index == @index }
 	end
 
-	# Yields each unfainted opposing Pokémon.
-	# Unused
-	def eachOpposing
-		@battle.battlers.each { |b| yield b if b && !b.fainted? && b.opposes?(@index) }
-	end
-
-	alias stupidity_hasActiveAbility? hasActiveAbility? unless method_defined?(:stupidity_hasActiveAbility?)
-	def hasActiveAbility?(check_ability, ignore_fainted = false, mold_broken=false)
-		return false if mold_broken
-		return stupidity_hasActiveAbility?(check_ability, ignore_fainted)
-	end
+	# (eachOpposing is PIF's own; hasActiveAbility?'s mold_broken argument is in 000_Core/004)
 
 	def pbCanLowerAttackStatStageIntimidateAI(user)
 		return false if fainted?
@@ -3666,8 +3663,9 @@ class PokeBattle_Battler
 		# NOTE: These checks exist to ensure appropriate messages are shown if
 		#       Intimidate is blocked somehow (i.e. the messages should mention the
 		#       Intimidate ability by name).
-		return false if !hasActiveAbility?(:CONTRARY)
-		return false if !pbCanLowerStatStage?(:ATTACK, user)
+		# KIF: was "return false if !hasActiveAbility?(:CONTRARY)" (false for nearly
+		# every foe) and ended on a nil, so Intimidate never counted
+		return pbCanLowerStatStage?(:ATTACK, user)
 	  end
 
 end

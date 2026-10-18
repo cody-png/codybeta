@@ -466,6 +466,12 @@ module KIF
                      (@maps_were && @maps_were != maps) ? " (was #{@maps_were.inspect})" : "",
                      @rate, @target, ev ? "  event running" : "", msg ? "  message" : "")
       line += "\n      " + parts.join(", ") unless parts.empty?
+      # one session per file (the last one kept as _previous), as KIF_log.txt
+      if @log_lines == 1 && File.file?(log_path)
+        prev = log_path.sub(/\.txt\z/, "_previous.txt")
+        File.delete(prev) if File.file?(prev)
+        File.rename(log_path, prev)
+      end
       File.open(log_path, "a") { |f| f.puts(line) }
     rescue => e
       unless @log_failed

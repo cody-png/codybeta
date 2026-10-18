@@ -74,6 +74,19 @@ module KIF
     # file names loaded straight from the Mods folder this session
     def self.loaded_root; @loaded_root || []; end
 
+    # f is the same script as one loaded loose from Mods/ (same name AND same
+    # bytes): loading it again makes its aliases recurse. Only the name used
+    # to count, so Mods/main.rb kept another mod's own main.rb from loading.
+    def self.loose_copy?(f)
+      name = File.basename(f)
+      return false unless loaded_root.include?(name)
+      (@loaded_root_paths || {}).fetch(name, []).any? do |p|
+        File.size(p) == File.size(f) && File.binread(p) == File.binread(f)
+      end
+    rescue SystemCallError
+      return false
+    end
+
     def self.status; return @status ||= {}; end
 
     # a mod's name for messages ("Set by Kanto Reloaded")
@@ -420,6 +433,7 @@ module KIF
     # Everything in one Mods folder (the game's, or a test's)
     def self.load_dir(dir)
       @loaded_root = []
+      @loaded_root_paths = {}
       @disabled = nil
       @status = {}
       @names = {}
@@ -440,6 +454,7 @@ module KIF
         KIF::ModRules.release(e.id) unless r == true
         next unless r == true
         @loaded_root << e.id
+        (@loaded_root_paths[File.basename(e.path)] ||= []) << e.path
         KIF.log("Mod loaded: #{e.id}")
       end
       # then folders (Mod Manager's own are loaded by Mod Manager); the source
@@ -462,7 +477,7 @@ module KIF
         KIF::ModRules.apply(e.id, e.name.to_s, json)
         # a script also dropped loose into Mods/ is already loaded (twice
         # makes its aliases recurse)
-        scripts = native.scripts(e).reject { |f| loaded_file?(f) || @loaded_root.include?(File.basename(f)) }
+        scripts = native.scripts(e).reject { |f| loaded_file?(f) || loose_copy?(f) }
         results = scripts.map { |f| load_file(f, e.id) }
         bad = results.find { |r| r != true }
         status[e.id] = { :loaded => bad.nil?, :error => bad }

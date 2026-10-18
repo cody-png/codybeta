@@ -433,6 +433,10 @@ module KIF
         Kernel.pbShuffleDex($game_variables[VAR_RANDOMIZER_WILD_POKE_BST])
         setsw(669, true)
         Kernel.randomizeWildPokemonByRoute if sw(SWITCH_RANDOM_WILD_AREA)
+      elsif trainer_mode == 2
+        # Follow wild with no wild part on: ensure_trainer_dex keeps any old
+        # table, so make this seed's one now (as a new game's intro does)
+        Kernel.pbShuffleDex($game_variables[VAR_RANDOMIZER_WILD_POKE_BST])
       end
       if sw(SWITCH_RANDOM_TRAINERS)
         sw(600) ? Kernel.pbShuffleTrainersCustom : Kernel.pbShuffleTrainers

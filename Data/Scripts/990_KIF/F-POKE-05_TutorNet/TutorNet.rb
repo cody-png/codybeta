@@ -757,7 +757,11 @@ def tutor_net_build_list(commands,moveDefault,movelist,monspecificlist=nil)
     if monspecificlist.is_a?(Array)
       next if !monspecificlist.include?(i[0])
     end  
-    if i[2]!="$" && i[2]!="c"
+    # KIF: a move or currency item from a mod that is now Off crashed Tutor.net
+    next unless GameData::Move.exists?(i[0])
+    currencyname = ""
+    if i[2] && i[2]!="$" && i[2]!="c"
+      next unless GameData::Item.exists?(i[2])
       if i[1]>1
         currencyname=GameData::Item.get(i[2]).name_plural
       else

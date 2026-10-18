@@ -32,8 +32,6 @@
 module KIF
   module ModCatalog
     REPO       = "KIF-Mods/mods"
-    TREE_URL   = "https://api.github.com/repos/#{REPO}/git/trees/main?recursive=1"
-    RAW_BASE   = "https://raw.githubusercontent.com/#{REPO}/main"
     SOURCE_FILE = "KIF_mods_source.txt"
     CATALOGS_FILE = "KIF_mods_catalogs.txt"
     ASSET_DIRS = %w[Graphics Audio Fonts]
@@ -441,8 +439,18 @@ module KIF
         src = updater.staged(dir, rel)
         dest = dest_for(item, rel)
         updater.mkdir_p(File.dirname(dest))
-        File.delete(dest) if File.file?(dest)
-        File.rename(src, dest)
+        # the old file is moved aside, not deleted, until the new one is in:
+        # a rename that fails (antivirus still scanning the download) puts it back
+        aside = dest + ".kif_old"
+        File.delete(aside) if File.file?(aside)
+        File.rename(dest, aside) if File.file?(dest)
+        begin
+          File.rename(src, dest)
+        rescue StandardError
+          File.rename(aside, dest) if File.file?(aside) && !File.file?(dest)
+          raise
+        end
+        (File.delete(aside) rescue nil) if File.file?(aside)
       end
       # files the mod no longer has: removed when they're still as installed
       old.each do |rel, sha|

@@ -279,24 +279,5 @@ class FightMenuDisplay
   end
 end
 
-#-------------------------------------------------------------------------------
-# Abilities the battle has revealed (ability pop-up, or its message when the
-# pop-ups are off): Pokémon => ability shown
-#-------------------------------------------------------------------------------
-class PokeBattle_Battle
-  alias cody_eff_pbShowAbilitySplash pbShowAbilitySplash unless method_defined?(:cody_eff_pbShowAbilitySplash)
-
-  def pbShowAbilitySplash(battler, *args)
-    begin
-      if battler && battler.pokemon
-        name = args[2]
-        if name.nil? || name == battler.abilityName
-          @cody_known_abilities ||= {}
-          @cody_known_abilities[battler.pokemon.object_id] = battler.ability_id
-        end
-      end
-    rescue
-    end
-    return cody_eff_pbShowAbilitySplash(battler, *args)
-  end
-end
+# (the record of abilities the battle has revealed lives in C-BATTLE-03
+# Battle Info, which has no module, so it works with Graphical Changes Off)

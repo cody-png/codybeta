@@ -78,6 +78,11 @@ class PokemonIconSprite
       @animBitmap.dispose if @animBitmap
       @animBitmap = anim
       self.bitmap = @animBitmap.bitmap
+      # a new bitmap resets src_rect to the whole strip: one frame again, as the base does
+      self.src_rect.width = @animBitmap.height
+      self.src_rect.height = @animBitmap.height
+      @numFrames = @animBitmap.width / @animBitmap.height
+      changeOrigin
     rescue => e
       KIF.log("KIF shiny icon failed: #{e.message}")
     end

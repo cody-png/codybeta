@@ -14,6 +14,22 @@ class PokeBattle_Battler
   def pbOwnedByPlayerSerious?
     return @battle.pbOwnedByPlayerSerious?(@index)
   end
+
+  # Copy of 6.8.2's pbDirectOpposing with `next` for `break` (as Essentials
+  # v20 fixed it): with the Pokémon straight across fainted, 6.8.2 gave up
+  # on the live foe and returned the fainted one, so DemICE's AI (60 calls)
+  # scored setup, priority and items against an empty slot in doubles.
+  def pbDirectOpposing(unfaintedOnly = false)
+    @battle.pbGetOpposingIndicesInOrder(@index).each do |i|
+      next if !@battle.battlers[i]
+      next if unfaintedOnly && @battle.battlers[i].fainted?   # KIF: was break
+      return @battle.battlers[i]
+    end
+    @battle.pbGetOpposingIndicesInOrder(@index).each do |i|
+      return @battle.battlers[i] if @battle.battlers[i]
+    end
+    return @battle.battlers[(@index ^ 1)]
+  end
 end
 
 module KIF
@@ -162,3 +178,5 @@ class PokeBattle_AI
     end
   end
 end
+
+KIF.guard_base("011_Battle/001_Battler/001_PokeBattle_Battler.rb", 486165913, "PokeBattle_Battler#pbDirectOpposing (004_KIF_BattleHelpers.rb)")

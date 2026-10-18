@@ -403,6 +403,13 @@ class PokeBattle_Battler
       numHits = move.pbNumHits(user, targets)
       # Process each hit in turn
       realNumHits = 0
+      # KIF: a frostbitten / drowsy Pokémon (F-BATTLE-06) still has :FROZEN /
+      # :SLEEP while it acts, so the "fell asleep / froze mid-move" stop below
+      # would end every multi-hit move after one hit
+      # shortcut: only this copy knows; with this folder replaced by a mod, PIF's loop stops after 1 hit again
+      kif_status0 = user.status
+      kif_acts = defined?(KIF::Mechanics) &&
+                 ((kif_status0 == :FROZEN && KIF::Mechanics.frostbite?) || (kif_status0 == :SLEEP && KIF::Mechanics.drowsy?))
       for i in 0...numHits
         break if magicCoater >= 0 || magicBouncer >= 0
         success = pbProcessMoveHit(move, user, targets, i, skipAccuracyCheck)
@@ -420,7 +427,7 @@ class PokeBattle_Battler
         end
         realNumHits += 1
         break if user.fainted?
-        break if [:SLEEP, :FROZEN].include?(user.status)
+        break if [:SLEEP, :FROZEN].include?(user.status) && !(kif_acts && user.status == kif_status0)
         # NOTE: If a multi-hit move becomes disabled partway through doing those
         #       hits (e.g. by Cursed Body), the rest of the hits continue as
         #       normal.

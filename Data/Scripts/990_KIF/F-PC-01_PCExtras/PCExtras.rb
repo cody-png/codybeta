@@ -53,7 +53,6 @@ end
 #-------------------------------------------------------------------------------
 module KIF
   module Wallpapers
-    BASE = 1000
     FIRST = 1040
     FOLDER = "Graphics/Pictures/KIF/Wallpapers/box_"
 

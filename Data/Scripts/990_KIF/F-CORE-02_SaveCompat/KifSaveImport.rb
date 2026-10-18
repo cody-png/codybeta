@@ -117,7 +117,7 @@ module KIF
         party = player.party
         party.dup.each do |pkmn|
           next if !pkmn.is_a?(Pokemon) || species_known?(pkmn)
-          next if party.count { |p| p.is_a?(Pokemon) && species_known?(p) } == 0 # never empty the party
+          next if party.count { |p| p.is_a?(Pokemon) && species_known?(p) && !p.egg? } == 0 # never leave only Eggs
           party.delete_if { |p| p.equal?(pkmn) }
           pending[:pokemon] << pkmn
           moved += 1
@@ -151,6 +151,29 @@ module KIF
       return moved
     end
 
+    # Set-aside Pokémon whose species exists again (a species mod switched
+    # back On, or one that failed to start last time) go back into free box
+    # slots; the rest stay set aside
+    def self.return_known_pokemon(data, pending)
+      return 0 unless game_data_loaded?
+      boxes = (data[:storage_system].instance_variable_get(:@boxes) rescue nil)
+      return 0 unless boxes.is_a?(Array)
+      back = 0
+      pending[:pokemon].dup.each do |pkmn|
+        next unless pkmn.is_a?(Pokemon) && species_known?(pkmn)
+        list = boxes.map { |b| b.instance_variable_get(:@pokemon) }.find { |l| l.is_a?(Array) && l.index(nil) }
+        break unless list
+        list[list.index(nil)] = pkmn
+        pending[:pokemon].delete_if { |p| p.equal?(pkmn) }
+        back += 1
+      end
+      if back > 0
+        pending[:returned] = pending[:returned].to_i + back
+        KIF.log("#{back} set-aside Pokémon are back in the boxes")
+      end
+      return back
+    end
+
     def self.convert!(data)
       return data unless data.is_a?(Hash) && !data.empty?
       pending = data[:kif_pending]
@@ -174,8 +197,9 @@ module KIF
         KIF.log("Converted a KIF save (game_version #{data[:game_version]})")
       end
       fill_pokemon_system(data[:pokemon_system])
+      returned = return_known_pokemon(data, pending)
       moved = set_aside_unknown_pokemon(data, pending)
-      pending[:notified] = false if moved > 0
+      pending[:notified] = false if moved > 0 || returned > 0
       data[:kif_pending] = pending if pending.length > 1 || !pending[:pokemon].empty?
       return data
     end
@@ -186,13 +210,15 @@ module KIF
 
     def self.show_notice
       @pending[:notified] = true
-      if @pending[:from]
-        pbMessage(_INTL("This save was made with {1} and has been converted.", @pending[:from]))
+      if (from = @pending.delete(:from))   # told once
+        pbMessage(_INTL("This save was made with {1} and has been converted.", from))
         pbMessage(_INTL("Save the game to keep it in the new format. Options not available yet in this version are kept for later."))
       end
+      back = @pending.delete(:returned).to_i
+      pbMessage(_INTL("{1} Pokémon that were set aside are back in your PC boxes.", back)) if back > 0
       n = (@pending[:pokemon] || []).length
       if n > 0
-        pbMessage(_INTL("{1} Pokémon from this save aren't available in this version yet. They were set aside safely and will come back in a later update.", n))
+        pbMessage(_INTL("{1} Pokémon from this save aren't available in this version yet. They were set aside safely and come back to your PC by themselves once the game has them again (for example when the mod that adds them is On).", n))
       end
     end
   end

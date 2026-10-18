@@ -19,12 +19,10 @@
 # Changes to DemICE's code:
 #   * $game_switches[850] (KIF's Endgame Challenge switch) ->
 #     KIF.endgame_challenge_active? (switch 850 means something else in 6.8.2).
-#   * pbCommandPhaseLoop keeps 6.8.2's addition: after switching from the
-#     party menu the command cursor goes back to Fight.
-#   * DemICE kept two of its own overrides that apply either way, as they
-#     behave like PIF's unless DemICE's code uses them:
-#     PokeBattle_Battler#hasActiveAbility? (extra mold_broken argument) and
-#     pbBattleTypeWeakingBerry (no berry animation while $aiberrycheck).
+#   * Dropped as they did the same as PIF: DemICE's pbCommandPhaseLoop,
+#     eachOpposing and pbBattleTypeWeakingBerry ($aiberrycheck was only set
+#     for non-berries). hasActiveAbility?'s mold_broken argument is in
+#     000_Core/004_KIF_BattleHelpers.rb.
 #   * DemICE's AI had no Drowsy/Frostbite awareness (F-BATTLE-06); KIF's own
 #     Drowsy/Frostbite AI edits were in base AI methods DemICE replaces.
 #     Since 2026-10-14 both AIs treat them as Frostbite / Drowsy (helpers in
@@ -61,8 +59,7 @@ module KIF
                               :pbGetMoveScoreDamage, :pbRoughDamage,
                               :pbMoveBaseDamage, :pbCheckMoveImmunity,
                               :pbEnemyItemToUse, :pbGetMoveScoreFunctionCode,
-                              :pbEnemyShouldWithdrawEx?, :pbChooseBestNewEnemy],
-      "PokeBattle_Battle" => [:pbCommandPhaseLoop]
+                              :pbEnemyShouldWithdrawEx?, :pbChooseBestNewEnemy]
     }
 
     def self.on?

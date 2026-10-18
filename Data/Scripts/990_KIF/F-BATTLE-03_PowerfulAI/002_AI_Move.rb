@@ -3,7 +3,6 @@
 #   Data/Scripts/100_DemICE's AI/AI Move.rb
 # Changes are marked "# KIF port" (see 000_PowerfulAI.rb).
 #===============================================================================
-$aiberrycheck=false
 class PokeBattle_AI
 
 	#=============================================================================
@@ -571,10 +570,8 @@ class PokeBattle_AI
 			# NOTE: Type-weakening berries aren't suitable for checking at the start
 			#       of the round.
 			if target.item && !(target.item.is_berry?)# && target.item_id!=:CHILANBERRY)
-				$aiberrycheck=true
 				BattleHandlers.triggerDamageCalcTargetItem(target.item,
 					user,target,move,multipliers,baseDmg,type)
-				$aiberrycheck=false
 			end
 		end
 		# Global abilities
@@ -1392,7 +1389,7 @@ class PokeBattle_AI
 							)
 						) ||
 						(
-						battler.status==:BURN && target.pbHasMove?(:WILLOWISP) || target.pbHasMove?(:SACREDFIRE) || target.pbHasMove?(:INFERNO) || !hasPhysicalAttack
+						battler.status==:BURN && (target.pbHasMove?(:WILLOWISP) || target.pbHasMove?(:SACREDFIRE) || target.pbHasMove?(:INFERNO) || !hasPhysicalAttack)   # KIF: brackets were missing
 						) ||
 						(
 						battler.status==:POISON && battler.effects[PBEffects::Toxic]<4
@@ -1418,7 +1415,7 @@ class PokeBattle_AI
 									end
 								end
 								tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
-								tempdam = 0 if pbCheckMoveImmunity(1,j,target,user,100)
+								tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)   # KIF: was (j,target,user)
 								if tempdam>priodam
 									priodam=tempdam
 									priomove=j
@@ -1466,7 +1463,7 @@ class PokeBattle_AI
 									end
 								end
 								tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
-								tempdam = 0 if pbCheckMoveImmunity(1,j,target,user,100)
+								tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)   # KIF: was (j,target,user)
 								if tempdam>priodam
 									priodam=tempdam
 									priomove=j
@@ -1516,7 +1513,7 @@ class PokeBattle_AI
 									end
 								end
 								tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
-								tempdam = 0 if pbCheckMoveImmunity(1,j,target,user,100)
+								tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)   # KIF: was (j,target,user)
 								if tempdam>priodam
 									priodam=tempdam
 									priomove=j
@@ -1693,7 +1690,7 @@ class PokeBattle_AI
 									end
 								end
 								tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
-								tempdam = 0 if pbCheckMoveImmunity(1,j,target,user,100)
+								tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)   # KIF: was (j,target,user)
 								if tempdam>priodam
 									priodam=tempdam
 									priomove=j
@@ -1751,7 +1748,7 @@ class PokeBattle_AI
 									end
 								end
 								tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
-								tempdam = 0 if pbCheckMoveImmunity(1,j,target,user,100)
+								tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)   # KIF: was (j,target,user)
 								if tempdam>priodam
 									priodam=tempdam
 									priomove=j
@@ -1806,7 +1803,7 @@ class PokeBattle_AI
 									end
 								end
 								tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
-								tempdam = 0 if pbCheckMoveImmunity(1,j,target,user,100)
+								tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)   # KIF: was (j,target,user)
 								if tempdam>priodam
 									priodam=tempdam
 									priomove=j
@@ -2012,7 +2009,7 @@ class PokeBattle_AI
 								end
 							end
 							tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
-							tempdam = 0 if pbCheckMoveImmunity(1,j,target,user,100)
+							tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)   # KIF: was (j,target,user)
 							if tempdam>priodam
 								priodam=tempdam
 								priomove=j
@@ -2218,7 +2215,7 @@ class PokeBattle_AI
 								end
 							end
 							tempdam = pbRoughDamage(j,user,target,skill,j.baseDamage)
-							tempdam = 0 if pbCheckMoveImmunity(1,j,target,user,100)
+							tempdam = 0 if pbCheckMoveImmunity(1,j,user,target,100)   # KIF: was (j,target,user)
 							if tempdam>priodam
 								priodam=tempdam
 								priomove=j
@@ -2322,86 +2319,4 @@ class PokeBattle_AI
 
 	end
 
-end
-
-def pbBattleTypeWeakingBerry(type,moveType,target,mults)
-	return if moveType != type
-	return if Effectiveness.resistant?(target.damageState.typeMod) && moveType != :NORMAL
-	mults[:final_damage_multiplier] /= 2
-	target.damageState.berryWeakened = true
-	target.battle.pbCommonAnimation("EatBerry",target) if !$aiberrycheck
-end
-
-
-
-class PokeBattle_Battle
-
-  def pbCommandPhaseLoop(isPlayer)
-    # NOTE: Doing some things (e.g. running, throwing a Poké Ball) takes up all
-    #       your actions in a round.
-    actioned = []
-    idxBattler = -1
-    loop do
-      break if @decision!=0   # Battle ended, stop choosing actions
-      idxBattler += 1
-      break if idxBattler>=@battlers.length
-      next if !@battlers[idxBattler] || pbOwnedByPlayer?(idxBattler)!=isPlayer
-      next if @choices[idxBattler][0]!=:None    # Action is forced, can't choose one
-      next if !pbCanShowCommands?(idxBattler)   # Action is forced, can't choose one
-      if !@controlPlayer && pbOwnedByPlayer?(idxBattler)
-        # Player chooses an action
-        actioned.push(idxBattler)
-        commandsEnd = false   # Whether to cancel choosing all other actions this round
-        loop do
-          cmd = pbCommandMenu(idxBattler,actioned.length==1)
-          # If being Sky Dropped, can't do anything except use a move
-          if cmd>0 && @battlers[idxBattler].effects[PBEffects::SkyDrop]>=0
-            pbDisplay(_INTL("Sky Drop won't let {1} go!",@battlers[idxBattler].pbThis(true)))
-            next
-          end
-          case cmd
-          when 0    # Fight
-            break if pbFightMenu(idxBattler)
-          when 1    # Bag
-            if pbItemMenu(idxBattler,actioned.length==1)
-              commandsEnd = true if pbItemUsesAllActions?(@choices[idxBattler][1])
-              break
-            end
-          when 2    # Pokémon
-            if pbPartyMenu(idxBattler)   # KIF port: 6.8.2 resets the command cursor
-              @scene.setLastCommandIndex(idxBattler,0)
-              break
-            end
-          when 3    # Run
-            # NOTE: "Run" is only an available option for the first battler the
-            #       player chooses an action for in a round. Attempting to run
-            #       from battle prevents you from choosing any other actions in
-            #       that round.
-            if pbRunMenu(idxBattler)
-              commandsEnd = true
-              break
-            end
-          when 4    # Call
-            break if pbCallMenu(idxBattler)
-          when -2   # Debug
-            pbDebugMenu
-            next
-          when -1   # Go back to previous battler's action choice
-            next if actioned.length<=1
-            actioned.pop   # Forget this battler was done
-            idxBattler = actioned.last-1
-            pbCancelChoice(idxBattler+1)   # Clear the previous battler's choice
-            actioned.pop   # Forget the previous battler was done
-            break
-          end
-          pbCancelChoice(idxBattler)
-        end
-      else
-		# DemICE moved the AI decision after player decision.
-        # AI controls this battler
-        @battleAI.pbDefaultChooseEnemyCommand(idxBattler)
-      end
-      break if commandsEnd
-    end
-  end
 end

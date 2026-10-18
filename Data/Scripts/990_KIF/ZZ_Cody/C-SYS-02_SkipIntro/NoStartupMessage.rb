@@ -11,9 +11,9 @@
 #   file itself is left alone. Nothing else in it is changed.
 #   The same screen also shows "Version X is now available! Please use the
 #   game's installer..." when LATEST_GAME_RELEASE (same downloaded file) is
-#   above PIF's own version: that would send KIF players to PIF's installer,
-#   so find_newer_available_version answers nil (logged once when it would
-#   have fired). KIF gets its own updater later.
+#   above PIF's own version: that would send KIF players to PIF's installer.
+#   KIF's updater (C-SYS-06, no module) answers that check instead, so it
+#   stays hidden even with this module Off.
 #===============================================================================
 module KIF
   module SkipIntro
@@ -39,16 +39,3 @@ module KIF
 end
 
 KIF::SkipIntro.silence_startup_messages
-
-alias kif_pif_find_newer_available_version find_newer_available_version unless defined?(kif_pif_find_newer_available_version)
-def find_newer_available_version
-  newer = kif_pif_find_newer_available_version
-  if newer
-    KIF.log("PIF update prompt skipped (PIF #{newer} is out; this is KIF #{KIF::PORT_VERSION} on PIF #{Settings::GAME_VERSION_NUMBER})") if defined?(KIF.log)
-    return nil
-  end
-  return nil
-rescue => e
-  KIF.log("PIF update check failed (#{e.class}: #{e.message})") if defined?(KIF.log)
-  return nil
-end

@@ -141,6 +141,22 @@ module PokeBattle_BattleCommon
       @scene.pbHideCaptureBall(idxBattler)
       # Save the Pokémon for storage at the end of battle
       @caughtPokemon.push(pkmn)
+      if is_steal_ball && trainerBattle? && defined?(KIF::LevelCap) && KIF::LevelCap.clamp(pkmn)   # KIF: stolen Pokémon follow the level cap
+        pbDisplayPaused(_INTL("Level cap Lv. {1}: {2} is held at the cap. The extra Exp is saved for later.", KIF::LevelCap.cap, pkmn.name))
+      end
     end
+  end
+end
+
+# EBDX (660_EBDX/012_EBDX_BattleHooks.rb) wraps pbThrowPokeBall on
+# PokeBattle_Battle and took its alias of PIF's method before this file
+# loaded, so the copy above was never reached (stealing was always
+# deflected). Its alias now calls the copy above.
+KIF.guard_base("660_EBDX/012_EBDX_BattleHooks.rb", 4120792821,
+               "PokeBattle_Battle#pbThrowPokeBall (EBDX wrapper, RocketMode.rb)")
+
+class PokeBattle_Battle
+  def pbThrowPokeBall_ebdx660(*args)
+    return PokeBattle_BattleCommon.instance_method(:pbThrowPokeBall).bind_call(self, *args)
   end
 end

@@ -103,7 +103,7 @@ All options in this menu are per-save.
 - **Cap Behavior** – Smart / Lock / RC *(Smart)*. What happens at the cap.
   - Smart: experience is banked and given back when the cap rises.
   - Lock: no experience past the cap.
-  - RC: you get Rare Candies instead.
+  - RC: you get Rare Candies instead (sent to your PC when the Bag is full).
 - **ExpAll Redistribution** – slider, 0–10 *(0)*. While Exp All is active, moves 10% per step of its experience toward your lower-level Pokémon.
 - **No-EVs Mode** – Off / On *(Off)*. Pokémon have no EVs at all.
 - **Max IVs Mode** – Off / On *(Off)*. Every Pokémon has perfect IVs.
@@ -112,7 +112,7 @@ All options in this menu are per-save.
 
 ### Catching
 
-- **Rocket Mode** – Off / On / All Balls *(Off)*. Lets Rocket Balls (sold in the Kuray Shop) steal trainers' Pokémon. All Balls lets any ball do it.
+- **Rocket Mode** – Off / On / All Balls *(Off)*. Lets Rocket Balls (sold in the Kuray Shop) steal trainers' Pokémon. All Balls lets any ball do it. Stolen Pokémon follow the Level Cap like your own (one stolen above it is held at the cap; its extra Exp is saved for later).
 - **Recover Consumables** – Off / On *(Off)*. Berries, gems and other items your Pokémon use up in battle come back afterwards.
 - **Skip Caught Prompt** – Off / On *(Off)*. With a full party, a caught Pokémon goes straight to the PC with no question asked.
 - **Critical Captures** – Off / On *(On)*. Critical captures can happen with any ball, and get more likely the more Pokémon you own. Off keeps only PIF's own last-ball critical capture.
@@ -225,7 +225,7 @@ All options in this menu are per-save.
 
 ### Global
 
-- **Save Backups** – Infinite / PIF *(Infinite)*. Infinite: every save makes a backup and none are ever deleted. PIF: only the newest ones are kept (backups you named are never removed). The Save menu also gains:
+- **Save Backups** – Infinite / PIF *(Infinite)*. Infinite: every save you make keeps a backup that is never deleted; autosaves keep only their newest 10 (they were filling gigabytes on long games). PIF: only the newest ones are kept (backups you named are never removed). The Save menu also gains:
   - **Name the next backup:** gives that backup a label in the load-backup list.
   - **Open the save folder.**
 - **Debug Exclusive** – Off / On *(Off)*. On: Import/Export and other tools need Debug mode.
@@ -272,7 +272,7 @@ New features made for KIF Beta that were never part of the original KIF. They si
 ### Battles
 
 - **Move Effectiveness** – Off / On *(On, all saves)*. The Fight menu shows how well each damaging move works against the foe: a green ▲ (super effective), orange ▼ (resisted) or grey ✕ (no effect) on each move button, and "Super eff." / "Resisted" / "No effect" under the PP of the highlighted move. With several foes, the info box lists each one with its multiplier (e.g. "Gyarados x4", "Onix x0") and names too long for the box scroll like a car radio display. The button marker shows the best result. Uses the battle's real type rules (including KIF's type buffs). Abilities stay hidden until the battle reveals them: once a foe's Levitate, Flash Fire, Volt Absorb, Water Absorb, Wonder Guard (and similar) has popped up, its immunity shows as "No effect" for the rest of that battle (not against Mold Breaker). Air Balloon and Magnet Rise also show Ground moves as "No effect".
-- **Gym Leader teams** – Normal / +1 / +2 / Full *(Normal, per save)*. Gym Leaders bring extra Pokémon to every battle with them (gym, rematch or story battle). The extras have the gym's type (in Remix and Expert, the type the leader's own team uses most; randomized gym types count), are fusions about as often as the rest of the team, are about as strong as the team, are evolved as far as their level allows and join at the team's average level. Never legendaries, repeats or banned Pokémon, and the same every time for a save. On randomized saves with random trainers, the Randomizer's *Leader team size* decides instead.
+- **Gym Leader teams** – Normal / +1 / +2 / Full *(Normal, per save)*. Gym Leaders bring extra Pokémon to every battle with them (gym, rematch or story battle). The extras have the gym's type (in Remix and Expert, the type the leader's own team uses most; randomized gym types count), are fusions about as often as the rest of the team, are about as strong as the team, are evolved as far as their level allows and join at the team's average level. Never legendaries, repeats or banned Pokémon, and the same every time for a save. On randomized saves with random trainers, the Randomizer's *Leader team size* decides instead (the leaders' lines follow it even with Battles & Challenges Off).
 - **Trainers keep their teams** *(always, Battles module)*. A trainer's Pokémon are rolled on the first fight (which ability a fusion gets, shininess) and kept for every rematch, so a Ralts fusion with Synchronize still has it later. Each trainer's rolls are saved with the save file.
 - **Your Pokémon in gyms** – Normal / +1 / +2 / Full *(Normal, per save)*. Raises how many Pokémon you may pick before a Kanto Gym Leader battle (Full = your whole party). The picker still shows.
 - With either setting on, the Kanto Gym Leaders say the real numbers ("I will be using three Pokémon, and you may use two."). At six they say "my full team" / "your whole team" instead of a number.

@@ -350,9 +350,9 @@ module KIF
       "Autosave" => [
         "The game saves by itself when you heal at a Pokémon Center.",
         "No autosave."],
-      "Quicksave with S" => [
-        "S does nothing on the map.",
-        "Press S on the map to open the save screen."],
+      "Quicksave" => [
+        "{Y} does nothing on the map.",
+        "Press {Y} on the map to open the save screen."],
       "Save Backups" => [
         "Every save you make keeps a backup forever; autosaves keep their newest 10.",
         "Only the newest backups are kept, as in PIF."],

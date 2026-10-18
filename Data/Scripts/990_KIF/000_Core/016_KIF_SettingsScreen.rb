@@ -1040,9 +1040,16 @@ class KifSettingsScreen
         b.fill_rect(x - 9, y + 13, 6, 1, LINE)
       end
       rrect(b, x - 9, y + 10, x - 5, y + 14, 1, DOTC) if changed?(r)
-      text(b, x, y - 1, 330, 26, r.label, TXT, PF::ROW)
+      label = r.label
+      # a button row's name stops before its OPEN chip (long mod names ran under it)
+      if mode == :button
+        badge = r.opt.respond_to?(:kif_badge) ? r.opt.kif_badge : nil
+        chip = PF.width(PF::TINY, PF.utf8((badge ? badge[0] : _INTL("OPEN")).to_s)) + 12
+        label = PF.fit(PF::ROW, label, VAL_X1 - x - chip - 10)
+      end
+      text(b, x, y - 1, 330, 26, label, TXT, PF::ROW)
       if locked_by(r.opt)
-        lx = x + PF.width(PF::ROW, PF.utf8(r.label.to_s)) + 6
+        lx = x + PF.width(PF::ROW, PF.utf8(label.to_s)) + 6
         pill(b, lx, y + 5, _INTL("LOCKED"), LOCKC) if lx + 52 < VAL_X1 - 120 || mode == :below
       end
       vy = (mode == :below) ? y + ROW_H + 1 : y + 2

@@ -32,6 +32,7 @@
 module KIF
   module ModCatalog
     REPO       = "KIF-Mods/mods"
+    DISCORD_REPO = "cody-png/kif-discord-mods"   # mods only shared on Discord (Claude Docs/_Tools/import_mods.py)
     SOURCE_FILE = "KIF_mods_source.txt"
     CATALOGS_FILE = "KIF_mods_catalogs.txt"
     ASSET_DIRS = %w[Graphics Audio Fonts]
@@ -153,6 +154,7 @@ module KIF
     def catalogs
       s = source
       list = [s ? Catalog.new(nil, nil, "KIF-Mods", s) : Catalog.new(REPO, "main", "KIF-Mods")]
+      list << Catalog.new(DISCORD_REPO, "main", "Discord Mods") unless s   # a local test source stays alone
       file = File.join(root, CATALOGS_FILE)
       if File.file?(file)
         File.read(file).to_s.force_encoding("UTF-8").split(/\r?\n/).each do |l|

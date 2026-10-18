@@ -16,12 +16,6 @@ module KIF
       attr_accessor :dialog_ctx
     end
 
-    def self.utf8(s)
-      return s if s.encoding == Encoding::UTF_8
-      u = s.dup.force_encoding(Encoding::UTF_8)
-      return u.valid_encoding? ? u : s
-    end
-
     def self.word(n)
       return NUMBER_WORDS[n] || n.to_s
     end
@@ -169,7 +163,7 @@ module KIF
     def self.rewrite_line(text, info)
       return nil unless info && text.is_a?(String)
       # Map texts load as raw bytes (RPG Maker data); read them as UTF-8
-      text = KIF::LeaderTeams.utf8(text)
+      text = KIF::Rand.utf8(text)
       # Show Text adds "\1" (wait) when another message follows; kept as is
       tail = text[/\x01*\z/]
       flat = text.sub(/\x01+\z/, "").gsub(/\s+/, " ").strip

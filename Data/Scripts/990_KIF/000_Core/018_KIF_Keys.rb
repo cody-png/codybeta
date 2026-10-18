@@ -73,7 +73,8 @@ module KIF
     def defaults
       return @defaults ||= {
         Input::USE => "C", Input::BACK => "X", Input::ACTION => "Z",
-        Input::SPECIAL => "D", Input::JUMPUP => "Q", Input::JUMPDOWN => "W"
+        Input::SPECIAL => "D", Input::JUMPUP => "Q", Input::JUMPDOWN => "W",
+        Input::Y => "S"
       }
     end
 
@@ -89,7 +90,7 @@ module KIF
     # "{USE}", "{ACTION}"... in a text -> the keys (for descriptions written
     # once)
     def fill(text)
-      return text.to_s.gsub(/\{(USE|BACK|ACTION|SPECIAL|JUMPUP|JUMPDOWN)\}/) { name(Input.const_get($1)) }
+      return text.to_s.gsub(/\{(USE|BACK|ACTION|SPECIAL|JUMPUP|JUMPDOWN|Y)\}/) { name(Input.const_get($1)) }
     end
 
     # the mkxp-z symbols (for Input.triggerex?) of the keys bound to button

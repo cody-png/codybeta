@@ -463,6 +463,9 @@ class KifSettingsScreen
 
   # start: a section id to open on (e.g. :modules)
   def initialize(inloadscreen = false, start = nil)
+    # the trainer mode when the screen opened (rebuild makes a new PIF scene
+    # after every change, so its own @current_game_mode is already the new one)
+    @mode0 = (getTrainersDataMode rescue nil) if defined?(getTrainersDataMode)
     @inloadscreen = inloadscreen
     @sections = KIF::SettingsScreen::SECTIONS.map { |id, label, col, _g| [id, label, col] }
     @section = 0
@@ -687,7 +690,7 @@ class KifSettingsScreen
     if $Trainer && $Trainer.respond_to?(:lowest_difficulty) && $Trainer.selected_difficulty < $Trainer.lowest_difficulty
       $Trainer.lowest_difficulty = $Trainer.selected_difficulty
     end
-    mode = @root && @root.instance_variable_get(:@current_game_mode)
+    mode = @mode0
     if mode && defined?(getTrainersDataMode) && getTrainersDataMode != mode
       pbMessage(_INTL("The game was mode changed - Reshuffling trainers."))
       Kernel.pbShuffleTrainers

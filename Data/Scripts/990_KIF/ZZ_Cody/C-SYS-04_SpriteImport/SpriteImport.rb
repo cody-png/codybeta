@@ -526,6 +526,7 @@ module KIF
       raw = bmp.raw_data
       return unless raw && raw.length == bmp.width * bmp.height * 4
       mkdir_p(DISK_CACHE_DIR) unless File.directory?(DISK_CACHE_DIR)
+      @disk_trimmed ||= (KIF.trim_cache_dir(DISK_CACHE_DIR, 20_000); true)   # ~150 MB
       cp = disk_cache_path(path)
       tmp = cp + ".tmp"
       File.binwrite(tmp, "KBM1" + [stamp[0], stamp[1], bmp.width, bmp.height].pack("NNNN") + Zlib::Deflate.deflate(raw, Zlib::BEST_SPEED))

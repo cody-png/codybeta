@@ -133,6 +133,7 @@ module KIF
         vals = SaveData.instance_variable_get(:@values) || []
         vals.each { |v| v.mark_as_unloaded if v.load_in_bootup? }
         SaveData.load_bootup_values(data)
+        KIF::Modules.migrate_old_save if defined?(KIF::Modules)
         KIF.log("Save folder: boot values read from #{newest}")
       rescue => e
         KIF.log("Save folder: boot values not reloaded (#{e.class}: #{e.message})")

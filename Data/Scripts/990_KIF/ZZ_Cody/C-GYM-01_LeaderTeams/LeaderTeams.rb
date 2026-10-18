@@ -69,6 +69,7 @@ module KIF
 
     def self.cody_setting
       return 0 unless $PokemonSystem && $PokemonSystem.respond_to?(:cody_leader_teams)
+      return 0 unless KIF::Modules.active?(:battles)   # this folder also runs for the Randomizer
       return $PokemonSystem.cody_leader_teams.to_i
     end
 
@@ -79,6 +80,7 @@ module KIF
 
     def self.player_max(max)
       s = ($PokemonSystem.cody_gym_party.to_i rescue 0)
+      s = 0 unless KIF::Modules.active?(:battles)
       return max if s <= 0
       return 6 if s >= 3
       return [max + s, 6].min

@@ -755,8 +755,7 @@ module KIF
         found = Dir[File.join(folder, "**", "*.rb")].sort
         # the same script dropped loose into Mods/ by hand is already loaded
         # (loading it twice makes its aliases recurse)
-        root = defined?(KIF::Mods) && KIF::Mods.respond_to?(:loaded_root) ? KIF::Mods.loaded_root : []
-        found = found.reject { |f| root.include?(File.basename(f)) }
+        found = found.reject { |f| defined?(KIF::Mods) && KIF::Mods.respond_to?(:loose_copy?) && KIF::Mods.loose_copy?(f) }
         next if found.empty?
         found.each do |f|
           begin

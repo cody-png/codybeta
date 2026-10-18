@@ -8,7 +8,10 @@
 # backups.
 #
 # Others > "Save Backups" (all saves):
-#   Infinite (default) – backups are never deleted (KIF)
+#   Infinite (default) – backups of the saves you make are never deleted
+#                        (KIF); autosaves (PIF's, every heal / N steps) keep
+#                        their newest 10 as "<slot>_<date>_autosave", or a
+#                        long game filled gigabytes (2026-10-18)
 #   PIF                – 6.8.2's limit (Settings::SAVEFILE_NB_BACKUPS)
 # Save menu, either way (KIF): "Name the next backup" – type a name, then
 # save; a copy of that save is kept as a backup under the name – and
@@ -24,15 +27,17 @@ KIF::Options.add(:others, :global) {
   EnumOption.new(_INTL("Save Backups"), [_INTL("Infinite"), _INTL("PIF")],
                  proc { $PokemonSystem.savebackups },
                  proc { |value| $PokemonSystem.savebackups = value },
-                 [_INTL("Every save keeps a backup; none are deleted"),
+                 [_INTL("Every save you make keeps a backup; autosaves keep their newest ones"),
                   _INTL("Only the newest backups are kept (PIF)")])
 }
 
 module KIF
   module SaveBackups
+    AUTO = "autosave"
     @next_name = nil
+    @autosaving = false
     class << self
-      attr_accessor :next_name
+      attr_accessor :next_name, :autosaving
     end
 
     def self.infinite?
@@ -58,10 +63,11 @@ module KIF
       KIF.log("Save backup failed: #{e.message}")
     end
 
-    # oldest unnamed backups beyond Settings::SAVEFILE_NB_BACKUPS
-    def self.trim(save_path, slot)
+    # oldest unnamed (or autosave) backups beyond Settings::SAVEFILE_NB_BACKUPS
+    def self.trim(save_path, slot, auto = false)
       dir = slot_dir(save_path, slot)
-      plain = Dir.children(dir).select { |c| c =~ /\A#{Regexp.escape(slot.to_s)}_\d{14}\.rxdata\z/ }.sort
+      tail = auto ? "_#{AUTO}" : ""
+      plain = Dir.children(dir).select { |c| c =~ /\A#{Regexp.escape(slot.to_s)}_\d{14}#{tail}\.rxdata\z/ }.sort
       plain[0...[plain.length - Settings::SAVEFILE_NB_BACKUPS, 0].max].each { |c| File.delete(File.join(dir, c)) }
     rescue => e
       KIF.log("Save backup clean-up failed: #{e.message}")
@@ -91,8 +97,9 @@ module Game
     # PIF: 6.8.2's limit, but named backups are never trimmed (6.8.2 deleted
     # any *.rxdata in the folder)
     def backup_savefile(save_path, slot)
-      KIF::SaveBackups.copy(save_path, slot)
-      KIF::SaveBackups.trim(save_path, slot) unless KIF::SaveBackups.infinite?
+      auto = KIF::SaveBackups.autosaving
+      KIF::SaveBackups.copy(save_path, slot, auto ? KIF::SaveBackups::AUTO : nil)
+      KIF::SaveBackups.trim(save_path, slot, auto) if auto || !KIF::SaveBackups.infinite?
     end
 
     # A named backup is a copy of the save just written (KIF)
@@ -177,5 +184,18 @@ class PokemonSaveScreen
     end
     @scene.pbEndScreen
     return ret
+  end
+end
+
+# PIF's autosave (Kernel.tryAutosave -> Kernel.Autosave -> Game.save) is
+# told apart from saves the player makes
+class << Kernel
+  alias kif_bk_Autosave Autosave unless method_defined?(:kif_bk_Autosave)
+
+  def Autosave(*args)
+    KIF::SaveBackups.autosaving = true
+    return kif_bk_Autosave(*args)
+  ensure
+    KIF::SaveBackups.autosaving = false
   end
 end

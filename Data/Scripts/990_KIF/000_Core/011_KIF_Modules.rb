@@ -155,8 +155,9 @@ module KIF
       return true if id.nil?
       if id.is_a?(String)
         return false if KIF::Features.replaced?(id)
-        id = KIF::Features.module_of(id)
-        return true if id.nil?
+        ids = KIF::Features.modules_of(id)   # a folder listed in two modules runs while either is on
+        return true if ids.empty?
+        return ids.any? { |m| state(m) != OFF }
       end
       return state(id) != OFF
     end
@@ -165,8 +166,9 @@ module KIF
       return true if id.nil?
       if id.is_a?(String)
         return false if KIF::Features.replaced?(id)
-        id = KIF::Features.module_of(id)
-        return true if id.nil?
+        ids = KIF::Features.modules_of(id)   # a folder listed in two modules runs while either is on
+        return true if ids.empty?
+        return ids.any? { |m| state(m) == ON }
       end
       return state(id) == ON
     end
@@ -325,6 +327,13 @@ module KIF
       return @module_of[key] = found
     end
 
+    # every module a feature folder is listed in (usually one)
+    def self.modules_of(key)
+      @modules_of ||= {}
+      return @modules_of[key] ||= KIF::Modules::MODULES.select { |_id, (_n, _d, prefixes)|
+        prefixes.any? { |pre| key.start_with?("#{pre}_") } }.keys
+    end
+
     # the feature a source file belongs to ("F-BATTLE-08_LevelCaps"), or nil
     def self.key_for_file(path)
       return nil if path.nil?
@@ -457,15 +466,23 @@ module Game
     alias kif_modules_set_up_system set_up_system unless method_defined?(:kif_modules_set_up_system)
     def set_up_system
       kif_modules_set_up_system
-      begin
-        if $PokemonSystem && !$PokemonSystem.instance_variable_defined?(:@kif_modules) && SaveData.exists?
-          KIF::Modules.all_on!
-          KIF.log("Modules: save from before Modules - every module turned On")
-        end
-        KIF::Modules.inherit_split_states
-      rescue => e
-        KIF.log("Modules: migration failed (#{e.class}: #{e.message})")
+      KIF::Modules.migrate_old_save
+    end
+  end
+end
+
+module KIF
+  module Modules
+    # also run when saves copied from old KIF are read at first launch
+    # (C-SYS-05), so those players aren't asked how to play
+    def self.migrate_old_save
+      if $PokemonSystem && !$PokemonSystem.instance_variable_defined?(:@kif_modules) && SaveData.exists?
+        all_on!
+        KIF.log("Modules: save from before Modules - every module turned On")
       end
+      inherit_split_states
+    rescue => e
+      KIF.log("Modules: migration failed (#{e.class}: #{e.message})")
     end
   end
 end
@@ -542,7 +559,10 @@ module Game
     alias kif_modules_load load unless method_defined?(:kif_modules_load)
     def load(*args, &blk)
       KIF::Modules.poll
-      kif_modules_load(*args, &blk)
+      ret = kif_modules_load(*args, &blk)
+      # a mod's locked stat rules (Max IVs, No EVs...) apply to stats saved without them
+      KIF.recalc_all_stats if defined?(KIF::Locks) && KIF::Locks.any?
+      ret
     end
   end
 end

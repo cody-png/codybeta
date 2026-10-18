@@ -78,8 +78,18 @@ module KIF
 
     def self.applies_to?(pkmn)
       return false unless pkmn && !pkmn.egg? && !pkmn.shadowPokemon?
+      return true if stolen?(pkmn)
       return pkmn.kif_player_owned? if pkmn.respond_to?(:kif_player_owned?)
       return $Trainer && pkmn.owner && pkmn.owner.id == $Trainer.id
+    end
+
+    # Stolen in Rocket Mode: the trainer stays OT (as in KIF), but the cap
+    # still counts, or stealing would skip it. Only the player's own Pokémon
+    # are ever asked about here; a caught or gift Pokémon has the player as
+    # OT and a traded one has obtain_method 2.
+    def self.stolen?(pkmn)
+      return false unless $Trainer && pkmn.owner && pkmn.owner.id != $Trainer.id
+      return pkmn.obtain_method.to_i == 0 && !(pkmn.respond_to?(:imported?) && pkmn.imported?)
     end
 
     def self.cap_for(pkmn)
@@ -263,6 +273,18 @@ class PokeBattle_Battle
       break unless $PokemonBag.pbCanStore?(:RARECANDY, 1)
       $PokemonBag.pbStoreItem(:RARECANDY, 1)
       given += 1
+    end
+    # the Exp for these levels is already gone: candies the Bag can't hold
+    # go to the PC's item storage instead of being lost
+    left = candies - given
+    if left > 0 && $PokemonGlobal
+      $PokemonGlobal.pcItemStorage ||= PCItemStorage.new
+      stored = $PokemonGlobal.pcItemStorage.pbStoreItem(:RARECANDY, left) rescue false
+      if stored
+        pbDisplayPaused(_INTL("Your Bag is full: {1} Rare Candies were sent to your PC.", left))
+      else
+        KIF.log("Level cap: #{left} Rare Candies couldn't be stored anywhere")
+      end
     end
     return if given == 0
     if given == 1

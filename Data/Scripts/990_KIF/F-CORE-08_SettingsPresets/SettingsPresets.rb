@@ -84,6 +84,7 @@ module KIF
         n += 1
       end
       KIF.sync_debug rescue nil
+      KIF.recalc_all_stats   # Max IVs, No EVs and the fusion stat rules, as the menu does
       KIF.log("Settings preset #{i + 1} loaded: #{n} settings")
       return n
     end

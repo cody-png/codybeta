@@ -354,7 +354,7 @@ module KIF
         "S does nothing on the map.",
         "Press S on the map to open the save screen."],
       "Save Backups" => [
-        "Every save keeps a backup; none are deleted.",
+        "Every save you make keeps a backup forever; autosaves keep their newest 10.",
         "Only the newest backups are kept, as in PIF."],
       "Hatch to PC Prompt" => [
         "Hatched Pokémon stay in your party.",

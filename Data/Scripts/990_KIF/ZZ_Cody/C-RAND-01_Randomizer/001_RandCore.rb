@@ -262,6 +262,7 @@ module KIF
       ensure
         @seeded -= 1
         memo_clear
+        @lite = {} if @seeded == 0   # a shuffle fills it with up to 60k fusions; normal play refills only what it needs
         srand(Random.new_seed)
       end
     end
@@ -555,8 +556,11 @@ module KIF
     #---------------------------------------------------------------------------
     # Route randomization belongs to a save
     #---------------------------------------------------------------------------
+    # bans and the Pokémon data feed the route picks too: two saves on one seed
+    # with different bans must not share Data/encounters_randomized.dat
     def self.route_signature
-      return [seed, get(:wild_bst), get(:wild_legend), get(:wild_custom), get(:fuse_all)].join("|")
+      species = data[:species] ? Zlib.crc32(Marshal.dump(data[:species])) : 0
+      return [seed, get(:wild_bst), get(:wild_legend), get(:wild_custom), get(:fuse_all), bans_code, species].join("|")
     end
 
     def self.file_route_signature

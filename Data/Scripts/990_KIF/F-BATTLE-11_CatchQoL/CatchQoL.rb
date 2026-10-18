@@ -62,7 +62,9 @@ class PokeBattle_Battler
   alias kif_pbConsumeItem pbConsumeItem unless method_defined?(:kif_pbConsumeItem)
 
   def pbConsumeItem(recoverable = true, symbiosis = true, belch = true)
-    if recoverable && @item_id && $PokemonSystem.recover_consumables == 1 &&
+    # only the item it started with: pbRemoveItem takes that copy back from the
+    # Bag at the next restock; a stolen or picked-up berry would be a free item
+    if recoverable && @item_id && @item_id == self.initialItem && $PokemonSystem.recover_consumables == 1 &&
        pbOwnedByPlayerSerious? && !(defined?(KIF::SelfBattle) && KIF::SelfBattle.active) &&
        $PokemonBag.pbCanStore?(@item_id, 1)   # not a partner's item, not a Self-Battle copy
       $PokemonBag.pbStoreItem(@item_id, 1)

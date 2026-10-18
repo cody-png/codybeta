@@ -57,8 +57,10 @@ module KIF
     #---------------------------------------------------------------------------
     module_function
 
+    # the folder the game runs in: Data, Graphics and Mods live here, also in
+    # a "Game Files" layout (only Logs / Import Sprites sit next to the .exe)
     def root
-      return defined?(KIF::Paths) ? KIF::Paths.root : Dir.pwd
+      return Dir.pwd
     end
 
     def stage_root
@@ -752,6 +754,10 @@ module KIF
             restart_after_apply(v)
           elsif cmd == 0
             File.delete(File.join(dir, "failed.txt")) rescue nil
+            # written again: the old script waits for the game that wrote it,
+            # whose process id may now belong to another program
+            exe = Win.exe_path || File.join(root, "InfiniteFusion.exe")
+            File.open(File.join(dir, "apply.cmd"), "wb") { |f| f.write(apply_script(dir, v, Process.pid, exe)) }
             if start_apply(dir)
               (KIF::SessionLog.finish rescue nil) if defined?(KIF::SessionLog)
               Kernel.exit!(0) rescue exit
@@ -786,10 +792,11 @@ KIF::Options.add(:others, :global) {
                    _INTL("Looks for a newer KIF Beta now"))
 }
 
-# The load screen's version check (PIF's spot, hidden by C-SYS-02)
-alias kif_upd_find_newer_available_version find_newer_available_version unless defined?(kif_upd_find_newer_available_version)
+# The load screen's version check (PIF's spot). KIF's own check runs here
+# and PIF's is never asked: it would tell KIF players to use PIF's installer
+# whenever PIF releases a newer version.
 def find_newer_available_version
   KIF::Updater.after_update
   KIF::Updater.check(false)
-  return kif_upd_find_newer_available_version
+  return nil
 end

@@ -1,2 +1,2 @@
-KIF Beta 0.21.57
-- Randomizer: turning it off (or loading a save without it) now always puts every Pokémon's data back; one change made right after the game loaded its data could be kept by mistake.
+KIF Beta 0.21.58
+- Battle AI: a mod that changes Filter or Solid Rock now changes how both AIs (PIF and Powerful AI) judge damage too. Without such a mod nothing changes.

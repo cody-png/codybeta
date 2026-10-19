@@ -85,7 +85,8 @@ module KIF
     # Sources: every item that can change. Targets: the same minus bans.
     def self.item_sources(tms)
       @sources_memo ||= {}
-      return @sources_memo[tms] ||= all_items.select { |i| tms ? tm_ok?(i) : (!i.is_machine? && itemCanBeRandomized(i)) }
+      # the same rule both ways: a story item (Cell Battery...) is never a result either
+      return @sources_memo[tms] ||= all_items.select { |i| tms ? tm_ok?(i) : (!i.is_machine? && item_randomizable?(i)) }
     end
 
     def self.item_targets(tms, category = nil)

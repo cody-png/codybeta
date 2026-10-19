@@ -119,6 +119,9 @@ module KIF
       list.each do |entry, buy, sell, dream|
         id = resolve(entry)
         next unless id
+        # a TM (or other important item) the player already has isn't sold
+        # again, as in PIF's marts (pbPokemonMart, which this shop skips)
+        next if $PokemonBag && GameData::Item.get(id).is_important? && $PokemonBag.pbHasItem?(id)
         stock << id unless stock.include?(id)
         if dream && free?
           @prices[id] = [0, 0]

@@ -145,7 +145,8 @@ def pbForceDevo(pokemon, scene = nil)
   return nil if evolution == :cancel
   return false if evolution.nil? || evolution == pokemon.species
   old_species = pokemon.species
-  evo = PokemonEvolutionScene.new
+  # PIF's own scene even with EBDX battles on: EBDX's has no "reversing" mode
+  evo = PokemonEvolutionScene.respond_to?(:ebdx_original_new) ? PokemonEvolutionScene.ebdx_original_new : PokemonEvolutionScene.new
   evo.pbStartScreen(pokemon, evolution)
   evo.pbEvolution(false, true)   # like PIF's DNA Reverser: can't be cancelled, no "evolved" after-effects
   evo.pbEndScreen

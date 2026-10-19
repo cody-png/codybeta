@@ -160,7 +160,7 @@ module KIF
 
     # Does this Pokémon count for what the event asks?
     def self.request_accepts?(pkmn, from, to, able)
-      return false if pkmn.nil?
+      return false if pkmn.nil? || (pkmn.egg? rescue false)   # as the pbHasSpecies? check: never an Egg
       proxy = KifSpeciesProxy.new(pkmn, from)
       return able.call(proxy) if to == :any
       sp = (pkmn.species rescue nil)

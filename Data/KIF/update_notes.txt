@@ -1,7 +1,2 @@
-KIF Beta 0.21.56
-- Animated sprites now move in battle. Outside battle they still show their first frame.
-- Quicksave and other key hints now show the key you actually set in the controls, not a fixed letter (the setting is now just called "Quicksave").
-- Tutor.net and the randomizer's spoiler log name your real keys too.
-- The Mod Browser also lists mods that were only shared on Discord (the "Discord Mods" catalog).
-- After an update the game now really closes, so the update window finishes and starts the game by itself (it used to wait until you closed it). This works from the next update on.
-- Long mod names in Settings no longer run under the OPEN button; they end in "...".
+KIF Beta 0.21.57
+- Randomizer: turning it off (or loading a save without it) now always puts every Pokémon's data back; one change made right after the game loaded its data could be kept by mistake.

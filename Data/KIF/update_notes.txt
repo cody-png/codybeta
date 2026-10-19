@@ -1,4 +1,6 @@
-KIF Beta 0.21.65
-- Battle AI (Powerful AI): a trainer carrying Dire Hit and another X item no longer stops the battle with an error.
-- Level caps: Exp from the Day Care or from unfusing that goes past the cap is now saved for later, like battle Exp.
-- In double and triple battles the PP text turns yellow, orange and red again as PP runs low.
+KIF Beta 0.21.66
+- Dominant Fusion Types work with the Randomizer's types: a species' dominant type is whatever type it has now in that place (Bulbasaur randomized to Ice makes Ice fusions).
+- Shiny Trainer Pokemon: "Disabled" is now called "Normal": trainer Pokemon use the same shiny odds as your Wild Shiny Odds slider.
+- Berserker: a foe that just switched in waits its turns before its first boost.
+- "Skip this version" and the Updates setting stick even if you quit without saving.
+- The Endgame Challenge ends when Battles & Challenges is switched Off (talking to the Fighting Arena leaders gave an error).

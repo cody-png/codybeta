@@ -536,6 +536,7 @@ module KIF
       load_dir(File.join(".", FOLDER))
       KIF::ModCompat.after_mods_loaded if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:after_mods_loaded)
       KIF::AbilityText.install if defined?(KIF::AbilityText)   # outside mods' own ability-text aliases
+      KIF::MoveText.install if defined?(KIF::MoveText)
     rescue => e
       KIF.log("Mods folder failed: #{e.message}")
     end

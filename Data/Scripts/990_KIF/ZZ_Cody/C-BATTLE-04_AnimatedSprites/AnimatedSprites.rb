@@ -37,6 +37,22 @@ module KIF
       bmp.dispose
       return frames
     end
+
+    # the hat as PIF's add_hat_to_bitmap draws it (LayeredClothes.rb), made
+    # once for every frame: add_hat_to_bitmap loads and scales the file on
+    # each call (48 frames = 48 loads per send-out)
+    def self.draw_hat(frames, pkmn, scale)
+      file = getTrainerSpriteHatFilename(pkmn.hat)
+      return unless pbResolveBitmap(file)
+      s = 1.5 * scale
+      hat = AnimatedBitmap.new(file, 0)
+      hat.scale_bitmap(s)
+      hat.mirror_horizontally if pkmn.hat_mirrored_horizontal
+      hat.mirror_vertically if pkmn.hat_mirrored_vertical
+      frames.each { |f| f.blt(pkmn.hat_x * s, pkmn.hat_y * s, hat.bitmap, hat.bitmap.rect) }
+    ensure
+      hat.dispose if hat
+    end
   end
 end
 
@@ -60,7 +76,7 @@ class PokemonBattlerSprite
         self.bitmap = frames[0]
         if pkmn.respond_to?(:hat) && pkmn.hat   # the hat was drawn on the strip's first frame only
           scale = back ? Settings::BACKRPSPRITE_SCALE : Settings::FRONTSPRITE_SCALE
-          frames[1..-1].each { |f| add_hat_to_bitmap(f, pkmn.hat, pkmn.hat_x, pkmn.hat_y, scale, pkmn.hat_mirrored_horizontal, pkmn.hat_mirrored_vertical) }
+          KIF::AnimatedSprites.draw_hat(frames[1..-1], pkmn, scale)
         end
         pbSetPosition
       end

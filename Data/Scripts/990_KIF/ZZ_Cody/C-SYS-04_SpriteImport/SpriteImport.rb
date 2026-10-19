@@ -500,6 +500,10 @@ module KIF
       return nil
     end
 
+    # KBM1 files can hold a whole animation strip (cached before strips were
+    # cut to their first frame, 0.21.54); KBM2 makes them rebuild once
+    DISK_CACHE_TAG = "KBM2"
+
     def read_disk_cache(path)
       return nil unless Bitmap.method_defined?(:raw_data=)
       cp = disk_cache_path(path)
@@ -507,7 +511,7 @@ module KIF
       stamp = disk_stamp(path)
       return nil unless stamp
       data = File.binread(cp)
-      return nil if data.length < 24 || data[0, 4] != "KBM1"
+      return nil if data.length < 24 || data[0, 4] != DISK_CACHE_TAG
       size, mtime, w, h = data[4, 16].unpack("NNNN")
       return nil unless [size, mtime] == stamp && w > 0 && h > 0 && w <= 2048 && h <= 2048
       raw = Zlib::Inflate.inflate(data[20..-1])
@@ -529,7 +533,7 @@ module KIF
       @disk_trimmed ||= (KIF.trim_cache_dir(DISK_CACHE_DIR, 20_000); true)   # ~150 MB
       cp = disk_cache_path(path)
       tmp = cp + ".tmp"
-      File.binwrite(tmp, "KBM1" + [stamp[0], stamp[1], bmp.width, bmp.height].pack("NNNN") + Zlib::Deflate.deflate(raw, Zlib::BEST_SPEED))
+      File.binwrite(tmp, DISK_CACHE_TAG + [stamp[0], stamp[1], bmp.width, bmp.height].pack("NNNN") + Zlib::Deflate.deflate(raw, Zlib::BEST_SPEED))
       File.delete(cp) if File.exist?(cp)
       File.rename(tmp, cp)
     rescue StandardError, Zlib::Error => e

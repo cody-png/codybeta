@@ -37,7 +37,8 @@ module KIF
           # a feature a mod replaced: its settings go with it
           key = (KIF::Features.key_for_proc(builder) rescue nil)
           next if key && KIF::Features.replaced?(key)
-          next unless all || KIF::Modules.visible?(mod)
+          # by folder first: a folder in two modules shows while either is On
+          next unless all || KIF::Modules.visible?(key || mod)
           opt = begin
                   builder.call
                 rescue StandardError => e

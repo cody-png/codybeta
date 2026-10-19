@@ -1,2 +1,3 @@
-KIF Beta 0.21.58
-- Battle AI: a mod that changes Filter or Solid Rock now changes how both AIs (PIF and Powerful AI) judge damage too. Without such a mod nothing changes.
+KIF Beta 0.21.59
+- Mods: a mod can say which mods it loads after (mod.json "load_after"), so renaming a mod folder no longer changes the order.
+- Mods can now change how an ability's name and description are shown (Summary, battle, Battle Info). Without such a mod nothing changes.

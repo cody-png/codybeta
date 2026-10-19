@@ -291,7 +291,7 @@ module KIF
         when :pokemon then base_species.map { |sp| [sp.species, sprintf("%03d %s", sp.id_number, sp.real_name)] }
         when :moves then move_pool.map { |m| [m.id, m.real_name] }.sort_by { |x| x[1] }
         when :items then (item_sources(false) + item_sources(true)).map { |i| [i.id, i.name] }.sort_by { |x| x[1] }
-        else all_abilities.map { |a| [a, GameData::Ability.get(a).real_name] }.sort_by { |x| x[1] }
+        else all_abilities.map { |a| [a, GameData::Ability.get(a).name] }.sort_by { |x| x[1] }
       end
     end
 

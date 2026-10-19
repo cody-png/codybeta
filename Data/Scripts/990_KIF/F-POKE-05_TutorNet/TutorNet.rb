@@ -722,6 +722,11 @@ class PokemonTutorNetScreen
           end
         end  
         @scene.pbEndScene
+        # KIF: a move bought in the Pokémon's own list is free now; the main
+        # list showed its old price until Tutor.net was reopened
+        commands = []
+        realcommands = tutor_net_build_list(commands,moveDefault,movelist)
+        realcommands[cmdTurnOff = realcommands.length] = _INTL("Exit")
         @scene.pbStartScene(realcommands, $Trainer.party,commands)
       else
         if cmd < 0

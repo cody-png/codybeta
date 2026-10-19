@@ -159,6 +159,10 @@ module KIF
       return c
     end
 
+    # what each side gets from a pool too small for the battle size: half
+    # only when both sides draw from it (KIF halved it always)
+    def self.pool_share(len, both); return both ? len / 2 : len; end
+
     def self.trainer_type
       types = TRAINER_TYPES.select { |t| GameData::TrainerType.exists?(t) rescue false }
       return types.sample || $Trainer.trainer_type
@@ -168,6 +172,7 @@ module KIF
     # for your side (nil = your party). Returns the decision, or :cancel.
     def self.fight(enemies, players = nil, enemy_dir = nil, player_dir = nil)
       original = $Trainer.party
+      bag = Marshal.load(Marshal.dump($PokemonBag)) if $PokemonBag   # items used in the battle come back
       foe = enemies.map { |p| prepare(p) }.compact
       team = (players || original).map { |p| prepare(p) }.compact
       return :empty if foe.none? { |p| !p.egg? } || team.none? { |p| !p.egg? }
@@ -193,6 +198,7 @@ module KIF
         PokemonSelection.restore if $PokemonGlobal.pokemonSelectionOriginalParty
         $Trainer.party = original
         $Trainer.heal_party
+        $PokemonBag = bag if bag
         $PokemonSystem.nomoneylost = 0
         @active = false
       end
@@ -346,14 +352,15 @@ module KIF
         end
         e_n = enemy_n
         p_n = player_n
-        needing = (randteam && !share && !playerfolder) ? e_n + p_n : e_n
+        both = randteam && !share && !playerfolder   # both sides draw from this pool
+        needing = both ? e_n + p_n : e_n
         if randteam && !share && pool.length < 2
           pbPlayBuzzerSE
           screen.pbDisplay(_INTL("No Battler to Fight!"))
           break
         end
         if pool.length < needing
-          e_n = p_n = share ? pool.length : pool.length / 2
+          e_n = p_n = pool_share(pool.length, both)
           screen.pbDisplay(_INTL("Battling with only {1} Pokemon(s)", e_n))
         end
         if randteam && player_pool.length < p_n

@@ -73,6 +73,21 @@ module KIF
       return KIF.endgame_challenge_active?
     end
 
+    # The dominant-type tables name a species' own types (Bulbasaur: Grass).
+    # With the Randomizer's types they mean the type now in that slot
+    # (Bulbasaur randomized to Ice: Ice). Cody, 2026-10-19.
+    def self.rand_type(sp, t)
+      return t unless sp && defined?(KIF::Rand)
+      orig = KIF::Rand.instance_variable_get(:@orig)   # only there once the randomizer changed data
+      o = orig && orig[sp.species]
+      return t unless o
+      return sp.type1 if t == o[:@type1]
+      return sp.type2 if t == o[:@type2]
+      return t
+    rescue StandardError
+      return t
+    end
+
     # Pokémon whose stats are being calculated with the self-fusion boost
     @boosting = nil
     @boost = 1.0
@@ -164,11 +179,11 @@ module GameData
     # KIF FusedSpecies.rb:136-146 (calculate_type1 with dominant types)
     def kif_dominant_type1
       head = @head_pokemon.species
-      return :ICE if head == :DEWGONG
-      return :WATER if [:OMANYTE, :OMASTAR].include?(head)
-      return :STEEL if [:SCIZOR, :MAGNEZONE, :EMPOLEON, :FERROTHORN].include?(head)
-      return :GRASS if head == :CELEBI
-      return :GROUND if head == :GASTRODON
+      return KIF::FusionRules.rand_type(@head_pokemon, :ICE) if head == :DEWGONG
+      return KIF::FusionRules.rand_type(@head_pokemon, :WATER) if [:OMANYTE, :OMASTAR].include?(head)
+      return KIF::FusionRules.rand_type(@head_pokemon, :STEEL) if [:SCIZOR, :MAGNEZONE, :EMPOLEON, :FERROTHORN].include?(head)
+      return KIF::FusionRules.rand_type(@head_pokemon, :GRASS) if head == :CELEBI
+      return KIF::FusionRules.rand_type(@head_pokemon, :GROUND) if head == :GASTRODON
       return @head_pokemon.type2 if @head_pokemon.type1 == :NORMAL && @head_pokemon.type2 == :FLYING
       return @head_pokemon.type1
     end
@@ -177,25 +192,25 @@ module GameData
     def kif_dominant_type2
       body = @body_pokemon.species
       # Dominant types
-      return :GRASS if [:BULBASAUR, :IVYSAUR, :VENUSAUR].include?(body)
-      return :FIRE if [:CHARMANDER, :CHARMELEON, :CHARIZARD, :MOLTRES].include?(body)
-      return :WATER if [:SQUIRTLE, :WARTORTLE, :BLASTOISE, :GYARADOS].include?(body)
-      return :GHOST if [:GASTLY, :HAUNTER, :GENGAR].include?(body)
-      return :ROCK if [:GEODUDE, :GRAVELER, :GOLEM, :ONIX].include?(body)
-      return :STEEL if body == :STEELIX
-      return :BUG if body == :SCYTHER
-      return :ELECTRIC if body == :ZAPDOS
-      return :ICE if body == :ARTICUNO
-      return :DRAGON if body == :DRAGONITE
+      return KIF::FusionRules.rand_type(@body_pokemon, :GRASS) if [:BULBASAUR, :IVYSAUR, :VENUSAUR].include?(body)
+      return KIF::FusionRules.rand_type(@body_pokemon, :FIRE) if [:CHARMANDER, :CHARMELEON, :CHARIZARD, :MOLTRES].include?(body)
+      return KIF::FusionRules.rand_type(@body_pokemon, :WATER) if [:SQUIRTLE, :WARTORTLE, :BLASTOISE, :GYARADOS].include?(body)
+      return KIF::FusionRules.rand_type(@body_pokemon, :GHOST) if [:GASTLY, :HAUNTER, :GENGAR].include?(body)
+      return KIF::FusionRules.rand_type(@body_pokemon, :ROCK) if [:GEODUDE, :GRAVELER, :GOLEM, :ONIX].include?(body)
+      return KIF::FusionRules.rand_type(@body_pokemon, :STEEL) if body == :STEELIX
+      return KIF::FusionRules.rand_type(@body_pokemon, :BUG) if body == :SCYTHER
+      return KIF::FusionRules.rand_type(@body_pokemon, :ELECTRIC) if body == :ZAPDOS
+      return KIF::FusionRules.rand_type(@body_pokemon, :ICE) if body == :ARTICUNO
+      return KIF::FusionRules.rand_type(@body_pokemon, :DRAGON) if body == :DRAGONITE
       # Inverse types
-      return :WATER if body == :DEWGONG
-      return :ROCK if [:OMANYTE, :OMASTAR].include?(body)
-      return :BUG if body == :SCIZOR
-      return :ELECTRIC if body == :MAGNEZONE
-      return :WATER if body == :EMPOLEON
-      return :GRASS if body == :FERROTHORN
-      return :PSYCHIC if body == :CELEBI
-      return :WATER if body == :GASTRODON
+      return KIF::FusionRules.rand_type(@body_pokemon, :WATER) if body == :DEWGONG
+      return KIF::FusionRules.rand_type(@body_pokemon, :ROCK) if [:OMANYTE, :OMASTAR].include?(body)
+      return KIF::FusionRules.rand_type(@body_pokemon, :BUG) if body == :SCIZOR
+      return KIF::FusionRules.rand_type(@body_pokemon, :ELECTRIC) if body == :MAGNEZONE
+      return KIF::FusionRules.rand_type(@body_pokemon, :WATER) if body == :EMPOLEON
+      return KIF::FusionRules.rand_type(@body_pokemon, :GRASS) if body == :FERROTHORN
+      return KIF::FusionRules.rand_type(@body_pokemon, :PSYCHIC) if body == :CELEBI
+      return KIF::FusionRules.rand_type(@body_pokemon, :WATER) if body == :GASTRODON
       return @body_pokemon.type1 if @body_pokemon.type2 == kif_dominant_type1
       return @body_pokemon.type2
     end
@@ -315,7 +330,8 @@ class Pokemon
 
   def kif_dominant_pair
     return nil unless KIF::FusionRules.dominant?
-    return KIF_DOMINANT_TYPES[self.species]
+    pair = KIF_DOMINANT_TYPES[self.species]
+    return pair && pair.map { |t| KIF::FusionRules.rand_type(species_data, t) }
   end
 
   def type1

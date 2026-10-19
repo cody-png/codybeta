@@ -158,7 +158,12 @@ class PokeBattle_Battler
   def pbInitPokemon(pkmn, idxParty)
     kif_egc_pbInitPokemon(pkmn, idxParty)
     if KIF::Endgame.challenge_map? && !pbOwnedByPlayerSerious?
-      @moves.each { |move| move.pp *= 2 }
+      # once per battle: this runs on every send-out, and KIF doubled what
+      # was left each time (Hydro Pump 5 PP: 10, then 8 more after a switch)
+      if pkmn.instance_variable_get(:@kif_egc_pp) != @battle.object_id
+        @moves.each { |move| move.pp *= 2 }
+        pkmn.instance_variable_set(:@kif_egc_pp, @battle.object_id)   # a foe's Pokémon: never saved
+      end
     end
   end
 end
@@ -299,7 +304,7 @@ KIF::MapPatches.add(328, "Endgame: Blue") { |map|
   idx = page && page.list.index { |c| (t = mp.text_of(c)) && t.start_with?("Darn it!") }
   if idx
     idx += 1 while page.list[idx + 1] && page.list[idx + 1].code == 401
-    page.list.insert(idx + 1, *mp.commands(KIF::EndgameEvents::EMBLEM_CHECK))
+    page.list.insert(idx + 1, *mp.commands(KIF::EndgameEvents::EMBLEM_CHECK + KIF::EndgameEvents::CHAMPION_R3))
   else
     KIF.log("Endgame: champion cutscene (Map328 event 7) not found")
   end

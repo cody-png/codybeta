@@ -62,7 +62,7 @@ module KIF
         def counts
           s = ER.state
           return [0, 0] unless s && s[:in]
-          total = s[:in].length + (s[:coupled] ? 0 : (s[:out] || {}).length)
+          total = ER.moved_doors(s, !s[:coupled])
           n = keyed.length
           return [n, [total - n, 0].max]
         end

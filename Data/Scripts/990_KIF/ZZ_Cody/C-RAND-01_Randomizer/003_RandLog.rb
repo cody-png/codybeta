@@ -252,7 +252,7 @@ module KIF
       th = $PokemonGlobal.randomTrainersHash || {}
       lines = []
       seen = {}
-      getTrainersDataMode.list_all.each do |_key, tr|
+      trainer_data.list_all.each do |_key, tr|
         next if seen[tr.id]   # PIF's trainer data lists each trainer under two keys
         seen[tr.id] = true
         team = th[tr.id]

@@ -36,8 +36,8 @@ module KIF
 
     module ER
       DATA_PATH = "Data/KIF/entrances.dat"
-      RETRIES = 100      # most layouts are found in 1-3 tries (~0.2 s each)
-      RETRIES_HERE = 40  # Randomize now mid-run: if nothing works from where you stand by then, the old doors stay
+      RETRIES = 150      # most layouts are found in a few tries (~0.1-0.2 s each); Simple mode needs up to ~75
+      RETRIES_HERE = RETRIES   # Randomize now mid-run: if nothing works from where you stand by then, the old doors stay
       BADGE_PREFIX = "badge_"
       OAK_LABS = [77, 551, 552, 593, 659, 724, 740, 847]   # every variant of Oak's Lab
       NO_START = [303, 167]   # Indigo Plateau, Crimson City (nowhere to go without 8 badges)
@@ -94,6 +94,14 @@ module KIF
 
       def self.state
         return Rand.data[:ent_layout]
+      end
+
+      # doors that lead somewhere new (a shuffle can leave a door where it
+      # was; it never counts as found, so it isn't one "to go" either)
+      def self.moved_doors(s, both_ways = false)
+        n = (s[:in] || {}).count { |k, v| k != v }
+        n += (s[:out] || {}).count { |k, v| k != v } if both_ways
+        return n
       end
 
       # The layout in use, if it belongs to this data file
@@ -1199,7 +1207,7 @@ module KIF
         out << _INTL("Start: {1}", start_name) if start_name
         out << (wild_scaling? ? _INTL("Level scaling: trainers and wild Pokémon follow how far into the game their map is") :
                                 _INTL("Level scaling: trainers follow how far into the game their map is")) if scaling?
-        out << _INTL("Found so far: {1} of {2} doors", (s[:seen] || []).map(&:first).uniq.length, s[:in].length)
+        out << _INTL("Found so far: {1} of {2} doors", (s[:seen] || []).map(&:first).uniq.length, ER.moved_doors(s))
         sph = s[:spheres] || {}
         d[:doors].sort_by { |o| [sph[o[:id]] || 99, d[:names][o[:map]].to_s, o[:tiles][0][1], o[:tiles][0][0]] }.each do |o|
           next unless s[:in].key?(o[:id])

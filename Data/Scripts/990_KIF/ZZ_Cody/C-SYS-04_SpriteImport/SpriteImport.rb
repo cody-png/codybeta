@@ -893,6 +893,7 @@ module KIF
         rescue => e
           KIF.log("Sprite import: #{File.basename(held)} (#{e.class}: #{e.message})") if defined?(KIF.log)
         end
+        tick   # a whole pack can be 250,000 files: keep the window answering
       end
       import_dirs.each { |d| prune(d) }   # empty _replace folders go
       KIF.log("Sprite import: #{n} differing sprites - #{cmd == 1 ? "#{done} new ones used" : 'kept the installed ones'}") if defined?(KIF.log)

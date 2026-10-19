@@ -103,17 +103,21 @@ end
 # opening Load / Save / Rename
 module KIF
   module Presets
-    def self.slot_option(i)
-      label = name(i)
-      label += "  " + _INTL("(empty)") unless filled?(i)
+    # d: the presets file, read once for all slots (the screen rebuilds its
+    # rows on every Left / Right)
+    def self.slot_option(i, d = data)
+      full = d[:slots][i].is_a?(Hash)
+      label = d[:names][i]
+      label += "  " + _INTL("(empty)") unless full
       return ButtonOption.new(label, proc { slot_menu(i) },
-                              filled?(i) ? _INTL("Load this preset, save this save's settings over it, or rename it.")
-                                         : _INTL("Save this save's settings here, or rename the slot."))
+                              full ? _INTL("Load this preset, save this save's settings over it, or rename it.")
+                                   : _INTL("Save this save's settings here, or rename the slot."))
     end
 
     def self.slot_options
       return [] unless KIF.in_game?
-      return Array.new(SLOTS) { |i| slot_option(i) }
+      d = data
+      return Array.new(SLOTS) { |i| slot_option(i, d) }
     end
 
     def self.slot_menu(i)

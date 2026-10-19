@@ -54,11 +54,18 @@ module KIF
 
     def self.copy(save_path, slot, name = nil)
       return unless File.exist?(save_path)
-      stamp = Time.now.strftime("%Y%m%d%H%M%S")
       clean = name.to_s.gsub(/[\\\/:*?"<>|]/, "").strip
-      file = clean.empty? ? "#{slot}_#{stamp}.rxdata" : "#{slot}_#{stamp}_#{clean}.rxdata"
+      dir = slot_dir(save_path, slot)
+      t = Time.now; file = nil
+      # two saves in one second: the next free second, so neither backup is lost
+      loop do
+        stamp = t.strftime("%Y%m%d%H%M%S")
+        file = clean.empty? ? "#{slot}_#{stamp}.rxdata" : "#{slot}_#{stamp}_#{clean}.rxdata"
+        break unless File.exist?(File.join(dir, file))
+        t += 1
+      end
       # streamed copy (KIF read the whole save into memory first)
-      IO.copy_stream(save_path, File.join(slot_dir(save_path, slot), file))
+      IO.copy_stream(save_path, File.join(dir, file))
     rescue => e
       KIF.log("Save backup failed: #{e.message}")
     end

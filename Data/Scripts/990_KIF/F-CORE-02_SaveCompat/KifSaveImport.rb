@@ -127,6 +127,10 @@ module KIF
       boxes = storage.instance_variable_get(:@boxes) if storage
       if boxes.is_a?(Array)
         boxes.each do |box|
+          # the Hoenn Transfer Box is reloaded from its own shared file when
+          # opened: a Pokémon taken out here would come back (and be set aside
+          # again on every load)
+          next if defined?(StorageTransferBox) && box.is_a?(StorageTransferBox)
           list = box.instance_variable_get(:@pokemon)
           next unless list.is_a?(Array)
           list.each_with_index do |pkmn, i|
@@ -161,7 +165,9 @@ module KIF
       back = 0
       pending[:pokemon].dup.each do |pkmn|
         next unless pkmn.is_a?(Pokemon) && species_known?(pkmn)
-        list = boxes.map { |b| b.instance_variable_get(:@pokemon) }.find { |l| l.is_a?(Array) && l.index(nil) }
+        # never into the Transfer Box: its shared file replaces it when opened
+        list = boxes.reject { |b| defined?(StorageTransferBox) && b.is_a?(StorageTransferBox) }
+                    .map { |b| b.instance_variable_get(:@pokemon) }.find { |l| l.is_a?(Array) && l.index(nil) }
         break unless list
         list[list.index(nil)] = pkmn
         pending[:pokemon].delete_if { |p| p.equal?(pkmn) }
@@ -179,6 +185,9 @@ module KIF
       pending = data[:kif_pending]
       pending = {} unless pending.is_a?(Hash)
       pending[:pokemon] ||= []
+      # in the save data before any Pokémon moves into it: if a step below
+      # raises, what was already taken out of the party / boxes isn't lost
+      data[:kif_pending] = pending
       if kif_save?(data)
         MODDED_KEYS.each do |kif_key, key|
           data[key] = data[kif_key] if data[kif_key]
@@ -200,7 +209,7 @@ module KIF
       returned = return_known_pokemon(data, pending)
       moved = set_aside_unknown_pokemon(data, pending)
       pending[:notified] = false if moved > 0 || returned > 0
-      data[:kif_pending] = pending if pending.length > 1 || !pending[:pokemon].empty?
+      data.delete(:kif_pending) unless pending.length > 1 || !pending[:pokemon].empty?
       return data
     end
 

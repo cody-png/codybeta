@@ -440,7 +440,11 @@ module KIF
     #--- import ----------------------------------------------------------------
     def self.species_of(v)
       return nil if v.nil?
-      d = GameData::Species.get(v.is_a?(String) ? v.to_sym : v)
+      v = v.to_sym if v.is_a?(String)
+      # try_get: get turns an unknown id into Pikachu (the file was imported
+      # as one and used up); "a/b" fusion ids are only read by get
+      d = GameData::Species.try_get(v)
+      d = GameData::Species.get(v) if d.nil? && v.to_s.include?("/")
       return d ? d.id : nil
     rescue
       return nil
@@ -515,7 +519,7 @@ module KIF
         next unless plain_ok.call(v)
         # a number field gets a number (a hand-edited "0" would crash egg? / happiness later)
         cur = pkmn.instance_variable_get("@#{k}")
-        next if cur.is_a?(Integer) && !v.nil? && !v.is_a?(Integer)
+        next if cur.is_a?(Integer) && !v.is_a?(Integer)   # null too: egg? on a nil steps_to_hatch crashed the PC
         pkmn.instance_variable_set("@#{k}", v)
       end
       pkmn.exp = h["exp"] if h["exp"].is_a?(Integer)
@@ -539,7 +543,7 @@ module KIF
           next if KIF_KEYS.include?(k) || SKIP_EXTRA.include?("@#{k}".to_sym)
           val = object_from(v, depth)
           # a number field gets a number here too ("statusCount": "3" crashed the next turn asleep)
-          next if pkmn.instance_variable_get("@#{k}").is_a?(Integer) && !val.nil? && !val.is_a?(Integer)
+          next if pkmn.instance_variable_get("@#{k}").is_a?(Integer) && !val.is_a?(Integer)
           pkmn.instance_variable_set("@#{k}", val)
         end
       end

@@ -646,7 +646,10 @@ module KIF
          [412, 1, []],
          [0, 1, []],
          [412, 0, []],
-         [111, 0, [1, 7, 0, 2, 0]],
+         # 6.8.2 keeps a dex number in variable 7 for starters from other
+         # sets (common events 45/46); like PIF's rival code, anything but 0
+         # and 1 counts as the third starter (KIF: only 2, so no battle)
+         [111, 0, [12, "![0, 1].include?(pbGet(7))"]],
          [111,
           1,
           [12,
@@ -674,6 +677,14 @@ module KIF
        [408, 1, ["not hard league beat"]],
        [117, 1, [42]],
        [121, 1, [844, 844, 0]],
+       [0, 1, []],
+       [412, 0, []]]
+
+    # KIF Map328 Blue page 3 (switch 918 + variable 162 >= 12): beating the
+    # champion again after Mt. Silver and 12 Gym rematches unlocks Dem's hard
+    # mode (switch 849). 6.8.2's Blue has no such page, so nothing set it.
+    CHAMPION_R3 = [[111, 0, [12, "$game_switches[918] && pbGet(162) >= 12"]],
+       [121, 1, [849, 849, 0]],
        [0, 1, []],
        [412, 0, []]]
 

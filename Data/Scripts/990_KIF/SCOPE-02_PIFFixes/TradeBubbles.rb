@@ -13,16 +13,17 @@
 #===============================================================================
 module KIF
   module TradeBubbles
-    @pages = {}
+    # weak: every map load makes new page objects, so a plain Hash kept one
+    # dead entry per page seen for the whole session
+    @pages = ObjectSpace::WeakMap.new
 
     def self.trade_page?(page)
       return false unless page
-      key = page.object_id
-      return @pages[key] if @pages.has_key?(key)
+      return @pages[page] if @pages.key?(page)
       found = (page.list || []).any? do |c|
         [355, 655, 111].include?(c.code) && c.parameters.any? { |p| p.is_a?(String) && p.include?("pbStartTrade") }
       end
-      @pages[key] = found
+      @pages[page] = found
       return found
     rescue StandardError
       return false

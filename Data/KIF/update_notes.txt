@@ -1,3 +1,7 @@
-KIF Beta 0.21.63
-- Mods can now change how a move's name and description are shown, the same way as abilities. Without such a mod nothing changes.
-- Battle AI: mods can now tell the AI which moves still escape a trapping move.
+KIF Beta 0.21.64
+- Importing a Pokemon whose species the game doesn't have no longer turns it into a Pikachu; the file is kept for later.
+- An imported Pokemon with an empty number field no longer crashes the PC.
+- Loading an old KIF save no longer moves Pokemon in or out of the Hoenn Transfer Box, and Pokemon set aside are never lost if the conversion stops halfway.
+- Endgame Challenge: beating the champion again after Mt. Silver and 12 Gym rematches unlocks Dem's challenge again; hard-mode Blue battles you whichever starter you picked; foes no longer gain extra PP each time they switch back in.
+- Mods that copy one of KIF's item handlers no longer fail to load.
+- The settings search and the trade bubbles use less work and memory.

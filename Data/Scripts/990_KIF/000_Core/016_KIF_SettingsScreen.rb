@@ -542,6 +542,10 @@ class KifSettingsScreen
   def rows
     return @sub[:rows] if @sub
     if @query
+      # filtered once per query and row set: rows is asked several times a
+      # frame, and each pass built every row's description text
+      key = [@query, @rows.object_id]
+      return @query_rows if @query_key == key
       # every word typed has to be in the name or the description
       words = PF.utf8(@query).downcase.split(/\s+/)
       out = []
@@ -557,7 +561,8 @@ class KifSettingsScreen
           out.concat(rs)
         end
       end
-      return out
+      @query_key = key
+      return @query_rows = out
     end
     return @rows[section_id] || []
   end

@@ -199,7 +199,9 @@ class FightMenuDisplay
       @typeIcon.y = self.y + 6
       @cody_pp = nil
       if move.total_pp > 0
-        base, shadow = FightMenuDisplay::TEXT_BASE_COLOR, FightMenuDisplay::TEXT_SHADOW_COLOR
+        # PIF's low-PP colours, as with one foe (yellow / orange / red)
+        f = [(4.0 * move.pp / move.total_pp).ceil, 3].min
+        base, shadow = FightMenuDisplay::PP_COLORS[f * 2], FightMenuDisplay::PP_COLORS[f * 2 + 1]
         base, shadow = shadow, base if defined?(isDarkMode) && isDarkMode
         @cody_pp = [_INTL("PP: {1}/{2}", move.pp, move.total_pp), 448, 26, 2, base, shadow]
       end

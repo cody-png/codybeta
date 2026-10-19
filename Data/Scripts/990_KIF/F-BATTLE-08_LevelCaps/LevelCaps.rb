@@ -205,7 +205,8 @@ module KIF
       return unless $Trainer && $PokemonSystem
       return if $game_temp && ($game_temp.message_window_showing || $game_temp.in_menu)
       return if $game_system && $game_system.map_interpreter.running?
-      now = cap
+      # the cap and the player: a save loaded with the same cap is checked too
+      now = [cap, $Trainer.object_id]
       return if now == @last_cap
       @last_cap = now
       release_all
@@ -347,5 +348,17 @@ def unfuseCore(fused_pokemon)
   if bank > 0
     [head, body].each { |p| p.kif_banked_exp = p.kif_banked_exp.to_i + bank if p }
   end
+  # unfusing hands each part the Exp the fusion gained: past the cap it's banked
+  [head, body].each { |p| KIF::LevelCap.clamp(p) if p }
+  return ret
+end
+
+# The Day Care's Exp (one per step) knows no cap: what's past it is banked
+# when the Pokémon comes back
+alias kif_cap_pbDayCareWithdraw pbDayCareWithdraw unless defined?(kif_cap_pbDayCareWithdraw)
+def pbDayCareWithdraw(index)
+  pkmn = ($PokemonGlobal.daycare[index][0] rescue nil)
+  ret = kif_cap_pbDayCareWithdraw(index)
+  KIF::LevelCap.clamp(pkmn) if pkmn
   return ret
 end

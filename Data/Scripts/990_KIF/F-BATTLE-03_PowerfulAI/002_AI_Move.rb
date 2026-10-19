@@ -1098,7 +1098,9 @@ class PokeBattle_AI
 			# Log stat-raising items
 			if xItems[i]
 				data = xItems[i]
-				usableXItems.push([i, battler.stages[data[0]], data[1]])
+				# Dire Hit's entry is an effect, not a stat: stages[] has no such key in 6.8.2,
+				# and the nil made the sort below raise (KIF)
+				usableXItems.push([i, battler.stages[data[0]] || 0, data[1]])
 				next
 			end
 		end

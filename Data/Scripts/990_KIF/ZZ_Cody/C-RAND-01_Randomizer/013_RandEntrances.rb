@@ -1167,6 +1167,7 @@ module KIF
       def self.note(door_id, kind)
         s = state
         return unless s
+        return if (kind == :in ? s[:in] : (s[:out] || {}))[door_id] == door_id   # left in place: nothing to find
         s[:seen] ||= []
         key = [door_id, kind]
         s[:seen] << key unless s[:seen].include?(key)

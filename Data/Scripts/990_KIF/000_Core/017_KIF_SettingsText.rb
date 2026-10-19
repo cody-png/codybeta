@@ -16,7 +16,7 @@ module KIF
         "Opposing trainers' Pokémon can be shiny, at the Wild Odds.",
         "As Off, and each trainer's ace (strongest Pokémon) is always shiny.",
         "Every Pokémon of every opposing trainer is shiny.",
-        "Trainers' Pokémon are as in PIF (no extra shiny rolls)."],
+        "Trainers' Pokémon use the same shiny odds as your Wild Shiny Odds slider, as in PIF (no extra roll)."],
       "Shiny Colors" => [
         "KIF shinies only shift the hue. Fastest.",
         "KIF shinies shift the hue and swap colour channels.",

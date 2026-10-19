@@ -84,6 +84,9 @@ class PokeBattle_Battle
       battler = @battlers[idxPos]
       next if !pos || !battler || battler.pbOwnedByPlayerSerious?
       if requiredturns[mode] > 1
+        # a foe that came in this round is at turn 0, a multiple of every
+        # step: it waits its turns like the others (Cody, 2026-10-19)
+        next if battler.turnCount == 0
         next if battler.turnCount % requiredturns[mode] != 0
       end
       # Chaos (4): +2 to every stat each turn ("sharply"), so all stats hit +6

@@ -155,12 +155,23 @@ class PokeBattle_AI
     end
   end
 
-  # The target's damage ability (without Mold Breaker). Filter / Solid Rock
-  # read the hit's effectiveness, so they are worked out from typeMod.
+  # Damage multiplier of the target's weakness-reducing ability (Filter /
+  # Solid Rock) on this hit, for both AIs' damage estimates (PIF AI through
+  # kif_ai_target_damage_ability, DemICE's pbRoughDamage directly). Their
+  # handlers read the last hit's effectiveness, so it's worked out from
+  # typeMod here. A mod that changes these abilities aliases this one method
+  # and both AIs follow.
+  def kif_ai_weakness_ability_multiplier(user, target, move, type, typeMod, moldBreaker)
+    return 1.0 if moldBreaker || !target.hasActiveAbility?([:FILTER, :SOLIDROCK])
+    return Effectiveness.super_effective?(typeMod) ? 0.75 : 1.0
+  end
+
+  # The target's damage ability (without Mold Breaker). Filter / Solid Rock:
+  # kif_ai_weakness_ability_multiplier.
   def kif_ai_target_damage_ability(user, target, move, type, typeMod, mults, baseDmg)
     return if !target.abilityActive?
     if [:FILTER, :SOLIDROCK].include?(target.ability_id)
-      mults[:final_damage_multiplier] *= 0.75 if Effectiveness.super_effective?(typeMod)
+      mults[:final_damage_multiplier] *= kif_ai_weakness_ability_multiplier(user, target, move, type, typeMod, false)
     else
       BattleHandlers.triggerDamageCalcTargetAbility(target.ability, user, target, move, mults, baseDmg, type)
     end

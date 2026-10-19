@@ -648,13 +648,12 @@ class PokeBattle_AI
 				end
 			end
 		end
+		# Filter / Solid Rock: one method both AIs use, so mods can change it (KIF)
+		multipliers[:final_damage_multiplier] *= kif_ai_weakness_ability_multiplier(user, target, move, type, typeMod, moldBreaker)
 		# DemICE adding resist berries
 		if Effectiveness.super_effective?(typeMod)
 			if user.hasActiveItem?(:EXPERTBELT)
 				multipliers[:final_damage_multiplier]*=1.2
-			end
-			if target.hasActiveAbility?([:SOLIDROCK, :FILTER]) && !moldBreaker
-				multipliers[:final_damage_multiplier]*=0.75
 			end
 			if target.itemActive?
 				case target.item_id

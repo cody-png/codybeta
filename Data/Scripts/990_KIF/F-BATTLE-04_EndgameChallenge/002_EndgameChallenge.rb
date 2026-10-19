@@ -345,3 +345,14 @@ KIF::MapPatches.add(784, "Endgame: Gold") { |map|
     KIF.log("Endgame: Gold (Map784 event 5) not found")
   end
 }
+
+# "Battles & Challenges" switched Off (or a save loaded with it Off) ends the
+# challenge: without KIF's map changes the Fighting Arena's 6.8.2 hard pages
+# call createTrainer, which 6.8.2 commented out, and KIF's Dem (who ends it)
+# isn't there. The player starts it again from Dem. (Cody, 2026-10-19)
+KIF::Modules.watch(:battles) { |on|
+  if !on && $game_switches && $game_switches[KIF::Endgame::SWITCH]
+    $game_switches[KIF::Endgame::SWITCH] = false
+    KIF.log("Endgame Challenge ended: Battles & Challenges is Off")
+  end
+} if defined?(KIF::Modules)

@@ -19,7 +19,9 @@
 #     1 Ace      – same, then the ace (last Pokémon if its level >= the
 #                  highest level, else the highest-level one) is made shiny
 #     2 All      – the whole party is shiny
-#     3 Disabled – nothing is done (normal PIF behaviour)
+#     3 Normal   – nothing is done: the same odds as the Wild Shiny Odds
+#                  slider, as in PIF (named "Disabled" before 2026-10-19;
+#                  never-shiny trainers are a setting of their own)
 #   Opposing trainers only: partner trainers and the player's own Pokémon
 #   (e.g. passed into customTrainerBattle) are never touched.
 #   Shiny fusions always get head/body shiny parts so their colours change.
@@ -41,13 +43,13 @@ KIF::Options.add(:shinies, :save) {
                    }, _INTL("<x> out of 65536 | Choose the Shiny Odds"))
 }
 KIF::Options.add(:shinies, :save) {
-  EnumOption.new(_INTL("Shiny Trainer Pokemon"), [_INTL("Off"), _INTL("Ace"), _INTL("All"), _INTL("Disabled")],
+  EnumOption.new(_INTL("Shiny Trainer Pokemon"), [_INTL("Off"), _INTL("Ace"), _INTL("All"), _INTL("Normal")],
                  proc { $PokemonSystem.shiny_trainer_pkmn },
                  proc { |value| $PokemonSystem.shiny_trainer_pkmn = value },
                  [_INTL("Trainer pokemon will have their normal shiny rates"),
                   _INTL("Draws the opposing trainers ace pokemon as shiny"),
                   _INTL("All trainers pokemon in their party will be shiny"),
-                  _INTL("Trainer pokemon will never be shiny")])
+                  _INTL("Trainer Pokemon use the same shiny odds as your Wild Shiny Odds slider")])
 }
 
 module KIF

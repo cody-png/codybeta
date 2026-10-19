@@ -124,9 +124,45 @@ module KIF
       return installed_channel == "beta" ? 1 : 0
     end
 
+    # Updates (Stable / Beta / Off) and "Skip this version" are often picked
+    # on the load screen, before there's a save to write them into, so they
+    # are also kept in a small file in the save folder (Cody, 2026-10-19)
+    CHOICES_FILE = "KIF_updates.kro"
+
+    def choices_path
+      return File.join(KIF.save_dir, CHOICES_FILE)
+    end
+
+    def stored_choices
+      h = {}
+      return h unless File.file?(choices_path)
+      File.read(choices_path).split(/\r?\n/).each do |l|
+        k, v = l.split("=", 2)
+        h[k] = v.to_s if k && !k.empty?
+      end
+      return h
+    rescue StandardError
+      return {}
+    end
+
+    def store_choice(key, value)
+      h = stored_choices
+      h[key.to_s] = value.to_s
+      KIF.mkdir_p(KIF.save_dir)
+      File.open(choices_path, "wb") { |f| f.write(h.map { |k, v| "#{k}=#{v}" }.join("\r\n")) }
+    rescue StandardError => e
+      log("couldn't keep the update choice (#{e.class}: #{e.message})")
+    end
+
     def channel
+      c = stored_choices["channel"]
+      return c.to_i if c =~ /\A[0-2]\z/
       return 2 unless $PokemonSystem && $PokemonSystem.respond_to?(:kif_updates)
       return $PokemonSystem.kif_updates.to_i
+    end
+
+    def skipped_version
+      return stored_choices["skip"] || ($PokemonSystem && $PokemonSystem.kif_update_skip).to_s
     end
 
     def local_manifest
@@ -733,7 +769,7 @@ module KIF
         pbMessage(_INTL("KIF Beta {1} is the newest {2} version.", current_version, ch == 1 ? _INTL("beta") : _INTL("stable"))) if manual
         return false
       end
-      if !manual && $PokemonSystem && $PokemonSystem.kif_update_skip.to_s == v
+      if !manual && skipped_version == v
         return false
       end
       in_game = manual && $scene.is_a?(Scene_Map)
@@ -747,6 +783,7 @@ module KIF
           show_notes(base)
         when 3
           $PokemonSystem.kif_update_skip = v if $PokemonSystem
+          store_choice("skip", v)
           pbMessage(_INTL("You won't be asked about {1} again. Options > System > Check for Updates still finds it.", v))
           return false
         else
@@ -811,8 +848,8 @@ KIF::Options.define(:kif_update_skip, "", :global)
 
 KIF::Options.add(:others, :global) {
   EnumOption.new(_INTL("Updates"), [_INTL("Stable"), _INTL("Beta"), _INTL("Off")],
-                 proc { $PokemonSystem.kif_updates },
-                 proc { |value| $PokemonSystem.kif_updates = value },
+                 proc { KIF::Updater.channel },
+                 proc { |value| $PokemonSystem.kif_updates = value; KIF::Updater.store_choice("channel", value) },
                  [_INTL("At start-up, KIF checks for new releases and offers to update"),
                   _INTL("Also offers test builds (may have bugs)"),
                   _INTL("KIF never checks for updates by itself")])

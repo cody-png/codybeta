@@ -180,9 +180,10 @@ module KIF
     # tweaks, F-DATA-01, which come and go with their module).
     def self.apply_data(changes = nil)
       changes ||= (data[:species] || {})
+      orig = originals   # first: rebuilding it starts a new @written, which must be the one used below
       written = (@written ||= {})
       changed = false
-      originals.each do |s, fields|
+      orig.each do |s, fields|
         sp = GameData::Species.get(s)
         ch = changes[s] || {}
         fields.each do |f, v|

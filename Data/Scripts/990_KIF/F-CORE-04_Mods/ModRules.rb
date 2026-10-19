@@ -15,6 +15,9 @@
 #                                    (KIF::Locks, 000_Core/002)
 #   "catalog":      "owner/repo@branch"         its own mod catalog, listed
 #                                    in Browse (ModCatalog.rb)
+#   "load_after":   ["other_mod"]    load after these mods when they are
+#                                    installed (an order only, nothing is
+#                                    required; Mods.rb NativeSource#order)
 #
 # A mod whose KIF version doesn't match, that clashes with a mod that is On,
 # or that needs a mod that couldn't load, isn't loaded: Mods shows it as

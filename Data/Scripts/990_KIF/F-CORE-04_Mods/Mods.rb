@@ -357,20 +357,31 @@ module KIF
         return KIF::Mods.folder_scripts(e.path)
       end
 
-      # mod.json "dependencies" first
+      # mod.json "dependencies" and "load_after" first. load_after (2026-10-18)
+      # is only an order: a named mod that isn't installed is skipped, nothing
+      # is required. Otherwise folder-name order. A loop is logged and cut
+      # where it closes.
       def order(list)
         ids = list.map(&:id)
-        deps = {}
+        jsons = {}
         list.each do |e|
           json = File.join(e.path.to_s, "mod.json")
-          h = (e.kind == :folder && File.file?(json)) ? (KIF::Mods.read_json(json) || {}) : {}
-          d = KIF::ModRules.ids_in(h["dependencies"])
-          # dependencies name mod.json ids; match them to folders by id or name
-          deps[e.id] = list.select { |o| o != e && d.any? { |x| x == o.id || x == (KIF::Mods.read_json(File.join(o.path.to_s, "mod.json")) || {})["id"].to_s } }.map(&:id)
+          jsons[e.id] = (e.kind == :folder && File.file?(json)) ? (KIF::Mods.read_json(json) || {}) : {}
+        end
+        deps = {}
+        list.each do |e|
+          h = jsons[e.id]
+          d = KIF::ModRules.ids_in(h["dependencies"]) + KIF::ModRules.ids_in(h["load_after"])
+          # both name mod.json ids; match them to folders by id or name
+          deps[e.id] = list.select { |o| o != e && d.any? { |x| x == o.id || x == jsons[o.id]["id"].to_s } }.map(&:id)
         end
         out = []
         visit = lambda do |id, stack|
-          return if out.include?(id) || stack.include?(id)
+          return if out.include?(id)
+          if stack.include?(id)
+            KIF.log("Mods: load order loop #{(stack[stack.index(id)..-1] + [id]).join(' -> ')} (mod.json dependencies / load_after) - cut at #{id}")
+            return
+          end
           (deps[id] || []).each { |d| visit.call(d, stack + [id]) }
           out << id
         end
@@ -524,6 +535,7 @@ module KIF
       KIF::ModSettings.install(FOLDER) if defined?(KIF::ModSettings)
       load_dir(File.join(".", FOLDER))
       KIF::ModCompat.after_mods_loaded if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:after_mods_loaded)
+      KIF::AbilityText.install if defined?(KIF::AbilityText)   # outside mods' own ability-text aliases
     rescue => e
       KIF.log("Mods folder failed: #{e.message}")
     end

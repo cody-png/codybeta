@@ -285,8 +285,24 @@ module KIF
       def to_proc; method(:call).to_proc; end
     end
 
+    # A handler hash entry must stay a real Proc: PIF's HandlerHash#add /
+    # #copy refuse anything else, so a mod doing ItemHandlers.copy(:EXPCANDY,
+    # ...) failed to load. The gate rides on the proc (gate_of).
+    def self.gated_proc(g)
+      pr = proc { |*args, &blk| g.call(*args, &blk) }
+      pr.instance_variable_set(:@kif_gate, g)
+      return pr
+    end
+
+    # the GatedCallback behind a handler (a gated proc or the callback itself)
+    def self.gate_of(handler)
+      return handler if handler.is_a?(GatedCallback)
+      return handler.instance_variable_get(:@kif_gate) if handler.is_a?(Proc)
+      return nil
+    end
+
     def self.gate_callback(cb, fallback = nil)
-      return cb if cb.is_a?(GatedCallback)
+      return cb if cb.is_a?(GatedCallback) || (cb.is_a?(Proc) && cb.instance_variable_get(:@kif_gate))
       id = KIF::Features.key_for_proc(cb) || for_proc(cb)
       return id ? GatedCallback.new(id, cb, fallback) : cb
     end
@@ -530,7 +546,7 @@ module KIF
           fb = nil if fb.equal?(v)
           g = gate_callback(v, fb)
           next if g.equal?(v)
-          h[k] = g
+          h[k] = gated_proc(g)
           n += 1
         end
         ifs = obj.instance_variable_get(:@addIfs) || obj.instance_variable_get(:@add_ifs)
@@ -541,7 +557,7 @@ module KIF
               next unless v.is_a?(Proc)
               g = gate_callback(v)
               next if g.equal?(v)
-              entry[i] = g
+              entry[i] = gated_proc(g)
               n += 1
             end
           end

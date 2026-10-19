@@ -282,7 +282,7 @@ module KIF
       end
       # Same nature / gender every time too
       extras = KIF::Rand.with_seed(:leader_extras, tr_data.id.inspect, pid) {
-        picks.map { |d| make_pokemon(d, level, trainer) }
+        picks.map { |d| make_pokemon(d, level, trainer, tr_data) }
       }
       # Random held items roll like the rest of the team's (outside the seed)
       extras.each { |p| p.item = pbGetRandomHeldItem.id if $game_switches[SWITCH_RANDOM_HELD_ITEMS] }
@@ -290,9 +290,15 @@ module KIF
     end
 
     # Like the rest of a trainer's team (PIF's to_trainer IVs/EVs)
-    def self.make_pokemon(d, level, trainer)
-      sp = getSpecies(d)
-      pkmn = Pokemon.new(sp.id, level, trainer)
+    def self.make_pokemon(d, level, trainer, tr_data = nil)
+      sp = getSpecies(d).id
+      # the same species rules as the rest of the team (PIF's to_trainer):
+      # Single-Pokémon mode and Reversed mode
+      if tr_data
+        sp = tr_data.replaceSingleSpeciesModeIfApplicable(sp)
+        sp = reverseFusionSpecies(sp) if $game_switches[SWITCH_REVERSED_MODE]
+      end
+      pkmn = Pokemon.new(sp, level, trainer)
       GameData::Stat.each_main do |s|
         pkmn.iv[s.id] = [level / 2, Pokemon::IV_STAT_LIMIT].min
         pkmn.ev[s.id] = [level * 3 / 2, Pokemon::EV_LIMIT / 6].min

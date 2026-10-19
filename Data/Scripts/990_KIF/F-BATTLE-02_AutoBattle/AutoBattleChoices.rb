@@ -142,6 +142,18 @@ class PokeBattle_Battle
     @kif_shift_check = false
   end
 
+  # Exp paid inside pbEORSwitch (hazards KO a foe as it comes in) can ask
+  # about a new move: those questions are the player's, not the Shift offer.
+  # Answering them "no" looped "Give up on learning?" forever.
+  alias kif_autoch_pbGainExp pbGainExp unless method_defined?(:kif_autoch_pbGainExp)
+  def pbGainExp(*args)
+    eor = @kif_in_eor
+    @kif_in_eor = false
+    return kif_autoch_pbGainExp(*args)
+  ensure
+    @kif_in_eor = eor
+  end
+
   # The Shift-style offer is the only yes/no pbEORSwitch asks in a trainer
   # battle ("Use next Pokémon?" is wild battles only)
   def pbDisplayConfirm(msg)

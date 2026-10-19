@@ -149,15 +149,18 @@ class PokeBattle_Battle
     r = $PokemonSystem.expall_redist
     base = a / 2
     return base if r.nil? || r <= 0
-    party = pbParty(0)
+    # the player's own Pokémon only: in a partner battle pbParty(0) also holds
+    # the ally's, who never get Exp All exp (pbGainExp: eachInTeam(0, 0))
+    own = []
+    eachInTeam(0, 0) { |p, i| own << [p, i] }
     recipients = []
-    party.each_with_index do |p, i|
-      next if !p || p.egg? || !p.able?
+    own.each do |p, i|
+      next if p.egg? || !p.able?
       next if defeatedBattler.participants.include?(i) || expShare.include?(i)
       recipients << p
     end
     return base if recipients.empty? || !recipients.any? { |p| p.equal?(pkmn) }
-    highest_level = party.select { |p| p && !p.egg? }.map(&:level).max || pkmn.level
+    highest_level = own.map(&:first).reject(&:egg?).map(&:level).max || pkmn.level
     emphasis = 1 + (0.05 + r ** 1.1 / 1000.0)
     weights = recipients.map { |p| [highest_level - p.level, 0].max ** emphasis }
     sum = weights.sum

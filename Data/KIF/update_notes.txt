@@ -1,3 +1,9 @@
-KIF Beta 0.21.59
-- Mods: a mod can say which mods it loads after (mod.json "load_after"), so renaming a mod folder no longer changes the order.
-- Mods can now change how an ability's name and description are shown (Summary, battle, Battle Info). Without such a mod nothing changes.
+KIF Beta 0.21.60
+- Saves: a save that Import Old Saves put into another slot now saves to that slot (it could save over your other file). Two backups made in the same second are both kept.
+- Sprite import: a pack the game can't use, or an archive inside a pack that can't be opened, is kept and reported instead of deleted. Closing the game while a pack unpacks no longer leaves broken sprites behind. Animated sprites with a hat no longer stutter when sent out.
+- Self-Battle gives back items used in the battle, and no longer halves the foe's team when only the foe draws from the box.
+- Battle Info shows Metronome (not the move it called), and counts Fly or Outrage once.
+- Tutor.net shows the new price right after you buy a move. Evolving in EBDX battles keeps the sprite the evolution showed.
+- Randomizer: Randomize now tries much longer before giving up; the door counter can reach 0; randomizing while in the challenge lobby shuffles every trainer.
+- Battle settings that belong to two modules stay in the menu while either module is on.
+- Mods: a mod catalog with unsafe file paths can't write outside the Mods folder.

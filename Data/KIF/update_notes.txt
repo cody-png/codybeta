@@ -1,9 +1,6 @@
-KIF Beta 0.21.60
-- Saves: a save that Import Old Saves put into another slot now saves to that slot (it could save over your other file). Two backups made in the same second are both kept.
-- Sprite import: a pack the game can't use, or an archive inside a pack that can't be opened, is kept and reported instead of deleted. Closing the game while a pack unpacks no longer leaves broken sprites behind. Animated sprites with a hat no longer stutter when sent out.
-- Self-Battle gives back items used in the battle, and no longer halves the foe's team when only the foe draws from the box.
-- Battle Info shows Metronome (not the move it called), and counts Fly or Outrage once.
-- Tutor.net shows the new price right after you buy a move. Evolving in EBDX battles keeps the sprite the evolution showed.
-- Randomizer: Randomize now tries much longer before giving up; the door counter can reach 0; randomizing while in the challenge lobby shuffles every trainer.
-- Battle settings that belong to two modules stay in the menu while either module is on.
-- Mods: a mod catalog with unsafe file paths can't write outside the Mods folder.
+KIF Beta 0.21.61
+- The DNA Reverser and Devolution Spray no longer crash with Elite Battle visuals on.
+- The Kuray Shop no longer sells a TM you already have.
+- Level caps: a fusion's saved Exp is no longer given out twice when it is unfused.
+- Randomizer: NPC requests never take an Egg; story items no longer turn up in item balls; the Randomizer screen shows its last row.
+- Battle AI: a Mold Breaker Pokemon's status moves are no longer treated as bounced by Magic Bounce.

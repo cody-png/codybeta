@@ -593,20 +593,27 @@ module KifScrollText
 end
 
 module KifRandWindowMixin
+  # included (not prepended), so ModuleGate can't switch it: with the
+  # Randomizer Off, PIF's screen gets its own window back
+  def kif_rand_on?; return !defined?(KIF::Modules) || KIF::Modules.active?("C-RAND-01_Randomizer"); end
+
   def pbUpdate
+    return super unless kif_rand_on?
     super
     tb = @sprites && @sprites["textbox"]
     tb.kif_scroll_update if tb.respond_to?(:kif_scroll_update)
   end
 
   def initOptionsWindow
+    return super unless kif_rand_on?
     tb = @sprites["textbox"]
     if tb.is_a?(Window_AdvancedTextPokemon) && !tb.is_a?(KifScrollText)
       tb.extend(KifScrollText)
       tb.text = tb.text
     end
     width = Graphics.width
-    height = (Graphics.height - @sprites["title"].height - @sprites["textbox"].height) + 32
+    # without PIF's "+ 32" (SCOPE-02 OptionScreens): the last row sat under the description
+    height = Graphics.height - @sprites["title"].height - @sprites["textbox"].height
     win = KifRandOptionWindow.new(@PokemonOptions, 0, @sprites["title"].height, width, height)
     win.viewport = @viewport
     win.visible = true

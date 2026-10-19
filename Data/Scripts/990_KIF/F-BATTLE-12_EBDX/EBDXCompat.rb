@@ -131,9 +131,13 @@ if KIF::EBDX.installed?
         ret
       end
 
-      def pbEvolution(*args)
+      # PIF's scene takes (cancancel, reversing); EBDX's only cancancel, so
+      # PIF's DNA Reverser crashed with EBDX on. Reversing: no "evolved"
+      # after-effects (consumed item, Shedinja), as in PIF's scene.
+      def pbEvolution(cancancel = true, reversing = false)
+        define_singleton_method(:pbEvolutionMethodAfterEvolution) { } if reversing
         old = @pokemon.species
-        ret = super
+        ret = super(cancancel)
         evolved = (@pokemon.species != old)
         if !evolved && @pokemon.respond_to?(:pif_sprite=)
           pre = (@pokemon.preEvolved_pif_sprite rescue nil)

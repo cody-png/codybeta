@@ -25,7 +25,6 @@ class PokeBattle_AI
   # A status move aimed at a foe that the foe's ability or Substitute stops
   def kif_pif_status_move_blocked?(move, user, target, skill)
     return false if !move.statusMove? || user.index == target.index || !target.opposes?(user)
-    return true if move.canMagicCoat? && target.hasActiveAbility?(:MAGICBOUNCE)
     return true if target.effects[PBEffects::Substitute] > 0 && !move.ignoresSubstitute?(user)
     return true if Settings::MECHANICS_GENERATION >= 7 && user.hasActiveAbility?(:PRANKSTER) &&
                    target.pbHasType?(:DARK)
@@ -33,6 +32,7 @@ class PokeBattle_AI
       return true if target.pbHasType?(:GRASS) || target.hasActiveItem?(:SAFETYGOGGLES)
     end
     return false if user.hasMoldBreaker?
+    return true if move.canMagicCoat? && target.hasActiveAbility?(:MAGICBOUNCE)   # Mold Breaker ignores it (base pbSuccessCheckAgainstTarget)
     return true if move.powderMove? && target.hasActiveAbility?(:OVERCOAT)
     return true if move.soundMove? && target.hasActiveAbility?(:SOUNDPROOF)
     case pbRoughType(move, user, skill)

@@ -152,6 +152,9 @@ module KIF
       extra = pkmn.exp - limit
       return false if extra <= 0
       pkmn.kif_banked_exp = pkmn.kif_banked_exp.to_i + extra
+      # a fusion: the banked Exp leaves what its parts get when unfused too
+      # (unfusing gives each part the bank; it was counted twice)
+      pkmn.exp_gained_since_fused = [pkmn.exp_gained_since_fused.to_i - extra, 0].max if pkmn.isFusion?
       pkmn.exp = limit
       pkmn.calc_stats
       return true

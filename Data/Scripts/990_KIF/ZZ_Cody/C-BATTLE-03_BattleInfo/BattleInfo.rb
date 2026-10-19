@@ -387,9 +387,13 @@ end
 class PokeBattle_Battler
   alias kif_bi_pbUseMove pbUseMove unless method_defined?(:kif_bi_pbUseMove)
 
+  # The move chosen this turn: @lastMoveUsed would be the move Metronome,
+  # Sleep Talk, Assist... called; a multi-turn move's later turns (Fly's
+  # second, Outrage) aren't new uses.
   def pbUseMove(choice, specialUsage = false)
+    multi = usingMultiTurnAttack?
     ret = kif_bi_pbUseMove(choice, specialUsage)
-    KIF::BattleInfo.note_move(self, @lastMoveUsed) if @lastMoveUsed && !specialUsage
+    KIF::BattleInfo.note_move(self, @lastRegularMoveUsed) if @lastRegularMoveUsed && !specialUsage && !multi
     return ret
   end
 end

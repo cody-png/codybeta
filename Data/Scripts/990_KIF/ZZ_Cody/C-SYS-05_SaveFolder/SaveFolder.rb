@@ -212,6 +212,26 @@ module KIF
       ensure
         KIF::SaveFolder.screen = nil
       end
+
+      # A save copied into another slot (an import that found its slot taken,
+      # or a copy made by hand) still names its old slot, and saving or
+      # autosave would write over that other save. It belongs to the file it
+      # was loaded from. Only the loaded copy changes, never the file.
+      def load_save_file(file_path)
+        data = super
+        begin
+          slot = File.basename(file_path.to_s, ".*")
+          pl = data.is_a?(Hash) ? data[:player] : nil
+          if pl.respond_to?(:save_slot=) && pl.save_slot && pl.save_slot != slot &&
+             defined?(SaveData::MANUAL_SLOTS) && SaveData::MANUAL_SLOTS.include?(slot)
+            KIF.log("Save #{slot} still named slot #{pl.save_slot}: it saves to #{slot}")
+            pl.save_slot = slot
+          end
+        rescue StandardError => e
+          KIF.log("Save slot check failed (#{e.class}: #{e.message})")
+        end
+        return data
+      end
     end
 
     # After an import, the menu acts as if Left was pressed on the save

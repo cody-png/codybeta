@@ -90,11 +90,16 @@ if KIF::EBDX.installed?
   # takes (species, back) and crashed with "wrong number of arguments".
   # With a Pokémon first, the evolved form is drawn the way 6.8.2's own
   # evolution scene does (the chosen sprite for the new species).
+  # the evolved form's sprite as the scene showed it [species, pif sprite]:
+  # the Pokémon keeps that one (a second pick can be another random sprite)
+  class << KIF::EBDX; attr_accessor :evo_pif; end
+
   module KIF::EBDX::SpeciesBitmap
     def setPokemonBitmapSpecies(*args)
       if args[0].is_a?(Pokemon)
         pkmn, species, back = args
         pif = (BattleSpriteLoader.new.obtain_pif_sprite(species) rescue nil)
+        KIF::EBDX.evo_pif = [species, pif] if pif && !back
         if pif && !back
           # a shiny Pokémon evolves into a shiny sprite (SCOPE-02 EvolutionShiny)
           bm = (KIF::EvolutionShiny.bitmap(pkmn, species, pif) rescue nil) if defined?(KIF::EvolutionShiny)
@@ -115,10 +120,13 @@ if KIF::EBDX.installed?
   if defined?(::PokemonEvolutionSceneEBDX)
     module KIF::EBDX::EvolutionSprites
       def pbStartScreen(pokemon, newspecies, *rest)
+        KIF::EBDX.evo_pif = nil
         ret = super
         if pokemon.respond_to?(:pif_sprite=)
           pokemon.preEvolved_pif_sprite = pokemon.pif_sprite if pokemon.respond_to?(:preEvolved_pif_sprite=)
-          pokemon.pif_sprite = (BattleSpriteLoader.new.obtain_pif_sprite(newspecies) rescue pokemon.pif_sprite)
+          shown = KIF::EBDX.evo_pif
+          pokemon.pif_sprite = (shown && shown[0] == newspecies) ? shown[1] :
+                               (BattleSpriteLoader.new.obtain_pif_sprite(newspecies) rescue pokemon.pif_sprite)
         end
         ret
       end

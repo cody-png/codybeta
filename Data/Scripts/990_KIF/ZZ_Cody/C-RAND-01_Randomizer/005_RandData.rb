@@ -599,6 +599,7 @@ KIF::DataLoad.after_load_all("Randomizer Pokémon data") do
   KIF::Rand.instance_variable_set(:@orig, nil)
   KIF::Rand.instance_variable_set(:@move_pool, nil)
   KIF::Rand.instance_variable_set(:@bound, nil)
+  KIF::Rand.instance_variable_set(:@all_abilities, nil)   # a mod's abilities added by this load
   if $PokemonGlobal && $PokemonGlobal.kif_rand[:species] && (!defined?(KIF::Modules) || KIF::Modules.active?("C-RAND-01_Randomizer"))
     KIF::Rand.apply_data
   end

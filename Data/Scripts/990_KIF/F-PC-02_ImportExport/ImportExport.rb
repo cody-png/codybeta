@@ -537,7 +537,10 @@ module KIF
         h["pif_extra"].each do |k, v|
           next unless k.is_a?(String) && k =~ /\A[A-Za-z_]\w*\z/
           next if KIF_KEYS.include?(k) || SKIP_EXTRA.include?("@#{k}".to_sym)
-          pkmn.instance_variable_set("@#{k}", object_from(v, depth))
+          val = object_from(v, depth)
+          # a number field gets a number here too ("statusCount": "3" crashed the next turn asleep)
+          next if pkmn.instance_variable_get("@#{k}").is_a?(Integer) && !val.nil? && !val.is_a?(Integer)
+          pkmn.instance_variable_set("@#{k}", val)
         end
       end
       pkmn.instance_variable_set(:@imported, true)

@@ -198,7 +198,13 @@ module KIF
       return unless Dir.exist?(dir)
       Dir.children(dir).each do |c|
         path = File.join(dir, c)
-        File.directory?(path) ? remove_tree(path) : delete_file(path)
+        if File.symlink?(path)   # a link from an archive: remove the link, never what it points to
+          (File.delete(path) rescue (Dir.rmdir(path) rescue nil))
+        elsif File.directory?(path)
+          remove_tree(path)
+        else
+          delete_file(path)
+        end
         tick
       end
       Dir.rmdir(dir) rescue nil
@@ -277,11 +283,15 @@ module KIF
       t[:errors] += 1   # a sprite that couldn't be written (disk full, locked): its archive is kept
     end
 
-    # Every file under a folder (skipping our own _done / _unpacking)
+    # Every file under a folder (skipping our own _done / _unpacking, links -
+    # an archive can hold a link to a folder elsewhere on the PC - and tar
+    # output still being written, "*.part")
     def each_file(dir, top = true, &block)
       Dir.children(dir).sort.each do |c|
         path = File.join(dir, c)
+        next if File.symlink?(path)
         if File.directory?(path)
+          next if c.end_with?(".part")
           next if top && [DONE_DIR, WORK_DIR].include?(c)
           each_file(path, false, &block)
         else
@@ -313,12 +323,36 @@ module KIF
       # handle: Windows' tar into the work folder, then the moving pass
       return true if archive =~ /\.zip\z/i && Zip.extract(archive, into, direct: root)
       remove_tree(into)   # whatever the built-in reader got through before it gave up
-      mkdir_p(into)
+      # tar writes into "<work>.part", renamed when it's done: a game closed
+      # while tar ran leaves no half-written sprites to install next time
+      part = into + ".part"
+      remove_tree(part)
+      mkdir_p(part)
       begin
-        return system("tar", "-xf", archive, "-C", into) ? true : false
+        ok = system("tar", "-xf", archive, "-C", part) ? true : false
+        File.rename(part, into) if ok
+        return ok
       rescue
         return false
       end
+    end
+
+    # sprites placed (or found already there) so far this import
+    def sprites_so_far
+      t = tally
+      return t[:moved] + t[:same] + t[:eggs] + t[:skipped] + t[:conflicts].length
+    end
+
+    # Did an unpacked archive bring anything the game uses? A pack whose
+    # folders aren't known (or not sprites at all) gave nothing: it is kept
+    # and reported, not deleted.
+    def brought_sprites?(before, work, root)
+      return true if sprites_so_far > before
+      return false unless Dir.exist?(work)
+      each_file(work, false) do |f|
+        return true if ARCHIVES.include?(File.extname(f).downcase) || destination(f.sub(root, ""))
+      end
+      return false
     end
 
     def file_after(dir, name)
@@ -340,6 +374,7 @@ module KIF
       reset_tally
       import_dirs.each do |root|
         next unless Dir.exist?(root)
+        Dir.glob(File.join(root, WORK_DIR, "*.part")).each { |d| remove_tree(d) }   # tar cut short last time
         # unpack archives first (each into its own work folder; an archive
         # inside an archive gets its turn on the next pass)
         3.times do
@@ -356,7 +391,8 @@ module KIF
             status("Unpacking #{File.basename(path)}...", 0)
             work = file_after(File.join(root, WORK_DIR), File.basename(path, ".*"))
             errors = tally[:errors]
-            if unpack(path, work, root) && tally[:errors] == errors
+            before = sprites_so_far
+            if unpack(path, work, root) && tally[:errors] == errors && brought_sprites?(before, work, root)
               finish_archive(path)   # unpacked: deleted (or kept, if the player asked)
             else
               failed << path
@@ -388,6 +424,18 @@ module KIF
           each_file(work, false) { |_f| leftovers += 1 }
           # sprites that couldn't be moved stay for the next start
           if tally[:errors] == 0
+            # an archive found inside another that couldn't be unpacked goes
+            # back to the Import Sprites folder (the player is told to unpack it)
+            failed.map! do |f|
+              next f unless f.start_with?(work + "/") && File.file?(f)
+              dst = file_after(root, File.basename(f))
+              begin
+                File.rename(f, dst)
+              rescue SystemCallError
+                next f
+              end
+              dst
+            end
             remove_tree(work)
             @leftovers += leftovers
           end
@@ -500,6 +548,10 @@ module KIF
       return nil
     end
 
+    # KBM1 files can hold a whole animation strip (cached before strips were
+    # cut to their first frame, 0.21.54); KBM2 makes them rebuild once
+    DISK_CACHE_TAG = "KBM2"
+
     def read_disk_cache(path)
       return nil unless Bitmap.method_defined?(:raw_data=)
       cp = disk_cache_path(path)
@@ -507,7 +559,7 @@ module KIF
       stamp = disk_stamp(path)
       return nil unless stamp
       data = File.binread(cp)
-      return nil if data.length < 24 || data[0, 4] != "KBM1"
+      return nil if data.length < 24 || data[0, 4] != DISK_CACHE_TAG
       size, mtime, w, h = data[4, 16].unpack("NNNN")
       return nil unless [size, mtime] == stamp && w > 0 && h > 0 && w <= 2048 && h <= 2048
       raw = Zlib::Inflate.inflate(data[20..-1])
@@ -529,7 +581,7 @@ module KIF
       @disk_trimmed ||= (KIF.trim_cache_dir(DISK_CACHE_DIR, 20_000); true)   # ~150 MB
       cp = disk_cache_path(path)
       tmp = cp + ".tmp"
-      File.binwrite(tmp, "KBM1" + [stamp[0], stamp[1], bmp.width, bmp.height].pack("NNNN") + Zlib::Deflate.deflate(raw, Zlib::BEST_SPEED))
+      File.binwrite(tmp, DISK_CACHE_TAG + [stamp[0], stamp[1], bmp.width, bmp.height].pack("NNNN") + Zlib::Deflate.deflate(raw, Zlib::BEST_SPEED))
       File.delete(cp) if File.exist?(cp)
       File.rename(tmp, cp)
     rescue StandardError, Zlib::Error => e
@@ -625,13 +677,15 @@ module KIF
     module Zip
       module_function
 
+      MAX_ENTRY = 64 * 1024 * 1024
+
       # direct: the import folder the archive came from. Then each sprite goes
       # straight to where the game reads it (no copy in a work folder to move
       # afterwards); archives inside it are still written to `into`.
       def extract(archive, into, direct: nil)
         require "zlib"
         File.open(archive, "rb") do |f|
-          entries(f).each do |name, method, csize, offset|
+          entries(f).each do |name, method, csize, offset, usize|
             next if name.end_with?("/")
             safe = name.tr("\\", "/").split("/").reject { |p| p.empty? || p == "." || p == ".." }
             next if safe.empty?
@@ -645,9 +699,14 @@ module KIF
               KIF::SpriteImport.not_written += 1
               next
             end
+            # one file this big is read whole into memory here; tar writes it
+            # in pieces (a nested pack, or a broken entry)
+            return false if usize > MAX_ENTRY
             f.seek(offset)
             h = f.read(30)
-            next unless h && h[0, 4] == "PK\x03\x04".b
+            # headers not where the directory says (a self-extracting .exe
+            # zip, bytes in front): give the archive to tar, don't skip all
+            return false unless h && h[0, 4] == "PK\x03\x04".b
             nlen, xlen = h[26, 4].unpack("vv")
             f.seek(offset + 30 + nlen + xlen)
             # a packing this reader doesn't know (Deflate64, BZip2, LZMA): give the archive to tar
@@ -703,7 +762,9 @@ module KIF
         cd = f.read(cd_size)
         list = []
         pos = 0
-        count.times do
+        # every directory record, not just `count`: some zip writers wrap the
+        # count past 65,535 entries without zip64
+        while pos + 46 <= cd.bytesize
           break unless cd[pos, 4] == "PK\x01\x02".b
           method = cd[pos + 10, 2].unpack1("v")
           csize, usize = cd[pos + 20, 8].unpack("VV")
@@ -729,9 +790,10 @@ module KIF
               e += 4 + len
             end
           end
-          list << [name, method, csize, offset]
+          list << [name, method, csize, offset, usize]
           pos += 46 + nlen + xlen + clen
         end
+        raise "central directory not where the end record says" if list.empty? && count > 0   # tar takes over
         return list
       end
     end
@@ -831,6 +893,7 @@ module KIF
         rescue => e
           KIF.log("Sprite import: #{File.basename(held)} (#{e.class}: #{e.message})") if defined?(KIF.log)
         end
+        tick   # a whole pack can be 250,000 files: keep the window answering
       end
       import_dirs.each { |d| prune(d) }   # empty _replace folders go
       KIF.log("Sprite import: #{n} differing sprites - #{cmd == 1 ? "#{done} new ones used" : 'kept the installed ones'}") if defined?(KIF.log)

@@ -18,6 +18,13 @@ module KIF
     return false
   end
 
+  # A downloaded relative path that stays inside its folder: no "..", drive,
+  # backslash or leading "/" (update manifests, mod catalogs).
+  def self.safe_rel_path?(path)
+    p = path.to_s
+    return !(p.empty? || p.start_with?("/") || p =~ /\A[A-Za-z]:/ || p.include?("\\") || p.split("/").include?(".."))
+  end
+
   # mkdir -p / rm -r (no FileUtils in the game's Ruby). rm_tree never follows
   # a folder link into what it points at.
   def self.mkdir_p(dir)

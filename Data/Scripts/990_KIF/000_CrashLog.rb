@@ -15,14 +15,28 @@
 module KIF
   module CrashLog
     FILE = "KIF_errorlog.txt"
+    MAX_BYTES = 1_000_000   # past this, the file becomes KIF_errorlog_previous.txt
 
     def self.write(text)
       path = defined?(KIF::Paths) ? KIF::Paths.log(FILE) : FILE
+      rotate(path)
       File.open(path, "ab") do |f|
         f.write("\r\n=================\r\n\r\n[#{Time.now}]\r\n")
         f.write(text.to_s)
         f.write("\r\n")
       end
+    rescue
+      nil
+    end
+
+    # once a session: a log that only ever grew is moved aside
+    def self.rotate(path)
+      return if @rotated
+      @rotated = true
+      return unless File.file?(path) && File.size(path) > MAX_BYTES
+      old = path.sub(/\.txt\z/, "_previous.txt")
+      File.delete(old) if File.exist?(old)
+      File.rename(path, old)
     rescue
       nil
     end

@@ -243,7 +243,9 @@ module KIF
       text = text.to_s.dup.force_encoding("UTF-8")
       out = {}
       text.scan(/\{"path":"((?:[^"\\]|\\.)*)","mode":"\d+","type":"blob","sha":"([0-9a-f]{40})","size":(\d+)/) do |p, sha, size|
-        out[unescape(p)] = [sha, size.to_i]
+        path = unescape(p)
+        next log("skipped an unsafe file path: #{path}") unless KIF.safe_rel_path?(path)
+        out[path] = [sha, size.to_i]
       end
       if text.include?('"truncated":true')
         log("tree listing was cut short by GitHub")

@@ -413,6 +413,12 @@ module KIF
       end
     end
 
+    # the game's trainers, also while standing on an Endgame Challenge map
+    # (there getTrainersDataMode gives only the 28 challenge teams)
+    def self.trainer_data
+      return defined?(kif_egc_getTrainersDataMode) ? kif_egc_getTrainersDataMode : getTrainersDataMode
+    end
+
     def self.shuffle_trainers(customs = nil)
       customs = customs.map { |c| dex_of(c) }.select { |d| d > 0 } if customs
       customs = nil if customs && customs.empty?
@@ -425,7 +431,7 @@ module KIF
       else
         data[:theme_map] = nil
       end
-      list = getTrainersDataMode.list_all.values.uniq { |t| t.id }
+      list = trainer_data.list_all.values.uniq { |t| t.id }
       list.each_with_index do |tr, ti|
         progress(_INTL("Shuffling trainers..."), ti.to_f / list.length) if ti % 40 == 0
         olds = tr.pokemon.map { |p| dex_of(p[:species]) }

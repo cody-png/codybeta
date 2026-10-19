@@ -103,7 +103,7 @@ module KIF
         sha, size, path = l.split(" ", 3)
         next unless path && sha =~ /\A[0-9a-f]{40}\z/
         # only plain paths inside the game folder ("Audio/ME/x..mp3" is fine, a ".." part is not)
-        next if path.start_with?("/") || path =~ /\A[A-Za-z]:/ || path.include?("\\") || path.split("/").include?("..")
+        next unless KIF.safe_rel_path?(path)
         files[path] = [sha, size.to_i]
       end
       return nil if info["files"].to_i != files.length   # cut short

@@ -112,6 +112,12 @@ module KIF
       unless dead.empty?
         return _INTL("Needs {1}, which couldn't start.", dead.map { |x| blocked[x] }.uniq.join(", "))
       end
+      # a dependency that is switched Off or not installed (its scripts would
+      # call code that isn't there)
+      gone = ids_in(json["dependencies"]).reject { |x| mine.include?(x) || on.has_key?(x) || blocked.has_key?(x) }
+      unless gone.empty?
+        return _INTL("Needs {1}. Install it or switch it On.", gone.join(", "))
+      end
       return nil
     end
 

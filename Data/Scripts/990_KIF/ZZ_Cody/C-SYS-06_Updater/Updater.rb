@@ -42,6 +42,7 @@ module KIF
     PAGE       = "https://github.com/#{REPO}/releases"
     BRANCHES   = ["release", "beta-testing"]          # channel 0 Stable, 1 Beta
     MANIFEST   = "Data/KIF/update_manifest.txt"
+    STAGED_MANIFEST = "manifest.txt"   # in the update folder, beside files/
     NOTES      = "Data/KIF/update_notes.txt"
     VERSION_FILE = "Data/VERSION"
     STAGE_DIR  = "KIF Update"
@@ -516,8 +517,10 @@ module KIF
     # Moving the files in
     #---------------------------------------------------------------------------
     def apply_script(dir, version, pid, exe)
-      r = win_path(root)
-      s = win_path(dir)
+      # % starts a variable in a .cmd file: a folder named "KIF 100%" broke it
+      r = win_path(root).gsub("%", "%%")
+      s = win_path(dir).gsub("%", "%%")
+      m = win_path(MANIFEST)
       lines = []
       lines << "@echo off"
       lines << "chcp 65001 >nul"
@@ -535,9 +538,10 @@ module KIF
       lines << ":go"
       lines << "robocopy \"#{s}\\files\" \"#{r}\" /E /MOVE /R:10 /W:1 /NFL /NDL /NJH /NJS /NP >nul"
       lines << "if errorlevel 8 goto fail"
+      lines << "if exist \"#{s}\\#{STAGED_MANIFEST}\" copy /y \"#{s}\\#{STAGED_MANIFEST}\" \"#{r}\\#{m}\" >nul"
       lines << "if exist \"#{s}\\remove.txt\" for /f \"usebackq delims=\" %%f in (\"#{s}\\remove.txt\") do if exist \"#{r}\\%%f\" del /f /q \"#{r}\\%%f\""
       lines << "echo ok> \"#{s}\\done.txt\""
-      lines << "start \"\" \"#{win_path(exe)}\"" if exe
+      lines << "start \"\" \"#{win_path(exe).gsub('%', '%%')}\"" if exe
       lines << "exit /b 0"
       lines << ":fail"
       lines << "echo failed> \"#{s}\\failed.txt\""
@@ -576,6 +580,13 @@ module KIF
         end
       end
       walk.call("") if File.directory?(files)
+      man = File.join(dir, STAGED_MANIFEST)
+      if File.file?(man)
+        dest = File.join(root, MANIFEST)
+        mkdir_p(File.dirname(dest))
+        File.delete(dest) if File.exist?(dest)
+        File.rename(man, dest)
+      end
       rm_file = File.join(dir, "remove.txt")
       if File.file?(rm_file)
         File.read(rm_file).force_encoding("UTF-8").split(/\r?\n/).each do |rel|
@@ -654,9 +665,10 @@ module KIF
         pbMessage(_INTL("{1} files couldn't be downloaded. Check your connection and try again later.", result.length))
         return false
       end
-      man = staged(dir, MANIFEST)
-      mkdir_p(File.dirname(man))
-      File.open(man, "wb") { |f| f.write(body) }   # the list the plan was made from
+      # the list the plan was made from: kept beside files/ and moved in only
+      # after every file is in, so a failed move can't leave a new list over
+      # old files (the next update trusts the list)
+      File.open(File.join(dir, STAGED_MANIFEST), "wb") { |f| f.write(body) }
       File.open(File.join(dir, "remove.txt"), "wb") { |f| f.write(plan[:removals].map { |p| win_path(p) }.join("\r\n")) }
       File.open(File.join(dir, "version.txt"), "wb") { |f| f.write(version) }
       log("#{version}: #{n} files (#{size_text(plan[:bytes])}) downloaded, #{plan[:removals].length} to remove")

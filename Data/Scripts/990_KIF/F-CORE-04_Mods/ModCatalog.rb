@@ -436,13 +436,30 @@ module KIF
       return [done, failed, nil]
     end
 
+    GAME_COPY = ".kif_game"   # a game file a mod's asset replaced, kept to put back
+
+    # rel is one of the game's own files (the installed update manifest)
+    def game_file?(rel)
+      m = (updater.local_manifest rescue nil)
+      return m ? m.files.has_key?(rel) : false
+    end
+
     def move_in(item, todo, dir)
       old = record(item)
       updater.mkdir_p(folder_of(item))
+      # mod.json last: its version is what says the mod is installed, so a
+      # move that fails halfway leaves the old version and is offered again
+      todo = todo.sort_by { |rel, _, _| rel == "mod.json" ? 1 : 0 }
       todo.each do |rel, _sha, _size|
         src = updater.staged(dir, rel)
         dest = dest_for(item, rel)
         updater.mkdir_p(File.dirname(dest))
+        # a game file replaced by a mod's asset is kept, not deleted
+        kept = false
+        if asset?(rel) && File.file?(dest) && !File.file?(dest + GAME_COPY) && game_file?(rel)
+          File.rename(dest, dest + GAME_COPY)
+          kept = true
+        end
         # the old file is moved aside, not deleted, until the new one is in:
         # a rename that fails (antivirus still scanning the download) puts it back
         aside = dest + ".kif_old"
@@ -452,15 +469,23 @@ module KIF
           File.rename(src, dest)
         rescue StandardError
           File.rename(aside, dest) if File.file?(aside) && !File.file?(dest)
+          File.rename(dest + GAME_COPY, dest) if kept && !File.file?(dest)
           raise
         end
         (File.delete(aside) rescue nil) if File.file?(aside)
       end
-      # files the mod no longer has: removed when they're still as installed
+      # files the mod no longer has: removed when they're still as installed;
+      # a game file it had replaced comes back
       old.each do |rel, sha|
         next if item.files.has_key?(rel)
         p = dest_for(item, rel)
+        if File.file?(p + GAME_COPY)
+          File.delete(p) if File.file?(p)
+          File.rename(p + GAME_COPY, p)
+          next
+        end
         next unless File.file?(p)
+        next if asset?(rel) && game_file?(rel)   # never delete the game's own file
         File.delete(p) if !updater.sha_ok? || updater.git_sha(p) == sha
       end
       File.open(File.join(folder_of(item), RECORD), "wb") do |f|

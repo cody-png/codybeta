@@ -91,7 +91,9 @@ class PokeBattle_Battle
       amount = (mode == 4) ? 2 : 1
       berserkup = [:ATTACK, amount, :DEFENSE, amount, :SPECIAL_ATTACK, amount,
                    :SPECIAL_DEFENSE, amount, :SPEED, amount]
-      next if !battler.pbCanRaiseStatStage?(berserkup[0], battler, self, true)
+      # skipped only when no stat can rise (KIF checked Attack alone, with its
+      # fail message: at Attack +6 nothing rose any more and the message repeated)
+      next if berserkup.each_slice(2).none? { |st, _| battler.pbCanRaiseStatStage?(st, battler, self) }
       if amount > 1
         pbDisplay(_INTL("All stats from {1} sharply increased! [BERSERKER MODE]", battler.pbThis))
       else

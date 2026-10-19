@@ -212,10 +212,13 @@ module KIF
       return 0
     end
 
-    def self.compare(a, b)
+    # ties: old position first, in both orders (reversing a sorted list
+    # reversed the ties too)
+    def self.compare(a, b, descending = false)
       c = (a[0] <=> b[0])
       c = (a[0].to_s <=> b[0].to_s) if c.nil?
-      return (c == 0) ? (a[1] <=> b[1]) : c
+      return a[1] <=> b[1] if c == 0
+      return descending ? -c : c
     end
 
     # Sorted list of Pokémon (nil-free) or nil if cancelled
@@ -229,10 +232,9 @@ module KIF
                                     [_INTL("Normal Order"), _INTL("Reverse Order"), _INTL("Nevermind")])
       return nil if order < 0 || order > 1
       pairs = pokes.each_with_index.map { |p, i| [value(p, attr), i] }
-      pairs.sort! { |a, b| compare(a, b) }
       descending = (order == 1)
       descending = !descending if attr == :bst   # BST: Normal = highest first
-      pairs.reverse! if descending
+      pairs.sort! { |a, b| compare(a, b, descending) }
       return pairs.map { |_, i| pokes[i] }
     end
 

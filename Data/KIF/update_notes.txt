@@ -1,6 +1,10 @@
-KIF Beta 0.21.61
-- The DNA Reverser and Devolution Spray no longer crash with Elite Battle visuals on.
-- The Kuray Shop no longer sells a TM you already have.
-- Level caps: a fusion's saved Exp is no longer given out twice when it is unfused.
-- Randomizer: NPC requests never take an Egg; story items no longer turn up in item balls; the Randomizer screen shows its last row.
-- Battle AI: a Mold Breaker Pokemon's status moves are no longer treated as bounced by Magic Bounce.
+KIF Beta 0.21.62
+- Auto-Battle: the game no longer freezes asking "Give up on learning?" when entry hazards knock out a foe as it comes in.
+- Berserker keeps raising the other stats once Attack is maxed, without repeating "won't go any higher".
+- Exp All sharing no longer gives part of your share to a partner trainer's Pokemon.
+- Gym Leader extra Pokemon follow Single-Pokemon mode and Reversed mode like the rest of the team.
+- The Starter K-Egg moves up a tier 10% of the time, as intended (it was 20%).
+- PC Sort in Reverse Order keeps Pokemon with equal values in their old order.
+- Big Icons show the new picture after you pick a new main sprite in the Pokedex.
+- Mods: a mod that needs another mod that is Off or missing is shown as blocked instead of loading; a mod that replaces a game picture keeps the original and puts it back when the mod stops using it; a failed mod update is offered again.
+- Updates: a game folder with % in its name no longer breaks the update window, and a failed update can't leave old files behind.

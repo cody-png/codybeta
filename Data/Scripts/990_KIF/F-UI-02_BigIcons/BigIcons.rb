@@ -373,3 +373,15 @@ class PokemonBoxPartySprite
     @pokemonsprites.each { |s| s.visible = show if s && !s.disposed? }
   end
 end
+
+# A new main sprite picked in the Pokédex changes the picture of every
+# Pokémon of that species without one of its own; the scaled icons cached
+# under the old picture are dropped.
+class PokemonPokedexInfo_Scene
+  alias kif_bi_swap_main_sprite swap_main_sprite unless method_defined?(:kif_bi_swap_main_sprite)
+  def swap_main_sprite(*args)
+    ret = kif_bi_swap_main_sprite(*args)
+    KIF::BigIcons.clear_cache
+    return ret
+  end
+end

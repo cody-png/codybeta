@@ -198,10 +198,12 @@ module KIF
       when 22..31
         tier = effect - 22
         roll = rand(1..100)
-        if roll <= 10 && tier > 0
-          tier -= 1
-        elsif roll <= 20 && tier < 9
-          tier += 1
+        # 10% one tier lower, 10% one higher (KIF's comment). KIF let the
+        # Starter egg's "lower" 10% fall through to "higher": 20% up.
+        if roll <= 10
+          tier -= 1 if tier > 0
+        elsif roll <= 20
+          tier += 1 if tier < 9
         end
         return pick(pool(tier.to_s))
       end

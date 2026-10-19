@@ -1,4 +1,4 @@
-KIF-MANIFEST 1 version=0.21.60 channel=stable files=29568
+KIF-MANIFEST 1 version=0.21.61 channel=stable files=29568
 5d8b7ff7853a0c9ea25cef730252f32a2849ac94 3085627 Audio/BGM/Azalea Town.mp3
 c1bf8a69360590600d95f7b17970c9bbc1e317ef 2505405 Audio/BGM/BW2_Ghetsis Battle.mp3
 fc522881c06a4cb076d61a14911405c3da74338e 2722742 Audio/BGM/BW2_K_leader.mp3
@@ -3395,7 +3395,7 @@ fe767fa0b1773b41eaea0464a459b076e6609c5b 428 Data/Items.rxdata
 ef274be56fa0a395d41f9d20c4627b84d49f9e46 4878 Data/KIF/MysteryGift_KIF.txt
 a0a66659d9f44d21e1f84d80e4e5970e9df33cfa 610062 Data/KIF/entrances.dat
 ccdde561e5fc62b0b3ebd760916e6e29eb9c07f9 21721 Data/KIF/trainers_challenge.dat
-8e84fc17a026d610116d83209ded168d9cc2a740 1139 Data/KIF/update_notes.txt
+210c6398a8572d0ce534c45d61e0934a43c7b092 483 Data/KIF/update_notes.txt
 9a527fb1c545d642d4a709d95452fbabcc853867 78297 Data/Map001.rxdata
 775d19da5c3949f878e650e7bbd242a6a300dfe4 5213 Data/Map002.rxdata
 470905be3cae69dbe4a6a546f248949b09bb82b1 6159 Data/Map003.rxdata
@@ -4834,7 +4834,7 @@ a18d4dcef83035015e0ccda0be1b45e70118e324 3919 Data/Scripts/990_KIF/000_Core/018_
 fe9e8c44e5031440d107a067ca4c7ed2f734a60c 4159 Data/Scripts/990_KIF/000_Core/019_KIF_AbilityText.rb
 2fdb3f8daa175f93785c62db4551eb89b3a3bf68 4373 Data/Scripts/990_KIF/000_CrashLog.rb
 94a304270165a1f1c8bbdeee71f773931f13f68b 1653 Data/Scripts/990_KIF/000_Paths.rb
-53a2af5a9830b4514e885498688b57dd49d0c3eb 1659 Data/Scripts/990_KIF/000_README.rb
+c5b8b4ba9614729a5fd208b8236eb1a60fbbdb91 1659 Data/Scripts/990_KIF/000_README.rb
 c71dc6639c04aa6eafd1faf81e55486063e7db0e 5270 Data/Scripts/990_KIF/F-BATTLE-01_BattleFormat/BattleFormat.rb
 c3ecf0e9c15f9b0895dda3bfd3bb21623f76fcf9 4767 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattle.rb
 9de49fa7a2f541bdf128a78d0b6816069832339d 13148 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattleChoices.rb
@@ -4852,12 +4852,12 @@ f071fa4c81b66de87303748d264e7b6a57b31993 50120 Data/Scripts/990_KIF/F-BATTLE-04_
 d5a45b25f8b16ef9bbfaee6edaf661d07fdb2620 25248 Data/Scripts/990_KIF/F-BATTLE-05_ChallengeModifiers/ChallengeModifiers.rb
 5f11542206c3919678affdb8fbf6c3b1693c44c9 17980 Data/Scripts/990_KIF/F-BATTLE-06_Mechanics/Mechanics.rb
 43e3ae1a473a7316626a7ff01367f3cb6c573ff1 16373 Data/Scripts/990_KIF/F-BATTLE-07_BattleUI/BattleUI.rb
-7bf024c8f7fd703643548e004cea1fab9149af01 14045 Data/Scripts/990_KIF/F-BATTLE-08_LevelCaps/LevelCaps.rb
+0be0e534119853c2e4e93f9991d1f7049745beb4 14291 Data/Scripts/990_KIF/F-BATTLE-08_LevelCaps/LevelCaps.rb
 26d6fac81f1d85eb2310dbe32f99fcbbe97e5092 14696 Data/Scripts/990_KIF/F-BATTLE-09_ExpEvIvModes/ExpEvIvModes.rb
 26db37f1beadef1dac188140f9722ce7e2721d55 7042 Data/Scripts/990_KIF/F-BATTLE-10_RocketMode/RocketMode.rb
 9f711121079b8a931fbae7191cbf9f7681fe0503 4249 Data/Scripts/990_KIF/F-BATTLE-11_CatchQoL/CatchQoL.rb
 cc1609d908638ffdfc040a0a9753ac03808df328 4078 Data/Scripts/990_KIF/F-BATTLE-11_CatchQoL/CriticalCaptures.rb
-1f34930182e7141c0f15a237debaa06fa5856771 7954 Data/Scripts/990_KIF/F-BATTLE-12_EBDX/EBDXCompat.rb
+d426d61e1fb0d7861e9ae03b46f64d89e34dbbb7 8295 Data/Scripts/990_KIF/F-BATTLE-12_EBDX/EBDXCompat.rb
 c41f2f0188ae271247f0797505a2636250cf21da 10469 Data/Scripts/990_KIF/F-CORE-02_SaveCompat/KifSaveImport.rb
 cad9433ce64bc1245099826f3e1e7caa2d6b9278 7697 Data/Scripts/990_KIF/F-CORE-03_SaveBackups/SaveBackups.rb
 b3ff012ef6f1e913527f8ed5b9caacc5096d6a4c 21112 Data/Scripts/990_KIF/F-CORE-04_Mods/ModCatalog.rb
@@ -4873,7 +4873,7 @@ b74e3575e1a1012e09ef1d5bb2fcc343c62bc39e 5472 Data/Scripts/990_KIF/F-CORE-08_Set
 a68a85c260f61acd2380bb17046e15fbcf351262 14133 Data/Scripts/990_KIF/F-FUSION-01_FusionRules/FusionRules.rb
 6f96102493e0993dbcacad581e4325cbb9e8770c 6474 Data/Scripts/990_KIF/F-FUSION-02_Breeding/HeadLegendaryBreeding.rb
 9b1ab643790d66d288295c83fd5645fb5db23b02 5351 Data/Scripts/990_KIF/F-FUSION-03_FusionPreview/FusionPreview.rb
-beb1eb0d9edaf628ac037ab296d44aa627ee8c14 8397 Data/Scripts/990_KIF/F-ITEM-01_KurayShop/KurayShop.rb
+a0088224ffcdec8e471ca1a27efe34f995e839fc 8644 Data/Scripts/990_KIF/F-ITEM-01_KurayShop/KurayShop.rb
 596893703194466e3148a51a3a1120fce29f2e4e 18346 Data/Scripts/990_KIF/F-ITEM-02_KurayEggs/KurayEggs.rb
 721b2dca8fd5f35593f3d51042e299f3536b7adc 19393 Data/Scripts/990_KIF/F-ITEM-04_PokeRadarPlus/PokeRadarPlus.rb
 1f644534bead82952da26c52fd6348e020b00e53 15482 Data/Scripts/990_KIF/F-PC-01_PCExtras/PCExtras.rb
@@ -4881,7 +4881,7 @@ f711a3490db0896d05c50eeba1e79e8335583c25 32057 Data/Scripts/990_KIF/F-PC-02_Impo
 2f17457fbdc6f1abfb75573d38a85c5bf9cb21df 19824 Data/Scripts/990_KIF/F-PC-03_SelfBattle/SelfBattle.rb
 0639b3dacfbb4e7e6cd4604b2e245345b3a3e50a 6043 Data/Scripts/990_KIF/F-POKE-01_EvolutionLock/EvolutionLock.rb
 4c243ebc914610a80fe9d932f056597bc9bdc056 2823 Data/Scripts/990_KIF/F-POKE-02_ItemEffects/AbilityCapsules.rb
-f2e4d1aaa9cf71f14405c80dce52e09fea48ccae 10271 Data/Scripts/990_KIF/F-POKE-02_ItemEffects/ItemEffects.rb
+dc5e020f29ba9d55f39ee60823e2f81289c38fda 10447 Data/Scripts/990_KIF/F-POKE-02_ItemEffects/ItemEffects.rb
 5156eebf62589b1760176a0a3a4c4cc6cf5be008 9761 Data/Scripts/990_KIF/F-POKE-03_Gender/Gender.rb
 956f237afff4acb65dcbeed40ad7f81dea0a767b 6712 Data/Scripts/990_KIF/F-POKE-04_MoveLearning/001_EventMoves.rb
 82fe7791a4a85540e83512c7b2aac23f0e8d265c 10332 Data/Scripts/990_KIF/F-POKE-04_MoveLearning/002_MoveLearning.rb
@@ -4910,7 +4910,7 @@ b1b4a00f98b5963269d1cb8000c0bf7a39562e2e 2611 Data/Scripts/990_KIF/F-UI-09_Title
 4e5bcc70c85d36ccfe08a93a48c2d0be8bacd516 7290 Data/Scripts/990_KIF/F-UI-10_Shenanigans/Shenanigans.rb
 decdd594aa4dbd54eeaaea9e6ba757e6a1fca108 1956 Data/Scripts/990_KIF/F-UI-11_DarkMode/DarkMode.rb
 42d3b5f0cfe7c98c210c7aaaada5f2d6e0a2c2e5 648 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/BabySpecies.rb
-4d4a7a5234606601d32ba4b1c7991ed1a68ff3df 18304 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/BattleAI.rb
+8abdb4b276272797826239bd57d1b814e3a76609 18367 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/BattleAI.rb
 58641a8e3a205988f3101179d7786d18b93f9753 1670 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/BlackoutMusic.rb
 44f9e7aef5ee79ee6d9bde19232fb5df9bfe6052 906 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/DarkImages.rb
 ba87b2e06da3c8aaaa59fd9b6680eb13e17c0d2a 858 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/DebugEcho.rb
@@ -4939,12 +4939,12 @@ b8ab5e342879011adc5a52aa977796a957235d08 4056 Data/Scripts/990_KIF/ZZ_Cody/C-FUS
 ee1b3273e85f3d3e6818920ad09a2217519598f8 24123 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/001_RandCore.rb
 d948d5bd25f200b787536008bb7c8d4dc86655a9 15113 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/002_RandHooks.rb
 1f567a634147503929ffa8158aa47afd61c5a73f 18142 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/003_RandLog.rb
-15345e886fc4f62b28374f70255bf2cd85b54d9c 35657 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/004_RandScreen.rb
+70795076b07e2a6e3fa78e9324befeb081da194d 36049 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/004_RandScreen.rb
 5a0ccede960b55a80dbad8b0549f1767b3ae74ae 24978 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/005_RandData.rb
 ac770ea77f4259d7b8dcb69acfb737900bd9785c 20790 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/006_RandTrainers.rb
-2e8818ef4f869437b04a2b2c9deed5eaf2798f86 13437 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/007_RandItems.rb
+e96fd3f5150a056b97c2573109c65118662f7c50 13525 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/007_RandItems.rb
 bc7c592125f8b4c27dc04c29d0f515da57c19f3b 10785 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/008_RandWildPlus.rb
-6811823662a109f75919215405022bbd65d6705c 11246 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/009_RandRequests.rb
+25baaff0af2d77b4cd70ac4be3ef116702a8842b 11319 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/009_RandRequests.rb
 8b0a621866e84c7264f313a6aa3f6b3a723518b0 4507 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/010_RandApply.rb
 d800e9a4a9b64dc462473e63adaf73d7439b5f28 1461 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/011_RandLeaders.rb
 c72652b2d8f03ab7625c670085e210611dec1500 3785 Data/Scripts/990_KIF/ZZ_Cody/C-RAND-01_Randomizer/012_RandRerolls.rb
@@ -4977,7 +4977,7 @@ dc0d2d806447623fafeea8d45f586fd0cdd5b7f0 4266418 Data/Sprite Credits.csv
 3b3389e09b90357c0655e74ffae380fc48b7e609 410184 Data/Tilesets.rxdata
 f9b31006c733aa226e60e209c722557464a6479e 364643 Data/TilesetsTemp.rxdata
 94c39352b0edb225fa90de0ca64fe19c8a5fdae3 345 Data/Troops.rxdata
-ecc5e2e55474459085ae80179ed9872cda369836 7 Data/VERSION
+18e6fd523d9e3f965437e90919d85a71ed48187c 7 Data/VERSION
 c7ea19a7a791e601e24bbc538d8611eb1e1025b0 245 Data/Weapons.rxdata
 88cb261de46afa991fb60f0251319dcc0a4b73f5 21823 Data/abilities.dat
 142be0a9a8a80bf26ad1292785f9ec46b76e7ea1 22509076 Data/attacksRS.dat

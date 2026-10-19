@@ -28,15 +28,21 @@ class PokeBattle_AI
   def pbGetMoveScoreFunctionCode(score, move, user, target, skill = 100)
     ret = kif_trap_pbGetMoveScoreFunctionCode(score, move, user, target, skill)
     begin
-      ret += KIF_TRAP_BONUS if move.function == "0EF" && move.statusMove? && kif_ai_trap_worth?(user, target, skill)
+      ret += KIF_TRAP_BONUS if move.function == "0EF" && move.statusMove? && kif_ai_trap_worth?(user, target, skill, move)
     rescue => e
       KIF.log("Trap value: #{e.class}: #{e.message}")
     end
     return ret
   end
 
+  # Moves that still get the foe out once it's trapped (function codes). One
+  # method so a mod whose trapping move stops them (DD's Block) can say so.
+  def kif_ai_trap_escape_codes(user, move, target)
+    return KIF_TRAP_ESCAPE_CODES
+  end
+
   # Can the foe be kept in by Mean Look (and isn't it already)?
-  def kif_ai_trappable?(target)
+  def kif_ai_trappable?(target, user = nil, move = nil)
     return false if !target || target.fainted?
     return false if Settings::MORE_TYPE_EFFECTS && target.pbHasType?(:GHOST)
     return false if target.hasActiveItem?(:SHEDSHELL)
@@ -46,7 +52,8 @@ class PokeBattle_AI
       next if !b.abilityActive?
       return false if BattleHandlers.triggerTrappingTargetAbility(b.ability, target, b, @battle)
     end
-    return false if target.pbHasMoveFunction?(*KIF_TRAP_ESCAPE_CODES)
+    codes = kif_ai_trap_escape_codes(user, move, target)
+    return false if !codes.empty? && target.pbHasMoveFunction?(*codes)
     # Nothing to switch to: trapping changes nothing
     return false if @battle.pbAbleNonActiveCount(target.index) == 0
     return true
@@ -64,9 +71,9 @@ class PokeBattle_AI
     return best
   end
 
-  def kif_ai_trap_worth?(user, target, skill)
+  def kif_ai_trap_worth?(user, target, skill, move = nil)
     return false if user.index == target.index || !target.opposes?(user)
-    return false if !kif_ai_trappable?(target)
+    return false if !kif_ai_trappable?(target, user, move)
     # Perish Song trap
     if target.effects[PBEffects::PerishSong] == 0
       return true if user.pbHasMoveFunction?("0E5")

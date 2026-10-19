@@ -1,11 +1,13 @@
 #===============================================================================
-# KIF::AbilityText – one place that answers an ability's display name and
-# description (2026-10-18). The Summary, battle splashes and messages, Battle
-# Info and the randomizer's lists all read GameData::Ability#name /
-# #description, so that is where the answer is given.
+# KIF::AbilityText / KIF::MoveText – one place that answers an ability's or a
+# move's display name and description (abilities 2026-10-18, moves
+# 2026-10-19). The Summary, battle splashes and messages, Battle Info, the
+# move screens and the randomizer's lists all read GameData::Ability /
+# GameData::Move #name and #description, so that is where the answer is given.
 #
 #   KIF::AbilityText.register("My Mod", :SOLIDROCK, name: "Solid Rock",
 #                             description: "Halves 4x hits.", priority: 10)
+#   KIF::MoveText.register("My Mod", :DETECT, description: "...", priority: 10)
 #   KIF::AbilityText.set_priority("My Mod", -> { my_setting_on? ? 30 : 5 })
 #
 # The highest priority wins (a tie: the later registration). A priority is a
@@ -15,8 +17,8 @@
 # exactly as before.
 #
 # Kept apart from KIF::TextSwap: TextSwap swaps whole _INTL message texts and
-# its first answer wins; ability names don't go through _INTL, and here the
-# answer is picked by ability and by priority.
+# its first answer wins; these names don't go through _INTL, and here the
+# answer is picked by id and by priority.
 #
 # The wrapper is put on after every mod has loaded (KIF::Mods.load_all) and
 # again after each data load, so it sits outside mods that alias #name /
@@ -24,13 +26,11 @@
 # registered.
 #===============================================================================
 module KIF
-  module AbilityText
-    @entries = {}      # ability id => [{ :owner, :name, :description, :priority, :seq }]
-    @seq = 0
-
-    def self.register(owner, ability, name: nil, description: nil, priority: 0)
-      id = ability.to_s.upcase.to_sym
-      list = (@entries[id] ||= [])
+  # what AbilityText and MoveText share; each sets data_class and PREFIX
+  module TextRegistry
+    def register(owner, id, name: nil, description: nil, priority: 0)
+      key = id.to_s.upcase.to_sym
+      list = (@entries[key] ||= [])
       list.reject! { |e| e[:owner] == owner }
       list << { :owner => owner, :name => name, :description => description,
                 :priority => priority, :seq => (@seq += 1) }
@@ -38,34 +38,34 @@ module KIF
     end
 
     # every registration of owner; a number or a proc
-    def self.set_priority(owner, priority)
+    def set_priority(owner, priority)
       @entries.each_value { |l| l.each { |e| e[:priority] = priority if e[:owner] == owner } }
       return nil
     end
 
-    def self.unregister(owner, ability = nil)
-      ids = ability ? [ability.to_s.upcase.to_sym] : @entries.keys
-      ids.each { |id| (@entries[id] || []).reject! { |e| e[:owner] == owner } }
+    def unregister(owner, id = nil)
+      keys = id ? [id.to_s.upcase.to_sym] : @entries.keys
+      keys.each { |k| (@entries[k] || []).reject! { |e| e[:owner] == owner } }
       @entries.delete_if { |_, l| l.empty? }
       return nil
     end
 
-    def self.any?; return !@entries.empty?; end
+    def any?; return !@entries.empty?; end
 
-    def self.name(ability);        return pick(ability, :name); end
-    def self.description(ability); return pick(ability, :description); end
+    def name(id);        return pick(id, :name); end
+    def description(id); return pick(id, :description); end
 
-    def self.priority_of(e)
+    def priority_of(e)
       p = e[:priority]
       return (p.respond_to?(:call) ? p.call : p).to_f
     rescue StandardError => err
-      KIF.log("AbilityText: priority of #{e[:owner]} failed (#{err.class}: #{err.message})") if defined?(KIF.log)
+      KIF.log("#{self::PREFIX}: priority of #{e[:owner]} failed (#{err.class}: #{err.message})") if defined?(KIF.log)
       return 0.0
     end
 
     # the winning registered text, or nil (then the game's own)
-    def self.pick(ability, field)
-      list = @entries[ability.to_s.upcase.to_sym]
+    def pick(id, field)
+      list = @entries[id.to_s.upcase.to_sym]
       return nil unless list
       best = nil; best_key = nil
       list.each do |e|
@@ -76,25 +76,48 @@ module KIF
       return best ? best[field].to_s : nil
     end
 
-    # Puts KIF's answer outside #name / #description. Safe to call again: it
+    # Puts this answer outside #name / #description. Safe to call again: it
     # wraps again only when something (a mod) has wrapped them since.
-    @wrapped ||= {}
-    @n ||= 0
-    def self.install
+    def install
+      reg = self
+      klass = data_class
       [:name, :description].each do |m|
-        cur = GameData::Ability.instance_method(m)
+        cur = klass.instance_method(m)
         next if @wrapped[m] && cur == @wrapped[m]
-        inner = :"kif_at_#{m}_#{@n += 1}"
-        GameData::Ability.send(:alias_method, inner, m)
-        GameData::Ability.send(:define_method, m) do
-          t = KIF::AbilityText.any? ? KIF::AbilityText.pick(@id, m) : nil
+        inner = :"#{self::PREFIX}_#{m}_#{@n += 1}"
+        klass.send(:alias_method, inner, m)
+        klass.send(:define_method, m) do
+          t = reg.any? ? reg.pick(@id, m) : nil
           t || send(inner)
         end
-        @wrapped[m] = GameData::Ability.instance_method(m)
+        @wrapped[m] = klass.instance_method(m)
       end
       return nil
     end
   end
+
+  module AbilityText
+    extend TextRegistry
+    PREFIX = "kif_at"
+    @entries = {}      # ability id => [{ :owner, :name, :description, :priority, :seq }]
+    @seq = 0
+    @wrapped ||= {}
+    @n ||= 0
+    def self.data_class; return GameData::Ability; end
+  end
+
+  module MoveText
+    extend TextRegistry
+    PREFIX = "kif_mt"
+    @entries = {}      # move id => [...]
+    @seq = 0
+    @wrapped ||= {}
+    @n ||= 0
+    def self.data_class; return GameData::Move; end
+  end
 end
 
-KIF::DataLoad.after_load_all("Ability text (KIF::AbilityText)") { KIF::AbilityText.install } if defined?(KIF::DataLoad)
+KIF::DataLoad.after_load_all("Ability and move text (KIF::AbilityText, KIF::MoveText)") {
+  KIF::AbilityText.install
+  KIF::MoveText.install
+} if defined?(KIF::DataLoad)

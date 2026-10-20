@@ -127,6 +127,79 @@ module KIF
 
     def self.key(k); return k.to_s.to_sym; end
 
+    #---------------------------------------------------------------------------
+    # Settings of an uninstalled mod (Cody, 2026-10-20): moved into a file of
+    # their own that nothing reads, so a leftover value can't reach a save or
+    # another mod. They come back only when the same mod registers the same
+    # setting again and the value still fits it (a choice that still exists,
+    # a number still in range).
+    #---------------------------------------------------------------------------
+    UNINSTALLED_FILE = "KIF_ModSettings_uninstalled.kro"
+
+    def self.uninstalled_path; return File.join(KIF.save_dir, UNINSTALLED_FILE); end
+
+    def self.uninstalled
+      return @uninstalled if @uninstalled
+      d = File.open(uninstalled_path, "rb") { |f| Marshal.load(f) } if File.exist?(uninstalled_path)
+      return @uninstalled = (d.is_a?(Hash) ? d : {})
+    rescue StandardError
+      return @uninstalled = {}
+    end
+
+    def self.write_uninstalled
+      tmp = uninstalled_path + ".tmp"
+      File.open(tmp, "wb") { |f| Marshal.dump(uninstalled, f) }
+      File.rename(tmp, uninstalled_path)
+      return true
+    rescue StandardError => e
+      KIF.log("Uninstalled mods' settings not written (#{e.class}: #{e.message})") if KIF.respond_to?(:log)
+      return false
+    end
+
+    # Moves mod_id's saved values out. Returns how many.
+    def self.stash(mod_id)
+      id = mod_id.to_s
+      keys = @registry.select { |e| e[:mod].to_s == id }.map { |e| e[:key] }.select { |k| values.has_key?(k) }
+      return 0 if keys.empty?
+      box = (uninstalled[id] ||= {})
+      keys.each { |k| box[k] = values[k] }
+      return 0 unless write_uninstalled   # kept where they were if that failed
+      keys.each { |k| values.delete(k) }
+      write
+      return keys.length
+    end
+
+    # v still a value e's row can show
+    def self.fits?(e, v)
+      return false unless v.nil? || v == true || v == false || v.is_a?(Numeric) || v.is_a?(String)
+      case e[:type]
+      when :enum
+        n = Array(e[:values]).length
+        n = 2 if n == 0
+        return v.is_a?(Integer) && v >= 0 && v < n
+      when :number, :slider
+        lo = num(e[:min] || e[:minimum], 0)
+        hi = num(e[:max] || e[:maximum], 100)
+        return v.is_a?(Numeric) && v >= lo && v <= hi
+      when :button
+        return false
+      else
+        return v == true || v == false || v == 0 || v == 1
+      end
+    end
+
+    def self.restore_stashed(e)
+      return if e[:mod].nil? || values.has_key?(e[:key])
+      box = uninstalled[e[:mod].to_s]
+      return unless box && box.has_key?(e[:key])
+      v = box.delete(e[:key])
+      uninstalled.delete(e[:mod].to_s) if box.empty?
+      write_uninstalled
+      return unless fits?(e, v)
+      values[e[:key]] = v
+      write
+    end
+
     def self.entry(k)
       kk = key(k)
       return @registry.find { |e| e[:key] == kk }
@@ -185,6 +258,11 @@ module KIF
                                         h[:category] == "__nocategory__"
       @registry.delete_if { |e| e[:key] == h[:key] }
       @registry << h
+      begin
+        restore_stashed(h)   # a reinstalled mod gets its settings back
+      rescue StandardError => ex
+        KIF.log("Mod setting #{h[:key]}: couldn't bring back its saved value (#{ex.class}: #{ex.message})") if KIF.respond_to?(:log)
+      end
       return true
     end
 

@@ -75,6 +75,27 @@ module KIF
     def self.loaded_root; @loaded_root || []; end
     def self.loaded_dirs; @loaded_dirs || []; end
 
+    # Uninstall (Cody, 2026-10-20): deletes a mod of KIF's own Mods folder
+    # (its folder, or its loose .rb). Its settings move to the uninstalled
+    # store first (KIF::ModSettings.stash). Code already loaded stays until
+    # the game restarts. Mod Manager's mods are Mod Manager's to remove.
+    def self.uninstall(e)
+      return false unless e && e.source.is_a?(NativeSource)
+      path = File.expand_path(e.path.to_s)
+      root = File.expand_path(e.source.dir.to_s)
+      return false unless path.start_with?(root + "/") && File.exist?(path)
+      KIF::ModSettings.stash(e.id) if defined?(KIF::ModSettings) && KIF::ModSettings.active?
+      File.directory?(path) ? KIF.rm_tree(path) : File.delete(path)
+      set_disabled(e.id, false) if disabled.include?(e.id)
+      e.source.instance_variable_set(:@entries, nil)
+      KIF::ModCatalog.instance_variable_set(:@installed_index, nil) if defined?(KIF::ModCatalog)
+      KIF.log("Mod uninstalled: #{e.name} (#{e.id})")
+      return !File.exist?(path)
+    rescue StandardError => ex
+      KIF.log("Mod #{e && e.id} couldn't be uninstalled: #{ex.class}: #{ex.message}")
+      return false
+    end
+
     # f is the same script as one loaded loose from Mods/ (same name AND same
     # bytes): loading it again makes its aliases recurse. Only the name used
     # to count, so Mods/main.rb kept another mod's own main.rb from loading.

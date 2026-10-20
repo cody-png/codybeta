@@ -203,6 +203,7 @@ module KIF
       bits << e.description.to_s.gsub(/\s+/, " ")[0, 160] if e.description && !e.description.empty?
       bits << _INTL("Mod Manager mod.") if e.kind == :mod_manager
       bits << _INTL("Mods folder: {1}", e.id) if bits.empty?
+      bits << _INTL("{1}: uninstall.", KIF::Keys.name(Input::USE)) if e.source.is_a?(KIF::Mods::NativeSource)
       return KIF::PixelFont.utf8(bits.join(" "))
     end
 
@@ -276,7 +277,9 @@ module KIF
           elsif !loaded.nil? && (loaded ? true : false) != e.enabled?
             opt.kif_badge = [e.enabled? ? _INTL("ON NEXT START") : _INTL("OFF NEXT START"), KIF::PixelUI::WARN]
           end
-          rows << Row.new(:opt, opt, :global, e.name.to_s, :mods, "Installed", 0, nil)
+          # USE: uninstall (KIF's own Mods folder; Mod Manager removes its own)
+          act = e.source.is_a?(KIF::Mods::NativeSource) ? [:mod_menu, e] : nil
+          rows << Row.new(:opt, opt, :global, e.name.to_s, :mods, "Installed", 0, nil, act)
         end
       end
       withset = list.reject { |e| e.settings.nil? || e.settings.empty? }
@@ -293,6 +296,19 @@ module KIF
         end
       end
       return rows
+    end
+
+    # USE on an installed mod
+    def mod_menu(e)
+      cmd = pbMessage(KIF::PixelFont.utf8(e.name.to_s), [_INTL("Uninstall"), _INTL("Cancel")], 2)
+      return false unless cmd == 0
+      return false unless pbConfirmMessage(KIF::PixelFont.utf8(_INTL("Remove {1}? Its settings are kept for if you install it again.", e.name)))
+      if KIF::Mods.uninstall(e)
+        pbMessage(KIF::PixelFont.utf8(_INTL("{1} was removed. The game finishes removing it the next time it starts.", e.name)))
+        return true
+      end
+      pbMessage(KIF::PixelFont.utf8(_INTL("{1} couldn't be removed (see Logs/KIF_log.txt). Close the game and delete its folder in Mods.", e.name)))
+      return false
     end
 
     def catalog_desc(it)
@@ -756,6 +772,9 @@ class KifSettingsScreen
       when :mod_category
         name = r.action[1]
         open_sub(_INTL(name)) { category_page(name) }
+      when :mod_menu
+        hidden { KIF::SettingsScreen.mod_menu(r.action[1]) }
+        after_change
       when :catalog_install
         hidden { KIF::ModCatalogUI.install(r.action[1]) }
         after_change

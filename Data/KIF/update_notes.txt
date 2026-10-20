@@ -1,6 +1,8 @@
-KIF Beta 0.21.66
-- Dominant Fusion Types work with the Randomizer's types: a species' dominant type is whatever type it has now in that place (Bulbasaur randomized to Ice makes Ice fusions).
-- Shiny Trainer Pokemon: "Disabled" is now called "Normal": trainer Pokemon use the same shiny odds as your Wild Shiny Odds slider.
-- Berserker: a foe that just switched in waits its turns before its first boost.
-- "Skip this version" and the Updates setting stick even if you quit without saving.
-- The Endgame Challenge ends when Battles & Challenges is switched Off (talking to the Fighting Arena leaders gave an error).
+KIF Beta 0.21.67
+- Save Backups is always on: switching PC & Saves Off no longer lets the game delete old backups (named ones included).
+- Saves the game makes by itself (Transfer Box, PC, Battle Frontier) keep their newest 10 backups, so the backups folder stops growing. Saves you make keep every backup, as before.
+- Comatose works for every Pokemon that has it (random abilities, mods), not only Komala.
+- Entrances: Return to Pokemon Center no longer sends you into a Center you can't leave, after Entrances were switched Off and On on a random-start game.
+- Entrances: on a random-start game, Randomize now places trainer levels from your start, not from the badges you have now.
+- Mods: when a mod stops replacing a game picture, the picture from your current KIF comes back (not an older one).
+- Battle AI: its switch-in and entry-hazard choices can count abilities a mod adds (KIF: Elite Redux innates).

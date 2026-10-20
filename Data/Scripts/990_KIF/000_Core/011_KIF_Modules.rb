@@ -60,8 +60,8 @@ module KIF
                         "K-Eggs: typed, badge, legendary and fusion eggs from the Kuray Shop.",
                         %w[F-ITEM-02]],
       :pc           => ["PC & Saves",
-                        "PC extras, quicksave, save backups, eggs hatching into the PC.",
-                        %w[F-PC-01 F-UI-06 F-CORE-03 F-UI-08]],
+                        "PC extras, quicksave, eggs hatching into the PC.",
+                        %w[F-PC-01 F-UI-06 F-UI-08]],   # F-CORE-03 Save Backups: always on (Off put back PIF's clean-up, which deletes named backups)
       :import       => ["Import & Export",
                         "Export Pokémon to files and import them back (PC and party).",
                         %w[F-PC-02]],

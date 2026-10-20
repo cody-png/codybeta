@@ -53,10 +53,14 @@ module KIF
         return home_spot
       end
 
-      # Home: a random start's first Center, otherwise the game's home spot
+      # Home: a random start's first Center, otherwise the game's home spot.
+      # Only the layout's own start door: start_origin's fallback (the last
+      # Center used) is the very Center return_target is checking, so it would
+      # skip the check (layouts without a start door are checked from home).
       def self.home_spot
         s = state
-        if s.is_a?(Hash) && Rand.dget(:ent_start).to_i >= 1 && (o = start_origin(s)) && o[:to]
+        if s.is_a?(Hash) && Rand.dget(:ent_start).to_i >= 1 && s[:start_door] &&
+           (o = (dat[:door_by_id][s[:start_door]] rescue nil)) && o[:to]
           dir = o[:to_dir].to_i
           return [o[:to][0], o[:to][1], o[:to][2], dir > 0 ? dir : 2, :home]
         end

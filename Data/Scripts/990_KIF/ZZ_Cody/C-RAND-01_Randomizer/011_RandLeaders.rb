@@ -22,13 +22,9 @@ module KIF
       return dget(leader_type?(tr_type) ? :leader_size : :team_size)
     end
 
+    # one rule with the leader's lines (C-GYM-01), so they name the size the battle uses
     def self.team_extra_count(tr_type, n)
-      case team_extra_setting(tr_type)
-      when 1 then return [n + 1, 6].min - n
-      when 2 then return [n + 2, 6].min - n
-      when 3 then return [6 - n, 0].max
-      end
-      return 0
+      return KIF::LeaderTeams.extra_count(n, team_extra_setting(tr_type))
     end
   end
 end

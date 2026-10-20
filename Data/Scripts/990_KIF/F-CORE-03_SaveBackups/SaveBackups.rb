@@ -8,10 +8,12 @@
 # backups.
 #
 # Others > "Save Backups" (all saves):
-#   Infinite (default) – backups of the saves you make are never deleted
-#                        (KIF); autosaves (PIF's, every heal / N steps) keep
-#                        their newest 10 as "<slot>_<date>_autosave", or a
-#                        long game filled gigabytes (2026-10-18)
+#   Infinite (default) – backups of the saves you make in the save menu
+#                        (and Quicksave) are never deleted (KIF); saves the
+#                        game makes by itself (autosave, Transfer Box, PC,
+#                        Battle Frontier) keep their newest 10 as
+#                        "<slot>_<date>_autosave", or a long game filled
+#                        gigabytes (2026-10-18; Transfer Box 2026-10-19)
 #   PIF                – 6.8.2's limit (Settings::SAVEFILE_NB_BACKUPS)
 # Save menu, either way (KIF): "Name the next backup" – type a name, then
 # save; a copy of that save is kept as a backup under the name – and
@@ -35,9 +37,9 @@ module KIF
   module SaveBackups
     AUTO = "autosave"
     @next_name = nil
-    @autosaving = false
+    @player_saving = false
     class << self
-      attr_accessor :next_name, :autosaving
+      attr_accessor :next_name, :player_saving
     end
 
     def self.infinite?
@@ -104,7 +106,7 @@ module Game
     # PIF: 6.8.2's limit, but named backups are never trimmed (6.8.2 deleted
     # any *.rxdata in the folder)
     def backup_savefile(save_path, slot)
-      auto = KIF::SaveBackups.autosaving
+      auto = !KIF::SaveBackups.player_saving
       KIF::SaveBackups.copy(save_path, slot, auto ? KIF::SaveBackups::AUTO : nil)
       KIF::SaveBackups.trim(save_path, slot, auto) if auto || !KIF::SaveBackups.infinite?
     end
@@ -194,15 +196,15 @@ class PokemonSaveScreen
   end
 end
 
-# PIF's autosave (Kernel.tryAutosave -> Kernel.Autosave -> Game.save) is
-# told apart from saves the player makes
-class << Kernel
-  alias kif_bk_Autosave Autosave unless method_defined?(:kif_bk_Autosave)
+# Saves the player picks (save menu, another slot, Quicksave) all go through
+# doSave; every other Game.save is the game saving by itself
+class PokemonSaveScreen
+  alias kif_bk_doSave doSave unless method_defined?(:kif_bk_doSave)
 
-  def Autosave(*args)
-    KIF::SaveBackups.autosaving = true
-    return kif_bk_Autosave(*args)
+  def doSave(slot)
+    KIF::SaveBackups.player_saving = true
+    return kif_bk_doSave(slot)
   ensure
-    KIF::SaveBackups.autosaving = false
+    KIF::SaveBackups.player_saving = false
   end
 end

@@ -32,7 +32,7 @@
 module KIF
   module ModCatalog
     REPO       = "KIF-Mods/mods"
-    DISCORD_REPO = "cody-png/kif-discord-mods"   # mods only shared on Discord (Claude Docs/_Tools/import_mods.py)
+    DISCORD_REPO = "cody-png/kif-discord-mods"   # mods only shared on Discord (made with import_mods.py)
     SOURCE_FILE = "KIF_mods_source.txt"
     CATALOGS_FILE = "KIF_mods_catalogs.txt"
     ASSET_DIRS = %w[Graphics Audio Fonts]
@@ -57,8 +57,7 @@ module KIF
       def raw_base; return "https://raw.githubusercontent.com/#{@repo}/#{@branch}"; end
       def base
         return raw_base unless local?
-        full = File.expand_path(@path).tr("\\", "/").sub(%r{\A/}, "")
-        return "file:///" + full.split("/").map { |seg| seg.b.gsub(/[^A-Za-z0-9\-._~:]/n) { |c| format("%%%02X", c.ord) } }.join("/")
+        return KIF::Updater.file_url(@path)
       end
     end
 
@@ -480,6 +479,11 @@ module KIF
         next if item.files.has_key?(rel)
         p = dest_for(item, rel)
         if File.file?(p + GAME_COPY)
+          # a KIF update put a newer game file there since: it stays, the old copy goes
+          if File.file?(p) && updater.sha_ok? && updater.git_sha(p) != sha
+            File.delete(p + GAME_COPY)
+            next
+          end
           File.delete(p) if File.file?(p)
           File.rename(p + GAME_COPY, p)
           next

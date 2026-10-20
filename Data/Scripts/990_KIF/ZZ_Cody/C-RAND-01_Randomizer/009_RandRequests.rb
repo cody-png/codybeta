@@ -55,15 +55,9 @@ module KIF
     #---------------------------------------------------------------------------
     # What an event asks for, and what it should say instead
     #---------------------------------------------------------------------------
+    # the script lines of an event's commands (C-GYM-01 reads them the same way)
     def self.event_script_text(list)
-      parts = []
-      list.each do |cmd|
-        case cmd.code
-        when 355, 655 then parts << cmd.parameters[0].to_s
-        when 111 then parts << cmd.parameters[1].to_s if cmd.parameters[0] == 12
-        end
-      end
-      return parts.join("\n")
+      return KIF::LeaderTeams.script_text(list)
     end
 
     # Requested species => what it should be (a species, :any, or nil)

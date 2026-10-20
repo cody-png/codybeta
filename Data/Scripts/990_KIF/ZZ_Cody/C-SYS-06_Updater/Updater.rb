@@ -179,15 +179,18 @@ module KIF
       if File.file?(file)
         line = File.read(file).to_s.strip.split(/\r?\n/).first.to_s.strip
         unless line.empty?
-          if !(line =~ %r{\A\w+://}) && File.directory?(line)
-            full = File.expand_path(line).tr("\\", "/").sub(%r{\A/}, "")
-            line = "file:///" + full.split("/").map { |seg| seg.b.gsub(/[^A-Za-z0-9\-._~:]/n) { |c| format("%%%02X", c.ord) } }.join("/")
-          end
+          line = file_url(line) if !(line =~ %r{\A\w+://}) && File.directory?(line)
           return line.chomp("/")
         end
       end
       branch = BRANCHES[ch]
       return branch ? "#{RAW_BASE}/#{branch}" : nil
+    end
+
+    # file:/// URL of a local folder (a test source, a local mod catalog)
+    def file_url(dir)
+      full = File.expand_path(dir).tr("\\", "/").sub(%r{\A/}, "")
+      return "file:///" + full.split("/").map { |seg| seg.b.gsub(/[^A-Za-z0-9\-._~:]/n) { |c| format("%%%02X", c.ord) } }.join("/")
     end
 
     def url_for(base, path)

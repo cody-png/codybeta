@@ -1854,9 +1854,9 @@ class PokeBattle_AI
 				party.each_with_index do |pkmn, idxParty|
 					next if !pkmn || !pkmn.able?
 					next if inBattleIndices.include?(idxParty)
-					next if pkmn.ability == :MAGICGUARD || pkmn.isAirborne? || pkmn.item == :HEAVYDUTYBOOTS
+					next if kif_ai_party_ability?(pkmn, :MAGICGUARD) || pkmn.isAirborne? || pkmn.item == :HEAVYDUTYBOOTS
 					count += 1
-					count += 1 if (pkmn.item == :FOCUSSASH || pkmn.ability == :STURDY || pkmn.ability == :WONDERGUARD) &&
+					count += 1 if (pkmn.item == :FOCUSSASH || kif_ai_party_ability?(pkmn, :STURDY) || kif_ai_party_ability?(pkmn, :WONDERGUARD)) &&
 					user.pbOpposingSide.effects[PBEffects::Spikes]==0
 				end
 				score += [15, 10, 5][user.pbOpposingSide.effects[PBEffects::Spikes]] * count
@@ -1883,13 +1883,13 @@ class PokeBattle_AI
 				party.each_with_index do |pkmn, idxParty|
 					next if !pkmn || !pkmn.able?
 					next if inBattleIndices.include?(idxParty)
-					next if pkmn.ability == :MAGICGUARD || pkmn.ability == :IMMUNITY || pkmn.isAirborne? || pkmn.item == :HEAVYDUTYBOOTS ||
+					next if kif_ai_party_ability?(pkmn, :MAGICGUARD) || kif_ai_party_ability?(pkmn, :IMMUNITY) || pkmn.isAirborne? || pkmn.item == :HEAVYDUTYBOOTS ||
 					pkmn.status != :NONE || pkmn.hasType?(:STEEL)
-					if pkmn.hasType?(:POISON) || pkmn.ability == :POISONHEAL || pkmn.ability == :GUTS || pkmn.ability == :TOXICBOOST
+					if pkmn.hasType?(:POISON) || kif_ai_party_ability?(pkmn, :POISONHEAL) || kif_ai_party_ability?(pkmn, :GUTS) || kif_ai_party_ability?(pkmn, :TOXICBOOST)
 						count-=1
 					else
 						count += 1
-						count += 1 if (pkmn.item == :FOCUSSASH || pkmn.ability == :STURDY || pkmn.ability == :WONDERGUARD) &&
+						count += 1 if (pkmn.item == :FOCUSSASH || kif_ai_party_ability?(pkmn, :STURDY) || kif_ai_party_ability?(pkmn, :WONDERGUARD)) &&
 						user.pbOpposingSide.effects[PBEffects::ToxicSpikes]==0
 					end
 				end
@@ -1918,13 +1918,13 @@ class PokeBattle_AI
 				party.each_with_index do |pkmn, idxParty|
 					next if !pkmn || !pkmn.able?
 					next if inBattleIndices.include?(idxParty)
-					next if pkmn.ability == :MAGICGUARD || pkmn.item == :HEAVYDUTYBOOTS
+					next if kif_ai_party_ability?(pkmn, :MAGICGUARD) || pkmn.item == :HEAVYDUTYBOOTS
 					count += 1
-					count += 1 if pkmn.item == :FOCUSSASH || pkmn.ability == :STURDY || pkmn.ability == :WONDERGUARD ||
+					count += 1 if pkmn.item == :FOCUSSASH || kif_ai_party_ability?(pkmn, :STURDY) || kif_ai_party_ability?(pkmn, :WONDERGUARD) ||
 					(pkmn.hasType?(:FIRE) && (pkmn.hasType?(:ICE) || pkmn.hasType?(:BUG) || pkmn.hasType?(:FLYING))) ||
 					(pkmn.hasType?(:ICE) &&  (pkmn.hasType?(:BUG) || pkmn.hasType?(:FLYING))) ||
 					(pkmn.hasType?(:BUG) && pkmn.hasType?(:FLYING))
-					count +=3 if pkmn.ability == :WONDERGUARD
+					count +=3 if kif_ai_party_ability?(pkmn, :WONDERGUARD)
 				end
 				score += 15 * count
 				@battle.allOtherSideBattlers(user.index).each do |b|

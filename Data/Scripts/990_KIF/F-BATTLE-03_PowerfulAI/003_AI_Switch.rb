@@ -301,16 +301,16 @@ class PokeBattle_AI
 			pokmon.eachOpposing do |newenemy|
 				ospeed = pbRoughStat(newenemy,:SPEED,100)
 				if pokmon.hasActiveAbility?(:DRIZZLE) && @battle.pbWeather != :Rain
-					ospeed *= 2 if newenemy.hasActiveAbility?(:SWIFTSWIM)
+					ospeed *= kif_ai_weather_speed if newenemy.hasActiveAbility?(:SWIFTSWIM)
 				end
 				if pokmon.hasActiveAbility?([:DROUGHT,:ORICHALCUMPULSE]) && @battle.pbWeather != :Sun
-					ospeed *= 2 if newenemy.hasActiveAbility?([:CHLOROPHYLL,:PROTOSYNTHESIS])
+					ospeed *= kif_ai_weather_speed if newenemy.hasActiveAbility?([:CHLOROPHYLL,:PROTOSYNTHESIS])
 				end
 				if pokmon.hasActiveAbility?(:SANDSTREAM) && @battle.pbWeather != :Sandstorm 
-					ospeed *= 2 if newenemy.hasActiveAbility?(:SANDRUSH)
+					ospeed *= kif_ai_weather_speed if newenemy.hasActiveAbility?(:SANDRUSH)
 				end
 				if pokmon.hasActiveAbility?(:SNOWWARNING) && @battle.pbWeather != :Hail 
-					ospeed *= 2 if newenemy.hasActiveAbility?(:SLUSHRUSH)
+					ospeed *= kif_ai_weather_speed if newenemy.hasActiveAbility?(:SLUSHRUSH)
 				end
 				if pokmon.hasActiveAbility?([:ELECTRICSURGE,:HADRONENGINE]) && @battle.field.terrain != :Electric
 					ospeed *= 2 if newenemy.hasActiveAbility?(:SURGESURFER)
@@ -347,11 +347,11 @@ class PokeBattle_AI
 							tempdam*=1.5 if j.type == :FIRE
 							tempdam*=0.5 if j.type == :WATER
 							tempdam*=1.33 if newenemy.hasActiveAbility?(:ORICHALCUMPULSE) && j.physicalMove?
-							tempdam*=1.5 if newenemy.hasActiveAbility?(:SOLARPOWER) && j.specialMove?
+							tempdam*=1.5 if newenemy.hasActiveAbility?(:SOLARPOWER) && kif_ai_solar_power?(newenemy, j)
 						end
 						if pokmon.hasActiveAbility?(:SANDSTREAM) && @battle.pbWeather != :Sandstorm 
 							tempdam*=0.67 if pokmon.pbHasType?(:ROCK) && j.specialMove?
-							tempdam*=1.3 if [:GROUND,:ROCK,:STEEL].include?(j.type) && newenemy.hasActiveAbility?(:SANDFORCE)
+							tempdam*=kif_ai_sand_force(newenemy, j) if newenemy.hasActiveAbility?(:SANDFORCE)
 						end
 						if pokmon.hasActiveAbility?([:ELECTRICSURGE,:HADRONENGINE]) && @battle.field.terrain != :Electric
 							if j.type == :ELECTRIC && newenemy.affectedByTerrain?
@@ -481,11 +481,11 @@ class PokeBattle_AI
 						tempdam*=1.5 if m.type == :FIRE
 						tempdam*=0.5 if m.type == :WATER
 						tempdam*=1.33 if pokmon.hasActiveAbility?(:ORICHALCUMPULSE) && m.physicalMove?
-						tempdam*=1.5 if pokmon.hasActiveAbility?(:SOLARPOWER) && m.specialMove?
+						tempdam*=1.5 if pokmon.hasActiveAbility?(:SOLARPOWER) && kif_ai_solar_power?(pokmon, m)
 					end
 					if pokmon.hasActiveAbility?(:SANDSTREAM) && @battle.pbWeather != :Sandstorm 
 						tempdam*=0.67 if b.pbHasType?(:ROCK) && m.specialMove?
-						tempdam*=1.3 if [:GROUND,:ROCK,:STEEL].include?(m.type) && pokmon.hasActiveAbility?(:SANDFORCE)
+						tempdam*=kif_ai_sand_force(pokmon, m) if pokmon.hasActiveAbility?(:SANDFORCE)
 					end
 					if pokmon.hasActiveAbility?([:ELECTRICSURGE,:HADRONENGINE]) && @battle.field.terrain != :Electric
 						if m.type == :ELECTRIC && pokmon.affectedByTerrain?
@@ -595,9 +595,9 @@ class PokeBattle_AI
 			ownparty.each_with_index do |pkmn, idxParty|
 				next if !pkmn || !pkmn.able?
 				next if pkmn.equal?(pokmon.pokemon)   # KIF fix: pokmon is the stand-in battler, so pkmn==pokmon was never true and its own ability counted as team synergy
-				if pokmon.ability==:DROUGHT
-					sum+=20 if pkmn.ability == :CHLOROPHYLL
-					sum+=10 if pkmn.ability == :FLOWERGIFT || pkmn.ability == :SOLARPOWER || pkmn.ability == :PROTOSYNTHESIS
+				if kif_ai_party_ability?(pokmon, :DROUGHT)
+					sum+=20 if kif_ai_party_ability?(pkmn, :CHLOROPHYLL)
+					sum+=10 if kif_ai_party_ability?(pkmn, :FLOWERGIFT) || kif_ai_party_ability?(pkmn, :SOLARPOWER) || kif_ai_party_ability?(pkmn, :PROTOSYNTHESIS)
 					pkmn.eachMove do |m|
 						next if m.base_damage==0 || m.type != :FIRE
 						sum += 10
@@ -609,9 +609,9 @@ class PokeBattle_AI
 					sum+=5 if pkmn.pbHasMoveFunction?("0D8", "028") # Synthesis, Growth
 					sum+=10 if pkmn.pbHasMoveFunction?("0C4") # Solarbeam
 				end
-				if pokmon.ability==:DRIZZLE
-					sum+=20 if pkmn.ability == :SWIFTSWIM
-					sum+=5 if pkmn.ability == :RAINDISH || pkmn.ability == :DRYSKIN || pkmn.ability == :HYDRATION
+				if kif_ai_party_ability?(pokmon, :DRIZZLE)
+					sum+=20 if kif_ai_party_ability?(pkmn, :SWIFTSWIM)
+					sum+=5 if kif_ai_party_ability?(pkmn, :RAINDISH) || kif_ai_party_ability?(pkmn, :DRYSKIN) || kif_ai_party_ability?(pkmn, :HYDRATION)
 					pkmn.eachMove do |m|
 						next if m.base_damage==0 || m.type != :WATER
 						sum += 10
@@ -623,24 +623,24 @@ class PokeBattle_AI
 					sum-=5 if pkmn.pbHasMoveFunction?("0D8", "028", "0C4") && @battle.pbWeather  == :Sun # Synthesis, Growth,Solarbeam
 					sum+=5 if pkmn.pbHasMoveFunction?("008") # Thunder
 				end
-				if pokmon.ability==:SANDSTREAM
-					sum+=20 if pkmn.ability == :SANDRUSH
-					sum+=10 if pkmn.ability == :SANDVEIL || pkmn.ability == :SANDFORCE
+				if kif_ai_party_ability?(pokmon, :SANDSTREAM)
+					sum+=20 if kif_ai_party_ability?(pkmn, :SANDRUSH)
+					sum+=10 if kif_ai_party_ability?(pkmn, :SANDVEIL) || kif_ai_party_ability?(pkmn, :SANDFORCE)
 					sum+=10 if pkmn.hasType?(:ROCK)
 					sum-=5 if pkmn.pbHasMoveFunction?("0D8", "028", "0C4") && @battle.pbWeather  == :Sun  # Synthesis, Growth,Solarbeam
 					sum+=5 if pkmn.pbHasMoveFunction?("16D") # Shore Up
 				end
-				if pokmon.ability==:SNOWWARNING
-					sum+=20 if pkmn.ability == :SLUSHRUSH
-					sum+=10 if pkmn.ability == :SNOWCLOAK || pkmn.ability == :ICEBODY
+				if kif_ai_party_ability?(pokmon, :SNOWWARNING)
+					sum+=20 if kif_ai_party_ability?(pkmn, :SLUSHRUSH)
+					sum+=10 if kif_ai_party_ability?(pkmn, :SNOWCLOAK) || kif_ai_party_ability?(pkmn, :ICEBODY)
 					sum-=5 if pkmn.pbHasMoveFunction?("0D8", "028", "0C4") && @battle.pbWeather  == :Sun  # Synthesis, Growth,Solarbeam
 					sum+=5 if pkmn.pbHasMoveFunction?("00D") # Blizzard
 					sum+=5 if pkmn.pbHasMoveFunction?("167") # Aurora Veil
 				end
-				if pokmon.ability==:ELECTRICSURGE
+				if kif_ai_party_ability?(pokmon, :ELECTRICSURGE)
 					sum+=5 if pkmn.item == :ELECTRICSEED
-					sum+=10 if pkmn.ability == :SURGESURFER
-					sum+=10 if pkmn.ability == :QUARKDRIVE
+					sum+=10 if kif_ai_party_ability?(pkmn, :SURGESURFER)
+					sum+=10 if kif_ai_party_ability?(pkmn, :QUARKDRIVE)
 					pkmn.eachMove do |m|
 						next if m.base_damage==0 || m.type != :ELECTRIC
 						sum += 5
@@ -648,9 +648,9 @@ class PokeBattle_AI
 					# sum+=5 if pkmn.pbHasMoveFunction?("TypeAndPowerDependOnTerrain", "BPRaiseWhileElectricTerrain")
 					# sum+=5 if pkmn.pbHasMoveFunction?("DoublePowerInElectricTerrain") 
 				end
-				if pokmon.ability==:GRASSYSURGE
+				if kif_ai_party_ability?(pokmon, :GRASSYSURGE)
 					sum+=5 if pkmn.item == :GRASSYSEED
-					sum+=5 if pkmn.ability == :GRASSPELT
+					sum+=5 if kif_ai_party_ability?(pkmn, :GRASSPELT)
 					pkmn.eachMove do |m|
 						next if m.base_damage==0 || m.type != :GRASS
 						sum += 5
@@ -659,7 +659,7 @@ class PokeBattle_AI
 					sum+=5 if pkmn.pbHasMoveFunction?("16E")#,"TypeAndPowerDependOnTerrain") # Floral Healing
 					#sum+=5 if pkmn.pbHasMoveFunction?("HigherPriorityInGrassyTerrain") 
 				end
-				if pokmon.ability==:MISTYSURGE
+				if kif_ai_party_ability?(pokmon, :MISTYSURGE)
 					sum+=5 if pkmn.item == :MISTYSEED
 					pkmn.eachMove do |m|
 						next if m.base_damage==0 || m.type != :DRAGON
@@ -668,9 +668,9 @@ class PokeBattle_AI
 					sum-=5 if pkmn.pbHasMoveFunction?("003", "006") # Sleep, Toxic
 					#sum+=5 if pkmn.pbHasMoveFunction?("TypeAndPowerDependOnTerrain", "UserFaintsPowersUpInMistyTerrainExplosive")
 				end
-				if pokmon.ability==:PSYCHICSURGE
+				if kif_ai_party_ability?(pokmon, :PSYCHICSURGE)
 					sum+=5 if pkmn.item == :PSYCHICSEED
-					sum-=5 if pkmn.ability == :PRANKSTER
+					sum-=5 if kif_ai_party_ability?(pkmn, :PRANKSTER)
 					pkmn.eachMove do |m|
 						next if m.base_damage==0 || m.type != :PSYCHIC
 						sum += 5

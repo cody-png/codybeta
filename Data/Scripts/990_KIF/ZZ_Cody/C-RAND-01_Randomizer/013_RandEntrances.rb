@@ -36,8 +36,7 @@ module KIF
 
     module ER
       DATA_PATH = "Data/KIF/entrances.dat"
-      RETRIES = 150      # most layouts are found in a few tries (~0.1-0.2 s each); Simple mode needs up to ~75
-      RETRIES_HERE = RETRIES   # Randomize now mid-run: if nothing works from where you stand by then, the old doors stay
+      RETRIES = 150      # most layouts are found in a few tries (~0.1-0.2 s each); Simple mode needs up to ~75; mid-run, the old doors stay after these
       BADGE_PREFIX = "badge_"
       OAK_LABS = [77, 551, 552, 593, 659, 724, 740, 847]   # every variant of Oak's Lab
       NO_START = [303, 167]   # Indigo Plateau, Crimson City (nowhere to go without 8 badges)
@@ -567,12 +566,14 @@ module KIF
         # Random start: made at the hand-over (see handover_target), from the
         # chosen Center, with exactly what the save has at that moment
         start_door = nil; start = nil; extra = []; cands = []
+        start_flags = nil   # what the save had at the hand-over: levels are placed with it
         if random_start
           cands = start_candidates(d, Rand.dget(:ent_start) == 1).shuffle(random: rng)
           start_door = cands.first
           if start_door
             start = start_door[:in_node]
             extra = current_flags(d)
+            start_flags = extra
           end
         elsif origin_door
           # Randomize now on a random-start save: the world still grows from
@@ -580,8 +581,10 @@ module KIF
           # where the player stands is checked as usual
           start = origin_door[:in_node]
           extra = current_flags(d)
+          old = state
+          start_flags = old[:start_flags] if old.is_a?(Hash)
         end
-        tries = (start_door.nil? && mid_run?) ? RETRIES_HERE : RETRIES
+        tries = RETRIES
         tries.times do |i|
           Rand.progress(_INTL("Shuffling entrances... (try {1})", i + 1), 0.1 + 0.8 * i / tries) if Rand.respond_to?(:progress)
           # a start that keeps failing gives way to the next candidate
@@ -605,10 +608,13 @@ module KIF
           rsig = {}
           regions.each { |r| rsig[r] = (d[:region_sigs] || {})[r] if r != 0 }
           first = start_door || origin_door
+          # levels follow the start, not the badges the player has by now (a
+          # reshuffle at 6 badges would put most of the world in the first bin)
+          lv = (origin_door && start_flags) ? sweep(d, edges, start_flags, nil, start) : res
           return { in: map_in, out: map_out, sig: d[:signature], rsig: rsig, regions: regions, attempts: i + 1, seen: [],
                    shape: shape, doors: Rand.dget(:ent_doors), coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]),
-                   start_door: first && first[:id], start_done: !first.nil?, progress: map_progress(res), pv: d[:progress_version],
-                   nv: NEAR_VERSION, seed: Rand.seed }.merge(near_for(d, edges, res, start, start_door.nil?))
+                   start_door: first && first[:id], start_done: !first.nil?, progress: map_progress(lv), pv: d[:progress_version],
+                   nv: NEAR_VERSION, seed: Rand.seed, start_flags: start_flags }.merge(near_for(d, edges, lv, start, start_door.nil?))
         end
         return nil
       end
@@ -856,7 +862,7 @@ module KIF
             KIF.log("Entrance levels around you couldn't be redone (#{ex.class}: #{ex.message})")
           end
           pbMessage(_INTL("No new door layout works from where you're standing, so your doors stay as they are. Try again somewhere else.")) if defined?(pbMessage)
-          KIF.log("Entrances: no layout from here after #{RETRIES_HERE} tries (seed #{Rand.seed}); kept the old one")
+          KIF.log("Entrances: no layout from here after #{RETRIES} tries (seed #{Rand.seed}); kept the old one")
         else
           Rand.data.delete(:ent_layout)
           pbMessage(_INTL("No beatable entrance layout was found for this seed; entrances stay as they are.")) if defined?(pbMessage)
@@ -1083,7 +1089,7 @@ module KIF
         start = nil; extra = []
         if (o = start_origin(s))
           start = o[:in_node]
-          extra = current_flags(d)
+          extra = s[:start_flags] || current_flags(d)   # saves from before start_flags: as before
           s[:start_door] ||= o[:id]
         end
         edges = edges_for(d, s[:in], s[:out])

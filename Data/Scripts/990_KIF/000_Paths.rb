@@ -19,10 +19,6 @@ module KIF
       return "."
     end
 
-    def self.packed?
-      return root != (Dir.pwd rescue root)
-    end
-
     # <root>/Logs, made when needed; the save folder if it can't be written
     def self.logs
       dir = File.join(root, "Logs")

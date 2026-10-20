@@ -397,9 +397,9 @@ module KIF
   module ModCompat
     MM_SCENES = ["Scene_Installed", "Scene_Browser", "Scene_ModderTools"]
 
+    # the updater's check (asks Wine's ntdll; Wine without a Z: drive too)
     def self.wine?
-      return @wine unless @wine.nil?
-      @wine = (File.exist?("Z:/etc") || File.exist?("Z:/proc")) rescue false
+      return KIF::Updater::Win.wine? rescue false
     end
 
     # true when this game's window is the foreground window (Windows);

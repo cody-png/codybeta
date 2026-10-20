@@ -118,6 +118,30 @@ end
 # (F-BATTLE-06) keep the status names :FROZEN / :SLEEP, so the AIs ask here
 # whether a Pokémon is really frozen / fully asleep.
 class PokeBattle_AI
+  # Does this party Pokémon (or battler) have this ability? DemICE asks it for
+  # Pokémon in the back (hazards). A mod that gives Pokémon more abilities
+  # (KIF-ER's innates) aliases this one method and the AI follows.
+  def kif_ai_party_ability?(pkmn, id)
+    return pkmn.respond_to?(:ability_id) && pkmn.ability_id == id
+  end
+
+  # DemICE's switch-in choice: the numbers a mod may change the same way
+  # (KIF-ER's Elite Redux versions)
+  # Swift Swim / Chlorophyll / Sand Rush / Slush Rush Speed multiplier
+  def kif_ai_weather_speed
+    return 2
+  end
+
+  # Does Solar Power boost this move?
+  def kif_ai_solar_power?(battler, move)
+    return move.specialMove?
+  end
+
+  # Sand Force's multiplier on this move in sand
+  def kif_ai_sand_force(battler, move)
+    return [:GROUND, :ROCK, :STEEL].include?(move.type) ? 1.3 : 1
+  end
+
   # Frozen and unable to act (not Frostbite)
   def kif_ai_frozen?(b)
     return b.status == :FROZEN && !KIF::Mechanics.frostbite_in_battle?

@@ -333,8 +333,9 @@ module KIF
     end
 
     # where a file of the mod lives once installed (game folder for assets)
+    # every file stays in the mod's folder; its pictures / sounds are found
+    # there by KIF::ModAssets (Cody, 2026-10-20: nothing is copied into the game)
     def dest_for(item, rel)
-      return File.join(root, rel) if asset?(rel)
       return File.join(folder_of(item), rel)
     end
 
@@ -343,7 +344,11 @@ module KIF
     end
 
     def record(item)
-      p = File.join(folder_of(item), RECORD)
+      return record_at(folder_of(item))
+    end
+
+    def record_at(folder)
+      p = File.join(folder, RECORD)
       return {} unless File.file?(p)
       out = {}
       File.read(p).split(/\r?\n/).each do |l|
@@ -439,12 +444,54 @@ module KIF
       return [done, failed, nil]
     end
 
-    GAME_COPY = ".kif_game"   # a game file a mod's asset replaced, kept to put back
+    GAME_COPY = ".kif_game"   # older KIF: a game file a mod's file replaced, kept to put back
 
     # rel is one of the game's own files (the installed update manifest)
     def game_file?(rel)
       m = (updater.local_manifest rescue nil)
       return m ? m.files.has_key?(rel) : false
+    end
+
+    # Once, for mods an older KIF installed: their pictures / sounds were
+    # copied into the game's folders (listed in .installed_assets) and a game
+    # file they replaced was kept as <file>.kif_game. Now they move into the
+    # mod's own folder and the game's files come back. A file that isn't the
+    # mod's any more (a KIF update or the player changed it) stays.
+    def migrate_copied_assets(mods_dir)
+      Dir.glob(File.join(mods_dir, "*", ASSETS)).each do |marker|
+        folder = File.dirname(marker)
+        rec = record_at(folder)
+        moved = back = left = 0
+        File.read(marker).split(/\r?\n/).map(&:strip).each do |rel|
+          next if rel.empty? || !KIF.safe_rel_path?(rel) || !asset?(rel)
+          game = File.join(root, rel)
+          mine = File.join(folder, rel)
+          keep = game + GAME_COPY
+          ours = File.file?(game) && (rec[rel].nil? || !updater.sha_ok? || updater.git_sha(game) == rec[rel])
+          if ours && !File.exist?(mine) && (File.file?(keep) || !game_file?(rel))
+            updater.mkdir_p(File.dirname(mine))
+            File.rename(game, mine)
+            moved += 1
+          elsif ours && File.file?(keep)
+            File.delete(game)   # the mod has its own copy already
+            moved += 1
+          elsif ours
+            left += 1   # replaced by a KIF before 0.21.62, no copy kept: a KIF update brings the game's back
+          end
+          if File.file?(keep)
+            if File.file?(game)
+              File.delete(keep)   # a newer game file is there: it stays
+            else
+              File.rename(keep, game)
+              back += 1
+            end
+          end
+        end
+        File.delete(marker)
+        log("#{File.basename(folder)}: #{moved} files moved into the mod, #{back} game files back" + (left > 0 ? ", #{left} game files still the mod's (no copy was kept)" : ""))
+      rescue StandardError => e
+        log("#{File.basename(folder.to_s)}: couldn't tidy the copied files (#{e.class}: #{e.message}); tried again next start")
+      end
     end
 
     def move_in(item, todo, dir)
@@ -457,12 +504,6 @@ module KIF
         src = updater.staged(dir, rel)
         dest = dest_for(item, rel)
         updater.mkdir_p(File.dirname(dest))
-        # a game file replaced by a mod's asset is kept, not deleted
-        kept = false
-        if asset?(rel) && File.file?(dest) && !File.file?(dest + GAME_COPY) && game_file?(rel)
-          File.rename(dest, dest + GAME_COPY)
-          kept = true
-        end
         # the old file is moved aside, not deleted, until the new one is in:
         # a rename that fails (antivirus still scanning the download) puts it back
         aside = dest + ".kif_old"
@@ -472,38 +513,19 @@ module KIF
           File.rename(src, dest)
         rescue StandardError
           File.rename(aside, dest) if File.file?(aside) && !File.file?(dest)
-          File.rename(dest + GAME_COPY, dest) if kept && !File.file?(dest)
           raise
         end
         (File.delete(aside) rescue nil) if File.file?(aside)
       end
-      # files the mod no longer has: removed when they're still as installed;
-      # a game file it had replaced comes back
+      # files the mod no longer has: removed when they're still as installed
       old.each do |rel, sha|
         next if item.files.has_key?(rel)
         p = dest_for(item, rel)
-        if File.file?(p + GAME_COPY)
-          # a KIF update put a newer game file there since: it stays, the old copy goes
-          if File.file?(p) && updater.sha_ok? && updater.git_sha(p) != sha
-            File.delete(p + GAME_COPY)
-            next
-          end
-          File.delete(p) if File.file?(p)
-          File.rename(p + GAME_COPY, p)
-          next
-        end
         next unless File.file?(p)
-        next if asset?(rel) && game_file?(rel)   # never delete the game's own file
         File.delete(p) if !updater.sha_ok? || updater.git_sha(p) == sha
       end
       File.open(File.join(folder_of(item), RECORD), "wb") do |f|
         item.files.sort.each { |rel, (sha, _size)| f.write("#{sha} #{rel}\r\n") }
-      end
-      assets = item.files.keys.select { |rel| asset?(rel) }.sort
-      if assets.empty?
-        File.delete(File.join(folder_of(item), ASSETS)) if File.file?(File.join(folder_of(item), ASSETS))
-      else
-        File.open(File.join(folder_of(item), ASSETS), "wb") { |f| f.write(assets.join("\n") + "\n") }
       end
       KIF::Mods.sources.each { |s| s.instance_variable_set(:@entries, nil) if s.is_a?(KIF::Mods::NativeSource) }
       @installed_index = nil

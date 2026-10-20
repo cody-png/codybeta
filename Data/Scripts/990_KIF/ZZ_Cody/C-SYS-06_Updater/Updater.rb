@@ -867,6 +867,7 @@ KIF::Options.add(:others, :global) {
 # whenever PIF releases a newer version.
 def find_newer_available_version
   KIF::Updater.after_update
-  KIF::Updater.check(false)
+  updating = KIF::Updater.check(false)
+  KIF::ModCatalogUI.startup_check if defined?(KIF::ModCatalogUI) && updating != true
   return nil
 end

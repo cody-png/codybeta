@@ -73,6 +73,28 @@ module KIF
 
     # file names loaded straight from the Mods folder this session
     def self.loaded_root; @loaded_root || []; end
+    def self.loaded_dirs; @loaded_dirs || []; end
+
+    # Uninstall (Cody, 2026-10-20): deletes a mod of KIF's own Mods folder
+    # (its folder, or its loose .rb). Its settings move to the uninstalled
+    # store first (KIF::ModSettings.stash). Code already loaded stays until
+    # the game restarts. Mod Manager's mods are Mod Manager's to remove.
+    def self.uninstall(e)
+      return false unless e && e.source.is_a?(NativeSource)
+      path = File.expand_path(e.path.to_s)
+      root = File.expand_path(e.source.dir.to_s)
+      return false unless path.start_with?(root + "/") && File.exist?(path)
+      KIF::ModSettings.stash(e.id) if defined?(KIF::ModSettings) && KIF::ModSettings.active?
+      File.directory?(path) ? KIF.rm_tree(path) : File.delete(path)
+      set_disabled(e.id, false) if disabled.include?(e.id)
+      e.source.instance_variable_set(:@entries, nil)
+      KIF::ModCatalog.instance_variable_set(:@installed_index, nil) if defined?(KIF::ModCatalog)
+      KIF.log("Mod uninstalled: #{e.name} (#{e.id})")
+      return !File.exist?(path)
+    rescue StandardError => ex
+      KIF.log("Mod #{e && e.id} couldn't be uninstalled: #{ex.class}: #{ex.message}")
+      return false
+    end
 
     # f is the same script as one loaded loose from Mods/ (same name AND same
     # bytes): loading it again makes its aliases recurse. Only the name used
@@ -333,7 +355,9 @@ module KIF
                                 :author => h["author"]&.to_s, :description => desc, :kind => :folder,
                                 :path => path, :source => self)
             else
-              next if Dir[File.join(path, "**", "*.rb")].empty?
+              # a folder with only pictures / sounds is a mod too (KIF::ModAssets)
+              next if Dir[File.join(path, "**", "*.rb")].empty? &&
+                      KIF::ModAssets::DIRS.none? { |d| File.directory?(File.join(path, d)) }
               list << Entry.new(:id => c, :name => c, :kind => :folder, :path => path, :source => self)
             end
           end
@@ -445,6 +469,7 @@ module KIF
     def self.load_dir(dir)
       @loaded_root = []
       @loaded_root_paths = {}
+      @loaded_dirs = []   # folder mods that loaded, in order (their pictures / sounds)
       @disabled = nil
       @status = {}
       @names = {}
@@ -493,6 +518,7 @@ module KIF
         bad = results.find { |r| r != true }
         status[e.id] = { :loaded => bad.nil?, :error => bad }
         if bad.nil?
+          @loaded_dirs << e.path.to_s
           KIF.log("Mod loaded: #{e.name} (folder #{e.id}, #{scripts.length} scripts)")
         else
           KIF::ModRules.release(e.id)
@@ -533,7 +559,9 @@ module KIF
       KIF::ModCompat.before_mods_load if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:before_mods_load)
       Dir.mkdir(FOLDER) unless File.directory?(FOLDER)
       KIF::ModSettings.install(FOLDER) if defined?(KIF::ModSettings)
+      KIF::ModCatalog.migrate_copied_assets(FOLDER) if defined?(KIF::ModCatalog)   # once: files older KIF copied into the game
       load_dir(File.join(".", FOLDER))
+      KIF::ModAssets.build(@loaded_dirs || []) if defined?(KIF::ModAssets)
       KIF::ModCompat.after_mods_loaded if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:after_mods_loaded)
       KIF::AbilityText.install if defined?(KIF::AbilityText)   # outside mods' own ability-text aliases
       KIF::MoveText.install if defined?(KIF::MoveText)

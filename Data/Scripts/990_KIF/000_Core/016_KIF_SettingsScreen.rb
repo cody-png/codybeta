@@ -183,8 +183,9 @@ module KIF
       attr_accessor :kif_badge
     end
 
-    # Mods section: Installed, Browse (the KIF-Mods catalog) and Updates
-    VIEWS = [:installed, :browse, :updates]
+    # Mods section: Installed, Browse (the catalogs), Modpacks, Share Code
+    # and Updates
+    VIEWS = [:installed, :browse, :modpacks, :share, :updates]
     @mods_view = 0
     class << self
       attr_accessor :mods_view
@@ -203,6 +204,7 @@ module KIF
       bits << e.description.to_s.gsub(/\s+/, " ")[0, 160] if e.description && !e.description.empty?
       bits << _INTL("Mod Manager mod.") if e.kind == :mod_manager
       bits << _INTL("Mods folder: {1}", e.id) if bits.empty?
+      bits << _INTL("{1}: uninstall.", KIF::Keys.name(Input::USE)) if e.source.is_a?(KIF::Mods::NativeSource)
       return KIF::PixelFont.utf8(bits.join(" "))
     end
 
@@ -232,12 +234,12 @@ module KIF
       rows = []
       if cat
         ups = KIF::ModCatalog.items ? KIF::ModCatalog.updates.length : 0
-        names = [_INTL("Installed {1}", list.length), _INTL("Browse"),
+        names = [_INTL("Installed {1}", list.length), _INTL("Browse"), _INTL("Modpacks"), _INTL("Share Code"),
                  ups > 0 ? _INTL("Updates {1}", ups) : _INTL("Updates")]
         # no name: the bar is the tab row
         opt = EnumOption.new("", names, proc { @mods_view || 0 },
                              proc { |v| @mods_view = v },
-                             _INTL("Left/Right: your mods, the KIF-Mods catalog, or updates for the mods you have."))
+                             _INTL("Left/Right: your mods, the mod catalogs, modpacks, share codes, or updates for the mods you have."))
         rows << Row.new(:opt, opt, nil, opt.name, :mods, nil, 0, nil)
         # once per tab visit: a failed read waits for "Try again" instead of
         # contacting GitHub on every redraw
@@ -253,7 +255,11 @@ module KIF
         end
       end
       return rows + installed_rows(list) if view == 0
-      return rows + browse_rows if view == 1
+      case VIEWS[view]
+      when :browse   then return rows + browse_rows
+      when :modpacks then return rows + pack_rows
+      when :share    then return rows + share_rows
+      end
       return rows + update_rows
     end
 
@@ -276,7 +282,9 @@ module KIF
           elsif !loaded.nil? && (loaded ? true : false) != e.enabled?
             opt.kif_badge = [e.enabled? ? _INTL("ON NEXT START") : _INTL("OFF NEXT START"), KIF::PixelUI::WARN]
           end
-          rows << Row.new(:opt, opt, :global, e.name.to_s, :mods, "Installed", 0, nil)
+          # USE: uninstall (KIF's own Mods folder; Mod Manager removes its own)
+          act = e.source.is_a?(KIF::Mods::NativeSource) ? [:mod_menu, e] : nil
+          rows << Row.new(:opt, opt, :global, e.name.to_s, :mods, "Installed", 0, nil, act)
         end
       end
       withset = list.reject { |e| e.settings.nil? || e.settings.empty? }
@@ -293,6 +301,19 @@ module KIF
         end
       end
       return rows
+    end
+
+    # USE on an installed mod
+    def mod_menu(e)
+      cmd = pbMessage(KIF::PixelFont.utf8(e.name.to_s), [_INTL("Uninstall"), _INTL("Cancel")], 2)
+      return false unless cmd == 0
+      return false unless pbConfirmMessage(KIF::PixelFont.utf8(_INTL("Remove {1}? Its settings are kept for if you install it again.", e.name)))
+      if KIF::Mods.uninstall(e)
+        pbMessage(KIF::PixelFont.utf8(_INTL("{1} was removed. The game finishes removing it the next time it starts.", e.name)))
+        return true
+      end
+      pbMessage(KIF::PixelFont.utf8(_INTL("{1} couldn't be removed (see Logs/KIF_log.txt). Close the game and delete its folder in Mods.", e.name)))
+      return false
     end
 
     def catalog_desc(it)
@@ -344,6 +365,49 @@ module KIF
                                _INTL("That catalog didn't answer. Press to try again."))
         rows << Row.new(:opt, opt, nil, opt.name, :mods, "Catalog", 0, nil, [:catalog_reload])
       end
+      return rows
+    end
+
+    def pack_rows
+      cat = KIF::ModCatalog
+      if cat.items.nil?
+        opt = ButtonOption.new(_INTL("Try again"), nil, cat.error || _INTL("The mod catalog is empty."))
+        return [Row.new(:opt, opt, nil, opt.name, :mods, nil, 0, nil, [:catalog_reload])]
+      end
+      if cat.packs.empty?
+        opt = ButtonOption.new(_INTL("No modpacks yet"), nil, _INTL("None of the catalogs has a modpack yet. Press to check again."))
+        return [Row.new(:opt, opt, nil, opt.name, :mods, "Modpacks", 0, nil, [:catalog_reload])]
+      end
+      rows = []
+      cat.packs.group_by { |pk| pk.catalog ? pk.catalog.name : "KIF-Mods" }.each do |cname, list|
+        head = _INTL("{1} modpacks", cname)
+        rows << Row.new(:head, nil, nil, KIF::PixelFont.utf8(head), :mods, head, 0, nil)
+        list.each do |pk|
+          names = pk.mods.map { |id, _| (it = cat.find(id)) ? it.name : id }
+          who = []
+          who << "v#{pk.version}" unless pk.version.empty?
+          who << _INTL("by {1}", pk.author) unless pk.author.empty?
+          desc = _INTL("{1} mods: {2}.", names.length, names.join(", "))
+          desc += " " + who.join(" ") + "." unless who.empty?
+          desc += " " + pk.description unless pk.description.empty?
+          opt = BadgeButton.new(pk.name, nil, KIF::PixelFont.utf8(desc.gsub(/\s+/, " ")))
+          todo = KIF::ModPacks.plan(pk.mods)[:list]
+          opt.kif_badge = todo.empty? ? [_INTL("INSTALLED"), KIF::PixelUI::OWN] : [_INTL("{1} MODS", names.length), KIF::PixelUI::PILL]
+          rows << Row.new(:opt, opt, nil, pk.name, :mods, head, 0, nil, [:pack_install, pk])
+        end
+      end
+      return rows
+    end
+
+    def share_rows
+      n = KIF::ModPacks.mine.length
+      rows = [Row.new(:head, nil, nil, _INTL("Share Code"), :mods, "Share Code", 0, nil)]
+      opt = ButtonOption.new(_INTL("Copy my share code"), nil,
+                             _INTL("Copies a code for the {1} mods you have On. Someone who uses it gets the same mods. Works with Mod Manager codes too.", n))
+      rows << Row.new(:opt, opt, nil, opt.name, :mods, "Share Code", 0, nil, [:share_export])
+      opt = ButtonOption.new(_INTL("Use a share code"), nil,
+                             _INTL("Copy a code someone shared, then press here (or type it in). Installs the mods from it you don't have."))
+      rows << Row.new(:opt, opt, nil, opt.name, :mods, "Share Code", 0, nil, [:share_import])
       return rows
     end
 
@@ -582,7 +646,10 @@ class KifSettingsScreen
     d = (KIF::SettingsScreen.description_for(opt) rescue nil) || opt.description
     if d.is_a?(Array)
       v = (opt.get rescue 0)
-      d = d[v.is_a?(Integer) ? v : 0] || d[0]
+      # a value a mod added has no rewritten line: the option's own text, if
+      # it has one (never another value's text)
+      own = opt.respond_to?(:description) ? opt.description : nil
+      d = v.is_a?(Integer) ? (d[v] || (own.is_a?(Array) ? own[v] : nil)) : d[0]
     end
     d = PF.utf8(d.to_s).gsub(/\s+/, " ").strip
     by = locked_by(opt)
@@ -756,6 +823,9 @@ class KifSettingsScreen
       when :mod_category
         name = r.action[1]
         open_sub(_INTL(name)) { category_page(name) }
+      when :mod_menu
+        hidden { KIF::SettingsScreen.mod_menu(r.action[1]) }
+        after_change
       when :catalog_install
         hidden { KIF::ModCatalogUI.install(r.action[1]) }
         after_change
@@ -764,6 +834,14 @@ class KifSettingsScreen
         after_change
       when :catalog_reload
         hidden { KIF::ModCatalog.load(true) }
+        after_change
+      when :pack_install
+        hidden { KIF::ModCatalogUI.install_pack(r.action[1]) }
+        after_change
+      when :share_export
+        hidden { KIF::ModCatalogUI.share_export }
+      when :share_import
+        hidden { KIF::ModCatalogUI.share_import }
         after_change
       end
       return

@@ -33,6 +33,7 @@ module KIF
   module ModCatalog
     REPO       = "KIF-Mods/mods"
     DISCORD_REPO = "cody-png/kif-discord-mods"   # mods only shared on Discord (made with import_mods.py)
+    OWN_REPO     = "cody-png/kif-mods"           # KIF Beta's own mods from now on (Cody, 2026-10-20)
     SOURCE_FILE = "KIF_mods_source.txt"
     CATALOGS_FILE = "KIF_mods_catalogs.txt"
     ASSET_DIRS = %w[Graphics Audio Fonts]
@@ -153,7 +154,10 @@ module KIF
     def catalogs
       s = source
       list = [s ? Catalog.new(nil, nil, "KIF-Mods", s) : Catalog.new(REPO, "main", "KIF-Mods")]
-      list << Catalog.new(DISCORD_REPO, "main", "Discord Mods") unless s   # a local test source stays alone
+      unless s   # a local test source stays alone
+        list << Catalog.new(OWN_REPO, "main", "KIF Beta Mods")
+        list << Catalog.new(DISCORD_REPO, "main", "Discord Mods")
+      end
       file = File.join(root, CATALOGS_FILE)
       if File.file?(file)
         File.read(file).to_s.force_encoding("UTF-8").split(/\r?\n/).each do |l|

@@ -403,6 +403,7 @@ These features have no option of their own.
   - **Share Code** – *Copy my share code* copies a code (KIF-...) for the mods you have On; *Use a share code* installs the mods from a code someone copied for you (or type it in). Codes from Mod Manager 2.0 work too.
   - **Updates** – installed catalog mods with a newer version; **Update all** updates them in one go. Only changed files are downloaded, and a mod's own settings are kept. At start-up, right after KIF's own update check, KIF asks "Updates for N mods. Open Mods > Updates?" (not when Updates is Off or there's no internet).
   With Mod Manager 2.0 installed, Browse, Modpacks, Share Code and Updates are left to its own browser.
+- **Celadon Dept. Store:** the X-item clerk sells X Sp. Def (PIF listed a placeholder "Thing" for P50 there by mistake).
 - **Trade bubbles:** every NPC who offers a trade shows the trade bubble above their head until the trade is done (PIF only showed it for some of them).
 - **Faster PC boxes:** a fusion's icon is made much faster the first time it's shown, and switching boxes no longer draws the new box's icons twice, so flipping between full boxes doesn't stutter. Shiny fusion icons show the shiny colours on the right half in both the party and the PC.
 - **Crash log:** if the game crashes, the full error is saved to `KIF_errorlog.txt` in the `Logs` folder next to InfiniteFusion.exe, ready to share. Every other KIF log (session log, frame log, Entrances returns) is in that folder too.

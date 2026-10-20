@@ -1,8 +1,8 @@
-KIF Beta 0.21.67
-- Save Backups is always on: switching PC & Saves Off no longer lets the game delete old backups (named ones included).
-- Saves the game makes by itself (Transfer Box, PC, Battle Frontier) keep their newest 10 backups, so the backups folder stops growing. Saves you make keep every backup, as before.
-- Comatose works for every Pokemon that has it (random abilities, mods), not only Komala.
-- Entrances: Return to Pokemon Center no longer sends you into a Center you can't leave, after Entrances were switched Off and On on a random-start game.
-- Entrances: on a random-start game, Randomize now places trainer levels from your start, not from the badges you have now.
-- Mods: when a mod stops replacing a game picture, the picture from your current KIF comes back (not an older one).
-- Battle AI: its switch-in and entry-hazard choices can count abilities a mod adds (KIF: Elite Redux innates).
+KIF Beta 0.21.68
+- Mods: a mod's pictures and sounds stay in its own folder and the game uses them from there, so a mod never overwrites a game file. Mods an older KIF installed are tidied once and the game's own pictures come back.
+- Mods: a folder with only pictures and sounds is a mod. When two mods have the same picture, the one that loads later wins.
+- Mods: Uninstall a mod from Installed (USE on it). Its settings are set aside outside your save and come back if you install it again.
+- Mods: new Modpacks and Share Code tabs. Install a set of mods at once, or copy a code for your mods and give it to a friend (Mod Manager 2.0 codes work too).
+- Mods: at start-up, after KIF's own update check, the game tells you when your mods have updates.
+- Mods: a third catalog, KIF Beta Mods.
+- Options: a choice a mod adds to a setting no longer shows another choice's description.

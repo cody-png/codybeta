@@ -7,9 +7,8 @@
 # (curl, then a file-by-file fallback) and every file is checked against its
 # git id before it is moved in.
 #
-# Installing: Graphics/, Audio/ and Fonts/ inside a mod go to the game folder
-# (listed in the mod's .installed_assets, the file Mod Manager uses too);
-# everything else goes to Mods/<folder>/. .kif_installed in the mod folder
+# Installing: every file goes to Mods/<folder>/ (its pictures and sounds are
+# found there, KIF::ModAssets). .kif_installed in the mod folder
 # lists what was installed, so an update can remove files the mod dropped
 # (only ones still unchanged). Other files in the folder (a mod's own
 # settings) are never touched.
@@ -28,6 +27,8 @@
 #     from there)
 #   * Ruby: KIF::ModCatalog.add_catalog("owner/repo", branch: "main", name: "...")
 # A mod found in two catalogs comes from the first one (KIF-Mods first).
+# A catalog's modpacks/<folder>/modpack.json files are its modpacks
+# (KIF::ModPacks).
 #===============================================================================
 module KIF
   module ModCatalog
@@ -171,6 +172,7 @@ module KIF
     end
 
     def items;   return @items; end
+    def packs;   return @packs || []; end
     def checked; return @checked; end
     def error;   return @error; end
     # catalogs that couldn't be read last time: [Catalog, ...]
@@ -190,6 +192,7 @@ module KIF
       @error = nil
       @failed = []
       list = []
+      packs = []
       cats = catalogs
       cats.each do |cat|
         files = cat.local? ? local_tree(cat.path) : remote_tree(cat)
@@ -199,6 +202,7 @@ module KIF
           next
         end
         list.concat(items_in(cat, files, list))
+        packs.concat(packs_in(cat, files, packs))
       end
       updater.hide_status
       if list.empty? && !@failed.empty?
@@ -206,9 +210,33 @@ module KIF
         return @items
       end
       @items = list
+      @packs = packs
       @checked = Time.now
       log("#{list.length} mods listed (#{cats.length - @failed.length} of #{cats.length} catalogs)")
       return @items
+    end
+
+    # Load screen: the installed mods with an update, reading only their own
+    # catalog entries so the start stays quick. Browse still reads the whole
+    # list when opened.
+    # shortcut: matched by folder name, a renamed mod folder isn't checked at start-up
+    def startup_updates
+      @installed_index = nil
+      have = installed_index.values
+      return [] if have.empty?
+      out = []
+      catalogs.each_with_index do |c, i|
+        files = c.local? ? local_tree(c.path) : remote_tree(c)
+        if files.nil?
+          break if i == 0   # the first catalog didn't answer: most likely offline
+          next
+        end
+        mine = files.select { |path, _| have.include?(path.split("/", 2)[0]) }
+        out.concat(items_in(c, mine, out))
+      end
+      return out.select { |it| update?(it) && !kif_problem(it) }
+    ensure
+      updater.hide_status
     end
 
     # the mods of one catalog (one already listed by an earlier catalog is
@@ -233,6 +261,22 @@ module KIF
           next
         end
         out << it
+      end
+      return out
+    end
+
+    # the modpacks of one catalog (one already listed by an earlier catalog
+    # is skipped)
+    def packs_in(cat, files, before = [])
+      folders = files.keys.map { |p| p =~ %r{\Amodpacks/([^/]+)/modpack\.json\z} ? $1 : nil }.compact.sort_by(&:downcase)
+      out = []
+      folders.each do |f|
+        text = updater.fetch(updater.url_for(cat.base, "modpacks/#{f}/modpack.json"))
+        json = text ? (KIF::Mods::MiniJSON.parse(KIF::PixelFont.utf8(text).sub(/\A\uFEFF/, "")) rescue nil) : nil
+        next log("#{cat.name}: modpacks/#{f}/modpack.json unreadable") unless json.is_a?(Hash) && json["mods"].is_a?(Array)
+        pk = KIF::ModPacks::Pack.new(f, json, cat)
+        next if (before + out).any? { |o| o.id == pk.id }
+        out << pk
       end
       return out
     end
@@ -582,6 +626,90 @@ module KIF
       bytes = ups.inject(0) { |s, it| s + cat.plan(it).inject(0) { |t, f| t + f[2] } }
       return unless pbConfirmMessage(_INTL("Update {1} mods ({2})? Their settings are kept.", ups.length, KIF::Updater.size_text(bytes)))
       run(ups)
+    end
+
+    # a modpack or a share code: installs the mods from it the player
+    # doesn't have and updates the ones older than it wants
+    def install_set(title, wanted)
+      p = KIF::ModPacks.plan(wanted)
+      notes = []
+      notes << _INTL("Not in any catalog: {1}.", p[:missing].join(", ")) unless p[:missing].empty?
+      notes << _INTL("Won't start on this KIF: {1}.", p[:wont].join(", ")) unless p[:wont].empty?
+      off = p[:off].empty? ? nil : _INTL("Installed but Off: {1}. Switch them On under Installed.", p[:off].join(", "))
+      if p[:list].empty?
+        pbMessage(KIF::PixelFont.utf8(([_INTL("You have every mod from {1} that the catalogs have.", title)] + notes + [off].compact).join(" ")))
+        return
+      end
+      pbMessage(KIF::PixelFont.utf8(notes.join(" "))) unless notes.empty?
+      fresh = p[:list].count { |it| !cat.installed?(it) }
+      ups = p[:list].length - fresh
+      bytes = p[:list].inject(0) { |s, it| s + cat.plan(it).inject(0) { |t, f| t + f[2] } }
+      size = KIF::Updater.size_text(bytes)
+      q = if ups == 0
+            _INTL("Install {1} mods from {2} ({3})?", fresh, title, size)
+          elsif fresh == 0
+            _INTL("Update {1} mods for {2} ({3})? Their settings are kept.", ups, title, size)
+          else
+            _INTL("Install {1} mods and update {2} for {3} ({4})?", fresh, ups, title, size)
+          end
+      return unless pbConfirmMessage(KIF::PixelFont.utf8(q))
+      run(p[:list])
+      pbMessage(KIF::PixelFont.utf8(off)) if off
+    end
+
+    def install_pack(pk)
+      install_set(pk.name, pk.mods)
+    end
+
+    # Share Code tab: copy a code for the mods that are On
+    def share_export
+      list = KIF::ModPacks.mine
+      return pbMessage(_INTL("No mods are On, so there's nothing to share.")) if list.empty?
+      code = KIF::ModPacks.encode(list)
+      copied = begin
+                 Input.clipboard = code
+                 true
+               rescue StandardError, NameError
+                 false
+               end
+      shown = KIF::ModPacks.spaced(code)
+      if copied
+        pbMessage(_INTL("Copied the code for your {1} mods. Paste it to share it:\n{2}", list.length, shown))
+      else
+        pbMessage(_INTL("Your code for {1} mods (copying didn't work, so write it down):\n{2}", list.length, shown))
+      end
+      KIF.log("Mods: share code for #{list.length} mods copied#{copied ? '' : ' (clipboard failed)'}")
+    end
+
+    # Share Code tab: a code someone copied (clipboard, or typed in)
+    def share_import
+      clip = (Input.clipboard.to_s rescue "")
+      code = clip.strip =~ /\AKIFr?-/ ? clip : nil
+      code ||= pbMessageFreeText(_INTL("Type the share code (it starts with KIF-)."), "", false, 500)
+      return if code.nil? || code.strip.empty?
+      list = KIF::ModPacks.decode(code)
+      return pbMessage(_INTL("That isn't a share code. Codes start with KIF-.")) unless list
+      cat.load if cat.items.nil?
+      return pbMessage(cat.error || _INTL("Couldn't reach the mod catalog. Check the internet connection and try again.")) if cat.items.nil?
+      KIF.log("Mods: share code with #{list.length} mods: #{list.map(&:first).join(', ')}")
+      install_set(_INTL("the share code"), list)
+    end
+
+    # load screen, right after KIF's own update check (Cody, 2026-10-20);
+    # nothing when Updates is Off or the catalogs don't answer
+    def startup_check
+      return false unless cat.available? && KIF::Updater.channel != 2
+      ups = cat.startup_updates
+      return false if ups.empty?
+      cat.log("updates at start-up: #{ups.map { |it| "#{it.id} #{it.version}" }.join(', ')}")
+      q = ups.length == 1 ? _INTL("An update for 1 mod. Open Mods > Updates?") : _INTL("Updates for {1} mods. Open Mods > Updates?", ups.length)
+      return false unless pbMessage(q, [_INTL("Yes"), _INTL("Later")], 2) == 0
+      KIF::SettingsScreen.mods_view = KIF::SettingsScreen::VIEWS.index(:updates)
+      pbFadeOutIn { KifSettingsScreen.new(true, :mods).main }
+      return true
+    rescue StandardError => e
+      cat.log("start-up check failed (#{e.class}: #{e.message})")
+      return false
     end
 
     def run(list)

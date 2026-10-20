@@ -646,7 +646,10 @@ class KifSettingsScreen
     d = (KIF::SettingsScreen.description_for(opt) rescue nil) || opt.description
     if d.is_a?(Array)
       v = (opt.get rescue 0)
-      d = d[v.is_a?(Integer) ? v : 0] || d[0]
+      # a value a mod added has no rewritten line: the option's own text, if
+      # it has one (never another value's text)
+      own = opt.respond_to?(:description) ? opt.description : nil
+      d = v.is_a?(Integer) ? (d[v] || (own.is_a?(Array) ? own[v] : nil)) : d[0]
     end
     d = PF.utf8(d.to_s).gsub(/\s+/, " ").strip
     by = locked_by(opt)

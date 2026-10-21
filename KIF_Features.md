@@ -62,11 +62,11 @@ Defaults are shown in *(italics)*.
 - **Shiny Fuse Dye** – Off / On / Random *(Off)*. On: fusing a shiny keeps its colours on the result, so you can "dye" a fusion. Random: the colours are re-rolled after every fusion or unfusion.
 - **Shiny Gamble Odds** – slider, 0–1000 *(100)*. The odds for the PC's Shiny Gamble: 1 in this number. 0 means every gamble wins.
 - **Wild Shiny Odds** – slider, 1–65536 *(16)*. Your shiny chance out of 65,536. 16 is the standard 1 in 4,096; raise it for more shinies. Use "Increment Slider by" (see the end of this guide) to move it faster.
-- **Shiny Trainer Pokemon** – Off / Ace / All / Disabled *(Off)*.
+- **Shiny Trainer Pokemon** – Off / Ace / All / Normal *(Off)*.
   - Off: trainers' Pokémon have normal shiny odds.
   - Ace: every trainer's ace is shiny.
   - All: every trainer Pokémon is shiny.
-  - Disabled: trainer Pokémon are never shiny.
+  - Normal: trainer Pokémon use the same shiny odds as your Wild Shiny Odds slider. (This used to be called Disabled.)
 
 ---
 
@@ -122,7 +122,7 @@ All options in this menu are per-save.
 - **Self-Fusion Stat Boost** – Off / On *(Off)*. A Pokémon fused with itself gets a stat boost scaled to its base stat total.
 - **Fusion BaseStats** – Off / Head / Better *(Off)*. Choose how your fusions' base stats are made. The six sliders under it set, per stat, what percentage comes from the head (Head) or from whichever parent has the higher stat (Better).
 - **NPC Fusion BaseStats** – Off / Head / Better *(Off)*. The same, for other trainers' and wild fusions. Has its own six sliders.
-- **Dominant Fusion Types** – Off / On *(Off)*. Brings back the pre-v6 fusion typing, where dominant types such as Steel or Water take priority.
+- **Dominant Fusion Types** – Off / On *(Off)*. Brings back the pre-v6 fusion typing, where dominant types such as Steel or Water take priority. With randomized types it uses the types a species has in your game (a Bulbasaur randomized to Ice makes Ice fusions).
 - **Head Legendary Breeding** – Off / On *(Off)*. Fusions with a legendary head can breed again, as in older PIF versions.
 
 ### K-Eggs
@@ -225,7 +225,7 @@ All options in this menu are per-save.
 
 ### Global
 
-- **Save Backups** – Infinite / PIF *(Infinite)*. Infinite: every save you make keeps a backup that is never deleted; autosaves keep only their newest 10 (they were filling gigabytes on long games). PIF: only the newest ones are kept (backups you named are never removed). The Save menu also gains:
+- **Save Backups** – Infinite / PIF *(Infinite)*. Always works, even with the PC & Saves module Off. Infinite: every save you make keeps a backup that is never deleted; saves the game makes by itself (autosaves, Transfer Box, PC, Battle Frontier) keep only their newest 10 (they were filling gigabytes on long games). PIF: only the newest ones are kept (backups you named are never removed). The Save menu also gains:
   - **Name the next backup:** gives that backup a label in the load-backup list.
   - **Open the save folder.**
 - **Debug Exclusive** – Off / On *(Off)*. On: Import/Export and other tools need Debug mode.
@@ -403,6 +403,8 @@ These features have no option of their own.
   - **Share Code** – *Copy my share code* copies a code (KIF-...) for the mods you have On; *Use a share code* installs the mods from a code someone copied for you (or type it in). Codes from Mod Manager 2.0 work too.
   - **Updates** – installed catalog mods with a newer version; **Update all** updates them in one go. Only changed files are downloaded, and a mod's own settings are kept. At start-up, right after KIF's own update check, KIF asks "Updates for N mods. Open Mods > Updates?" (not when Updates is Off or there's no internet).
   With Mod Manager 2.0 installed, Browse, Modpacks, Share Code and Updates are left to its own browser.
+- **Misty:** losing to her no longer keeps her gym music playing in the Pokémon Center.
+- **Comatose** works for every Pokémon that has it (random abilities, mods), not only Komala (PIF checked for Komala).
 - **Celadon Dept. Store:** the X-item clerk sells X Sp. Def (PIF listed a placeholder "Thing" for P50 there by mistake).
 - **Trade bubbles:** every NPC who offers a trade shows the trade bubble above their head until the trade is done (PIF only showed it for some of them).
 - **Faster PC boxes:** a fusion's icon is made much faster the first time it's shown, and switching boxes no longer draws the new box's icons twice, so flipping between full boxes doesn't stutter. Shiny fusion icons show the shiny colours on the right half in both the party and the PC.

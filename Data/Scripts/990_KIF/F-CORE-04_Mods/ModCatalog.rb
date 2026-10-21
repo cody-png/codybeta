@@ -156,7 +156,7 @@ module KIF
       s = source
       list = [s ? Catalog.new(nil, nil, "KIF-Mods", s) : Catalog.new(REPO, "main", "KIF-Mods")]
       unless s   # a local test source stays alone
-        list << Catalog.new(OWN_REPO, "main", "KIF Beta Mods")
+        list << Catalog.new(OWN_REPO, "main", "KIF Mods (cody-png)")
         list << Catalog.new(DISCORD_REPO, "main", "Discord Mods")
       end
       file = File.join(root, CATALOGS_FILE)

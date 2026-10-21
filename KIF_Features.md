@@ -402,7 +402,7 @@ These features have no option of their own.
   With Mod Manager 2.0 installed, Browse, Modpacks, Share Code and Updates are left to its own browser.
 - **Mods that change KIF:** a mod can replace one KIF feature with its own version, or set some settings and modules while it's On. Those rows show LOCKED ("Set by <mod>"). Switch the mod Off and your own settings are back.
 - **Mods that can't start:** a mod made for another KIF version, or one that doesn't work with a mod you have On, isn't loaded. Options > Mods shows it as BLOCKED with the reason. Browse warns before installing one (WON'T START / CLASH).
-- **More mod catalogs:** Browse lists KIF-Mods, KIF Beta Mods (KIF's own mods) and Discord Mods (mods shared on Discord), and can list other modders' catalogs too. A mod can bring its own, or add `owner/repo` lines to `KIF_mods_catalogs.txt` next to the game.
+- **More mod catalogs:** Browse lists KIF-Mods, KIF Mods (cody-png) (KIF's own mods) and Discord Mods (mods shared on Discord), and can list other modders' catalogs too. A mod can bring its own, or add `owner/repo` lines to `KIF_mods_catalogs.txt` next to the game.
 - **Misty:** losing to her no longer keeps her gym music playing in the Pokémon Center.
 - **Comatose** works for every Pokémon that has it (random abilities, mods), not only Komala (PIF checked for Komala).
 - **Celadon Dept. Store:** the X-item clerk sells X Sp. Def (PIF listed a placeholder "Thing" for P50 there by mistake).

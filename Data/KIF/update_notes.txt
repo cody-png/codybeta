@@ -1,4 +1,4 @@
-KIF Beta 1.0.0
-- KIF 1.0.0 is here: the first full release of KIF on Pokemon Infinite Fusion 6.8.2. Thank you to everyone who played and tested the beta builds!
-- The full release notes are in the Discord announcement and on the GitHub releases page.
-- The feature guide (KIF_Features.md, next to the game) is up to date.
+KIF 1.0.1
+- Mods: the catalog of KIF's own mods is now called KIF Mods (cody-png) in Browse.
+- Mods: Browse reads a new mod catalog correctly from the start (a brand-new catalog could look empty for a few minutes).
+- The feature guide (KIF_Features.md) and the README are tidied up and use the KIF 1.0 name.

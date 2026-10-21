@@ -1,4 +1,2 @@
-KIF 1.0.1
-- Mods: the catalog of KIF's own mods is now called KIF Mods (cody-png) in Browse.
-- Mods: Browse reads a new mod catalog correctly from the start (a brand-new catalog could look empty for a few minutes).
-- The feature guide (KIF_Features.md) and the README are tidied up and use the KIF 1.0 name.
+KIF 1.0.2
+- Mods: installing a mod from Options > Mods > Browse works again. In 1.0.0 and 1.0.1 it failed on Windows and opened the old Options screen instead.

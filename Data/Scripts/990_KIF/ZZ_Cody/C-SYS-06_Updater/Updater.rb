@@ -500,6 +500,7 @@ module KIF
       todo = items.reject { |path, sha, size| good_file?(staged(dir, path), sha, size) }   # resumed downloads
       if !todo.empty? && windows? && (curl = Win.curl)
         cfg = File.join(dir, "download.cfg")
+        mkdir_p(dir)   # a mod install's staging folder doesn't exist yet (1.0.1: every Windows mod install failed here)
         File.open(cfg, "wb") do |f|
           todo.each do |path, _sha, _size|
             f.write("url = #{curl_quote(url_for(base, path))}\n")

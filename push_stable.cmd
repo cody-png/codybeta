@@ -1,6 +1,7 @@
 @echo off
-rem Makes the current kif-beta the STABLE release: every player with
-rem Updates: Stable is offered it at their next start (KIF updater, C-SYS-06).
+rem Moves the Stable branch (release) to the current kif-beta: every player with
+rem Updates: Stable is offered it at their next start, and the installers download it.
+rem It doesn't create a GitHub Releases entry (those are made by hand).
 rem Test builds go out with push_branches.cmd (beta-testing = Beta channel).
 setlocal
 set GIT=git
@@ -8,12 +9,12 @@ where git >nul 2>nul || for /d %%d in ("%LOCALAPPDATA%\GitHubDesktop\app-*") do 
 cd /d "%~dp0"
 set /p VER=<Data\VERSION
 echo.
-echo This publishes kif-beta (KIF Beta %VER%) to EVERY player on the Stable channel.
+echo This moves Stable to KIF %VER%: EVERY player on Stable is offered it, and new installs get it.
 echo Push kif-beta first (push_branches.cmd) so GitHub has this exact version.
 echo.
-choice /M "Publish KIF Beta %VER% as the stable release"
+choice /M "Move Stable to KIF %VER%"
 if errorlevel 2 (echo Cancelled. & pause & exit /b 0)
 "%GIT%" push origin kif-beta:release
 if errorlevel 1 (echo FAILED - push kif-beta with GitHub Desktop first, then try again. & pause & exit /b 1)
-echo Done: players get %VER% at their next start.
+echo Done: Stable is KIF %VER%. Players get it at their next start.
 pause

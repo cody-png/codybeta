@@ -1,3 +1,2 @@
-KIF 1.0.2
-- Mods: installing a mod from Options > Mods > Browse works again. In 1.0.0 and 1.0.1 it failed on Windows and opened the old Options screen instead.
-- Controllers: PlayStation, Switch and other controllers that aren't Xbox-style are recognized again (KIF now uses the same game engine version as old KIF).
+KIF 1.0.3
+- Fusion icons: a fusion (or evolution) you make now shows its icon right away. In 1.0.2 its icon stayed invisible until the game was restarted.

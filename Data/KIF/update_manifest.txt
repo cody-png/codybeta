@@ -1,4 +1,4 @@
-KIF-MANIFEST 1 version=1.0.2 channel=beta files=29574
+KIF-MANIFEST 1 version=1.0.3 channel=beta files=29575
 5d8b7ff7853a0c9ea25cef730252f32a2849ac94 3085627 Audio/BGM/Azalea Town.mp3
 c1bf8a69360590600d95f7b17970c9bbc1e317ef 2505405 Audio/BGM/BW2_Ghetsis Battle.mp3
 fc522881c06a4cb076d61a14911405c3da74338e 2722742 Audio/BGM/BW2_K_leader.mp3
@@ -3395,7 +3395,7 @@ fe767fa0b1773b41eaea0464a459b076e6609c5b 428 Data/Items.rxdata
 ef274be56fa0a395d41f9d20c4627b84d49f9e46 4878 Data/KIF/MysteryGift_KIF.txt
 a0a66659d9f44d21e1f84d80e4e5970e9df33cfa 610062 Data/KIF/entrances.dat
 ccdde561e5fc62b0b3ebd760916e6e29eb9c07f9 21721 Data/KIF/trainers_challenge.dat
-d7e92a8387a54fe682c004f105fb723044a2f90f 318 Data/KIF/update_notes.txt
+8f6a44dad8c99bfa38a9f2f0cad3be5b32f8641c 155 Data/KIF/update_notes.txt
 9a527fb1c545d642d4a709d95452fbabcc853867 78297 Data/Map001.rxdata
 775d19da5c3949f878e650e7bbd242a6a300dfe4 5213 Data/Map002.rxdata
 470905be3cae69dbe4a6a546f248949b09bb82b1 6159 Data/Map003.rxdata
@@ -4834,7 +4834,7 @@ a18d4dcef83035015e0ccda0be1b45e70118e324 3919 Data/Scripts/990_KIF/000_Core/018_
 b39d0a496ed3588fde4bc6f1a2512945696215ea 4673 Data/Scripts/990_KIF/000_Core/019_KIF_AbilityText.rb
 2fdb3f8daa175f93785c62db4551eb89b3a3bf68 4373 Data/Scripts/990_KIF/000_CrashLog.rb
 387547ba2f2f056257d22af14a58799d1d989b32 1580 Data/Scripts/990_KIF/000_Paths.rb
-a77d69ba35144149b5a68909cd856ea78080137b 1657 Data/Scripts/990_KIF/000_README.rb
+4136cd131f0d4c65b94d068a895ccd69b4b8789a 1657 Data/Scripts/990_KIF/000_README.rb
 c71dc6639c04aa6eafd1faf81e55486063e7db0e 5270 Data/Scripts/990_KIF/F-BATTLE-01_BattleFormat/BattleFormat.rb
 c3ecf0e9c15f9b0895dda3bfd3bb21623f76fcf9 4767 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattle.rb
 f61dc09a97343db4191a69a6b908a32d1a92c836 13593 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattleChoices.rb
@@ -4983,7 +4983,7 @@ dc0d2d806447623fafeea8d45f586fd0cdd5b7f0 4266418 Data/Sprite Credits.csv
 3b3389e09b90357c0655e74ffae380fc48b7e609 410184 Data/Tilesets.rxdata
 f9b31006c733aa226e60e209c722557464a6479e 364643 Data/TilesetsTemp.rxdata
 94c39352b0edb225fa90de0ca64fe19c8a5fdae3 345 Data/Troops.rxdata
-e6d5cb833c634c4e2972335825d1100492e7c96b 5 Data/VERSION
+e4c0d46e55ffb2237c9e900aa77172886f6c8aa5 5 Data/VERSION
 c7ea19a7a791e601e24bbc538d8611eb1e1025b0 245 Data/Weapons.rxdata
 88cb261de46afa991fb60f0251319dcc0a4b73f5 21823 Data/abilities.dat
 142be0a9a8a80bf26ad1292785f9ec46b76e7ea1 22509076 Data/attacksRS.dat
@@ -29571,5 +29571,6 @@ efc611ae60983418b89b9ccc27bf03ed6db28ce0 868 KIF Savefiles.lnk
 0bdca70266ce2d53d3a4fbbf3afdd111558c6bf5 5886 README.md
 2e717fa224ceeed030e4092119a65532d2829993 684544 RGSS100J.dll
 f7a93d01ffdd225021c053e176216c09009d8935 758272 RGSS104E.dll
+2152f6eb7b22ae630d1bd621a227b4cd2483e930 16294 mkxp.json
 95d8bc31821cf1f44e4eb3bbb3869c157eae58e0 9267848 x64-msvcrt-ruby310.dll
 7e5b7d1d87815c2208093abfa812dbd5a2259c97 120302 zlib1.dll

@@ -289,12 +289,14 @@ module KIF
       return nil unless text
       text = text.to_s.dup.force_encoding("UTF-8")
       out = {}
-      text.scan(/\{"path":"((?:[^"\\]|\\.)*)","mode":"\d+","type":"blob","sha":"([0-9a-f]{40})","size":(\d+)/) do |p, sha, size|
+      # GitHub sends this list on one line or spread over many (a new repo
+      # got the second), so spaces between the parts don't matter
+      text.scan(/\{\s*"path"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"mode"\s*:\s*"\d+"\s*,\s*"type"\s*:\s*"blob"\s*,\s*"sha"\s*:\s*"([0-9a-f]{40})"\s*,\s*"size"\s*:\s*(\d+)/) do |p, sha, size|
         path = unescape(p)
         next log("skipped an unsafe file path: #{path}") unless KIF.safe_rel_path?(path)
         out[path] = [sha, size.to_i]
       end
-      if text.include?('"truncated":true')
+      if text =~ /"truncated"\s*:\s*true/
         log("tree listing was cut short by GitHub")
         return nil   # a partial list would offer mods with missing files
       end

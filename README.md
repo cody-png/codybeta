@@ -10,14 +10,13 @@ KIF is **standalone**: you do not need Pokémon Infinite Fusion, and you should 
 
 This GitHub lets you see the game (open-source), contribute to its development with pull requests, and download the latest version.
 
-## KIF Beta – now on PIF 6.8.2
-
-KIF 0.20.7 was built on PIF 6.4.5. **KIF Beta** brings KIF's features to **PIF 6.8.2**, including its new content and the Hoenn additions.
+## KIF Beta is now officially on 6.8.2 at time of writing!!
+KIF 0.20.7 was built on PIF 6.4.5. **KIF Beta** brings KIF's features to **PIF 6.8.2**, including its new content and the Hoenn additions (but not Hoenn itself, sorry folks).
 
 - **Old KIF saves** load directly. Your settings, Pokémon and items carry over.
-- **Bug reports:** if the game crashes, send the `Logs` folder from the game folder (`KIF_errorlog.txt` in it has the crash). Report KIF problems to the KIF community, **not** to the PIF developers.
+- **Bug reports:** if the game crashes, send the `Logs` folder from the game folder (`KIF_errorlog.txt` in it has the crash) to the Discord. Please ping Cody (hi I'm Cody please ping me) whenever you open a bug report. Leave PIF folks alone about bug reports, they have no hand in KIF aside from providing a fantastic game (PIF)!
 - **New in KIF Beta:** an updater that downloads only what changed, sprite pack import, Modules (turn any part of KIF off), Settings Presets, Battle Info, the Fusion Screen and more – see [KIF_Features.md](KIF_Features.md).
-- **Not carried over from 0.20.7**, because PIF 6.8.2 now does these itself or they no longer work:
+- **Not carried over from 0.20.7**, because PIF 6.8.2 now does these itself or they no longer work or I just couldn't figure them out:
   - Shiny Finder.exe;
   - Individual Custom Sprites (PIF now has per-Pokémon sprites);
   - option preset files from 0.20.7 (Settings Presets use a new format).

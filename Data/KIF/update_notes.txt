@@ -1,2 +1,3 @@
 KIF 1.0.2
 - Mods: installing a mod from Options > Mods > Browse works again. In 1.0.0 and 1.0.1 it failed on Windows and opened the old Options screen instead.
+- Controllers: PlayStation, Switch and other controllers that aren't Xbox-style are recognized again (KIF now uses the same game engine version as old KIF).

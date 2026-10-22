@@ -782,9 +782,27 @@ module KIF
     end
 
     # at the load screen (manual: from Options, also says "up to date")
+    # A copy installed as one fixed version (the installer's "this version
+    # only", which leaves KIF_pinned.txt next to the game): no automatic
+    # update check; Options > Check for Updates still asks
+    PINNED_FILE = "KIF_pinned.txt"
+
+    def pinned
+      path = File.join(root, PINNED_FILE)
+      return nil unless File.file?(path)
+      v = File.read(path).to_s.strip
+      return v.empty? ? current_version : v
+    rescue StandardError
+      return nil
+    end
+
     def check(manual = false)
       ch = channel
       return false if ch == 2 && !manual
+      if !manual && (pin = pinned)
+        log("pinned to KIF #{pin} (#{PINNED_FILE}): no automatic update check")
+        return false
+      end
       ch = default_channel if ch == 2
       base = source(ch)
       return false unless base

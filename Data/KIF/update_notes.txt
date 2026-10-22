@@ -1,3 +1,3 @@
-KIF 1.0.3
-- Water, weather and other animations move again, and new fusion icons show right away: KIF is back on the game engine of 1.0.0 and 1.0.1.
-- The newer engine from 1.0.2 (for PlayStation and Switch controllers) is being tested and comes back in a later update. Until then, Steam Input or DS4Windows makes those controllers work.
+KIF 1.0.4
+- PlayStation (including DualSense Edge), Switch and other non-Xbox controllers work: KIF is on the newer game engine again.
+- Water, weather and other animations move on the newer engine, and new fusion icons show right away.

@@ -195,7 +195,7 @@ module KIF
           fractions.each do |a|
             pose(shot, a)
             yield
-            total += Graphics.kif_fps_delta.to_i if Graphics.respond_to?(:kif_fps_delta)
+            total += KIF::EngineTime.microseconds(Graphics.kif_fps_delta) if Graphics.respond_to?(:kif_fps_delta)
           end
         ensure
           restore(shot)
@@ -203,7 +203,7 @@ module KIF
       else
         # nothing on the map moved (menu, battle, standing still): one frame
         yield
-        total += Graphics.kif_fps_delta.to_i if Graphics.respond_to?(:kif_fps_delta)
+        total += KIF::EngineTime.microseconds(Graphics.kif_fps_delta) if Graphics.respond_to?(:kif_fps_delta)
       end
       # wait out what's left of the step, so the game keeps 40 steps a second
       now = clock

@@ -301,20 +301,7 @@ class PokemonEncounters
   alias kif_rand_choose_wild_pokemon choose_wild_pokemon unless method_defined?(:kif_rand_choose_wild_pokemon)
 
   def choose_wild_pokemon(*args)
-    enc = kif_rand_choose_wild_pokemon(*args)
-    return enc if !enc || KIF::Rand.in_regular > 0 || !KIF::Rand.pokemon_parts_on?
-    begin
-      if KIF::Rand.dynamic?
-        enc[0] = KIF::Rand.dynamic_species(enc[0])
-      elsif $game_switches[SWITCH_WILD_RANDOM_GLOBAL]
-        KIF::Rand.ensure_dex
-        to = KIF::Rand.dex_of(getRandomizedTo(enc[0]))
-        enc[0] = GameData::Species.get(to).species if to > 0
-      end
-    rescue => e
-      KIF.log("Extra wild Pokémon randomizing failed: #{e.message}")
-    end
-    return enc
+    return KIF::Rand.randomize_wild!(kif_rand_choose_wild_pokemon(*args))
   end
 
   alias kif_rand_setup setup unless method_defined?(:kif_rand_setup)
@@ -328,6 +315,44 @@ class PokemonEncounters
     return kif_rand_setup(map_ID)
   end
 end
+
+# Swap / Dynamic for a Pokémon picked straight from a map's table. PIF only
+# applies them to grass encounters (getRegularEncounter) and the hook above;
+# choose_wild_pokemon_for_map (Bug Contest, and mods such as Overworld
+# Encounters, whose roaming Pokémon stayed unrandomized: Tali, 2026-10-22)
+# got neither. Wrapped at start-up and again once the Mods folder has loaded,
+# since Overworld Encounters replaces the method without calling it.
+module KIF
+  module Rand
+    def self.randomize_wild!(enc)
+      return enc if !enc || in_regular > 0 || !pokemon_parts_on?
+      begin
+        if dynamic?
+          enc[0] = dynamic_species(enc[0])
+        elsif $game_switches[SWITCH_WILD_RANDOM_GLOBAL]
+          ensure_dex
+          to = dex_of(getRandomizedTo(enc[0]))
+          enc[0] = GameData::Species.get(to).species if to > 0
+        end
+      rescue => e
+        KIF.log("Extra wild Pokémon randomizing failed: #{e.message}")
+      end
+      return enc
+    end
+
+    def self.wrap_choose_for_map
+      c = ::PokemonEncounters
+      return unless c.method_defined?(:choose_wild_pokemon_for_map)
+      return if @for_map_wrapper && c.instance_method(:choose_wild_pokemon_for_map) == @for_map_wrapper
+      c.send(:alias_method, :kif_rand_for_map_inner, :choose_wild_pokemon_for_map)
+      c.send(:define_method, :choose_wild_pokemon_for_map) do |*args|
+        KIF::Rand.randomize_wild!(kif_rand_for_map_inner(*args))
+      end
+      @for_map_wrapper = c.instance_method(:choose_wild_pokemon_for_map)
+    end
+  end
+end
+KIF::Rand.wrap_choose_for_map
 
 # Common Event 15 asks for the strength ranges with its own menus right after
 # PIF's screen (during the intro); the new screen has the sliders, so those

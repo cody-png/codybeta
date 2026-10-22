@@ -483,6 +483,7 @@ module KIF
       bridge_arity if respond_to?(:bridge_arity)
       register_crafting_items if respond_to?(:register_crafting_items)
       mark_mod_ai if respond_to?(:mark_mod_ai)
+      KIF::Rand.wrap_choose_for_map if defined?(KIF::Rand) && KIF::Rand.respond_to?(:wrap_choose_for_map)   # a mod may have replaced it
       KIF::ModSettings.drain_pending if defined?(KIF::ModSettings)
     end
 

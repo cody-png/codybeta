@@ -1,9 +1,11 @@
 #===============================================================================
-# C-AP-01 – Archipelago, phase 1 (spike) (2026-10-22)
+# C-AP-01 – Archipelago, phase 2 (Kanto) (2026-10-22)
 #   Talks to the KIF Client (in the kif.apworld) through files in
 #   <game folder>/Archipelago/ (the engine has no sockets):
 #     slot.json        client -> game: seed, slot name, player, location ids,
-#                      DeathLink (written when the client connects)
+#                      map copies (aliases), gym badge events, badges for the
+#                      League, DeathLink (written when the client connects)
+#     scouts.json      client -> game: what each location holds (item, player)
 #     in/items.json    client -> game: every item received so far, with index
 #     in/death.json    client -> game: last DeathLink received (time, source)
 #     out/<n>.json     game -> client: seed, all checked location ids, goal,
@@ -12,10 +14,19 @@
 #   A save is in AP mode only after "Archipelago" in the pause menu links it
 #   (the entry shows once slot.json exists). The link, received index and
 #   checked locations live in the save ($PokemonGlobal.kif_ap).
-#   Location id = map id * 1000 + event id. An item ball / gift whose event
-#   is one of the slot's locations sends a check instead of giving its item.
+#   Locations:
+#     * item balls / gifts: id = map id * 1000 + event id (a copy of a map,
+#       e.g. a variant of a lab, uses the id of its original: aliases). The
+#       first time the event gives its item it sends the check instead; the
+#       rest of the event runs as normal, so its story switches are set.
+#       Later calls (a second item, a respawning find) are vanilla.
+#     * gym badges: id = BADGE_BASE + badge index. The gym leader's script
+#       "$Trainer.badges[n]=true" sends the check; the badge itself comes
+#       from Archipelago. "Leader beaten" switches (4-11) stay with the
+#       leader's event: they gate the leader's own pages.
 #   Received items are given on the map at a quiet moment (no message, menu
 #   or event), checked every 60 frames and right after a save is loaded.
+#   "BADGE_<n>" sets the badge (badge count, field moves, level caps).
 #===============================================================================
 class PokemonGlobalMetadata
   attr_accessor :kif_ap
@@ -25,6 +36,10 @@ module KIF
   module AP
     FOLDER = "Archipelago"
     POLL_FRAMES = 60
+    BADGE_BASE = 9_000_000
+    BADGE_SET_RE = /\$Trainer\.badges\[(\d+)\]\s*=\s*true/
+    LEAGUE_MAP = 148          # Pokemon League entrance: the 8-badge guards
+    LEAGUE_RE = /numbadges\s*>=\s*8/
     @timer = 0
     @global = nil
     @mtime = nil
@@ -33,6 +48,9 @@ module KIF
     @death = nil
     @seq = 0
     @dying = false
+    @scouts = nil
+    @scouts_mtime = nil
+    @badge_note = nil
 
     module_function
 
@@ -58,9 +76,13 @@ module KIF
     end
 
     def link!(slot)
+      aliases = {}
+      (slot["aliases"] || {}).each { |k, v| aliases[k.to_i] = v.to_i }
       $PokemonGlobal.kif_ap = {
         seed: slot["seed"].to_s, slot: slot["slot"].to_s, player: slot["player"].to_i,
         locations: slot["locations"].map(&:to_i), death_link: slot["death_link"] ? true : false,
+        aliases: aliases, badge_events: (slot["badge_events"] || []).map { |e| e.map(&:to_i) },
+        league_badges: (slot["league_badges"] || 8).to_i,
         received: 0, checked: [], goal: false, dirty: false, death_time: Time.now.to_f
       }
       # assumed decision: start with the DNA Splicers
@@ -75,18 +97,30 @@ module KIF
       @death_mtime = nil
       @queue = []
       @death = nil
+      @scouts = nil
+      @scouts_mtime = nil
+      @badge_note = nil
     end
 
     #---------------------------------------------------------------------------
     # Checks (game -> client)
     #---------------------------------------------------------------------------
-    # The AP location of the event running now, if it is one of the slot's
+    # The AP location of an event (a map copy counts as its original), if it
+    # is one of the slot's and not checked yet
+    def location_of(map_id, event_id)
+      return nil unless on? && event_id.to_i > 0
+      d = data
+      id = map_id.to_i * 1000 + event_id.to_i
+      id = (d[:aliases] || {})[id] || id
+      return nil unless d[:locations].include?(id) && !d[:checked].include?(id)
+      return id
+    end
+
+    # ... of the event running now
     def location_here
       return nil unless on? && $game_map
       ev = (pbMapInterpreter.instance_variable_get(:@event_id) rescue 0).to_i
-      return nil if ev <= 0
-      id = $game_map.map_id * 1000 + ev
-      return data[:locations].include?(id) ? id : nil
+      return location_of($game_map.map_id, ev)
     end
 
     def check!(id)
@@ -94,6 +128,83 @@ module KIF
       d[:checked] << id unless d[:checked].include?(id)
       KIF.verbose("Archipelago: checked #{id}")
       write_out
+    end
+
+    # What a location holds, from scouts.json: {"item", "player", "own"} or nil
+    def scout(id)
+      f = path("scouts.json")
+      mt = (File.mtime(f) rescue nil)
+      if mt && mt != @scouts_mtime
+        @scouts_mtime = mt
+        h = KIF::Mods.read_json(f)
+        @scouts = (h && h["seed"].to_s == data[:seed] && h["locations"].is_a?(Hash)) ? h["locations"] : nil
+      end
+      s = @scouts && @scouts[id.to_s]
+      return s.is_a?(Hash) ? s : nil
+    rescue StandardError
+      return nil
+    end
+
+    # "You found Bob's Hookshot!" (or your own item, or an unknown one)
+    def found_text(id, kind)
+      s = scout(id)
+      verb = kind == :given ? _INTL("obtained") : _INTL("found")
+      return _INTL("You {1} an Archipelago item!", verb) unless s && !s["item"].to_s.empty?
+      return _INTL("You {1} your {2}!", verb, s["item"]) if s["own"] || s["player"].to_s.empty?
+      return _INTL("You {1} {2}'s {3}!", verb, s["player"], s["item"])
+    end
+
+    def found_message(id, kind)
+      pbMessage(_INTL("\\me[Item get]{1}\\wtnp[30]", found_text(id, kind)))
+    end
+
+    # An item ball / gift event at a location: send the check, give nothing
+    def take(kind)
+      id = location_here
+      return false unless id
+      check!(id)
+      found_message(id, kind)
+      return true
+    end
+
+    # Kanto badges are shuffled when the slot names their gym events
+    def badge_shuffled?(n)
+      return on? && (data[:badge_events] || []).any? { |_m, _e, b| b == n }
+    end
+
+    # Replaces "$Trainer.badges[n]=true" in event scripts (vanilla when the
+    # save isn't linked or the badge isn't shuffled). At the gym's event it
+    # sends the badge's check; anywhere else (a debug NPC, a script handing
+    # out badges by switches) it gives nothing: badges come from Archipelago.
+    def badge_set(n, map_id, event_id)
+      return ($Trainer.badges[n] = true) unless badge_shuffled?(n)
+      d = data
+      id = BADGE_BASE + n
+      at_gym = d[:badge_events].any? { |m, e, b| b == n && m == map_id && e == event_id }
+      if at_gym && d[:locations].include?(id) && !d[:checked].include?(id)
+        check!(id)
+        @badge_note = id   # told when the script says "obtained the X Badge", or after the event
+      end
+      return true
+    end
+
+    # The gym's "{player} obtained the X Badge!" becomes what was found
+    def badge_message?
+      return false unless on? && @badge_note
+      id = @badge_note
+      @badge_note = nil
+      found_message(id, :given)
+      return true
+    end
+
+    def rewrite_script(script, map_id, event_id)
+      return script unless on?
+      if script =~ BADGE_SET_RE
+        script = script.gsub(BADGE_SET_RE) { "KIF::AP.badge_set(#{$1.to_i}, #{map_id.to_i}, #{event_id.to_i})" }
+      end
+      n = data[:league_badges] || 8
+      script = script.gsub(LEAGUE_RE, "numbadges>=#{n.to_i}") if map_id.to_i == LEAGUE_MAP && n != 8
+      return script
     end
 
     def goal!
@@ -157,24 +268,39 @@ module KIF
       @death = h if h && h["time"].to_f > d[:death_time].to_f
     end
 
+    def received_text(name, who, d)
+      return _INTL("You got {1}!", name) if who.empty? || who == d[:slot]
+      return _INTL("Received {1} from {2}!", name, who)
+    end
+
+    # One received item; false = can't take it now (bag pocket full)
+    def grant(e, d)
+      who = e["from"].to_s
+      if e["item"].to_s =~ /\ABADGE_(\d+)\z/
+        n = $1.to_i
+        $Trainer.badges[n] = true
+        name = e["name"].to_s.empty? ? _INTL("a Badge") : e["name"].to_s
+        pbMessage(_INTL("\\me[Badge get]{1}\\wtnp[30]", received_text(name, who, d)))
+        return true
+      end
+      it = (GameData::Item.try_get(e["item"].to_s.to_sym) rescue nil)
+      unless it
+        KIF.log("Archipelago: unknown item #{e['item'].inspect} (index #{e['index']}) skipped")
+        return true
+      end
+      return false unless $PokemonBag.pbStoreItem(it, [e["count"].to_i, 1].max)
+      pbMessage(_INTL("\\me[Item get]{1}\\wtnp[30]", received_text(it.name, who, d)))
+      return true
+    end
+
     def grant_pending
       return unless on?
       d = data
+      badge_message?   # a gym event that never showed its badge message
       while (e = @queue.first)
         idx = e["index"].to_i
         if idx >= d[:received]
-          it = (GameData::Item.try_get(e["item"].to_s.to_sym) rescue nil)
-          if it
-            break unless $PokemonBag.pbStoreItem(it, [e["count"].to_i, 1].max)   # bag full: try again later
-            who = e["from"].to_s
-            if who.empty? || who == d[:slot]
-              pbMessage(_INTL("\\me[Item get]You got {1}!\\wtnp[30]", it.name))
-            else
-              pbMessage(_INTL("\\me[Item get]Received {1} from {2}!\\wtnp[30]", it.name, who))
-            end
-          else
-            KIF.log("Archipelago: unknown item #{e['item'].inspect} (index #{idx}) skipped")
-          end
+          break unless grant(e, d)   # bag full: try again later
           d[:received] = idx + 1
         end
         @queue.shift
@@ -262,21 +388,21 @@ alias kif_ap_pbItemBall pbItemBall unless defined?(kif_ap_pbItemBall)
 alias kif_ap_pbReceiveItem pbReceiveItem unless defined?(kif_ap_pbReceiveItem)
 alias kif_ap_pbHallOfFameEntry pbHallOfFameEntry unless defined?(kif_ap_pbHallOfFameEntry)
 alias kif_ap_pbStartOver pbStartOver unless defined?(kif_ap_pbStartOver)
+alias kif_ap_obtainBadgeMessage obtainBadgeMessage unless defined?(kif_ap_obtainBadgeMessage)
 
 def pbItemBall(*args)
-  id = KIF::AP.location_here
-  return kif_ap_pbItemBall(*args) unless id
-  KIF::AP.check!(id)
-  pbMessage(_INTL("\\me[Item get]You found an Archipelago item!\\wtnp[30]"))
-  return true
+  return true if KIF::AP.take(:found)
+  return kif_ap_pbItemBall(*args)
 end
 
 def pbReceiveItem(*args)
-  id = KIF::AP.location_here
-  return kif_ap_pbReceiveItem(*args) unless id
-  KIF::AP.check!(id)
-  pbMessage(_INTL("\\me[Item get]You obtained an Archipelago item!\\wtnp[30]"))
-  return true
+  return true if KIF::AP.take(:given)
+  return kif_ap_pbReceiveItem(*args)
+end
+
+def obtainBadgeMessage(*args)
+  return if KIF::AP.badge_message?
+  return kif_ap_obtainBadgeMessage(*args)
 end
 
 def pbHallOfFameEntry(*args)
@@ -287,4 +413,14 @@ end
 def pbStartOver(*args)
   KIF::AP.death_out if KIF::AP.on?
   return kif_ap_pbStartOver(*args)
+end
+
+class Interpreter
+  alias kif_ap_execute_script execute_script unless method_defined?(:kif_ap_execute_script)
+
+  # Gym badges and the League guards' badge count (only for a linked save)
+  def execute_script(script)
+    script = KIF::AP.rewrite_script(script, @map_id, @event_id) if script.is_a?(String) && KIF::AP.on?
+    return kif_ap_execute_script(script)
+  end
 end

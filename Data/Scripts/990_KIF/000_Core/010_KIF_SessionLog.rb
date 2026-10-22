@@ -216,10 +216,12 @@ module KIF
         count = ->(dir) { Dir.exist?(dir) ? Dir.children(dir).length : 0 }
         idx = "Graphics/CustomBattlers/local_sprites/indexed"
         heads = Dir.exist?(idx) ? Dir.children(idx).select { |c| File.directory?(File.join(idx, c)) } : []
-        fusion_files = heads.sum { |h| count.call(File.join(idx, h)) }
+        # every file in every head folder (236k with a sprite pack): only
+        # counted with verbose logging; players get the folder count
+        fusion_files = KIF.verbose? ? heads.sum { |h| count.call(File.join(idx, h)) } : nil
         dl = ($PokemonSystem.download_sprites rescue nil)
         write("Sprites: #{count.call('Graphics/CustomBattlers/local_sprites/BaseSprites')} base sprite files, " \
-              "#{fusion_files} fusion sprite files in #{heads.length} folders, " \
+              "#{fusion_files ? "#{fusion_files} fusion sprite files in " : 'fusion sprites in '}#{heads.length} folders, " \
               "#{count.call('Graphics/CustomBattlers/spritesheets/spritesheets_base')} base sheets, " \
               "#{count.call('Graphics/CustomBattlers/spritesheets/spritesheets_custom')} custom sheets, " \
               "#{count.call('Graphics/Battlers/spritesheets_autogen')} autogen sheets; " \

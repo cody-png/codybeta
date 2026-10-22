@@ -495,18 +495,28 @@ class PokemonLoadScreen
   end
 end
 
-class PokemonLoad_Scene
-  alias kif_nz_pbChoose pbChoose unless method_defined?(:kif_nz_pbChoose)
+# A prepended module, not an alias: Save Folder (C-SYS-05) prepends
+# pbChoose too, and an alias next to a prepend loops (test 294)
+module KIF
+  module Nuzlocke
+    # Continue on a locked save opens the locked menu instead, until
+    # something else is chosen
+    def self.guard_choose(continue_idx)
+      loop do
+        ret = yield
+        return ret unless continue_idx && continue_idx >= 0 && ret == continue_idx && preview
+        locked_menu
+      end
+    end
 
-  def pbChoose(*args)
-    loop do
-      ret = kif_nz_pbChoose(*args)
-      continue_idx = args[1]
-      return ret unless continue_idx && continue_idx >= 0 && ret == continue_idx && KIF::Nuzlocke.preview
-      KIF::Nuzlocke.locked_menu
+    module LoadChooseHook
+      def pbChoose(*args)
+        KIF::Nuzlocke.guard_choose(args[1]) { super(*args) }
+      end
     end
   end
 end
+PokemonLoad_Scene.prepend(KIF::Nuzlocke::LoadChooseHook)
 
 class PokemonLoadPanel
   alias kif_nz_refresh refresh unless method_defined?(:kif_nz_refresh)

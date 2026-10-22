@@ -68,7 +68,7 @@ module KIF
       d = data
       d[:slots][i] = keys.each_with_object({}) { |k, h| h[k] = Marshal.load(Marshal.dump(KIF::Options.raw(k))) }   # the player's values, not a mod's locks
       ok = write(d)
-      KIF.log("Settings preset #{i + 1} (#{d[:names][i]}) saved: #{d[:slots][i].length} settings") if ok
+      KIF.verbose("Settings preset #{i + 1} (#{d[:names][i]}) saved: #{d[:slots][i].length} settings") if ok
       return ok
     end
 
@@ -85,7 +85,7 @@ module KIF
       end
       KIF.sync_debug rescue nil
       KIF.recalc_all_stats   # Max IVs, No EVs and the fusion stat rules, as the menu does
-      KIF.log("Settings preset #{i + 1} loaded: #{n} settings")
+      KIF.verbose("Settings preset #{i + 1} loaded: #{n} settings")
       return n
     end
 

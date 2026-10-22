@@ -324,7 +324,7 @@ module KIF
       def toggle_category(_name); nil; end
       def category_collapsed?(_name); false; end
       def restore_category_states; nil; end
-      def debug_log(message); KIF.log("[Mod] #{message}") if KIF.respond_to?(:log); end
+      def debug_log(message); KIF.verbose("[Mod] #{message}") if KIF.respond_to?(:verbose); end
     end
 
     #---------------------------------------------------------------------------

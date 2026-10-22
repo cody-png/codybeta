@@ -29,7 +29,7 @@ module KIF
         Settings.send(:remove_const, c)
         Settings.const_set(c, "")
       end
-      KIF.log("Start-up message skipped: #{dropped.uniq.join(' | ')}") if !dropped.empty? && defined?(KIF.log)
+      KIF.verbose("Start-up message skipped: #{dropped.uniq.join(' | ')}") if !dropped.empty? && defined?(KIF.verbose)
       return dropped
     rescue => e
       KIF.log("Start-up message check failed (#{e.class}: #{e.message})") if defined?(KIF.log)

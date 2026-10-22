@@ -67,6 +67,29 @@ module KIF
     echoln("[KIF] #{msg}") if defined?(echoln)
     KIF::SessionLog.write(msg) if defined?(KIF::SessionLog)
   end
+
+  # Verbose logging, for Cody and testers: on in debug mode, or when a file
+  # named verbose.txt is in the Logs folder (or the save folder). Players get
+  # the short log. Looked up once a session.
+  VERBOSE_MARKER = "verbose.txt"
+
+  def self.verbose?
+    return @verbose unless @verbose.nil?
+    @verbose = begin
+      on = $DEBUG || marker?(VERBOSE_MARKER)
+      on ||= defined?(KIF::Paths) && File.exist?(File.join(KIF::Paths.logs, VERBOSE_MARKER))
+      on ? true : false
+    rescue
+      false
+    end
+    return @verbose
+  end
+
+  # A log line only verbose logging writes (details that help testing and
+  # would only fill a player's log)
+  def self.verbose(msg)
+    log(msg) if verbose?
+  end
 end
 
 #===============================================================================

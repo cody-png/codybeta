@@ -215,7 +215,7 @@ class PokeBattle_Battle
         return
       end
       if defined?(KIF.log)
-        KIF.log("Auto-Battle (#{KIF::PowerfulAI.on? ? 'DemICE' : 'PIF'} AI): #{pkmn.name} #{GameData::Move.get(newMove).name}? " +
+        KIF.verbose("Auto-Battle (#{KIF::PowerfulAI.on? ? 'DemICE' : 'PIF'} AI): #{pkmn.name} #{GameData::Move.get(newMove).name}? " +
                 scores.map { |id, s| "#{GameData::Move.get(id).name} #{s.round}" }.join(", ") +
                 " -> forgets #{GameData::Move.get(worst).name}") rescue nil
       end
@@ -295,7 +295,7 @@ class Object
     if mode == 1 && battle
       begin
         kept, worst, scores = ab.rate_moves(battle, pkmn, nil, id)
-        KIF.log("Auto-Battle evolution (#{KIF::PowerfulAI.on? ? 'DemICE' : 'PIF'} AI): #{pkmn.name} #{name}? " +
+        KIF.verbose("Auto-Battle evolution (#{KIF::PowerfulAI.on? ? 'DemICE' : 'PIF'} AI): #{pkmn.name} #{name}? " +
                 scores.map { |m, sc| "#{GameData::Move.get(m).name} #{sc.round}" }.join(", ") +
                 " -> forgets #{GameData::Move.get(worst).name}") if defined?(KIF.log)
         if worst != id

@@ -44,6 +44,7 @@ module KIF
     WHITEOUT_NORMAL   = 2
 
     class << self
+      attr_accessor :started_over   # pbStartOver ran during this battle's end
       attr_accessor :lifted    # PIF's own no_reviving rule while a blackout heals the living
       attr_accessor :pending   # this wild battle: [place, counts?]
     end
@@ -110,9 +111,36 @@ module KIF
       attr_accessor :preview   # the save data the load screen shows, when its run is locked
     end
 
+    # A locked run is also written to a small file in the save folder, keyed
+    # by the trainer's ID: autosaves and backups of that run are locked too,
+    # and a save that couldn't be written still is
+    LOCK_FILE = "KIF_nuzlocke_locked.txt"
+
+    def self.lock_path
+      return File.join(KIF.save_dir, LOCK_FILE)
+    end
+
+    def self.locked_ids
+      return File.file?(lock_path) ? File.read(lock_path).split(/\s+/).map(&:to_i) : []
+    rescue StandardError
+      return []
+    end
+
+    def self.lock_trainer(player)
+      return unless player && player.respond_to?(:id)
+      ids = locked_ids
+      return if ids.include?(player.id)
+      File.open(lock_path, "ab") { |f| f.write("#{player.id}\r\n") }
+    rescue StandardError => e
+      KIF.log("Nuzlocke: lock file not written (#{e.class}: #{e.message})")
+    end
+
     def self.failed_save?(save_data)
-      g = save_data.is_a?(Hash) ? save_data[:global_metadata] : nil
-      return !!(g && g.respond_to?(:kif_nuzlocke) && g.kif_nuzlocke[:failed])
+      return false unless save_data.is_a?(Hash)
+      g = save_data[:global_metadata]
+      return true if g && g.respond_to?(:kif_nuzlocke) && g.kif_nuzlocke[:failed]
+      p = save_data[:player]
+      return !!(p && p.respond_to?(:id) && locked_ids.include?(p.id))
     end
 
     # Saves locked before the player carried the mark get it here
@@ -147,9 +175,12 @@ module KIF
     # After every battle: who fainted is dead; they leave the party when a
     # living one is left (a whiteout is handled by pbStartOver)
     def self.after_battle
-      dead = $Trainer.party.select { |p| p && !p.egg? && p.fainted? && !p.kif_nz_dead }
-      dead.each { |p| bury(p) }
+      bury_fainted
       move_dead_out if $Trainer.party.any? { |p| able?(p) }
+    end
+
+    def self.bury_fainted
+      $Trainer.party.select { |p| p && !p.egg? && p.fainted? && !p.kif_nz_dead }.each { |p| bury(p) }
     end
 
     def self.bury(p)
@@ -196,8 +227,9 @@ module KIF
         $Trainer.kif_nz_failed = true
         pbMessage(_INTL("Your Nuzlocke run is over. This save is locked and can't be played again."))
         KIF.log("Nuzlocke: run over, save locked")
+        lock_trainer($Trainer)
         begin
-          Game.save
+          KIF.log("Nuzlocke: the locked save couldn't be written (no save slot); the lock file still holds it") if Game.save == false
         rescue => e
           KIF.log("Nuzlocke: the locked save couldn't be written (#{e.class}: #{e.message})")
         end
@@ -366,6 +398,16 @@ class PokemonSystem
     return true if KIF::Nuzlocke.on? && !KIF::Nuzlocke.lifted
     return kif_nz_no_reviving
   end
+
+  # While Nuzlocke forces it, PIF's Challenge options (which write every row
+  # back on closing) and PIF's blackout toggle don't change the player's own
+  # No reviving
+  alias kif_nz_set_no_reviving no_reviving= unless method_defined?(:kif_nz_set_no_reviving)
+
+  def no_reviving=(value)
+    return if KIF::Nuzlocke.on? && !KIF::Nuzlocke.lifted
+    self.kif_nz_set_no_reviving(value)
+  end
 end
 
 class Pokemon
@@ -375,6 +417,16 @@ class Pokemon
   def heal
     return if @kif_nz_dead && KIF::Nuzlocke.on?
     kif_nz_heal
+  end
+
+  # calc_stats keeps the HP missing from the total, so a level gained in the
+  # PC or by Rare Candy would give a dead Pokémon HP back
+  alias kif_nz_calc_stats calc_stats unless method_defined?(:kif_nz_calc_stats)
+
+  def calc_stats(*args)
+    r = kif_nz_calc_stats(*args)
+    @hp = 0 if @kif_nz_dead && KIF::Nuzlocke.on?
+    return r
   end
 
   def heal_HP
@@ -426,24 +478,44 @@ end
 
 alias kif_nz_pbAfterBattle pbAfterBattle unless defined?(kif_nz_pbAfterBattle)
 
+# The fainted are buried before PIF's step (it heals after a canLose loss),
+# but leave the party only after it: its evolution check goes by party index.
+# A battle that ends with nobody standing ends like a whiteout even when PIF
+# doesn't black out (canLose battles, rematches, the Bug Contest, a partner
+# winning alone). Self Battle fights with copies: nothing to bury.
 def pbAfterBattle(decision, canLose)
-  if KIF::Nuzlocke.on?
+  nz = KIF::Nuzlocke.on? && !(defined?(KIF::SelfBattle) && KIF::SelfBattle.instance_variable_get(:@active))
+  if nz
     begin
       place, foes = KIF::Nuzlocke.pending
       KIF::Nuzlocke.use_place(place, foes) if place
       KIF::Nuzlocke.pending = nil
-      KIF::Nuzlocke.after_battle
+      KIF::Nuzlocke.started_over = false
+      KIF::Nuzlocke.bury_fainted
     rescue => e
       KIF.log("Nuzlocke: after-battle step failed (#{e.class}: #{e.message})")
     end
   end
-  kif_nz_pbAfterBattle(decision, canLose)
+  ret = kif_nz_pbAfterBattle(decision, canLose)
+  if nz && KIF::Nuzlocke.on?
+    begin
+      if $Trainer.party.any? { |p| KIF::Nuzlocke.able?(p) }
+        KIF::Nuzlocke.move_dead_out
+      elsif !KIF::Nuzlocke.started_over
+        KIF::Nuzlocke.whiteout
+      end
+    rescue => e
+      KIF.log("Nuzlocke: after-battle step failed (#{e.class}: #{e.message})")
+    end
+  end
+  return ret
 end
 
 alias kif_nz_pbStartOver pbStartOver unless defined?(kif_nz_pbStartOver)
 
 def pbStartOver(*args)
   if KIF::Nuzlocke.on? && $Trainer
+    KIF::Nuzlocke.started_over = true
     return if KIF::Nuzlocke.whiteout == :title
     # the living are healed as usual; the dead stay dead (Pokemon#heal)
     KIF::Nuzlocke.lifted = true
@@ -465,6 +537,22 @@ def pbDNASplicing(pokemon, scene, *args)
     return false
   end
   return kif_nz_pbDNASplicing(pokemon, scene, *args)
+end
+
+class PokemonStorageScreen
+  alias kif_nz_pbFuseFromPC pbFuseFromPC unless method_defined?(:kif_nz_pbFuseFromPC)
+
+  def pbFuseFromPC(selected, heldpoke, *args)
+    if KIF::Nuzlocke.on?
+      other = (@storage[selected[0], selected[1]] rescue nil)
+      dead = [heldpoke, other].find { |p| p && p.fainted? }
+      if dead
+        pbDisplay(_INTL("Nuzlocke: {1} is dead and can't be fused.", dead.name))
+        return
+      end
+    end
+    return kif_nz_pbFuseFromPC(selected, heldpoke, *args)
+  end
 end
 
 alias kif_nz_pbUnfuse pbUnfuse unless defined?(kif_nz_pbUnfuse)
@@ -533,5 +621,33 @@ class PokemonLoadPanel
     rescue => e
       KIF.log("Nuzlocke: load-screen mark failed (#{e.class}: #{e.message})")
     end
+  end
+end
+
+# Battle Frontier / organized battles heal everyone afterwards with PIF's
+# rule: a Pokémon that faints there isn't dead
+alias kif_nz_pbOrganizedBattleEx pbOrganizedBattleEx unless defined?(kif_nz_pbOrganizedBattleEx)
+
+def pbOrganizedBattleEx(*args)
+  old = KIF::Nuzlocke.lifted
+  KIF::Nuzlocke.lifted = true
+  begin
+    return kif_nz_pbOrganizedBattleEx(*args)
+  ensure
+    KIF::Nuzlocke.lifted = old
+  end
+end
+
+# A locked run can't be loaded from Savefile management (backups) either
+class PokemonLoadScreen
+  alias kif_nz_savefileOptions savefileOptions unless method_defined?(:kif_nz_savefileOptions)
+
+  def savefileOptions(*args)
+    data = kif_nz_savefileOptions(*args)
+    if data && KIF::Nuzlocke.failed_save?(data)
+      pbMessage(_INTL("This is a save of a Nuzlocke run that is over, so it can't be played."))
+      return nil
+    end
+    return data
   end
 end

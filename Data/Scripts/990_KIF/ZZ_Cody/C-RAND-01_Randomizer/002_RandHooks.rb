@@ -344,9 +344,12 @@ module KIF
       c = ::PokemonEncounters
       return unless c.method_defined?(:choose_wild_pokemon_for_map)
       return if @for_map_wrapper && c.instance_method(:choose_wild_pokemon_for_map) == @for_map_wrapper
-      c.send(:alias_method, :kif_rand_for_map_inner, :choose_wild_pokemon_for_map)
+      # the method being wrapped is kept here, not looked up by name: a second
+      # wrap (after a mod replaced it) must not change what the first calls,
+      # or a mod that calls through to the old one loops for ever
+      inner = c.instance_method(:choose_wild_pokemon_for_map)
       c.send(:define_method, :choose_wild_pokemon_for_map) do |*args|
-        KIF::Rand.randomize_wild!(kif_rand_for_map_inner(*args))
+        KIF::Rand.randomize_wild!(inner.bind(self).call(*args))
       end
       @for_map_wrapper = c.instance_method(:choose_wild_pokemon_for_map)
     end

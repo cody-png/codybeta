@@ -1,3 +1,2 @@
-KIF 1.0.4
-- PlayStation (including DualSense Edge), Switch and other non-Xbox controllers work: KIF is on the newer game engine again.
-- Water, weather and other animations move on the newer engine, and new fusion icons show right away.
+KIF 1.0.5
+- A list of choices next to a speech bubble stays on screen. The Cinnabar Lab fossil list could go off the top of the screen.

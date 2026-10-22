@@ -308,6 +308,11 @@ class KifGraveyardPC
 end
 PokemonPCList.registerPC(KifGraveyardPC.new)
 
+# On the pause menu while Nuzlocke is On with Fainted Pokémon: Graveyard (Cody)
+KIF::PauseMenu.add(:kif_nz_graveyard, "Graveyard", icon: "menuIcons/GRAVEYARD", order: 50,
+  condition: proc { KIF::Nuzlocke.on? && $PokemonSystem.ch_nz_fainted == KIF::Nuzlocke::FAINTED_GRAVEYARD },
+  handler: proc { |_scene| KIF::Nuzlocke.show_graveyard; :stay })
+
 #-------------------------------------------------------------------------------
 # Hooks
 #-------------------------------------------------------------------------------

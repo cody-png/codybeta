@@ -223,7 +223,7 @@ All options in this menu are per-save.
   - **Nuzlocke whiteout** - Keep playing / Lock save / Blackout *(Keep playing)*. When the whole party is dead: the run is over and Nuzlocke turns Off; the run is over and the save is locked for good; or you black out as usual and a Pokémon from the PC joins you.
   - **Dupes clause** - Off / On *(On)*. A Pokémon whose evolution line you already have (both halves, for a fusion) doesn't use up the place.
   - **Shiny clause** - Off / On *(On)*. A shiny can always be caught and doesn't use up the place.
-  - **Nuzlocke Graveyard** - a box of the Pokémon that died on this run (also on the PC once one has died). You can look at each one's Summary and where it died, but nothing in it can be moved, withdrawn, fused or released, and it is never one of your PC boxes.
+  - **Nuzlocke Graveyard** - a box of the Pokémon that died on this run. It's on the pause menu (grave icon) while Nuzlocke is On with Fainted Pokémon: Graveyard, and on the PC once one has died. You can look at each one's Summary and where it died, but nothing in it can be moved, withdrawn, fused or released, and it is never one of your PC boxes.
 
 ---
 

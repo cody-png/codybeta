@@ -78,7 +78,8 @@ module KIF
 
     def self.wanted
       c = choice
-      return (c == :monitor) ? monitor_hz : c
+      c = (c == :monitor) ? monitor_hz : c
+      return KIF.mobile? ? [c, 60].min : c   # phones: 60 at most (no monitor rate to ask, and battery)
     end
 
     def self.labels

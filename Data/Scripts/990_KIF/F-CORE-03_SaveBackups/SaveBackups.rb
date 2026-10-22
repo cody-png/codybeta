@@ -173,6 +173,8 @@ module KIF
 
     def self.open_folder
       path = SaveData::SAVE_DIR.to_s
+      # a phone can't open a file manager from the game (starting one can hang it)
+      return pbMessage(_INTL("Your saves are in:\n{1}", path)) if KIF.mobile?
       if System.platform[/Windows/]
         system("explorer \"#{path.gsub('/', '\\')}\"")
       elsif System.platform[/Mac/]

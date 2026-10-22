@@ -419,7 +419,10 @@ module KIF
     # Cache
     #---------------------------------------------------------------------------
     def self.cache_mode
-      return $PokemonSystem ? $PokemonSystem.shiny_cache : 2
+      return 2 unless $PokemonSystem
+      m = $PokemonSystem.shiny_cache
+      # phones: Permanent acts as Per Session (saving a picture to disk is pixel by pixel there, seconds each)
+      return (m == 0 && KIF.mobile?) ? 1 : m
     end
 
     def self.copy_bitmap(src)
@@ -479,7 +482,7 @@ module KIF
           unless @disk_trimmed   # once a session: older game versions' folders go, this one is capped
             @disk_trimmed = true
             Dir.children(CACHE_DIR).each { |c| KIF.rm_tree(File.join(CACHE_DIR, c)) if c != Settings::GAME_VERSION_NUMBER.to_s && File.directory?(File.join(CACHE_DIR, c)) }
-            KIF.trim_cache_dir(dir, 20_000)
+            KIF.trim_cache_dir(dir, KIF.mobile? ? 2_000 : 20_000)   # phones: less storage
           end
           bmp.save_to_png(disk_path(key)) unless File.exist?(disk_path(key))
         rescue

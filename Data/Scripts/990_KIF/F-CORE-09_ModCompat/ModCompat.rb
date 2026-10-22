@@ -407,7 +407,7 @@ module KIF
     # true when this game's window is the foreground window (Windows);
     # true when it can't be told (Wine, no Win32API), like Mod Manager
     def self.game_focused?
-      return true if wine?
+      return true if wine? || KIF.mobile?   # a phone's fake Windows API has no foreground window
       @gfw ||= (Win32API.new('user32', 'GetForegroundWindow', [], 'l') rescue false)
       @gwtpi ||= (Win32API.new('user32', 'GetWindowThreadProcessId', ['l', 'p'], 'l') rescue false)
       return true unless @gfw && @gwtpi

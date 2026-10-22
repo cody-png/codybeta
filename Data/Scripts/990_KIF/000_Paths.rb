@@ -56,7 +56,15 @@ module KIF
     return true if $PokemonSystem && ($PokemonSystem.on_mobile rescue false)
     if @mobile_engine.nil?
       plat = (defined?(System) && System.respond_to?(:platform) ? System.platform.to_s : "") rescue ""
-      @mobile_engine = (plat =~ /android|ios/i || marker?(MOBILE_MARKER)) ? true : false
+      # an engine that doesn't say: Android's own environment and storage paths
+      why = if plat =~ /android|ios/i then "engine platform #{plat}"
+            elsif RUBY_PLATFORM =~ /android/i then "Ruby platform #{RUBY_PLATFORM}"
+            elsif ENV["ANDROID_ROOT"] || ENV["ANDROID_DATA"] then "Android environment"
+            elsif (Dir.pwd rescue "") =~ %r{\A/(storage|sdcard|data)/} then "Android storage path"
+            elsif marker?(MOBILE_MARKER) then MOBILE_MARKER
+            end
+      @mobile_engine = why ? true : false
+      KIF.log("Phone detected (#{why})") if why && KIF.respond_to?(:log)
     end
     return @mobile_engine
   rescue StandardError

@@ -254,5 +254,9 @@ PokemonLoad_Scene.prepend(KIF::SaveFolder::Scene) if defined?(PokemonLoad_Scene)
 alias kif_sf_openUrlInBrowser openUrlInBrowser unless defined?(kif_sf_openUrlInBrowser)
 def openUrlInBrowser(url = "")
   return KIF::SaveFolder.menu_import if url == KIF::SaveFolder::MENU_URL
+  if KIF.mobile?   # no browser to start from inside the game on a phone
+    Input.clipboard = url rescue nil
+    return pbMessage(_INTL("The link (copied if your device allows):\n{1}", url))
+  end
   return kif_sf_openUrlInBrowser(url)
 end

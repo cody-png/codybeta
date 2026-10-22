@@ -182,6 +182,7 @@ module KIF
         return File.join(SHEETS_DIR, "spritesheets_custom", *parts[-(folders.length - i)..-1])
       end
       parent = folders.last
+      name = name.downcase   # the game asks for "12.34b.png": phones' storage minds the case
       return File.join(EGGS_DIR, name) if parent == "eggs" && name =~ /\A\d+\.png\z/i
       case name
       when /\A\d+\.\d+\.\d+[a-z]*\.png\z/i
@@ -674,7 +675,7 @@ module KIF
       raw = bmp.raw_data
       return unless raw && raw.length == bmp.width * bmp.height * 4
       mkdir_p(DISK_CACHE_DIR) unless File.directory?(DISK_CACHE_DIR)
-      @disk_trimmed ||= (KIF.trim_cache_dir(DISK_CACHE_DIR, 20_000); true)   # ~150 MB
+      @disk_trimmed ||= (KIF.trim_cache_dir(DISK_CACHE_DIR, KIF.mobile? ? 2_000 : 20_000); true)   # ~150 MB (phones ~15 MB)
       cp = disk_cache_path(path)
       tmp = cp + ".tmp"
       File.binwrite(tmp, DISK_CACHE_TAG + [stamp[0], stamp[1], bmp.width, bmp.height].pack("NNNN") + Zlib::Deflate.deflate(raw, Zlib::BEST_SPEED))

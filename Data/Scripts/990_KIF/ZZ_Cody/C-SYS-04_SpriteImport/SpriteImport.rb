@@ -91,7 +91,7 @@ module KIF
     # Keep the window alive during a long import, with a progress screen
     def tick
       @last_tick ||= Time.now
-      return if Time.now - @last_tick < 0.25
+      return if Time.now - @last_tick < (@tick_every || 0.25)
       @last_tick = Time.now
       draw_status
       Graphics.update rescue nil
@@ -100,6 +100,8 @@ module KIF
     def status(line, count = nil)
       @status = [line, count]
       @last_tick = Time.now
+      # a redraw costs a phone more than the files written between two of them
+      @tick_every = KIF.respond_to?(:mobile?) && KIF.mobile? ? 1.0 : 0.25
       draw_status
       Graphics.update rescue nil
     end
@@ -226,9 +228,59 @@ module KIF
       return if dir.nil? || dir.empty?
       @dirs_made ||= {}
       return if @dirs_made[dir]
-      (KIF.mkdir_p(dir) rescue nil) unless Dir.exist?(dir)
-      @dirs_made[dir] = true if Dir.exist?(dir)   # a folder that couldn't be made is tried again
+      fresh = !Dir.exist?(dir)
+      (KIF.mkdir_p(dir) rescue nil) if fresh
+      # :fresh = made this run, nothing in it to look for
+      @dirs_made[dir] = (fresh ? :fresh : true) if Dir.exist?(dir)   # a folder that couldn't be made is tried again
     end
+
+    # The size of a file already at dest, or nil. One folder listing instead of
+    # a File.exist? per sprite (a stat costs ~60 ms on phone storage); a
+    # *.kiftmp found there is a write a closed game cut short: deleted.
+    def existing_size(dest)
+      dir = File.dirname(dest)
+      if @names_dir != dir
+        @dirs_made[@names_dir] = true if @names_dir && @dirs_made[@names_dir] == :fresh   # has our files now
+        @names_dir = dir
+        @names = {}
+        unless @dirs_made[dir] == :fresh
+          Dir.children(dir).each do |c|
+            c.end_with?(".kiftmp") ? delete_file(File.join(dir, c)) : @names[c.downcase] = true
+          end
+        end
+      end
+      return nil unless @names[File.basename(dest).downcase]   # downcased: Windows names ignore case
+      return File.size(dest)
+    rescue SystemCallError
+      return nil
+    end
+
+    # Written to <path>.kiftmp, then renamed: a game closed mid-write never
+    # leaves a cut-off sprite (it would look "different" next time)
+    def write_new(path, data)
+      tmp = path + ".kiftmp"
+      File.open(tmp, "wb") { |f| f.write(data) }   # "wb": a leftover .kiftmp is overwritten
+      File.rename(tmp, path)
+    rescue SystemCallError, IOError
+      delete_file(tmp) if tmp
+      raise
+    end
+
+    def timed(key)
+      t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      ret = yield
+      s = ((@timing ||= {})[key] ||= [0.0, 0])
+      s[0] += Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+      s[1] += 1
+      return ret
+    end
+
+    def log_timing(i)
+      return unless @timing && KIF.respond_to?(:verbose)
+      KIF.verbose("Sprite import: entry #{i}, average " + @timing.map { |k, (s, n)| "#{k} #{(s * 1000 / [n, 1].max).round(2)} ms" }.join(", "))
+    end
+
+    def info; @info ||= {}; end
 
     #---------------------------------------------------------------------------
     # Placing one sprite (a file on disk, or a zip entry still in memory)
@@ -240,8 +292,18 @@ module KIF
     #   second copy  -> left (the first one of a name wins)
     #---------------------------------------------------------------------------
     def reset_tally
-      @tally = { moved: 0, same: 0, eggs: 0, skipped: 0, errors: 0, conflicts: {}, placed: {} }
+      @tally = { moved: 0, same: 0, eggs: 0, skipped: 0, errors: 0, odd: 0, conflicts: {}, placed: {} }
       @dirs_made = {}
+      @names_dir = nil
+    end
+
+    # An installed file against a zip entry: a different size is different;
+    # the same size, the entry's CRC32 against the file's (no inflating)
+    def same_bytes?(dest, old_size, data, size, crc)
+      size ||= data.bytesize
+      return false unless old_size == size
+      cur = File.binread(dest)
+      return crc ? Zlib.crc32(cur) == crc : cur == data
     end
 
     def tally; @tally ||= (reset_tally; @tally); end
@@ -250,14 +312,18 @@ module KIF
       return dest.tr("\\", "/").downcase.start_with?(EGGS_DIR.downcase + "/")
     end
 
-    def place(dest, held, data: nil, from: nil)
+    # data: the bytes, or a Proc that reads them (a zip entry is only inflated
+    # when it is written); size/crc: the zip entry's, for the compare
+    def place(dest, held, data: nil, from: nil, size: nil, crc: nil)
       t = tally
       if t[:placed][dest]
         t[:skipped] += 1
         return
       end
-      if File.exist?(dest)
-        if data ? (File.size(dest) == data.bytesize && File.binread(dest) == data) : same_file?(from, dest)
+      bytes = -> { data.is_a?(Proc) ? (data = data.call) : data }
+      mkdir_p(File.dirname(dest))
+      if (old = timed(:exist) { existing_size(dest) })
+        if from ? same_file?(from, dest) : same_bytes?(dest, old, data, size, crc)
           (File.delete(from) rescue nil) if from
           t[:same] += 1
           return
@@ -269,13 +335,13 @@ module KIF
         end
         unless from && from == held
           mkdir_p(File.dirname(held))
-          data ? File.binwrite(held, data) : File.rename(from, held)
+          data ? write_new(held, bytes.call) : File.rename(from, held)
         end
         t[:conflicts][held] = dest
         return
       end
-      mkdir_p(File.dirname(dest))
-      data ? File.binwrite(dest, data) : File.rename(from, dest)
+      data ? timed(:write) { write_new(dest, bytes.call) } : File.rename(from, dest)
+      @names[File.basename(dest).downcase] = true if @names_dir == File.dirname(dest)
       t[:placed][dest] = true
       t[:moved] += 1
       bump
@@ -321,7 +387,15 @@ module KIF
       # .zip: read here (no console window), each sprite written straight to
       # where the game reads it; anything else, or a .zip this reader can't
       # handle: Windows' tar into the work folder, then the moving pass
-      return true if archive =~ /\.zip\z/i && Zip.extract(archive, into, direct: root)
+      @info = { reader: "zip", from: 0, entries: 0 }
+      @timing = {}
+      if archive =~ /\.zip\z/i
+        r = Zip.extract(archive, into, direct: root)
+        # nil: it failed after sprites were written - tar would write them all again
+        return r unless r == false
+      end
+      return false if KIF.respond_to?(:mobile?) && KIF.mobile?   # no tar on phones
+      @info[:reader] = "tar"
       remove_tree(into)   # whatever the built-in reader got through before it gave up
       # tar writes into "<work>.part", renamed when it's done: a game closed
       # while tar ran leaves no half-written sprites to install next time
@@ -392,11 +466,26 @@ module KIF
             work = file_after(File.join(root, WORK_DIR), File.basename(path, ".*"))
             errors = tally[:errors]
             before = sprites_so_far
-            if unpack(path, work, root) && tally[:errors] == errors && brought_sprites?(before, work, root)
+            t = tally
+            was = [t[:moved], t[:same] + t[:eggs], t[:conflicts].length, t[:odd]]
+            size = (File.size(path) rescue 0)
+            t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            ok = unpack(path, work, root)
+            # a resumed run placed the first part of the pack last time
+            if ok && tally[:errors] == errors && (info[:from].to_i > 0 || brought_sprites?(before, work, root))
               finish_archive(path)   # unpacked: deleted (or kept, if the player asked)
             else
               failed << path
             end
+            delete_file(path + Zip::PROGRESS) if File.exist?(path + Zip::PROGRESS)
+            secs = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+            w, s, r, o = [t[:moved], t[:same] + t[:eggs], t[:conflicts].length, t[:odd]].zip(was).map { |a, b| a - b }
+            n = info[:entries].to_i - info[:from].to_i
+            n = w + s + r if info[:reader] == "tar"
+            KIF.log("Sprite import: #{File.basename(path)} (#{(size / 1048576.0).round(1)} MB, #{info[:entries]} entries): " \
+                    "#{w} written, #{s} same, #{r} replaced (held), #{o} odd entries skipped, #{secs.round(1)} s, " \
+                    "#{(n / [secs, 0.001].max).round} files/s, reader #{info[:reader]}" \
+                    "#{info[:from].to_i > 0 ? ", resumed from entry #{info[:from]}" : ''}#{ok ? '' : ', not finished'}") if defined?(KIF.log)
             tick
           end
           break unless found
@@ -405,6 +494,7 @@ module KIF
         hold_root = File.join(root, HOLD_DIR)
         each_file(root, false) do |path|
           next if path.include?("/#{DONE_DIR}/")
+          next delete_file(path) if path.end_with?(".kiftmp", Zip::PROGRESS)   # cut-short writes, a removed pack's progress
           dest = destination(path.sub(root, ""))
           unless dest
             tally[:skipped] += 1 unless ARCHIVES.include?(File.extname(path).downcase) || path =~ /\.txt\z/i || File.basename(path).start_with?(".")
@@ -491,6 +581,12 @@ module KIF
     #   Per Session - memory only
     #   Off         - decode the file on every draw (as before 0.21.26)
     BITMAP_CACHE_LIMIT = 120
+    BITMAP_CACHE_LIMIT_MOBILE = 30   # ~10 MB of 288x288 bitmaps instead of ~39
+
+    # read each time: $PokemonSystem.on_mobile can be set after this loads
+    def bitmap_cache_limit
+      return KIF.respond_to?(:mobile?) && KIF.mobile? ? BITMAP_CACHE_LIMIT_MOBILE : BITMAP_CACHE_LIMIT
+    end
     DISK_CACHE_DIR = "Cache/KIFSprites"
     require "zlib"
     @bitmaps = {}
@@ -524,7 +620,7 @@ module KIF
     def keep_bitmap(path, src)
       cache = cached_bitmaps
       cache.delete(path)
-      if cache.length >= BITMAP_CACHE_LIMIT
+      while cache.length >= bitmap_cache_limit
         old_path, old = cache.first
         cache.delete(old_path)
         begin
@@ -682,10 +778,43 @@ module KIF
       # direct: the import folder the archive came from. Then each sprite goes
       # straight to where the game reads it (no copy in a work folder to move
       # afterwards); archives inside it are still written to `into`.
+      PROGRESS       = ".kifprogress"   # next to the zip: "<entries done> <zip size> <zip mtime>"
+      PROGRESS_EVERY = 1000
+
+      def save_progress(path, done, stamp)
+        File.binwrite(path, "#{done} #{stamp}\n")
+      rescue SystemCallError, IOError
+        nil
+      end
+
+      # true: done; false: nothing written yet, tar may try the archive;
+      # nil: failed after sprites were written (no tar: it would redo them)
       def extract(archive, into, direct: nil)
         require "zlib"
+        si = KIF::SpriteImport
+        mobile = KIF.respond_to?(:mobile?) && KIF.mobile?
+        progress = archive + PROGRESS
+        st = File.stat(archive)
+        stamp = "#{st.size} #{st.mtime.to_i}"
+        from = 0
+        if direct && File.file?(progress)
+          n, s = File.read(progress).split(" ", 2)
+          from = n.to_i if s.to_s.strip == stamp   # the same zip, not a new one of the same name
+          KIF.log("Sprite import: previous import of #{File.basename(archive)} was interrupted at entry #{from}") if from > 0 && defined?(KIF.log)
+        end
+        si.info[:from] = from
+        started = from > 0
+        errors = si.tally[:errors]
         File.open(archive, "rb") do |f|
-          entries(f).each do |name, method, csize, offset, usize|
+          list = entries(f)
+          si.info[:entries] = list.length
+          list.each_with_index do |(name, method, csize, offset, usize, crc), i|
+            if i > 0 && i % PROGRESS_EVERY == 0
+              # not past a sprite that couldn't be written: a resume tries it again
+              save_progress(progress, i, stamp) if direct && i > from && si.tally[:errors] == errors
+              si.log_timing(i) if i % 5000 == 0
+            end
+            next if i < from   # placed by the run that was cut short
             next if name.end_with?("/")
             safe = name.tr("\\", "/").split("/").reject { |p| p.empty? || p == "." || p == ".." }
             next if safe.empty?
@@ -699,30 +828,46 @@ module KIF
               KIF::SpriteImport.not_written += 1
               next
             end
-            # one file this big is read whole into memory here; tar writes it
-            # in pieces (a nested pack, or a broken entry)
-            return false if usize > MAX_ENTRY
-            f.seek(offset)
-            h = f.read(30)
-            # headers not where the directory says (a self-extracting .exe
-            # zip, bytes in front): give the archive to tar, don't skip all
-            return false unless h && h[0, 4] == "PK\x03\x04".b
-            nlen, xlen = h[26, 4].unpack("vv")
-            f.seek(offset + 30 + nlen + xlen)
-            # a packing this reader doesn't know (Deflate64, BZip2, LZMA): give the archive to tar
-            return false unless method == 0 || method == 8
-            data = f.read(csize)
-            data = Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(data) if method == 8
-            if direct && dest
-              held = File.join(direct, KIF::SpriteImport::HOLD_DIR, File.basename(into), *safe)
-              KIF::SpriteImport.place(dest, held, data: data)
-              KIF::SpriteImport.tick
+            # an entry this reader can't take: one file this big (read whole
+            # into memory here), headers not where the directory says (a
+            # self-extracting .exe zip, bytes in front), a packing it doesn't
+            # know (Deflate64, BZip2, LZMA). Before anything is written tar
+            # gets the archive (not on phones); after, the entry is skipped -
+            # tar would write every sprite again.
+            odd = "over 64 MB" if usize > MAX_ENTRY
+            unless odd
+              f.seek(offset)
+              h = f.read(30)
+              odd = "bad header" unless h && h[0, 4] == "PK\x03\x04".b
+            end
+            odd ||= "packing method #{method}" unless method == 0 || method == 8
+            begin
+              raise Zlib::DataError, odd if odd
+              nlen, xlen = h[26, 4].unpack("vv")
+              data = lambda do
+                f.seek(offset + 30 + nlen + xlen)
+                raw = f.read(csize)
+                method == 8 ? si.timed(:inflate) { Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(raw) } : raw
+              end
+              if direct && dest
+                held = File.join(direct, KIF::SpriteImport::HOLD_DIR, File.basename(into), *safe)
+                started = true
+                si.place(dest, held, data: data, size: usize, crc: crc)
+                si.tick
+                next
+              end
+              data = data.call
+            rescue Zlib::Error => e
+              return false unless started || mobile
+              si.tally[:odd] += 1
+              KIF.log("Sprite import: skipped #{name} in #{File.basename(archive)} (#{e.message})") if defined?(KIF.log)
               next
             end
             out = File.join(into, *safe)
             begin
               KIF::SpriteImport.mkdir_p(File.dirname(out))
-              File.binwrite(out, data)
+              started = true
+              KIF::SpriteImport.write_new(out, data)
             rescue SystemCallError, IOError => e
               # one file that can't be written (path too long, odd name)
               # doesn't stop the rest of the pack
@@ -734,11 +879,12 @@ module KIF
             KIF::SpriteImport.bump
             KIF::SpriteImport.tick
           end
+          save_progress(progress, list.length, stamp) if direct && si.tally[:errors] == errors
         end
         return true
       rescue => e
         KIF.log("Sprite import: couldn't read #{File.basename(archive)} (#{e.class}: #{e.message})") if defined?(KIF.log)
-        return false
+        return started ? nil : false
       end
 
       # [[name, method, compressed size, local header offset], ...]
@@ -767,7 +913,7 @@ module KIF
         while pos + 46 <= cd.bytesize
           break unless cd[pos, 4] == "PK\x01\x02".b
           method = cd[pos + 10, 2].unpack1("v")
-          csize, usize = cd[pos + 20, 8].unpack("VV")
+          crc, csize, usize = cd[pos + 16, 12].unpack("VVV")
           nlen, xlen, clen = cd[pos + 28, 6].unpack("vvv")
           offset = cd[pos + 42, 4].unpack1("V")
           flags = cd[pos + 8, 2].unpack1("v")
@@ -790,7 +936,7 @@ module KIF
               e += 4 + len
             end
           end
-          list << [name, method, csize, offset, usize]
+          list << [name, method, csize, offset, usize, crc]
           pos += 46 + nlen + xlen + clen
         end
         raise "central directory not where the end record says" if list.empty? && count > 0   # tar takes over

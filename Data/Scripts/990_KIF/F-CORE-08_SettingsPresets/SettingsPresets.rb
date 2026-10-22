@@ -36,11 +36,7 @@ module KIF
       begin
         d = File.open(path, "rb") { |f| Marshal.load(f) } if File.exist?(path)
       rescue StandardError => e
-        KIF.log("Presets file unreadable (#{e.class}: #{e.message}) - kept as #{FILE}.bad")
-        begin
-          File.rename(path, path + ".bad")   # the next save must not overwrite the player's presets
-        rescue StandardError
-        end
+        KIF.set_aside(path, "Presets file", e)   # the next save must not overwrite the player's presets
       end
       d = {} unless d.is_a?(Hash)
       d[:names] = Array.new(SLOTS) { |i| "Preset #{i + 1}" } unless d[:names].is_a?(Array)

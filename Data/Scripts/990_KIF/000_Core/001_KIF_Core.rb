@@ -92,6 +92,18 @@ module KIF
   def self.verbose(msg)
     log(msg) if verbose?
   end
+
+  # A file that can't be read is renamed to <name>.bad, never overwritten by
+  # the next save; an older .bad is kept too (the new one gets a time stamp)
+  def self.set_aside(path, what, err = nil)
+    dest = path + ".bad"
+    dest = path + Time.now.strftime(".%Y%m%d-%H%M%S.bad") if File.exist?(dest)
+    File.rename(path, dest)
+    log("#{what} unreadable#{err ? " (#{err.class}: #{err.message})" : ""} - kept as #{File.basename(dest)}")
+    return dest
+  rescue StandardError
+    return nil
+  end
 end
 
 #===============================================================================

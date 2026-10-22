@@ -108,11 +108,7 @@ module KIF
         d = File.open(path, "rb") { |f| Marshal.load(f) } if File.exist?(path)
         @values = d if d.is_a?(Hash)
       rescue StandardError => e
-        KIF.log("Mod settings file unreadable (#{e.class}: #{e.message}) - kept as #{File.basename(path)}.bad") if KIF.respond_to?(:log)
-        begin
-          File.rename(path, path + ".bad")   # never overwrite a damaged file quietly
-        rescue StandardError
-        end
+        KIF.set_aside(path, "Mod settings file", e)
       end
       return @values
     end
@@ -142,7 +138,8 @@ module KIF
       return @uninstalled if @uninstalled
       d = File.open(uninstalled_path, "rb") { |f| Marshal.load(f) } if File.exist?(uninstalled_path)
       return @uninstalled = (d.is_a?(Hash) ? d : {})
-    rescue StandardError
+    rescue StandardError => e
+      KIF.set_aside(uninstalled_path, "Uninstalled mods' settings file", e)
       return @uninstalled = {}
     end
 

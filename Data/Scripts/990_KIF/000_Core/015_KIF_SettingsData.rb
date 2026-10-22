@@ -28,7 +28,7 @@ module KIF
         ["EBDX", ["EBDX Battles", "EBDX Camera Zoom", "EBDX Stat Stage Icons", "EBDX Own Trainer Animation"]]]],
       [:pokemon, "Pokémon", [90, 170, 100], [
         ["Levels and EXP", ["Level Cap", "Cap Behavior", "Trainer Exp. Boost", "ExpAll Redistribution"]],
-        ["EVs and IVs", ["No-EVs Mode", "Max IVs Mode", "EVs Train Mode"]],
+        ["EVs and IVs", ["No-EVs Mode", "Max IVs Mode", "EVs Train Mode", "EV Allocation"]],
         ["Catching", ["Prompt Nicknames", "Critical Captures", "Rocket Mode", "Skip Caught Prompt",
                       "Recover Consumables"]],
         ["Fusion", ["Fusion BaseStats", "NPC Fusion BaseStats", "Self-Fusion Stat Boost",

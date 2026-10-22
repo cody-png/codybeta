@@ -108,6 +108,7 @@ All options in this menu are per-save.
 - **No-EVs Mode** - Off / On *(Off)*. Pokémon have no EVs at all.
 - **Max IVs Mode** - Off / On *(Off)*. Every Pokémon has perfect IVs.
 - **EVs Train Mode** - Off / On *(Off)*. Defeated Pokémon give no EVs. Only Power items give EVs, so you can train exactly what you want.
+- **EV Allocation** - Off / On *(Off)*. EVs won in battle don't go on stats by themselves: they wait on the Pokémon as EV points, and you spend them on the Summary's Skills page. Press USE there, Up/Down picks a stat, Left/Right takes or gives 4 EVs, ACTION puts every EV back into points (free to redo), USE when done. The usual limits stay (252 in one stat, 510 in all). Vitamins and feathers still raise their stat directly. Points left over after turning it Off can still be spent.
 - **Trainer Exp. Boost** - slider, 0-1000% *(+50%)*. Extra experience from trainer battles.
 
 ### Catching

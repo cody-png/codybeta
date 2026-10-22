@@ -58,7 +58,7 @@ module KIF
           @tick += 1
           return unless @tick % 4 == 1   # a look every few frames is plenty
           mode = Rand.dget(:ent_sign)
-          mine = @owner.nil? || (.respond_to?(:spriteset) && $scene.spriteset.equal?(@owner))
+          mine = @owner.nil? || ($scene.respond_to?(:spriteset) && $scene.spriteset.equal?(@owner))
           text = (mode > 0 && mine && ER.sign_allowed?) ? ER.sign_text : nil
           if text != @text
             @text = text

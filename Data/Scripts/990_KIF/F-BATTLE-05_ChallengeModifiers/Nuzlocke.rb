@@ -31,6 +31,10 @@ class Pokemon
   attr_accessor :kif_nz_dead
 end
 
+class Player
+  attr_accessor :kif_nz_failed   # a locked Nuzlocke run (shown on the load screen)
+end
+
 module KIF
   module Nuzlocke
     FAINTED_GRAVEYARD = 0
@@ -98,6 +102,44 @@ module KIF
       return g ? g[:place] : "?"
     end
 
+    #---------------------------------------------------------------------------
+    # Load screen: a locked run is marked and can't be continued; its
+    # Graveyard can still be looked at, straight from the save file
+    #---------------------------------------------------------------------------
+    class << self
+      attr_accessor :preview   # the save data the load screen shows, when its run is locked
+    end
+
+    def self.failed_save?(save_data)
+      g = save_data.is_a?(Hash) ? save_data[:global_metadata] : nil
+      return !!(g && g.respond_to?(:kif_nuzlocke) && g.kif_nuzlocke[:failed])
+    end
+
+    # Saves locked before the player carried the mark get it here
+    def self.mark_preview(save_data)
+      self.preview = failed_save?(save_data) ? save_data : nil
+      save_data[:player].kif_nz_failed = true if preview && save_data[:player]
+    end
+
+    def self.locked_menu
+      loop do
+        cmd = pbMessage(_INTL("This Nuzlocke run is over and the save is locked."),
+                        [_INTL("View Graveyard"), _INTL("Back")], 2)
+        break unless cmd == 0
+        view_graveyard_of(preview)
+      end
+    end
+
+    # The save's own Graveyard, without loading the game
+    def self.view_graveyard_of(save_data)
+      old = [$PokemonGlobal, $Trainer]
+      $PokemonGlobal = save_data[:global_metadata]
+      $Trainer = save_data[:player]
+      show_graveyard
+    ensure
+      $PokemonGlobal, $Trainer = old
+    end
+
     def self.able?(p)
       return p && !p.egg? && p.hp > 0
     end
@@ -151,6 +193,7 @@ module KIF
       state[:ended] = true
       if locked
         state[:failed] = true
+        $Trainer.kif_nz_failed = true
         pbMessage(_INTL("Your Nuzlocke run is over. This save is locked and can't be played again."))
         KIF.log("Nuzlocke: run over, save locked")
         begin
@@ -434,18 +477,51 @@ def pbUnfuse(pokemon, scene, *args)
   return kif_nz_pbUnfuse(pokemon, scene, *args)
 end
 
-# A locked run can't be loaded again
-module Game
-  class << self
-    alias kif_nz_load load unless method_defined?(:kif_nz_load)
+#-------------------------------------------------------------------------------
+# Load screen (PIF's MultiSaves): mark, refuse Continue, offer the Graveyard
+#-------------------------------------------------------------------------------
+class PokemonLoadScreen
+  alias kif_nz_load_save_file load_save_file unless method_defined?(:kif_nz_load_save_file)
 
-    def load(*args, &blk)
-      ret = kif_nz_load(*args, &blk)
-      if $PokemonGlobal && $PokemonGlobal.kif_nuzlocke[:failed]
-        pbMessage(_INTL("This save's Nuzlocke run is over, and the save is locked."))
-        $scene = pbCallTitle
-      end
-      return ret
+  def load_save_file(*args)
+    ret = kif_nz_load_save_file(*args)
+    begin
+      KIF::Nuzlocke.mark_preview(ret)
+    rescue => e
+      KIF::Nuzlocke.preview = nil
+      KIF.log("Nuzlocke: save check failed (#{e.class}: #{e.message})")
+    end
+    return ret
+  end
+end
+
+class PokemonLoad_Scene
+  alias kif_nz_pbChoose pbChoose unless method_defined?(:kif_nz_pbChoose)
+
+  def pbChoose(*args)
+    loop do
+      ret = kif_nz_pbChoose(*args)
+      continue_idx = args[1]
+      return ret unless continue_idx && continue_idx >= 0 && ret == continue_idx && KIF::Nuzlocke.preview
+      KIF::Nuzlocke.locked_menu
+    end
+  end
+end
+
+class PokemonLoadPanel
+  alias kif_nz_refresh refresh unless method_defined?(:kif_nz_refresh)
+
+  def refresh
+    redraw = @refreshBitmap && !@refreshing && !disposed?
+    kif_nz_refresh
+    return unless redraw && @isContinue && @trainer && @trainer.respond_to?(:kif_nz_failed) && @trainer.kif_nz_failed
+    begin
+      grave = Bitmap.new("Graphics/Icons/menuIcons/GRAVEYARD")
+      self.bitmap.blt(32 + self.bitmap.text_size(@title.to_s).width + 10, 4, grave, grave.rect)
+      grave.dispose
+      pbDrawTextPositions(self.bitmap, [[_INTL("Nuzlocke over"), 112, 80, 0, Color.new(240, 72, 88), Color.new(160, 64, 64)]])
+    rescue => e
+      KIF.log("Nuzlocke: load-screen mark failed (#{e.class}: #{e.message})")
     end
   end
 end

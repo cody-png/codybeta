@@ -37,7 +37,9 @@ module KIF
   # oldest half (by time) is removed. Called once per session per cache.
   def self.trim_cache_dir(dir, keep)
     return unless File.directory?(dir)
-    files = Dir.children(dir).map { |c| File.join(dir, c) }.select { |p| File.file?(p) }
+    names = Dir.children(dir)
+    return if names.length <= keep   # the usual case: one listing, no file looked at
+    files = names.map { |c| File.join(dir, c) }.select { |p| File.file?(p) }
     return if files.length <= keep
     files.sort_by { |p| File.mtime(p) }.first(files.length - keep / 2).each { |p| File.delete(p) rescue nil }
     log("Cache #{dir}: trimmed to #{keep / 2} files") if respond_to?(:log)

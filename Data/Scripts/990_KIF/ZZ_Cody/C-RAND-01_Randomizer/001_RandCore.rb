@@ -91,6 +91,15 @@ module KIF
     end
 
     def self.setting_max(key)
+      # cached per key (called for every setting read); a table that grew starts it afresh
+      sizes = [SETTINGS.length, defined?(DATA_SETTINGS) ? DATA_SETTINGS.length : 0]
+      @setting_max = [sizes, {}] unless @setting_max && @setting_max[0] == sizes
+      cache = @setting_max[1]
+      return cache[key] if cache.has_key?(key)
+      return cache[key] = setting_max_uncached(key)
+    end
+
+    def self.setting_max_uncached(key)
       s = SETTINGS.find { |x| x[0] == key } || (defined?(DATA_SETTINGS) && DATA_SETTINGS.find { |x| x[0] == key })
       return nil unless s
       return s[1] == :int ? s[2] : s[2] - 1

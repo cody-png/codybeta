@@ -31,10 +31,9 @@ module KIF
       path = file
       path = basename_map[file] || file unless file.include?("/") || file.include?("\\")
       begin
-        File.foreach(path) do |line|
-          next unless line =~ ALIAS_RE
-          h[$2.to_sym] << $1.to_sym
-        end
+        # one read and one scan per file; spaces never cross a line, as when read line by line
+        @alias_scan_re ||= Regexp.new(ALIAS_RE.source.gsub("\\s", "[^\\S\\n]"))
+        File.read(path).scan(@alias_scan_re) { |new_name, orig| h[orig.to_sym] << new_name.to_sym }
       rescue
       end
       @alias_cache[file] = h

@@ -109,6 +109,7 @@ module KIF
       use(@target)
       @backoff = WAIT_UP
       @came_up = false
+      @base_falls = 0   # a rate the player picks gets a fresh chance
     rescue => e
       KIF.log("Frame rate change failed (#{e.class}: #{e.message})")
     end
@@ -134,7 +135,14 @@ module KIF
     end
 
     def self.set_real
-      real = drawing_between? ? @rate : @logic
+      between = drawing_between?
+      if between != @was_between   # key repeat is only counted while drawing in between: start afresh
+        @was_between = between
+        @repeating = nil
+        @repeat_count = 0
+        @raw.clear if @raw
+      end
+      real = between ? @rate : @logic
       Graphics.kif_fps_set_rate(real) if Graphics.kif_fps_rate != real
     end
 
@@ -357,7 +365,8 @@ module KIF
     end
 
     def self.input_step
-      hit = buttons.find { |b| Input.trigger?(b) }
+      return unless drawing_between?   # at 40 the engine's own key repeat is used
+      hit =buttons.find { |b| Input.trigger?(b) }
       if hit
         @repeating = hit
         @repeat_count = 0
@@ -427,13 +436,15 @@ module KIF
       return if @window < WINDOW
       if @slow > WINDOW / 2 && @rate > BASE
         lower = rates.select { |r| r < @rate }.max || BASE
+        @base_falls = @base_falls.to_i + 1 if lower == BASE
         KIF.log("Frame rate: #{@rate} was too much for this computer, now #{lower}")
         # straight back down after trying a rate again: wait twice as long next time
         @backoff = [@backoff * 2, WAIT_UP * 32].min if @came_up
         @came_up = false
         use(lower)
         return
-      elsif @slow < WINDOW / 10 && @rate < @target
+      elsif @slow < WINDOW / 10 && @rate < @target && !(@rate == BASE && @base_falls.to_i >= 2)
+        # back at 40 twice: this device can't keep up, stop rebuilding the tiles to try again
         @good += @window
         if @good >= @backoff
           use(rates.select { |r| r > @rate }.min || @target)

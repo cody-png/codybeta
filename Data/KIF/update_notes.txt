@@ -1,4 +1,4 @@
-KIF 1.0.6
-- The game now says KIF instead of KIF Beta (update messages, the welcome message, randomizer logs).
-- KIF_log.txt now records more about downloads, the engine and the controller in use, to help with bug reports.
-- A leftover testing file is removed from the game folder.
+KIF 1.0.7
+- Randomizer: Built-in presets to start from (First Randomizer, Gym Challenge, Item Hunt, Fusion Frenzy, Dungeon Crawl, Total Chaos), in Presets & sharing.
+- Entrances: Which doors has a Custom choice. Door kinds picks which kinds of door are shuffled (Centers, Gyms, Marts, Houses, other buildings, Gates, caves).
+- Entrances: Door signs. Facing a shuffled door you have used shows where it leads, in the corner or above the door.

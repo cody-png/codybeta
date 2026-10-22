@@ -695,7 +695,8 @@ module KIF
         next if item.files.has_key?(rel)
         p = dest_for(item, rel)
         next unless File.file?(p)
-        File.delete(p) if !updater.sha_ok? || updater.git_sha(p) == sha
+        # a file that can't be checked is kept: it may be the player's edit
+        File.delete(p) if updater.sha_ok? && updater.git_sha(p) == sha
       end
       File.open(File.join(folder_of(item), RECORD), "wb") do |f|
         item.files.sort.each { |rel, (sha, _size)| f.write("#{sha} #{rel}\r\n") }

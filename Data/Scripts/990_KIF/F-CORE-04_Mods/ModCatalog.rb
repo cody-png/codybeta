@@ -34,7 +34,7 @@ module KIF
   module ModCatalog
     REPO       = "KIF-Mods/mods"
     DISCORD_REPO = "cody-png/kif-discord-mods"   # mods only shared on Discord (made with import_mods.py)
-    OWN_REPO     = "cody-png/kif-mods"           # KIF Beta's own mods from now on (Cody, 2026-10-20)
+    OWN_REPO     = "cody-png/kif-mods"           # KIF's own mods from now on (Cody, 2026-10-20)
     SOURCE_FILE = "KIF_mods_source.txt"
     CATALOGS_FILE = "KIF_mods_catalogs.txt"
     ASSET_DIRS = %w[Graphics Audio Fonts]

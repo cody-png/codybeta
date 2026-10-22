@@ -18,7 +18,7 @@
 #                       (SWITCH_DOUBLE_ABILITIES) is on. 6.8.2 dropped the
 #                       methods; mods still hook them (Master Splicer). The
 #                       methods are back with KIF's logic; the battle side
-#                       of double abilities is not (nothing in KIF Beta
+#                       of double abilities is not (nothing in KIF
 #                       turns the switch on).
 #   PokemonSystem       17 KIF 0.20.7 options/flags 6.8.2 doesn't have
 #                       (016_UI/015_UI_Options.rb:1-290), with KIF's
@@ -39,7 +39,7 @@
 #   PokemonDataBox      Alpha Encounters replaces the battle data box's
 #                       refresh with KIF 0.20.7's, which ends with
 #                       refreshStatus / refreshtypeDisplay (KIF 004_PokeBattle_
-#                       SceneElements.rb:542-578). They run KIF Beta's own
+#                       SceneElements.rb:542-578). They run KIF's own
 #                       status icon and Type Display (F-BATTLE-07), or draw the
 #                       status like 6.8.2 when that isn't set up.
 #   sprite_bitmap_from_pokemon  KIF 0.20.7 had a 4th argument, makeShiny
@@ -198,7 +198,7 @@ class PokeBattle_Battler
 end
 
 #-------------------------------------------------------------------------------
-# KIF 0.20.7 PokemonSystem attributes that 6.8.2 / KIF Beta don't define
+# KIF 0.20.7 PokemonSystem attributes that 6.8.2 / KIF don't define
 #-------------------------------------------------------------------------------
 class PokemonSystem
   {
@@ -702,7 +702,7 @@ if defined?(getDefaultClothes) || Object.private_method_defined?(:getDefaultClot
 end
 
 # Overworld Encounters asks super_shiny? of any Pokémon that has superHue
-# (Counterfeit Shinies adds superHue); KIF Beta has no super shinies.
+# (Counterfeit Shinies adds superHue); KIF has no super shinies.
 class Pokemon
   def super_shiny?; return false; end unless method_defined?(:super_shiny?)
 end

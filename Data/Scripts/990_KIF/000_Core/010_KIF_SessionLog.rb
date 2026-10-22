@@ -59,10 +59,24 @@ module KIF
         end
         raw("KIF #{(KIF::PORT_VERSION rescue '?')} on PIF #{(Settings::GAME_VERSION_NUMBER rescue '?')} - #{@started.strftime('%Y-%m-%d %H:%M:%S')}" \
             "#{$DEBUG ? ' - debug mode' : ''}")
+        raw("Engine: #{engine_text}")
         raw("Game folder: #{Dir.pwd}")
         raw("Save folder: #{KIF.save_dir}")
         raw("Logs: #{KIF::Paths.logs}")
         at_exit { finish }
+      end
+
+      # which engine build and system: mkxp-z version, platform, Ruby, the exe
+      # (bug reports from phones, Wine and swapped exes look alike otherwise)
+      def engine_text
+        mkxp = (System::VERSION rescue nil) if defined?(System)
+        platform = (System.platform rescue nil) if defined?(System)
+        exe = (KIF::Updater::Win.exe_path rescue nil) if defined?(KIF::Updater::Win)
+        parts = ["mkxp-z #{mkxp || '?'}", platform, "Ruby #{RUBY_VERSION}"]
+        parts << File.basename(exe.to_s) if exe
+        return parts.compact.join(", ")
+      rescue StandardError
+        return "?"
       end
 
       def raw(line)

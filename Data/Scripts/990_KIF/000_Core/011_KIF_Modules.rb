@@ -474,7 +474,7 @@ end
 
 KIF::Options.define(:kif_modules, {}, :global)
 
-# Players who were already playing KIF Beta before Modules existed keep their
+# Players who were already playing KIF before Modules existed keep their
 # features: a save from before Modules turns every module On once. New
 # players (no save yet) start with everything Off.
 module Game

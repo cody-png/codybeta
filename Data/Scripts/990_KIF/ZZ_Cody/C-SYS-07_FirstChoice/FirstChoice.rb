@@ -1,6 +1,6 @@
 #===============================================================================
 # C-SYS-07 – How do you want to play? (2026-10-12)
-#   New players used to start with every module Off, so KIF Beta played like
+#   New players used to start with every module Off, so KIF played like
 #   plain PIF until they found Options > Modules. The first time the load
 #   screen shows (no module chosen yet), KIF asks once:
 #     Classic KIF   - every module On, with the features KIF 0.20.7 never
@@ -32,7 +32,7 @@ module KIF
 
     def ask
       return false unless needed?
-      pbMessage(_INTL("Welcome to KIF Beta! KIF's features come in modules you can turn on or off at any time in Options > Modules."))
+      pbMessage(_INTL("Welcome to KIF! KIF's features come in modules you can turn on or off at any time in Options > Modules."))
       cmd = pbMessage(_INTL("How do you want to play?"),
                       [_INTL("Classic KIF"), _INTL("PIF only"), _INTL("Let me choose")], 0)
       case cmd

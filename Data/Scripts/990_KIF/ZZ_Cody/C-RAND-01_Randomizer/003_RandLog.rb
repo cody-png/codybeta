@@ -146,7 +146,7 @@ module KIF
       head << "Settings code: #{settings_code}"
       head << "Made: #{Time.now.strftime('%Y-%m-%d %H:%M')}"
       count = (File.foreach(Settings::CUSTOM_SPRITES_FILE_PATH).count rescue 0)
-      head << "Custom sprite list: #{count} entries (same seed = same game on the same KIF Beta version and sprite pack)"
+      head << "Custom sprite list: #{count} entries (same seed = same game on the same KIF version and sprite pack)"
       return head
     end
 
@@ -307,7 +307,7 @@ module KIF
       sections = build_log
       make_dir(LOG_DIR)
       File.open(log_path, "wb") do |f|
-        f.write("KIF Beta - Randomizer spoiler log\r\n")
+        f.write("KIF - Randomizer spoiler log\r\n")
         sections.each do |title, lines|
           f.write("\r\n== #{title} ==\r\n")
           lines.each { |l| f.write(l + "\r\n") }

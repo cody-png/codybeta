@@ -4,7 +4,7 @@
 #
 # At the load screen (where PIF asked about its own versions) KIF reads the
 # version of the newest build on GitHub (one tiny file). If it is newer than
-# this one: "KIF Beta X is out (you have Y)" - Update now / What's new /
+# this one: "KIF X is out (you have Y)" - Update now / What's new /
 # Later / Skip this version.
 #
 # Update now downloads only the files that changed, not the whole game:
@@ -19,7 +19,7 @@
 #     Import Sprites or anything the player added;
 #   * the game closes; a small "KIF update" window waits for it, moves the
 #     new files in (robocopy) and starts the game again; the next start says
-#     "KIF Beta was updated to X". If moving fails (a file in use), the next
+#     "KIF was updated to X". If moving fails (a file in use), the next
 #     start offers to try again.
 # Downloads run in the background through Windows' own curl.exe (no window),
 # so the progress bar moves and B cancels; without curl, KIF downloads one
@@ -50,6 +50,7 @@ module KIF
     REMOVABLE  = %w[Data/ Graphics/ Audio/ Fonts/]
     KEEP_THEIRS = %w[Graphics/CustomBattlers/ Graphics/Battlers/]   # player-installed sprites
     NEVER      = %w[Mods/ Logs/ Import\ Sprites/ KIF\ Update/ Graphics/CustomBattlers/local_sprites/ Cache/ ExportedPokemons/]
+    RETIRED    = %w[BETA_TESTING.md]   # outside REMOVABLE, once shipped to Stable by mistake: removed when the new list drops them
 
     Manifest = Struct.new(:version, :channel, :files)   # files: path => [sha, size]
 
@@ -214,8 +215,16 @@ module KIF
         return File.file?(path) ? File.binread(path) : nil
       end
       return nil unless defined?(HTTPLite)
+      t = Time.now
       res = HTTPLite.get(url)
-      return nil unless res.is_a?(Hash) && res[:status].to_i == 200
+      secs = Time.now - t
+      unless res.is_a?(Hash) && res[:status].to_i == 200
+        log(format("%s answered %s after %.1fs", url, res.is_a?(Hash) ? res[:status].inspect : "nothing", secs))
+        return nil
+      end
+      # slow or big answers only: the one-at-a-time fallback fetches thousands
+      bytes = res[:body].to_s.bytesize
+      log(format("%s: %s in %.1fs", url, size_text(bytes), secs)) if secs >= 2 || bytes >= 1048576
       return res[:body]
     rescue StandardError, (defined?(MKXPError) ? MKXPError : StandardError) => e
       log("#{url} not read (#{e.class}: #{e.message})")
@@ -259,7 +268,7 @@ module KIF
     end
 
     def removable?(path)
-      return under?(path, REMOVABLE) && !under?(path, NEVER)
+      return RETIRED.include?(path) || (under?(path, REMOVABLE) && !under?(path, NEVER))
     end
 
     # What to download / remove to go from the installed build to `remote`
@@ -496,9 +505,11 @@ module KIF
     # that couldn't be fetched, or :cancelled
     def download(base, items, dir, version, title = nil)
       total = items.inject(0) { |s, it| s + it[2] }
-      title ||= _INTL("Updating to KIF Beta {1}", version)
+      title ||= _INTL("Updating to KIF {1}", version)
       todo = items.reject { |path, sha, size| good_file?(staged(dir, path), sha, size) }   # resumed downloads
-      if !todo.empty? && windows? && (curl = Win.curl)
+      curl = !todo.empty? && windows? && Win.curl
+      log("downloading #{todo.length} of #{items.length} files (#{size_text(total)} in all) #{curl ? 'with curl' : 'one at a time'}")
+      if curl
         cfg = File.join(dir, "download.cfg")
         mkdir_p(dir)   # a mod install's staging folder doesn't exist yet (1.0.1: every Windows mod install failed here)
         File.open(cfg, "wb") do |f|
@@ -511,7 +522,10 @@ module KIF
         cmd = "\"#{win_path(curl)}\" -K \"#{win_path(cfg)}\" --parallel --parallel-max 6 --create-dirs " \
               "--fail --retry 3 --retry-delay 1 -L -s -S --stderr \"#{win_path(err)}\""
         h, _pid = Win.spawn(cmd, Win::CREATE_NO_WINDOW, root)
+        log("curl couldn't be started") unless h
         if h
+          started = Time.now
+          code = nil   # read after the loop
           last = 0
           loop do
             code = Win.exit_code(h)
@@ -527,17 +541,23 @@ module KIF
             if cancel_pressed?
               Win.kill(h)
               Win.close(h)
+              log(format("cancelled after %.0fs", Time.now - started))
               return :cancelled
             end
             break if code
           end
           Win.close(h)
-          log("curl finished (#{File.file?(err) ? File.read(err).lines.length : 0} error lines)")
+          secs = [Time.now - started, 0.1].max
+          got = todo.inject(0) { |s, (path, _sha, _size)| p = staged(dir, path); s + (File.file?(p) ? File.size(p) : 0) }
+          errors = File.file?(err) ? File.read(err).lines.map(&:strip).reject(&:empty?) : []
+          log(format("curl finished in %.0fs, %s (%s/s), exit code %s, %d error lines%s", secs, size_text(got),
+                     size_text((got / secs).to_i), code.inspect, errors.length, errors.empty? ? "" : ": " + errors.first(3).join(" | ")))
         end
       end
       # whatever is still missing or wrong: one at a time
       failed = []
       bad = items.reject { |path, sha, size| good_file?(staged(dir, path), sha, size) }
+      log("#{bad.length} files left for one at a time") unless bad.empty? || todo.empty?
       bad.each_with_index do |(path, sha, size), i|
         status(title, _INTL("{1} ({2} of {3})", File.basename(path), i + 1, bad.length),
                (i + 1).to_f / bad.length, _INTL("{1}: cancel (you can update later)", KIF::Keys.name(Input::BACK)))
@@ -550,6 +570,7 @@ module KIF
         end
         failed << path unless good_file?(dest, sha, size)
       end
+      log("one at a time: #{bad.length - failed.length} of #{bad.length} fetched") unless bad.empty?
       return failed
     end
 
@@ -565,7 +586,7 @@ module KIF
       lines << "@echo off"
       lines << "chcp 65001 >nul"
       lines << "title KIF update"
-      lines << "echo Finishing the KIF Beta #{version} update. This window closes by itself."
+      lines << "echo Finishing the KIF #{version} update. This window closes by itself."
       # the game closes itself; one still open after 20 s is closed here
       lines << "set /a waited=0"
       lines << ":wait"
@@ -647,7 +668,7 @@ module KIF
     def restart_after_apply(version)
       exe = windows? ? (Win.exe_path || File.join(root, "InfiniteFusion.exe")) : nil
       if exe
-        pbMessage(_INTL("KIF Beta {1} is installed. The game restarts now.", version))
+        pbMessage(_INTL("KIF {1} is installed. The game restarts now.", version))
         h, _pid = Win.spawn("\"#{win_path(exe)}\"", 0, root)
         if h
           Win.close(h)
@@ -658,7 +679,7 @@ module KIF
         end
         log("#{version}: the game couldn't start itself again")
       end
-      pbMessage(_INTL("KIF Beta {1} is installed. Close the game and start it again to use it.", version))
+      pbMessage(_INTL("KIF {1} is installed. Close the game and start it again to use it.", version))
       return true
     end
 
@@ -668,25 +689,28 @@ module KIF
     def update(base, version, in_game = false)
       unless writable?(stage_root)
         pbMessage(_INTL("The game folder can't be written to, so KIF can't update itself here (a folder like Program Files?)."))
-        pbMessage(_INTL("Get KIF Beta {1} from {2}", version, PAGE))
+        pbMessage(_INTL("Get KIF {1} from {2}", version, PAGE))
         return false
       end
-      status(_INTL("Updating to KIF Beta {1}", version), _INTL("Reading the file list..."))
+      status(_INTL("Updating to KIF {1}", version), _INTL("Reading the file list..."))
       body = fetch(url_for(base, MANIFEST))
       remote = parse_manifest(body)
       if !remote || remote.version.to_s != version
         hide_status
-        pbMessage(_INTL("The file list for KIF Beta {1} couldn't be read. Try again later.", version))
+        pbMessage(_INTL("The file list for KIF {1} couldn't be read. Try again later.", version))
         log("manifest for #{version} unreadable (got #{remote ? remote.version : 'nothing'})")
         return false
       end
       local = local_manifest
-      status(_INTL("Updating to KIF Beta {1}", version), _INTL("Checking your files...")) unless local
+      status(_INTL("Updating to KIF {1}", version), _INTL("Checking your files...")) unless local
+      t = Time.now
       plan = plan(local, remote)
+      # without a local list every file is read and hashed: minutes of disk and CPU
+      log(format("files compared in %.1fs (%s)", Time.now - t, local ? "from the local file list" : "no local file list, every file hashed"))
       hide_status
       n = plan[:downloads].length
       if n == 0 && plan[:removals].empty?
-        pbMessage(_INTL("Your files already match KIF Beta {1}.", version))
+        pbMessage(_INTL("Your files already match KIF {1}.", version))
         return false
       end
       msg = _INTL("{1} files to download ({2}).", n, size_text(plan[:bytes]))
@@ -716,7 +740,7 @@ module KIF
         exe = Win.exe_path || File.join(root, "InfiniteFusion.exe")
         File.open(File.join(dir, "apply.cmd"), "wb") { |f| f.write(apply_script(dir, version, Process.pid, exe)) }
         if start_apply(dir)
-          pbMessage(_INTL("KIF Beta {1} is ready. The game closes now and starts again in a moment.", version))
+          pbMessage(_INTL("KIF {1} is ready. The game closes now and starts again in a moment.", version))
           (KIF::SessionLog.finish rescue nil) if defined?(KIF::SessionLog)
           Win.quit_now
           return true
@@ -770,7 +794,7 @@ module KIF
         return false
       end
       unless newer?(v, current_version)
-        pbMessage(_INTL("KIF Beta {1} is the newest {2} version.", current_version, ch == 1 ? _INTL("beta") : _INTL("stable"))) if manual
+        pbMessage(_INTL("KIF {1} is the newest {2} version.", current_version, ch == 1 ? _INTL("beta") : _INTL("stable"))) if manual
         return false
       end
       if !manual && skipped_version == v
@@ -778,7 +802,7 @@ module KIF
       end
       in_game = manual && $scene.is_a?(Scene_Map)
       loop do
-        cmd = pbMessage(_INTL("KIF Beta {1} is out (you have {2}).", v, current_version),
+        cmd = pbMessage(_INTL("KIF {1} is out (you have {2}).", v, current_version),
                         [_INTL("Update now"), _INTL("What's new"), _INTL("Later"), _INTL("Skip this version")], 3)
         case cmd
         when 0
@@ -811,13 +835,13 @@ module KIF
           rm_tree(dir)
           if v == current_version
             log("updated to #{v}")
-            cmd = pbMessage(_INTL("KIF Beta was updated to {1}.", v), [_INTL("OK"), _INTL("What's new")], 1)
+            cmd = pbMessage(_INTL("KIF was updated to {1}.", v), [_INTL("OK"), _INTL("What's new")], 1)
             show_notes(nil) if cmd == 1
           end
         # failed.txt: the move stopped partway (the scripts, and so the version, may already be new)
         elsif !newer?(current_version, v) &&
               (File.file?(File.join(dir, "failed.txt")) || (File.file?(File.join(dir, "apply.cmd")) && v != current_version))
-          cmd = pbMessage(_INTL("The update to KIF Beta {1} didn't finish (a file was in use).", v),
+          cmd = pbMessage(_INTL("The update to KIF {1} didn't finish (a file was in use).", v),
                           [_INTL("Try again"), _INTL("Discard it")], 0)
           if cmd == 0 && !update_window?
             File.delete(File.join(dir, "failed.txt")) rescue nil
@@ -860,7 +884,7 @@ KIF::Options.add(:others, :global) {
 }
 KIF::Options.add(:others, :global) {
   ButtonOption.new(_INTL("Check for Updates"), proc { KIF::Updater.check(true) },
-                   _INTL("Looks for a newer KIF Beta now"))
+                   _INTL("Looks for a newer KIF now"))
 }
 
 # The load screen's version check (PIF's spot). KIF's own check runs here

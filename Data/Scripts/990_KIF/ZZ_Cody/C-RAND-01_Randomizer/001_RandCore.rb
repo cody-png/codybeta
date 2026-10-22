@@ -473,6 +473,37 @@ module KIF
     end
 
     #---------------------------------------------------------------------------
+    # Built-in presets: every setting back to its default, then these. The
+    # seed, bans and Strength ranges are kept.
+    #---------------------------------------------------------------------------
+    BUILTIN_PRESETS = [
+      ["First Randomizer", "Wild Pokémon by route, random first-stage starters and random trainers. Items and doors as usual.",
+       { :wild_mode => 2, :starters => 1, :trainers => 1 }],
+      ["Gym Challenge", "Random wild Pokémon and trainers; gym trainers, gym types and bigger leader teams (+2).",
+       { :wild_mode => 2, :trainers => 1, :gyms => 1, :gym_types => 1, :leader_size => 2 }],
+      ["Item Hunt", "Found items, TMs, shops and trainers' held items are random. Pokémon as usual.",
+       { :found_items => 1, :found_tms => 1, :given_tms => 1, :shop_items => 1, :held_items => 1 }],
+      ["Fusion Frenzy", "Every wild Pokémon is a fusion with a custom sprite; random starters and trainers.",
+       { :wild_mode => 2, :fuse_all => 1, :wild_custom => 1, :starters => 2, :trainers => 1, :trainer_custom => 1 }],
+      ["Dungeon Crawl", "Cave, forest, tower and gate doors are shuffled; levels follow how far in you are; random found items.",
+       { :entrances => 1, :ent_doors => 0, :ent_hints => 1, :ent_levels => 2, :wild_mode => 2, :found_items => 1 }],
+      ["Total Chaos", "Nearly everything random: Pokémon, trainers, gyms, items, types, abilities, stats, evolutions, and every door in Kanto, Johto and Sevii.",
+       { :wild_mode => 3, :starters => 2, :statics => 1, :gifts => 1, :trades => 2, :wild_legend => 1,
+         :trainers => 1, :gyms => 1, :gym_types => 1, :leader_size => 3,
+         :found_items => 1, :found_tms => 1, :given_tms => 1, :shop_items => 1, :held_items => 1,
+         :types => 1, :abilities => 1, :stats => 3, :evolutions => 1,
+         :entrances => 2, :ent_doors => 2, :ent_hints => 1, :ent_johto => 1, :ent_sevii => 1, :ent_start => 2, :ent_levels => 2 }]
+    ]
+
+    def self.load_builtin(index)
+      _name, _desc, vals = BUILTIN_PRESETS[index]
+      return false unless vals
+      code_enums.each { |key, _k, _max| set(key, DATA_DEFAULTS[key] || 0) }
+      vals.each { |key, v| set(key, v) }
+      return true
+    end
+
+    #---------------------------------------------------------------------------
     # Pokédex swap: made once whenever a Pokémon part needs it
     #---------------------------------------------------------------------------
     def self.identity_dex?(h)

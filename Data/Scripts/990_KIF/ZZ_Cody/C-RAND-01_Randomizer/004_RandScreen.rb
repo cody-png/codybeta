@@ -76,6 +76,11 @@ module KIF
                            }, desc)
     end
 
+    # the randomizer pages open now, innermost last
+    def self.page_stack
+      return @page_stack ||= []
+    end
+
     def self.open_page(title, desc, color, &builder)
       pbFadeOutIn {
         scene = KifRandPageScene.new(title, desc, color, builder)
@@ -397,6 +402,15 @@ module KIF
               pbMessage(ok ? _INTL("Saved to the {1} folder.", KIF::Rand::PRESET_DIR) : _INTL("Couldn't save that preset."))
             end
           }, _INTL("Saves these settings as a file you can share.")),
+          ButtonOption.new(_INTL("Built-in presets"), proc {
+            list = KIF::Rand::BUILTIN_PRESETS
+            i = pbMessage(_INTL("Which preset?"), list.map { |n, _d, _v| _INTL(n) } + [_INTL("Cancel")], list.length + 1)
+            if i >= 0 && i < list.length &&
+               pbConfirmMessage(_INTL("{1}: {2} Every other setting goes back to its default. Load it?", _INTL(list[i][0]), _INTL(list[i][1])))
+              KIF::Rand.load_builtin(i)
+              pbMessage(_INTL("Loaded. Use Randomize now for it to take effect."))
+            end
+          }, _INTL("Ready-made settings to start from: First Randomizer, Gym Challenge, Item Hunt, Fusion Frenzy, Dungeon Crawl, Total Chaos.")),
           ButtonOption.new(_INTL("Load preset"), proc {
             names = KIF::Rand.preset_names
             if names.empty?
@@ -408,7 +422,7 @@ module KIF
                 pbMessage(ok ? _INTL("Loaded. Use Randomize now for it to take effect.") : _INTL("That preset couldn't be read."))
               end
             end
-          }, _INTL("Loads a preset from the {1} folder.", KIF::Rand::PRESET_DIR))
+          }, _INTL("Loads one of your presets from the {1} folder.", KIF::Rand::PRESET_DIR))
         ]
       }
     end
@@ -651,13 +665,24 @@ class KifRandPageScene < PokemonOption_Scene
       @sprites["option"].nameShadowColor = MessageConfig::BLUE_TEXT_SHADOW_COLOR
     end
     @sprites["option"].refresh
+    KIF::Rand.page_stack << self
   end
 
   def pbGetOptions(inloadscreen = false)
     return @kif_builder.call
   end
 
+  # The window keeps each row's value and writes them all back on closing:
+  # after a button changed settings behind it, read them again
+  def kif_reload_values
+    for i in 0...@PokemonOptions.length
+      @sprites["option"].setValueNoRefresh(i, @PokemonOptions[i].get || 0)
+    end
+    @sprites["option"].refresh
+  end
+
   def pbEndScene
+    KIF::Rand.page_stack.delete(self)
     super
     KIF::Rand.sync_masters
   end

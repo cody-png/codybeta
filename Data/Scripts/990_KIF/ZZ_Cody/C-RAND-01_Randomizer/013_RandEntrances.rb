@@ -13,7 +13,7 @@ module KIF
   module Rand
     ENT_SETTINGS = [
       [:entrances, :enum, 3],     # Off / Simple / Full
-      [:ent_doors, :enum, 3],     # Dungeons / Buildings / Everything
+      [:ent_doors, :enum, 4],     # Dungeons / Buildings / Everything / Custom (ENT_KINDS)
       [:ent_coupled, :enum, 2],   # Off / On (default On, DATA_DEFAULTS)
       [:ent_hints, :enum, 2],     # Off / On
       [:ent_start, :enum, 3],     # Pallet / Random town / Random map
@@ -24,7 +24,7 @@ module KIF
     ENT_SETTINGS.each { |st| DATA_SETTINGS << st unless DATA_KEYS.include?(st[0]) }
     ENT_SETTINGS.each { |st| DATA_KEYS << st[0] unless DATA_KEYS.include?(st[0]) }
     LABELS[:entrances] = ["Entrances", ["Off", "Simple", "Full"]]
-    LABELS[:ent_doors] = ["Which doors", ["Dungeons", "Buildings", "Everything"]]
+    LABELS[:ent_doors] = ["Which doors", ["Dungeons", "Buildings", "Everything", "Custom"]]
     LABELS[:ent_coupled] = ["Coupled", ["Off", "On"]]
     LABELS[:ent_hints] = ["Door hints", ["Off", "On"]]
     LABELS[:ent_start] = ["Start", ["Pallet", "Random town", "Random map"]]
@@ -33,6 +33,29 @@ module KIF
     LABELS[:ent_sevii] = ["And Sevii?", ["Off", "On"]]
 
     DATA_DEFAULTS[:ent_coupled] = 1   # Coupled unless switched off
+
+    # Added after the first settings (2026-10-22): appended so older settings
+    # codes, which are shorter, still read (the rest keep their defaults).
+    # Which doors: Custom shuffles the kinds switched On here.
+    ENT_KINDS = [
+      [:center,  "Pokémon Centers"],
+      [:gym,     "Gyms"],
+      [:mart,    "Marts and shops"],
+      [:house,   "Houses"],
+      [:other,   "Other buildings"],
+      [:gate,    "Gates"],
+      [:dungeon, "Caves and dungeons"]
+    ]
+    ENT_SETTINGS2 = ENT_KINDS.map { |k, _| [:"ent_k_#{k}", :enum, 2] } +
+                    [[:ent_sign, :enum, 3]]   # Off / Corner / Above door: where a used door's destination shows
+    ENT_SETTINGS2.each { |st| DATA_SETTINGS << st unless DATA_KEYS.include?(st[0]) }
+    ENT_SETTINGS2.each { |st| DATA_KEYS << st[0] unless DATA_KEYS.include?(st[0]) }
+    ENT_KINDS.each do |k, name|
+      LABELS[:"ent_k_#{k}"] = [name, ["Off", "On"]]
+      DATA_DEFAULTS[:"ent_k_#{k}"] = 1
+    end
+    LABELS[:ent_sign] = ["Door signs", ["Off", "Corner", "Above door"]]
+    DATA_DEFAULTS[:ent_sign] = 1
 
     module ER
       DATA_PATH = "Data/KIF/entrances.dat"
@@ -340,8 +363,34 @@ module KIF
         case which
         when 0 then list.select { |x| x[:pool] == :dungeon }
         when 1 then list.select { |x| x[:pool] == :building }
+        when 3
+          kinds = custom_kinds
+          list.select { |x| kinds.include?(door_kind(x)) }
         else list
         end
+      end
+
+      # A door's kind for Which doors: Custom, from its name in the data file
+      # (multi-door places such as some houses are in the :dungeon pool)
+      def self.door_kind(o)
+        l = o[:label].to_s
+        return :center if l =~ /Pok[eé]mon Center/i
+        return :gym if l =~ /\bGym\b/
+        return :mart if l =~ /Mart\b|D(e)?p(ar)?t\.? Store|Boutique|Shop\b/i
+        return :house if l =~ /\bhouse\b/i
+        return :gate if l =~ /\bGate\b/
+        return o[:pool] == :dungeon ? :dungeon : :other
+      end
+
+      def self.custom_kinds
+        return ENT_KINDS.map(&:first).select { |k| Rand.dget(:"ent_k_#{k}") == 1 }
+      end
+
+      # what Which doors means right now (Custom: its kinds too), stored with
+      # a layout so a changed kind counts as different settings
+      def self.doors_setting
+        w = Rand.dget(:ent_doors)
+        return w == 3 ? [3, custom_kinds] : w
       end
 
       # Standing at the door with what the sweep gave (its own condition met)
@@ -561,6 +610,7 @@ module KIF
         shape = Rand.dget(:entrances)
         return nil if shape == 0
         doors = doors_for(d, Rand.dget(:ent_doors))
+        return nil if doors.empty?   # Custom with every kind Off
         coupled = Rand.dget(:ent_coupled) == 1
         rng = Random.new(Rand.sub_seed(*seed_parts))
         # Random start: made at the hand-over (see handover_target), from the
@@ -612,7 +662,7 @@ module KIF
           # reshuffle at 6 badges would put most of the world in the first bin)
           lv = (origin_door && start_flags) ? sweep(d, edges, start_flags, nil, start) : res
           return { in: map_in, out: map_out, sig: d[:signature], rsig: rsig, regions: regions, attempts: i + 1, seen: [],
-                   shape: shape, doors: Rand.dget(:ent_doors), coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]),
+                   shape: shape, doors: doors_setting, coupled: coupled, spheres: door_spheres(d, map_in, res[:seen]),
                    start_door: first && first[:id], start_done: !first.nil?, progress: map_progress(lv), pv: d[:progress_version],
                    nv: NEAR_VERSION, seed: Rand.seed, start_flags: start_flags }.merge(near_for(d, edges, lv, start, start_door.nil?))
         end
@@ -874,7 +924,7 @@ module KIF
       # settings). Layouts from before the seed was stored count as the same seed.
       def self.same_layout?(s)
         return false unless s.is_a?(Hash) && dat && layout_current?(s)
-        return false unless s[:shape] == Rand.dget(:entrances) && s[:doors] == Rand.dget(:ent_doors)
+        return false unless s[:shape] == Rand.dget(:entrances) && s[:doors] == doors_setting
         return false unless s[:coupled] == (Rand.dget(:ent_coupled) == 1)
         return false unless (s[:regions] || [0]).sort == regions_on.sort
         return false if s[:seed] && s[:seed] != Rand.seed
@@ -1207,8 +1257,10 @@ module KIF
         d = dat; s = state
         return [] unless d && s
         out = []
-        out << _INTL("Settings: {1}, {2}, {3}", LABELS[:entrances][1][s[:shape] || 2], LABELS[:ent_doors][1][s[:doors] || 2],
+        which, kinds = s[:doors].is_a?(Array) ? s[:doors] : [s[:doors] || 2, nil]
+        out << _INTL("Settings: {1}, {2}, {3}", LABELS[:entrances][1][s[:shape] || 2], LABELS[:ent_doors][1][which],
                      s[:coupled] ? _INTL("coupled") : _INTL("decoupled"))
+        out << _INTL("Door kinds: {1}", kinds.map { |k| ENT_KINDS.assoc(k)[1] }.join(", ")) if kinds
         regions = (s[:regions] || [0]).map { |r| REGION_NAMES[r] || r.to_s }
         out << _INTL("Regions: {1}", regions.join(" + ")) if regions.length > 1
         out << _INTL("Start: {1}", start_name) if start_name

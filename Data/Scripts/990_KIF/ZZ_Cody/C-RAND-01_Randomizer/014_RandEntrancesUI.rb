@@ -10,10 +10,14 @@ module KIF
                [_INTL("Doors lead where they always did."),
                 _INTL("Doors are shuffled; the two ends of a gate or cave stay on the same gate or cave."),
                 _INTL("Doors are shuffled freely. Every layout can still be finished.")]),
-          enum(:ent_doors, _INTL("Which doors"), [_INTL("Dungeons"), _INTL("Buildings"), _INTL("Everything")],
+          enum(:ent_doors, _INTL("Which doors"), [_INTL("Dungeons"), _INTL("Buildings"), _INTL("Everything"), _INTL("Custom")],
                [_INTL("Caves, towers, forests, the Mansion, gates and tunnels."),
                 _INTL("Pokémon Centers, gyms, marts and houses."),
-                _INTL("Both.")]),
+                _INTL("Both."),
+                _INTL("Only the kinds of door picked in Door kinds.")]),
+          DynButton.new(proc { _INTL("Door kinds ({1} of {2})", ER.custom_kinds.length, ENT_KINDS.length) },
+                        proc { page_ent_kinds; (page_stack.last.kif_reload_values rescue nil) },
+                        _INTL("Pick which kinds of door are shuffled. Opening this sets Which doors to Custom.")),
           onoff(:ent_johto, _INTL("And Johto?"),
                 _INTL("Only Kanto's doors are shuffled; Johto's stay as they are."),
                 _INTL("Johto's doors join the shuffle too, mixed with Kanto's: a Kanto door can lead into Johto and back.")),
@@ -26,6 +30,10 @@ module KIF
           onoff(:ent_hints, _INTL("Door hints"),
                 _INTL("Nothing is shown when you come out of a shuffled door."),
                 _INTL("The first time you use a shuffled door, a line names it and the place it belongs to.")),
+          enum(:ent_sign, _INTL("Door signs"), [_INTL("Off"), _INTL("Corner"), _INTL("Above door")],
+               [_INTL("Nothing shows in front of doors."),
+                _INTL("Facing a shuffled door you've used shows where it leads, in the top-left corner."),
+                _INTL("Facing a shuffled door you've used shows where it leads, just above the door.")]),
           enum(:ent_start, _INTL("Start"), [_INTL("Pallet"), _INTL("Random town"), _INTL("Random map")],
                [_INTL("Your journey starts in Pallet Town as usual."),
                 _INTL("Oak's parcel errand is skipped: once you have your starter, the next door hands you the Pokédex and takes you to a random town's Pokémon Center, which becomes home. New games only."),
@@ -41,6 +49,25 @@ module KIF
         end
         rows
       }
+    end
+
+    # Which doors: Custom, one On/Off row per kind
+    KIND_DESCS = {
+      :center  => ["Pokémon Center doors stay as they are.", "Pokémon Center doors are shuffled."],
+      :gym     => ["Gym doors stay as they are.", "Gym doors are shuffled."],
+      :mart    => ["Marts, department stores and shops stay as they are.", "Marts, department stores and shops are shuffled."],
+      :house   => ["House doors stay as they are.", "House doors are shuffled."],
+      :other   => ["Hotels, museums, labs, harbors and other buildings stay as they are.", "Hotels, museums, labs, harbors and other buildings are shuffled."],
+      :gate    => ["Gates between routes stay as they are.", "Gates between routes are shuffled."],
+      :dungeon => ["Caves, forests, towers and other dungeons stay as they are.", "Caves, forests, towers and other dungeons are shuffled."]
+    }
+
+    def self.page_ent_kinds
+      dset(:ent_doors, 3)
+      open_page(_INTL("Entrances: Door kinds"), _INTL("Which kinds of door are shuffled."), nil) {
+        ENT_KINDS.map { |k, name| onoff(:"ent_k_#{k}", _INTL(name), _INTL(KIND_DESCS[k][0]), _INTL(KIND_DESCS[k][1])) }
+      }
+      pbMessage(_INTL("With every kind of door Off, no doors are shuffled.")) if ER.custom_kinds.empty?
     end
 
     class << self

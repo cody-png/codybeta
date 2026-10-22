@@ -57,7 +57,16 @@ module KIF
       rescue SystemCallError
         nil   # save_to_png reports it, as PIF's version would
       end
-      fused.save_to_png(out_path)
+      begin
+        fused.save_to_png(out_path)
+      rescue StandardError, NotImplementedError => e
+        # an engine that can't write pictures (some phone players) or a folder
+        # it can't write to: the head's own icon instead of a crash
+        KIF.log("Fusion icon not saved (#{e.class}: #{e.message}); using the head's icon") if defined?(KIF.log)
+        fused.dispose
+        body.dispose
+        return head
+      end
       fused.dispose
       head.dispose
       body.dispose

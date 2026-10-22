@@ -42,6 +42,10 @@ module KIF
     ASSETS     = ".installed_assets"
     SKIP       = %w[modpacks]
     CACHE_TIME = 600   # seconds a fetched list is reused
+    # GitHub trees (by head commit) and mod.json texts (by blob sha) kept
+    # between sessions in the save folder, so an unchanged catalog costs one
+    # small request (2026-10-22)
+    DISK_CACHE = "KIF_catalog_cache.dat"
 
     # one catalog: a GitHub repository (or a folder laid out like one)
     class Catalog
@@ -55,7 +59,9 @@ module KIF
       def local?;   return !@path.nil?; end
       def name;     return (@name && !@name.to_s.empty?) ? @name.to_s : (local? ? File.basename(@path) : @repo); end
       def key;      return local? ? File.expand_path(@path) : "#{@repo.downcase}@#{@branch}"; end
-      def tree_url; return "https://api.github.com/repos/#{@repo}/git/trees/#{@branch}?recursive=1"; end
+      def tree_url(ref = @branch); return "https://api.github.com/repos/#{@repo}/git/trees/#{ref}?recursive=1"; end
+      # tiny answer holding the branch's head commit sha
+      def ref_url;  return "https://api.github.com/repos/#{@repo}/git/refs/heads/#{@branch}"; end
       def raw_base; return "https://raw.githubusercontent.com/#{@repo}/#{@branch}"; end
       def base
         return raw_base unless local?
@@ -194,8 +200,9 @@ module KIF
       list = []
       packs = []
       cats = catalogs
+      begin_stats(cats.length)
       cats.each do |cat|
-        files = cat.local? ? local_tree(cat.path) : remote_tree(cat)
+        files = tree_for(cat, force)
         if files.nil?
           @failed << cat
           log("#{cat.name}: couldn't be read")
@@ -214,6 +221,8 @@ module KIF
       @checked = Time.now
       log("#{list.length} mods listed (#{cats.length - @failed.length} of #{cats.length} catalogs)")
       return @items
+    ensure
+      end_stats("list read")
     end
 
     # Load screen: the installed mods with an update, reading only their own
@@ -225,8 +234,10 @@ module KIF
       have = installed_index.values
       return [] if have.empty?
       out = []
-      catalogs.each_with_index do |c, i|
-        files = c.local? ? local_tree(c.path) : remote_tree(c)
+      cats = catalogs
+      begin_stats(cats.length)
+      cats.each_with_index do |c, i|
+        files = tree_for(c)
         if files.nil?
           break if i == 0   # the first catalog didn't answer: most likely offline
           next
@@ -236,7 +247,123 @@ module KIF
       end
       return out.select { |it| update?(it) && !kif_problem(it) }
     ensure
+      end_stats("start-up check")
       updater.hide_status
+    end
+
+    #---------------------------------------------------------------------------
+    # Network use: trees reused for CACHE_TIME in memory, and on disk while
+    # the branch's head commit is the same; mod.json texts by blob sha
+    #---------------------------------------------------------------------------
+    def begin_stats(n)
+      @stats = { :cats => n, :req => 0, :bytes => 0, :hits => 0, :t => Time.now }
+    end
+
+    def end_stats(what)
+      s = @stats
+      return unless s
+      @stats = nil
+      save_disk if @dirty
+      log(format("%s: %d catalogs, %d requests (%s), %.1fs, %d from cache",
+                 what, s[:cats], s[:req], updater.size_text(s[:bytes]), Time.now - s[:t], s[:hits]))
+    end
+
+    def get(url)
+      text = updater.fetch(url)
+      if @stats
+        @stats[:req] += 1
+        @stats[:bytes] += text.to_s.bytesize
+      end
+      KIF.verbose("Mods catalog: #{url}: #{text ? "#{text.to_s.bytesize} bytes" : 'no answer'}")
+      return text
+    end
+
+    def hit(what)
+      @stats[:hits] += 1 if @stats
+      KIF.verbose("Mods catalog: #{what} from cache")
+    end
+
+    def disk_path; return File.join(KIF.save_dir, DISK_CACHE); end
+
+    # {:trees => {catalog key => [head sha, files]}, :json => {blob sha => text}};
+    # a missing or broken file is an empty cache
+    def disk
+      return @disk if @disk
+      d = begin
+            File.file?(disk_path) ? File.open(disk_path, "rb") { |f| Marshal.load(f) } : nil
+          rescue StandardError
+            log("cache file unreadable, ignored")
+            nil
+          end
+      d = nil unless d.is_a?(Hash) && d[:trees].is_a?(Hash) && d[:json].is_a?(Hash)
+      @disk = d || { :trees => {}, :json => {} }
+      return @disk
+    end
+
+    # only today's catalogs and the mod.json texts their trees still list
+    def save_disk
+      @dirty = false
+      d = disk
+      keys = catalogs.map(&:key)
+      d[:trees].select! { |k, v| keys.include?(k) && v.is_a?(Array) && v[1].is_a?(Hash) }
+      live = {}
+      d[:trees].each_value { |_head, files| files.each_value { |sha, _size| live[sha] = true } }
+      d[:json].select! { |sha, _| live[sha] }
+      tmp = disk_path + ".tmp"
+      File.open(tmp, "wb") { |f| Marshal.dump(d, f) }
+      File.rename(tmp, disk_path)
+    rescue StandardError => e
+      log("cache not saved (#{e.class}: #{e.message})")
+    end
+
+    # rel path => [sha, size] for a catalog
+    def tree_for(cat, force = false)
+      return local_tree(cat.path) if cat.local?
+      @trees ||= {}
+      at, files = @trees[cat.key]
+      if !force && at && Time.now - at < CACHE_TIME
+        hit("#{cat.name} file list")
+        return files
+      end
+      head = get(cat.ref_url).to_s[/"object"\s*:\s*\{[^}]*?"sha"\s*:\s*"([0-9a-f]{40})"/, 1]
+      # no answer (offline, rate limited): the big list wouldn't come either
+      return nil unless head
+      old = disk[:trees][cat.key]
+      if old.is_a?(Array) && old[0] == head && old[1].is_a?(Hash)
+        hit("#{cat.name} file list (#{head[0, 7]})")
+        files = old[1]
+      else
+        files = remote_tree(cat, cat.tree_url(head))
+        return nil unless files
+        disk[:trees][cat.key] = [head, files]
+        @dirty = true
+      end
+      @trees[cat.key] = [Time.now, files]
+      return files
+    end
+
+    # a catalog's small json file: from the cache when its blob sha is known
+    def cached_text(cat, info, url)
+      sha, size = info
+      return updater.fetch(url) if cat.local?   # file:// catalogs: as before
+      if (text = disk[:json][sha])
+        hit(url)
+        return text
+      end
+      text = get(url)
+      if text && blob_ok?(text, sha, size)
+        disk[:json][sha] = text
+        @dirty = true
+      end
+      return text
+    end
+
+    # text is that blob (the branch may have moved since the tree was read)
+    def blob_ok?(text, sha, size)
+      t = text.to_s.b
+      return false unless t.bytesize == size
+      return true unless updater.sha_ok?
+      return Digest::SHA1.hexdigest("blob #{t.bytesize}\0".b + t) == sha
     end
 
     # the mods of one catalog (one already listed by an earlier catalog is
@@ -252,7 +379,7 @@ module KIF
       folders = by_folder.keys.select { |f| by_folder[f].has_key?("mod.json") }.sort_by(&:downcase)
       folders.each_with_index do |f, i|
         status(_INTL("Reading the mod list"), _INTL("{1}: {2} of {3}", cat.name, i + 1, folders.length), (i + 1).to_f / folders.length)
-        text = updater.fetch(updater.url_for(cat.base, "#{f}/mod.json"))
+        text = cached_text(cat, by_folder[f]["mod.json"], updater.url_for(cat.base, "#{f}/mod.json"))
         json = text ? (KIF::Mods::MiniJSON.parse(KIF::PixelFont.utf8(text).sub(/\A﻿/, "")) rescue nil) : nil
         next log("#{cat.name}: #{f}/mod.json unreadable") unless json.is_a?(Hash)
         it = Item.new(f, json, by_folder[f], cat)
@@ -271,7 +398,7 @@ module KIF
       folders = files.keys.map { |p| p =~ %r{\Amodpacks/([^/]+)/modpack\.json\z} ? $1 : nil }.compact.sort_by(&:downcase)
       out = []
       folders.each do |f|
-        text = updater.fetch(updater.url_for(cat.base, "modpacks/#{f}/modpack.json"))
+        text = cached_text(cat, files["modpacks/#{f}/modpack.json"], updater.url_for(cat.base, "modpacks/#{f}/modpack.json"))
         json = text ? (KIF::Mods::MiniJSON.parse(KIF::PixelFont.utf8(text).sub(/\A\uFEFF/, "")) rescue nil) : nil
         next log("#{cat.name}: modpacks/#{f}/modpack.json unreadable") unless json.is_a?(Hash) && json["mods"].is_a?(Array)
         pk = KIF::ModPacks::Pack.new(f, json, cat)
@@ -282,10 +409,10 @@ module KIF
     end
 
     # rel path => [sha, size], from GitHub's tree listing
-    def remote_tree(cat = nil)
+    def remote_tree(cat = nil, url = nil)
       cat ||= catalogs[0]
       status(_INTL("Reading the mod list"), _INTL("Contacting GitHub ({1})...", cat.name))
-      text = updater.fetch(cat.tree_url)
+      text = get(url || cat.tree_url)
       return nil unless text
       text = text.to_s.dup.force_encoding("UTF-8")
       out = {}

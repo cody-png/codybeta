@@ -1,7 +1,7 @@
 #===============================================================================
 # F-BATTLE-12 – EBDX battle visuals
 # Elite Battle DX (Luka S.J.) as it ships inside KIF Multiplayer 6.7.0 by
-# Aleks, included in KIF Beta since 0.21.27 (with Aleks's
+# Aleks, included in KIF since 0.21.27 (with Aleks's
 # permission): Data/Scripts/660_EBDX and 661_BossUIHooks/003_EBDX_UIFixes.rb
 # copied as they are, graphics in Graphics/EBDX, sounds in Audio/*/EBDX and
 # the Audio/SE/Anim files PIF lacked. The two files are never edited here.
@@ -152,7 +152,7 @@ if KIF::EBDX.installed?
   end
 
   # 661/003's Type Display for EBDX boxes loads KIF 0.20.7's icon sheets from
-  # Graphics/Pictures/TypeIcons_*.png; KIF Beta keeps them in
+  # Graphics/Pictures/TypeIcons_*.png; KIF keeps them in
   # Graphics/Pictures/KIF/TypeIcons (F-BATTLE-07), and "Txt" (5) has no sheet
   # here, so PIF's own 64x28 type strip stands in for it (the 661 code draws
   # 5 at 64x28 anyway). Without this, Type Display 1-4 + EBDX crashed at the

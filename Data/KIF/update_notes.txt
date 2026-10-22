@@ -1,2 +1,4 @@
-KIF 1.0.5
-- A list of choices next to a speech bubble stays on screen. The Cinnabar Lab fossil list could go off the top of the screen.
+KIF 1.0.6
+- The game now says KIF instead of KIF Beta (update messages, the welcome message, randomizer logs).
+- KIF_log.txt now records more about downloads, the engine and the controller in use, to help with bug reports.
+- A leftover testing file is removed from the game folder.

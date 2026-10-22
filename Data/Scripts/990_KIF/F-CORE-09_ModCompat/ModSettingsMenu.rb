@@ -4,7 +4,7 @@
 #   API of an older community mod (Ghost QoL, GhostItem Splicers, GhostBattle
 #   Classic+, GhostNPC Buddy / Wandering Trainers, Poké-Broker, Player
 #   Housing, Overworld Encounters, Alpha Encounters). Only Kanto Reloaded
-#   provides it in KIF Beta, so without Kanto Reloaded those settings could
+#   provides it in KIF, so without Kanto Reloaded those settings could
 #   not be changed, and Ghost QoL even crashed (it reads ModSettingsMenu
 #   without checking for it).
 #   When no Kanto Reloaded is installed, KIF provides the same API before the

@@ -452,7 +452,7 @@ module KIF
       make_dir(PRESET_DIR)
       File.open("#{PRESET_DIR}/#{clean}.txt", "wb") do |f|
         f.write(settings_code + "\r\n")
-        f.write("# KIF Beta randomizer preset. The first line is the settings code;\r\n")
+        f.write("# KIF randomizer preset. The first line is the settings code;\r\n")
         f.write("# paste it in Randomizer > Presets & sharing > Paste settings code.\r\n")
       end
       return true

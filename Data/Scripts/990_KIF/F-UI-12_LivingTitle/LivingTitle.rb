@@ -272,7 +272,7 @@ class KifLivingTitle
       @actors.last.timer = 2.0 + i * 4 + frand * 3
     end
     @fusion = nil
-    @fuse_wait = 6.0
+    @fuse_wait = 2.5   # early: a player may not stay long (Cody, 2026-10-22)
     @sprites["flash"] = Sprite.new(@viewport)
     @sprites["flash"].bitmap = flash_bitmap
     @sprites["flash"].ox = @sprites["flash"].oy = 48
@@ -557,6 +557,7 @@ class KifLivingTitle
       @bitmaps[:fused] = bmp
       a.state = b.state = :meet
       a.ty = b.ty = my
+      a.speed = b.speed = WALK * 1.8   # they hurry to meet (back to WALK after the flash)
       @fusion = f = { :a => a, :b => b, :sx => sx, :x => @cam + sx, :y => my, :phase => :walk, :t => 0.0 }
     end
     f[:t] += dt
@@ -596,7 +597,7 @@ class KifLivingTitle
         @sprites["fused"].bitmap = nil
         @bitmaps.delete(:fused).dispose if @bitmaps[:fused]
         @fusion = nil
-        @fuse_wait = 12.0 + frand * 10
+        @fuse_wait = 7.0 + frand * 5
         @sprites["sparkle"].visible = @sprites["flash"].visible = false
         return
       end

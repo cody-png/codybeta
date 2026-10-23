@@ -162,7 +162,14 @@ module KIF
       @left  = inside && Input.kif_mouse_trigger?(Input::MOUSELEFT)
       @right = inside && Input.kif_mouse_trigger?(Input::MOUSERIGHT)
       @held  = inside && Input.kif_mouse_press?(Input::MOUSELEFT)
-      log_phone_test(nx, ny, moved) if @phone_test
+      if @phone_test
+        log_phone_test(nx, ny, moved)
+        # keys the engine itself sends (JoiPlay may turn a tap into a key too)
+        keys = [:USE, :BACK, :ACTION, :SPECIAL].select { |k| Input.kif_mouse_trigger?(Input.const_get(k)) }
+        d = Input.kif_mouse_dir4
+        log_phone_test(nx, ny, false, "keys=#{keys.join('+')} dir=#{d}") if !keys.empty? || d != @test_dir.to_i
+        @test_dir = d
+      end
       # scroll_v: the notches turned since the last Input.update (mkxp-z sums
       # SDL wheel events and resets it each update; up is positive). One step
       # a frame; notches that came together follow on the next frames.
@@ -346,8 +353,18 @@ module KIF
     def self.map_busy?(pl)
       return true if pbMapInterpreterRunning? || $game_temp.message_window_showing || $game_temp.in_menu
       return true if $game_temp.player_transferring || $game_temp.transition_processing
-      return true if pl.move_route_forcing || ($PokemonTemp && $PokemonTemp.miniupdate)
+      return true if route_moves?(pl) || ($PokemonTemp && $PokemonTemp.miniupdate)
       return false
+    end
+
+    # a forced route that steps, jumps or waits (a cutscene); not one that only
+    # changes how the player looks (some maps' parallel events set the
+    # player's opacity every frame)
+    def self.route_moves?(pl)
+      return false unless pl.move_route_forcing
+      route = pl.instance_variable_get(:@move_route)
+      return true unless route && route.list
+      return route.list.any? { |c| c.code.between?(1, 15) }
     end
 
     # Start of every Scene_Map#update
@@ -394,6 +411,7 @@ module KIF
         tx, ty = @pending
         @pending = nil
         click_tile(pl, tx, ty)
+        log_phone_test(@x, @y, false, "tile=#{tx},#{ty} player=#{pl.x},#{pl.y} path=#{@path ? @path.length / 2 : 'none'}") if @phone_test
       elsif @drag && (@drag_moved || @path.nil?)
         # holding the button: a new search when the pointer moved to another
         # tile, or once the last walk ended (not every step: the map scrolls
@@ -487,6 +505,7 @@ module KIF
     end
 
     def self.stop
+      log_phone_test(@x.to_i, @y.to_i, false, "walk stopped at line #{caller_locations(1, 1)[0].lineno}") if @phone_test && @path
       @path = nil
       @trans = nil
       @hold = false

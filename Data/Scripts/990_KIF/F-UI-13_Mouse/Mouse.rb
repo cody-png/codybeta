@@ -89,8 +89,27 @@ module KIF
     def self.on?
       return false unless engine?
       return false if defined?(::MouseUI)
-      return false if KIF.mobile?
+      return phone_test? if KIF.mobile?
       return (($PokemonSystem.kif_mouse rescue 0) || 0).to_i == 1
+    end
+
+    # Testing taps on a phone: a MouseOnPhone.krs marker file turns the mouse
+    # (and click to move) on there, and the first taps go to the log
+    PHONE_TEST = "MouseOnPhone.krs"
+
+    def self.phone_test?
+      if @phone_test.nil?
+        @phone_test = KIF.marker?(PHONE_TEST) ? true : false
+        KIF.log("Mouse test on a phone: on (#{PHONE_TEST}); engine mouse calls: #{engine?}") if @phone_test
+      end
+      return @phone_test
+    end
+
+    def self.log_phone_test(x, y, moved)
+      return unless @phone_test && (@left || @right || @held || moved)
+      @test_lines = @test_lines.to_i + 1
+      return if @test_lines > 20
+      KIF.log("Mouse test: #{x},#{y} left=#{@left} held=#{@held} right=#{@right} moved=#{moved}")
     end
 
     # Click to move (only asked while the mouse is on)
@@ -129,6 +148,7 @@ module KIF
       @left  = inside && Input.kif_mouse_trigger?(Input::MOUSELEFT)
       @right = inside && Input.kif_mouse_trigger?(Input::MOUSERIGHT)
       @held  = inside && Input.kif_mouse_press?(Input::MOUSELEFT)
+      log_phone_test(nx, ny, moved) if @phone_test
       # scroll_v: the notches turned since the last Input.update (mkxp-z sums
       # SDL wheel events and resets it each update; up is positive). One step
       # a frame; notches that came together follow on the next frames.

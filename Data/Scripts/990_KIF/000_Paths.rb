@@ -20,21 +20,35 @@ module KIF
       return "."
     end
 
-    # <root>/Logs, made when needed; the save folder if it can't be written
+    # <root>/Logs, made when needed. If it can't be written: on Android the
+    # app's own folder on shared storage (Android/data/<app>/files/Logs: the
+    # app can always write there and it can be read without root, so a phone
+    # player can still send a log), else the save folder.
     def self.logs
       dir = File.join(root, "Logs")
       return @logs if @logs && @logs_for == dir
       @logs_for = dir
-      begin
-        Dir.mkdir(dir) unless Dir.exist?(dir)
-        probe = File.join(dir, ".kif_write_test")
-        File.open(probe, "wb") { |f| f.write("") }
-        File.delete(probe)
-        @logs = dir
-      rescue StandardError
-        @logs = (KIF.save_dir rescue ".")
-      end
+      @logs = [dir, android_logs].compact.find { |d| writable_dir?(d) } || (KIF.save_dir rescue ".")
       return @logs
+    end
+
+    def self.writable_dir?(dir)
+      KIF.mkdir_p(dir) unless Dir.exist?(dir)
+      probe = File.join(dir, ".kif_write_test")
+      File.open(probe, "wb") { |f| f.write("") }
+      File.delete(probe)
+      return true
+    rescue StandardError
+      return false
+    end
+
+    # /storage/emulated/0/Android/data/<app>/files/Logs, from the app's private
+    # save path (/data/user/0/<app>/... or /data/data/<app>/...); nil elsewhere
+    def self.android_logs
+      app = (KIF.save_dir rescue "").to_s[%r{\A/data/(?:user/\d+|data)/([^/]+)/}, 1]
+      return nil unless app
+      base = ENV["EXTERNAL_STORAGE"].to_s.empty? ? "/storage/emulated/0" : ENV["EXTERNAL_STORAGE"]
+      return File.join(base, "Android", "data", app, "files", "Logs")
     end
 
     def self.log(name)

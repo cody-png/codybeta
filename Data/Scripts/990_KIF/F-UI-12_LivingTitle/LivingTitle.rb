@@ -230,12 +230,15 @@ class KifLivingTitle
     return k == :walk || k == :grass
   end
 
-  # the lowest row with a pixel in a follower sheet's first frame (its feet)
+  # the lowest row with a pixel in ANY frame of a follower sheet (its feet);
+  # flyers flap lower in later frames, and the first frame alone cut them off
   def feet(bmp)
     @feet ||= {}
     return @feet[bmp.object_id] ||= begin
       fw = bmp.width / 4; fh = bmp.height / 4
-      row = (fh - 1).downto(0).find { |y| (0...fw).step(2).any? { |x| bmp.get_pixel(x, y).alpha > 0 } }
+      row = (fh - 1).downto(0).find do |y|
+        (0...4).any? { |r| (0...bmp.width).step(2).any? { |x| bmp.get_pixel(x, r * fh + y).alpha > 0 } }
+      end
       row ? row + 1 : fh - 8
     end
   end

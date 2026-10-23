@@ -195,6 +195,23 @@ module GameData
         kif_rand_replace_gym(species, trainerId, pokemonIndex)
       }
     end
+
+    # A team the shuffle never saw (reached through a fallback: a Classic
+    # team in Remix/Expert, an Endgame team with the challenge off) crashed
+    # PIF's lookup. It's shuffled the first time it's used, the same each time.
+    alias kif_rand_replace_regular replace_species_to_randomized_regular unless method_defined?(:kif_rand_replace_regular)
+
+    def replace_species_to_randomized_regular(species, trainerId, pokemonIndex)
+      h = $PokemonGlobal && $PokemonGlobal.randomTrainersHash
+      if h.is_a?(Hash) && !h.empty? && !h[trainerId]
+        bst = pbGet(VAR_RANDOMIZER_TRAINER_BST)
+        h[trainerId] = KIF::Rand.with_seed(:trainers, trainerId.inspect) {
+          @pokemon.map { |p| getNewSpecies(GameData::Species.get(p[:species]).id_number, bst) }
+        }
+        KIF.log("Randomizer: shuffled #{trainerId.inspect}'s team on first use (not in the shuffle)")
+      end
+      return kif_rand_replace_regular(species, trainerId, pokemonIndex)
+    end
   end
 end
 

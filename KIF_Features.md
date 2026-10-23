@@ -425,3 +425,4 @@ These features have no option of their own.
 - **Faster PC boxes:** a fusion's icon is made much faster the first time it's shown, and switching boxes no longer draws the new box's icons twice, so flipping between full boxes doesn't stutter. Shiny fusion icons show the shiny colours on the right half in both the party and the PC.
 - **Crash log:** if the game crashes, the full error is saved to `KIF_errorlog.txt` in the `Logs` folder next to InfiniteFusion.exe, ready to share. Every other KIF log (session log, frame log, Entrances returns) is in that folder too.
 - **Old KIF saves** load directly. Their settings, Pokémon and items carry over.
+- **Items from a removed mod:** when a save holds items from a mod that is Off or uninstalled (in the Bag, the PC or held by Pokémon), they are put aside when the save loads instead of showing as UNKNOWN. Turn the mod back on and they return to your Bag.

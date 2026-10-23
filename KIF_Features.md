@@ -235,6 +235,7 @@ All options in this menu are per-save.
 - **Save Backups** - Infinite / PIF *(Infinite)*. Always works, even with the PC & Saves module Off. Infinite: every save you make keeps a backup that is never deleted; saves the game makes by itself (autosaves, Transfer Box, PC, Battle Frontier) keep only their newest 10 (they were filling gigabytes on long games). PIF: only the newest ones are kept (backups you named are never removed). The Save menu also gains:
   - **Name the next backup:** gives that backup a label in the load-backup list.
   - **Open the save folder.**
+- **Compressed save backups** - new backups are stored compressed, about a tenth of a save's size; "Load an older backup" reads them like before. **Compress Old Backups** (same menu as Save Backups) shrinks the backups made before this; each one is checked before its old copy is replaced, and any it can't check is left as it was.
 - **Debug Exclusive** - Off / On *(Off)*. On: Import/Export and other tools need Debug mode.
 - **Dex Evolutions** - Credits Box / Entry Box *(Credits Box)*. On the Pokédex info page, the Run button shows the Pokémon's evolutions (levels, items, conditions). Credits Box swaps the sprite-credits box for evolution lines; Entry Box shows an evolution chart in the entry box.
 - **Dex Sprite Select** - Off / On *(On)*. Each newly registered Pokémon or fusion asks which sprite to use.

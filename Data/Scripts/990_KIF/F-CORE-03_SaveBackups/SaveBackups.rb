@@ -23,6 +23,11 @@
 # 6.8.2 adaptations: backups use 6.8.2's folder and names, so its load-backup
 # menu lists them (named ones show "date – name"). KIF kept its own
 # "<slot> <n> <time> <map>" files next to the saves.
+#
+# Compressed backups (KIF 1.2, 2026-10-22): new backups are gzip files under
+# the same .rxdata names (about a tenth of the size); SaveData.get_data_from_file
+# reads either kind. Old plain backups stay as they are until the player uses
+# Options > Compress Old Backups.
 #===============================================================================
 KIF::Options.define(:savebackups, 1, :global)   # 0 Infinite, 1 Newest 10 (default, 2026-10-22), 2 Off
 
@@ -33,6 +38,10 @@ KIF::Options.add(:others, :global) {
                  [_INTL("Every save you make keeps a backup; autosaves keep their newest ones"),
                   _INTL("Only the newest 10 backups of each save file are kept"),
                   _INTL("No backups (named backups still work). Backups already made are kept")])
+}
+KIF::Options.add(:others, :global) {
+  ButtonOption.new(_INTL("Compress Old Backups"), proc { KIF::SaveBackups.compress_old_menu },
+                   _INTL("Shrinks backups made before KIF compressed them, to about a tenth"))
 }
 
 module KIF
@@ -56,6 +65,39 @@ module KIF
       return dir
     end
 
+    GZ_MAGIC = "\x1F\x8B".b
+
+    # a gzip backup (the name stays <slot>_<date>.rxdata, so PIF's menu,
+    # the trim and every name check treat it like a plain one)
+    def self.gz?(path)
+      return File.binread(path, 2) == GZ_MAGIC
+    rescue StandardError
+      return false
+    end
+
+    # 6: ~1/10 of the size in 10-25 ms on a PC; phones take the faster 1 (~1/8)
+    def self.level
+      return KIF.mobile? ? Zlib::BEST_SPEED : Zlib::DEFAULT_COMPRESSION
+    end
+
+    # gzip of raw if it reads back byte-exact and is smaller, else raw
+    def self.packed(raw)
+      gz = Zlib.gzip(raw, level: level)
+      return (gz.bytesize < raw.bytesize && Zlib.gunzip(gz) == raw) ? gz : raw
+    rescue StandardError => e
+      KIF.log("Save backup not compressed: #{e.message}")
+      return raw
+    end
+
+    # temp file + rename: a backup is never half written
+    def self.write_file(dest, data)
+      tmp = dest + ".tmp"
+      File.binwrite(tmp, data)
+      File.rename(tmp, dest)
+    ensure
+      (File.delete(tmp) if tmp && File.exist?(tmp)) rescue nil
+    end
+
     def self.copy(save_path, slot, name = nil)
       return unless File.exist?(save_path)
       clean = name.to_s.gsub(/[\\\/:*?"<>|]/, "").strip
@@ -68,10 +110,59 @@ module KIF
         break unless File.exist?(File.join(dir, file))
         t += 1
       end
-      # streamed copy (KIF read the whole save into memory first)
-      IO.copy_stream(save_path, File.join(dir, file))
+      write_file(File.join(dir, file), packed(File.binread(save_path)))
     rescue => e
       KIF.log("Save backup failed: #{e.message}")
+    end
+
+    # Options > Compress Old Backups: every plain backup is gzipped; the
+    # original is replaced only once the compressed file on disk reads back
+    # byte for byte. Returns [compressed, bytes freed, left as they were]
+    def self.compress_old(root = File.join(SaveData::SAVE_DIR.to_s, "backups"))
+      done = 0; freed = 0; kept = 0
+      return [0, 0, 0] unless Dir.exist?(root)
+      Dir.children(root).sort.each do |slot|
+        sdir = File.join(root, slot)
+        next unless File.directory?(sdir)
+        Dir.children(sdir).sort.each do |c|
+          path = File.join(sdir, c)
+          next unless c.end_with?(".rxdata") && File.file?(path) && !gz?(path)
+          Graphics.update rescue nil
+          tmp = path + ".tmp"
+          begin
+            raw = File.binread(path)
+            gz = Zlib.gzip(raw, level: level)
+            next if gz.bytesize >= raw.bytesize   # nothing to gain
+            File.binwrite(tmp, gz)
+            unless Zlib::GzipReader.open(tmp) { |f| f.read }.b == raw   # .b: read gives text encoding
+              kept += 1
+              KIF.log("Compress old backups: #{c} did not read back the same, left as it was")
+              next
+            end
+            mtime = File.mtime(path)
+            File.rename(tmp, path)
+            File.utime(mtime, mtime, path) rescue nil
+            done += 1; freed += raw.bytesize - gz.bytesize
+          rescue StandardError => e
+            kept += 1
+            KIF.log("Compress old backups: #{c} left as it was (#{e.message})")
+          ensure
+            (File.delete(tmp) if File.exist?(tmp)) rescue nil
+          end
+        end
+      end
+      return [done, freed, kept]
+    end
+
+    def self.compress_old_menu
+      return unless pbConfirmMessage(_INTL("Compress the backups made before KIF compressed them? Each one is checked before its old copy is replaced."))
+      done, freed, kept = compress_old
+      if done == 0 && kept == 0
+        pbMessage(_INTL("There are no old backups to compress."))
+      else
+        pbMessage(_INTL("Compressed {1} backups and freed {2} MB.", done, format("%.1f", freed / 1048576.0))) if done > 0
+        pbMessage(_INTL("{1} backups couldn't be checked, so they were left as they were.", kept)) if kept > 0
+      end
     end
 
     # oldest unnamed (or autosave) backups beyond Settings::SAVEFILE_NB_BACKUPS
@@ -124,6 +215,30 @@ module Game
         KIF::SaveBackups.next_name = nil
       end
       return ret
+    end
+  end
+end
+
+# Every save read (PIF's "Load an older backup", the corrupt-save fallback,
+# KIF) goes through here: a gzip backup is read through Zlib, the rest as PIF
+module SaveData
+  class << self
+    alias kif_bk_get_data_from_file get_data_from_file unless method_defined?(:kif_bk_get_data_from_file)
+
+    def get_data_from_file(file_path)
+      return kif_bk_get_data_from_file(file_path) unless KIF::SaveBackups.gz?(file_path)
+      # same reading as PIF 6.8.2 001_SaveData.rb:23-35, from the gzip stream
+      save_data = nil
+      Zlib::GzipReader.open(file_path) do |file|
+        data = Marshal.load(file)
+        if data.is_a?(Hash)
+          save_data = data
+          next
+        end
+        save_data = [data]
+        save_data << Marshal.load(file) until file.eof?
+      end
+      return save_data
     end
   end
 end

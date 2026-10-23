@@ -356,7 +356,9 @@ module KIF
           t[:eggs] += 1
           return
         end
-        if data && info[:redo]   # maybe half-written by the interrupted run: written again
+        # maybe half-written by the interrupted run: written again (only a file
+        # that run wrote; an older one is the player's and gets the question)
+        if data && info[:redo] && ((File.mtime(dest) >= info[:redo]) rescue false)
           timed(:write) { write_new(dest, bytes.call) }
           t[:placed][dest] = true
           t[:moved] += 1
@@ -917,6 +919,11 @@ module KIF
           KIF.log("Sprite import: previous import of #{File.basename(archive)} was interrupted at entry #{from}") if from > 0 && defined?(KIF.log)
         end
         si.info[:from] = from
+        # a resumed run holds its differing sprites in the first run's folder
+        # (the work folder may now be "<name> (2)"): no second copy to ask about
+        hold_name = from > 0 ? File.basename(archive, ".*") : File.basename(into)
+        # files the cut-short run wrote are newer than its last saved progress
+        since = (from > 0 && mobile) ? (File.mtime(progress) rescue nil) : nil
         started = from > 0
         errors = si.tally[:errors]
         File.open(archive, "rb") do |f|
@@ -931,7 +938,7 @@ module KIF
             next if i < from   # placed by the run that was cut short
             # phones write sprites in place (no temp file): the entries after
             # the last saved progress may have been cut off mid-write
-            si.info[:redo] = mobile && from > 0 && i < from + PROGRESS_EVERY
+            si.info[:redo] = (since && i < from + PROGRESS_EVERY) ? since : nil
             next if name.end_with?("/")
             safe = name.tr("\\", "/").split("/").reject { |p| p.empty? || p == "." || p == ".." }
             next if safe.empty?
@@ -967,7 +974,7 @@ module KIF
                 method == 8 ? si.timed(:inflate) { Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(raw) } : raw
               end
               if direct && dest
-                held = File.join(si.hold_base(direct), KIF::SpriteImport::HOLD_DIR, File.basename(into), *safe)
+                held = File.join(si.hold_base(direct), KIF::SpriteImport::HOLD_DIR, hold_name, *safe)
                 started = true
                 si.place(dest, held, data: data, size: usize, crc: crc)
                 si.tick

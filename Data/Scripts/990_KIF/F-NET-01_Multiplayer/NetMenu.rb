@@ -126,6 +126,8 @@ module KIF
       s = @session
       s.poll.each do |ev|
         case ev[0]
+        when :join_request
+          log("#{ev[1]} asks to join")
         when :connected
           log("connected to #{ev[1]} (#{s.via})")
         when :message
@@ -141,6 +143,32 @@ module KIF
     end
 
     def self.take_failure; f = @failed; @failed = nil; f; end
+
+    # "Let <name> join?" for a player who knew the code; called from the
+    # screens below and on the map when nothing else is going on
+    def self.ask_join
+      s = @session
+      return unless s&.asking? && !@asking
+      begin
+        @asking = true
+        yes = pbConfirmMessage(_INTL("{1} wants to join your game. Let {1} join?", s.partner))
+      ensure
+        @asking = false
+      end
+      return unless @session.equal?(s) && s.asking?   # gone or timed out meanwhile
+      yes ? s.accept : s.decline
+    end
+
+    # the map and the player are idle: a question cuts nothing off
+    def self.quiet?
+      return false unless $scene.is_a?(Scene_Map)
+      return false if $game_temp.message_window_showing || $game_temp.in_menu
+      return false if pbMapInterpreterRunning?
+      return false if $game_player.moving? || $game_player.move_route_forcing
+      return true
+    rescue StandardError
+      return false
+    end
 
     def self.lan_code
       return nil unless @session && @session.via == :direct && @local && PortMap.ip_kind(@local) != :invalid
@@ -221,6 +249,7 @@ module KIF
         Input.update
         @cmd.update
         KIF::Net.update
+        KIF::Net.ask_join
         if Input.trigger?(Input::USE)
           pbPlayDecisionSE
           return @cmd.index
@@ -466,7 +495,10 @@ module KIF
           loop do
             s = Net.session
             break unless s && s.state != :closed && !s.connected?
-            r = pick(_INTL("Join with a code\nConnecting to your friend's game..."), [_INTL("Cancel")],
+            head = if s.state == :waiting then _INTL("Join with a code\nWaiting for your friend to let you in...")
+                   else _INTL("Join with a code\nConnecting to your friend's game...")
+                   end
+            r = pick(head, [_INTL("Cancel")],
                      relay ? _INTL("Through the relay {1}.", relay.join(":")) : _INTL("Code looks right.\nConnecting..."),
                      proc { Net.session&.state })
             next if r.nil?
@@ -484,7 +516,8 @@ module KIF
             host_code: _INTL("The game at that address doesn't know this code. Ask your friend for a new one."),
             busy: _INTL("Someone else is joining or playing with them right now."),
             wait: _INTL("Too many wrong codes were tried from here. Try again in 10 minutes."),
-            relay: _INTL("The relay didn't accept you. Check the address, or ask your friend to host on it again.")
+            relay: _INTL("The relay didn't accept you. Check the address, or ask your friend to host on it again."),
+            declined: _INTL("Your friend didn't let you in (they said no, or didn't answer in time).")
           }[why] || _INTL("Their router may be closed, or the code is old (codes change sometimes).")
           r = pick(_INTL("Join with a code\nYour friend's game: Can't reach it"),
                    [_INTL("Host instead, send them your code"), _INTL("Try again"), _INTL("Use a relay"), _INTL("Back")], text)
@@ -566,6 +599,11 @@ KIF::PauseMenu.add(:kif_multiplayer, "Multiplayer", icon: "menuIcons/PLAYER", or
     :stay
   })
 
-Events.onMapUpdate += proc { |_sender, _e| KIF::Net.update if KIF::Net.session }
+Events.onMapUpdate += proc { |_sender, _e|
+  if KIF::Net.session
+    KIF::Net.update
+    KIF::Net.ask_join if KIF::Net.session&.asking? && KIF::Net.quiet?
+  end
+}
 
 at_exit { KIF::Net.shutdown rescue nil }

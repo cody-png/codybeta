@@ -7,17 +7,20 @@
 # (Tools/kif_relay.rb) for players who can't host; none is built in.
 #
 # Wire: every frame is a 4-byte big-endian length + payload.
-#   Handshake (plain JSON, max 1 KB a frame):
-#     joiner -> host  {"t":"hi","v":1,"n":<16 random bytes, hex>}
-#     host -> joiner  {"t":"hi","v":1,"n":<16 random bytes, hex>}
-#     joiner -> host  {"t":"auth","p":HMAC(secret, "KIF1 join"+nJ+nH)}   joiner proves first,
-#     host -> joiner  {"t":"auth","p":HMAC(secret, "KIF1 host"+nJ+nH)}   so a stranger who
-#                     connects to the host never gets a proof to guess the secret from.
-#     A wrong proof: {"t":"no","why":"code"} and the line closes; 5 wrong
-#     proofs from one address and it's ignored for 10 minutes.
-#   After it (max 64 KB a frame): payload = 32-byte MAC + JSON object
+#   Handshake (plain JSON, max 1 KB a frame), SPAKE2 (module Spake2 below):
+#     joiner -> host  {"t":"hi","v":2,"n":nJ,"x":X}    nJ, nH: 16 random bytes
+#     host -> joiner  {"t":"hi","v":2,"n":nH,"y":Y}    X = g^x M^w, Y = g^y N^w
+#     joiner -> host  {"t":"auth","p":HMAC(Ke, "KIF2 join")}   Ke = SHA-256(nJ, nH,
+#     host -> joiner  {"t":"auth","p":HMAC(Ke, "KIF2 host")}   X, Y, K = g^2xy, w)
+#     The joiner proves first. A wrong proof: {"t":"no","why":"code"} and the
+#     line closes; 5 wrong proofs from one address and it's ignored for 10
+#     minutes; at most 10 handshakes start in 10 seconds.
+#   Then the joiner says hello and the host's player is asked "Let <name>
+#   join?". The host answers with its own hello, or a signed
+#   {"t":"no","why":"declined"} (also after 60 s without an answer).
+#   After the proofs (max 64 KB a frame): payload = 32-byte MAC + JSON object
 #     {"t":type,"s":seq,...}; MAC = HMAC-SHA256(direction key, JSON); keys
-#     come from the secret and both nonces. A frame with a wrong MAC, an old
+#     come from Ke and both nonces. A frame with a wrong MAC, an old
 #     sequence number (replay) or fields that don't fit its type is dropped;
 #     a type this version doesn't know is ignored. 5 bad frames close the line.
 #   The first signed message each way is "hello" (name, KIF version).
@@ -43,7 +46,8 @@ module KIF
     MAX_PRE    = 1024    # frames before the handshake is done
     MAX_BAD    = 5       # bad frames before the line is closed
     MAX_RATE   = 400     # frames a second before the line is closed
-    PROTO      = 1
+    PROTO      = 2
+    HS_LIMIT   = 10      # handshakes a host starts in 10 s
 
     # Message types after the handshake: field => [class, max length] or
     # [Integer, min, max]. Later features (Soul Link, trading) add theirs.
@@ -52,7 +56,12 @@ module KIF
       "ping"  => {},
       "bye"   => {},
       "wave"  => {},
+      "no"    => { "why" => [String, 16] },
     }
+    NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined }
+
+    # a name from the other game, safe to show in a PIF message (no \ codes)
+    def self.shown_name(n); n.to_s.gsub(/[\\<>\x00-\x1f]/, "")[0, 24]; end
 
     def self.available?
       return @available unless @available.nil?
@@ -99,6 +108,78 @@ module KIF
 
       def hex(s); s.unpack1("H*"); end
       def unhex(s); (s.is_a?(String) && s =~ /\A(?:[0-9a-f]{2})+\z/) ? [s].pack("H*") : nil; end
+    end
+
+    #---------------------------------------------------------------------------
+    # SPAKE2 (the shape of RFC 9382) in the 2048-bit MODP group of RFC 3526:
+    # p is a safe prime, 2 generates the subgroup of order q = (p-1)/2.
+    # The join code's secret is never sent, and a recorded handshake can't be
+    # used to test guesses of it: that needs x or y, which never leave the
+    # games. Someone who connects gets one guess per try (rate-limited).
+    # M and N are squares of hashes (nobody knows their logarithms). Their
+    # elements must be 1 < e < p-1, and K = (their / base^w)^(2x): the 2
+    # keeps K out of the order-2 subgroup. Exponents are 256 bits; the
+    # w-powers and their inverses are made once a session.
+    #---------------------------------------------------------------------------
+    module Spake2
+      P = ("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DD" \
+           "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED" \
+           "EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F" \
+           "83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3B" \
+           "E39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA0510" \
+           "15728E5A8AACAA68FFFFFFFFFFFFFFFF").to_i(16)
+      Q = (P - 1) / 2
+      G = 2
+      HEX = 512   # an element on the wire: 256 bytes as hex
+
+      module_function
+
+      def to_group(label)
+        n = (0...9).map { |i| Crypto.sha256("KIF SPAKE2 #{label} #{i}") }.join.unpack1("H*").to_i(16)
+        return (n % P).pow(2, P)
+      end
+
+      def m; @m ||= to_group("M"); end
+      def n; @n ||= to_group("N"); end
+
+      def w(secret); Crypto.sha256("KIF SPAKE2 w".b + secret.b).unpack1("H*").to_i(16) % Q; end
+
+      # what one side needs for the session: [w, mine^w, (theirs^w)^-1]
+      def setup(secret, joiner)
+        w = w(secret)
+        mine, theirs = joiner ? [m, n] : [n, m]
+        return [w, mine.pow(w, P), inverse(theirs.pow(w, P))]
+      end
+
+      # [secret exponent, element to send]
+      def start(mine_w)
+        x = Crypto.random(32).unpack1("H*").to_i(16) | 1
+        return [x, G.pow(x, P) * mine_w % P]
+      end
+
+      # K, or nil for an element that isn't allowed
+      def finish(x, theirs, theirs_w_inv)
+        return nil unless theirs.is_a?(Integer) && theirs > 1 && theirs < P - 1
+        k = (theirs * theirs_w_inv % P).pow(2 * x, P)
+        return k > 1 ? k : nil
+      end
+
+      def inverse(a)
+        t, nt, r, nr = 0, 1, P, a % P
+        while nr != 0
+          q = r / nr
+          t, nt = nt, t - q * nt
+          r, nr = nr, r - q * nr
+        end
+        return t % P
+      end
+
+      def hex(i); i.to_s(16).rjust(HEX, "0"); end
+      def read(s); (s.is_a?(String) && s.length == HEX && s =~ /\A[0-9a-f]+\z/) ? s.to_i(16) : nil; end
+
+      def key(nj, nh, x_el, y_el, k, w)
+        Crypto.sha256("KIF SPAKE2 v1".b + nj + nh + [hex(x_el), hex(y_el), hex(k), hex(w)].map { |h| [h].pack("H*") }.join)
+      end
     end
 
     #---------------------------------------------------------------------------
@@ -431,32 +512,61 @@ module KIF
     #---------------------------------------------------------------------------
     # A session: hosting (one partner in v1), joining, or either through a
     # relay. Events from #poll:
+    #   [:join_request, name]   (host) someone with the code: #accept or #decline
     #   [:connected, name]      handshake done, partner said hello
     #   [:message, type, hash]  a checked message
     #   [:disconnected, why]    :bye, :timeout, :closed, :error
     #   [:failed, why]          joining failed: :unreachable, :code, :busy,
-    #                           :wait, :timeout, :host_code, :closed, :relay
+    #                           :wait, :timeout, :host_code, :closed, :relay,
+    #                           :declined
     #   [:rejected, address]    (host) someone with a wrong code
+    # States: :idle, :listening, :connecting, :handshake, :asking (host: the
+    # player is asked), :waiting (joiner: for the answer), :connected, :closed
     #---------------------------------------------------------------------------
     class Session
       attr_reader :state, :role, :partner, :partner_ver, :port, :via, :ports, :secret, :room, :conn, :relay
-      attr_accessor :ping_every, :timeout, :handshake_timeout, :name, :ver
+      attr_accessor :ping_every, :timeout, :handshake_timeout, :answer_timeout, :hs_limit, :name, :ver
 
       def initialize(name, ver)
         @name = name.to_s[0, 24]
         @ver = ver.to_s[0, 16]
         @state = :idle
         @events = Queue.new      # from threads
+        @later = []              # made outside #poll (accept, decline)
         @ping_every = 5.0
         @timeout = 20.0
         @handshake_timeout = 10.0
+        @answer_timeout = 60.0
+        @hs_limit = HS_LIMIT
+        @hs_log = []
         @fails = {}              # address => [count, until]
         @servers = []
         @threads = []
       end
 
       def connected?; @state == :connected; end
+      def asking?; @state == :asking; end
       def hosting?; @role == :host && @state != :closed && @state != :idle; end
+
+      # host: let the asking player in
+      def accept
+        return false unless asking?
+        @conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
+        @state = :connected
+        @later << [:connected, @partner]
+        return true
+      end
+
+      # host: say no (also after answer_timeout); hosting goes on
+      def decline
+        return false unless asking?
+        Net.log("said no to #{@partner}")
+        @conn.send_msg({ "t" => "no", "why" => "declined" })
+        drop_line(true)
+        @partner = nil
+        @state = :closed if @via == :relay   # the relay room is used up
+        return true
+      end
 
       # Listen on port (or the next free of PORT_TRIES); the port, or nil
       def host(secret, port: PORT, tries: PORT_TRIES, bind: "0.0.0.0", ipv6: true)
@@ -535,7 +645,8 @@ module KIF
 
       # Never waits: takes what the threads left and moves the state on
       def poll
-        out = []
+        out = @later
+        @later = []
         while (ev = (@events.pop(true) rescue nil))
           case ev[0]
           when :sock then accepted(ev[1], out)
@@ -581,7 +692,8 @@ module KIF
         end
         addr = (sock.remote_address.ip_address rescue "?")
         f = @fails[addr]
-        why = if f && f[0] >= MAX_BAD && Net.now < f[1] then "wait"
+        @hs_log.reject! { |t| Net.now - t > 10 }
+        why = if (f && f[0] >= MAX_BAD && Net.now < f[1]) || @hs_log.length >= @hs_limit then "wait"
               elsif @conn then "busy"
               end
         if why
@@ -589,6 +701,7 @@ module KIF
           return (sock.close rescue nil)
         end
         @fails.delete(addr) if f && Net.now >= f[1]
+        @hs_log << Net.now
         start(sock)
         @hs_state = :wait_hi
       end
@@ -602,21 +715,24 @@ module KIF
         @rx_seq = 0
       end
 
+      # [w, my base^w, inverse of their base^w], once a session
+      def pake; @pake ||= Spake2.setup(@secret, @role == :join); end
+
       def send_hi
         @my_nonce = Crypto.random(16)
-        @conn.send_raw({ "t" => "hi", "v" => PROTO, "n" => Crypto.hex(@my_nonce) })
+        @x, @xe = Spake2.start(pake[1])
+        @conn.send_raw({ "t" => "hi", "v" => PROTO, "n" => Crypto.hex(@my_nonce), "x" => Spake2.hex(@xe) })
         @hs_state = :wait_hi
       end
 
-      def proof(who); Crypto.hmac(@secret, "KIF1 #{who}".b + @nj + @nh); end
+      def proof(who); Crypto.hmac(@ke, "KIF2 #{who}"); end
 
       def frame(payload, out)
         return signed(payload, out) if @hs_state == :done
         h = Wire.parse(payload)
         return bad_hs(out, :closed) unless h
         if h["t"] == "no" && (@role == :join || @via == :relay)
-          why = { "code" => :code, "busy" => :busy, "wait" => :wait }[h["why"]] || :closed
-          return give_up(out, [:failed, why])
+          return give_up(out, [:failed, NO_WHY[h["why"]] || :closed])
         end
         case @hs_state
         when :relay_wait
@@ -626,13 +742,20 @@ module KIF
         when :wait_hi
           n = Crypto.unhex(h["n"])
           return bad_hs(out, :closed) unless h["t"] == "hi" && h["v"] == PROTO && n && n.bytesize == 16
+          theirs = Spake2.read(h[@role == :host ? "x" : "y"])
           if @role == :host
             @nj = n
             @nh = Crypto.random(16)
-            @conn.send_raw({ "t" => "hi", "v" => PROTO, "n" => Crypto.hex(@nh) })
+            y, ye = Spake2.start(pake[1])
+            k = Spake2.finish(y, theirs, pake[2]) or return bad_hs(out, :closed)
+            @ke = Spake2.key(@nj, @nh, theirs, ye, k, pake[0])
+            @conn.send_raw({ "t" => "hi", "v" => PROTO, "n" => Crypto.hex(@nh), "y" => Spake2.hex(ye) })
           else
             @nj = @my_nonce
             @nh = n
+            k = Spake2.finish(@x, theirs, pake[2]) or return give_up(out, [:failed, :host_code])
+            @ke = Spake2.key(@nj, @nh, @xe, theirs, k, pake[0])
+            @x = nil
             @conn.send_raw({ "t" => "auth", "p" => Crypto.hex(proof("join")) })
           end
           @hs_state = :wait_auth
@@ -656,12 +779,15 @@ module KIF
           else
             return give_up(out, [:failed, :host_code]) unless Crypto.same?(p, proof("host"))
           end
-          key = Crypto.hmac(@secret, "KIF1 key".b + @nj + @nh)
+          key = Crypto.hmac(@ke, "KIF2 key".b + @nj + @nh)
           @rx_key = Crypto.hmac(key, @role == :host ? "j2h" : "h2j")
           @conn.sign_with(Crypto.hmac(key, @role == :host ? "h2j" : "j2h"))
           @conn.cap = MAX_FRAME
           @hs_state = :done
+          return if @role == :host   # its hello waits for the player's answer
           @conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
+          @state = :waiting
+          @hs_started = Net.now
         end
       end
 
@@ -680,11 +806,19 @@ module KIF
         when "ping" then nil
         when "bye"  then line_ended(:bye, out)
         when "hello"
-          return if @state == :connected
-          @partner = msg["name"]
+          return unless @state == :handshake || @state == :waiting
+          @partner = Net.shown_name(msg["name"])
           @partner_ver = msg["ver"]
-          @state = :connected
-          out << [:connected, @partner]
+          if @role == :host
+            @state = :asking
+            @asking_since = Net.now
+            out << [:join_request, @partner]
+          else
+            @state = :connected
+            out << [:connected, @partner]
+          end
+        when "no"
+          give_up(out, [:failed, NO_WHY[msg["why"]] || :closed]) if @role == :join && @state != :connected
         else
           out << [:message, type, msg] if @state == :connected
         end
@@ -731,7 +865,13 @@ module KIF
         if @state == :handshake && @hs_state != :relay_wait && Net.now - @hs_started > @handshake_timeout
           return @role == :join || @via == :relay ? give_up(out, [:failed, :timeout]) : drop_line
         end
-        line_ended(:timeout, out) if @state == :connected && Net.now - @conn.last_rx > @timeout
+        if @state == :asking && Net.now - @asking_since > @answer_timeout
+          decline
+          return out << [:failed, :declined] if @state == :closed
+          return
+        end
+        return give_up(out, [:failed, :declined]) if @state == :waiting && Net.now - @hs_started > @answer_timeout + @handshake_timeout
+        line_ended(:timeout, out) if [:connected, :asking, :waiting].include?(@state) && Net.now - @conn.last_rx > @timeout
       end
     end
 
@@ -781,7 +921,7 @@ module KIF
               h = Parser.new(data).run if data
               next unless h && h["t"] == "kif_host" && h["name"].is_a?(String) && h["code"].is_a?(String)
               info = JoinCode.read(h["code"])
-              found[h["code"]] = [h["name"][0, 24].gsub(/[\x00-\x1f]/, ""), info] if info.is_a?(Hash) && info[:kind] != :relay
+              found[h["code"]] = [Net.shown_name(h["name"]), info] if info.is_a?(Hash) && info[:kind] != :relay
             end
           ensure
             u.close

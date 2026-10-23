@@ -66,7 +66,7 @@ module KIF
         ["Audio", ["Music Volume", "SE Volume"]],
         ["Screen", ["Screen Size", "Device"]],
         ["Text", ["Text Speed", "Text Entry"]],
-        ["Controls", ["Mouse"]],
+        ["Controls", ["Mouse", "Click to move"]],
         ["Updates and downloads", ["Updates", "Check for Updates", "Download data"]],
         ["Speed", ["Frame rate", "Sprite File Cache"]],
         ["Start-up", ["Skip intro", "Title screen"]],

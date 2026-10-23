@@ -41,7 +41,9 @@ class << Kernel
       if KIF::Rand.trainer_features?
         KIF::Rand.shuffle_trainers(args[1] ? args[2] : nil)
       else
-        kif_rand_pbShuffleTrainers(*args)
+        r = kif_rand_pbShuffleTrainers(*args)
+        KIF::Rand.shuffle_fallback_trainers(*args)
+        r
       end
     }
     KIF::Rand.progress_done

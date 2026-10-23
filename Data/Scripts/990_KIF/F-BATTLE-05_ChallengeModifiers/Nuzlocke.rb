@@ -282,7 +282,24 @@ module KIF
       return nil
     end
 
+    # The team that fell in the last battle goes to the Graveyard too (only the
+    # Blackout path moved them out before, so a locked run never showed them).
+    # Copies: with "Keep playing" the originals stay in the party.
+    def self.record_last_team
+      return unless $PokemonSystem.ch_nz_fainted == FAINTED_GRAVEYARD
+      grave = (state[:graveyard] ||= [])
+      $Trainer.party.each do |p|
+        next unless p && p.kif_nz_dead
+        next if grave.any? { |e| e[:pokemon].equal?(p) || e[:source_id] == p.object_id }
+        entry = (@to_bury || []).find { |e| e[:pokemon].equal?(p) } ||
+                { :name => p.name, :species => p.species, :level => p.level, :place => place_name($game_map.map_id) }
+        grave << entry.merge(:pokemon => Marshal.load(Marshal.dump(p)), :source_id => p.object_id)
+      end
+      @to_bury = []
+    end
+
     def self.end_run(locked)
+      record_last_team
       state[:ended] = true
       if locked
         state[:failed] = true

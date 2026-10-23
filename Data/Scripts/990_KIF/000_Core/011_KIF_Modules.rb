@@ -104,17 +104,19 @@ module KIF
       return nil if path.nil?
       path = path.to_s
       return @file_cache[path] if @file_cache.has_key?(path)
+      # Ruby's own code ("<internal:marshal>") is never a feature: no folder scan
+      return @file_cache[path] = nil if path.start_with?("<")
       key = path
-      path = basename_map[path] || path unless path.include?("/") || path.include?("\\")
+      # only .rb names are in the map
+      path = basename_map[path] || path if path.end_with?(".rb") && !(path.include?("/") || path.include?("\\"))
       found = nil
-      MODULES.each do |id, (_n, _d, prefixes)|
-        prefixes.each do |pre|
-          if path =~ %r{(\A|[/\\])#{Regexp.escape(pre)}_}
-            found = id
-            break
-          end
-        end
-        break if found
+      @module_res ||= MODULES.map { |id, (_n, _d, prefixes)|
+        [id, prefixes.empty? ? nil : %r{(\A|[/\\])(?:#{prefixes.map { |pre| Regexp.escape(pre) }.join("|")})_}]
+      }
+      @module_res.each do |id, re|
+        next unless re && path =~ re
+        found = id
+        break
       end
       @file_cache[key] = found
       return found

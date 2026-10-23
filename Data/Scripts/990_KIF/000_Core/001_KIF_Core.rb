@@ -37,7 +37,9 @@ module KIF
   # oldest half (by time) is removed. Called once per session per cache.
   def self.trim_cache_dir(dir, keep)
     return unless File.directory?(dir)
-    files = Dir.children(dir).map { |c| File.join(dir, c) }.select { |p| File.file?(p) }
+    names = Dir.children(dir)
+    return if names.length <= keep   # the usual case: one listing, no file looked at
+    files = names.map { |c| File.join(dir, c) }.select { |p| File.file?(p) }
     return if files.length <= keep
     files.sort_by { |p| File.mtime(p) }.first(files.length - keep / 2).each { |p| File.delete(p) rescue nil }
     log("Cache #{dir}: trimmed to #{keep / 2} files") if respond_to?(:log)
@@ -66,6 +68,41 @@ module KIF
   def self.log(msg)
     echoln("[KIF] #{msg}") if defined?(echoln)
     KIF::SessionLog.write(msg) if defined?(KIF::SessionLog)
+  end
+
+  # Verbose logging, for Cody and testers: on in debug mode, or when a file
+  # named verbose.txt is in the Logs folder (or the save folder). Players get
+  # the short log. Looked up once a session.
+  VERBOSE_MARKER = "verbose.txt"
+
+  def self.verbose?
+    return @verbose unless @verbose.nil?
+    @verbose = begin
+      on = $DEBUG || marker?(VERBOSE_MARKER)
+      on ||= defined?(KIF::Paths) && File.exist?(File.join(KIF::Paths.logs, VERBOSE_MARKER))
+      on ? true : false
+    rescue
+      false
+    end
+    return @verbose
+  end
+
+  # A log line only verbose logging writes (details that help testing and
+  # would only fill a player's log)
+  def self.verbose(msg)
+    log(msg) if verbose?
+  end
+
+  # A file that can't be read is renamed to <name>.bad, never overwritten by
+  # the next save; an older .bad is kept too (the new one gets a time stamp)
+  def self.set_aside(path, what, err = nil)
+    dest = path + ".bad"
+    dest = path + Time.now.strftime(".%Y%m%d-%H%M%S.bad") if File.exist?(dest)
+    File.rename(path, dest)
+    log("#{what} unreadable#{err ? " (#{err.class}: #{err.message})" : ""} - kept as #{File.basename(dest)}")
+    return dest
+  rescue StandardError
+    return nil
   end
 end
 

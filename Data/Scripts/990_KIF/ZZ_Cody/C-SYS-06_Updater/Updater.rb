@@ -65,6 +65,11 @@ module KIF
       return Dir.pwd
     end
 
+    # the last check got no version back (offline, blocked, filtered)
+    def unreachable
+      return @unreachable ? true : false
+    end
+
     def stage_root
       return File.join(root, STAGE_DIR)
     end
@@ -326,6 +331,7 @@ module KIF
 
     def windows?
       return false unless defined?(Win32API)
+      return false if KIF.respond_to?(:mobile?) && KIF.mobile?   # JoiPlay fakes part of Win32API
       return Win.available?
     end
 
@@ -783,6 +789,7 @@ module KIF
       base = source(ch)
       return false unless base
       v = remote_version(base)
+      @unreachable = v.nil?   # the load screen skips the mod check then (Updater_Startup.rb)
       if v.nil?
         log("no version found at #{base}")
         return false unless manual

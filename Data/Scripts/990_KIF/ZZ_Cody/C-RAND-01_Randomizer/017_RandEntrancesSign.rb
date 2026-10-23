@@ -35,7 +35,8 @@ module KIF
       end
 
       class DoorSign
-        def initialize
+        def initialize(owner = nil)
+          @owner = owner   # the spriteset it belongs to: only the current map's shows
           @viewport = Viewport.new(0, 0, Graphics.width, Graphics.height)
           @viewport.z = 99999
           @window = nil
@@ -57,7 +58,8 @@ module KIF
           @tick += 1
           return unless @tick % 4 == 1   # a look every few frames is plenty
           mode = Rand.dget(:ent_sign)
-          text = (mode > 0 && ER.sign_allowed?) ? ER.sign_text : nil
+          mine = @owner.nil? || ($scene.respond_to?(:spriteset) && $scene.spriteset.equal?(@owner))
+          text = (mode > 0 && mine && ER.sign_allowed?) ? ER.sign_text : nil
           if text != @text
             @text = text
             @window.dispose if @window && !@window.disposed?
@@ -86,13 +88,15 @@ module KIF
         end
       end
 
-      # one sign per map spriteset (made again when the map's spriteset is)
+      # one sign per map spriteset, kept on the spriteset itself (crossing
+      # back to a still-loaded map reuses its sign)
       def self.update_sign
         return unless $scene.is_a?(Scene_Map) && (spr = $scene.spriteset)
-        return if @sign && !@sign.disposed? && @sign_set.equal?(spr)
-        @sign = DoorSign.new
-        @sign_set = spr
-        spr.addUserSprite(@sign)
+        sign = spr.instance_variable_get(:@kif_door_sign)
+        return if sign && !sign.disposed?
+        sign = DoorSign.new(spr)
+        spr.instance_variable_set(:@kif_door_sign, sign)
+        spr.addUserSprite(sign)
       end
     end
   end

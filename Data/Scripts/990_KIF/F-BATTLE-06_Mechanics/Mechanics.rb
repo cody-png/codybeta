@@ -182,6 +182,7 @@ module Effectiveness
     # Hottest type-chart method (the AI calls it thousands of times a turn):
     # the defend type is tested before any option is read.
     def calculate_one(attack_type, defend_type)
+      return NORMAL_EFFECTIVE_ONE if defend_type.nil?   # no type left (Burn Up): PIF's AI asked with nil and crashed
       ret = kif_mech_calculate_one(attack_type, defend_type)
       case defend_type
       when :ICE

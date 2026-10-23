@@ -18,6 +18,7 @@ module KIF
     FILE      = "KIF_log.txt"
     PREVIOUS  = "KIF_log_previous.txt"
     MAX_BYTES = 200 * 1024
+    MAX_BYTES_VERBOSE = 2 * 1024 * 1024
     REPEATS   = 3
     MAX_MISSING_SPRITES = 40
 
@@ -60,6 +61,8 @@ module KIF
         raw("KIF #{(KIF::PORT_VERSION rescue '?')} on PIF #{(Settings::GAME_VERSION_NUMBER rescue '?')} - #{@started.strftime('%Y-%m-%d %H:%M:%S')}" \
             "#{$DEBUG ? ' - debug mode' : ''}")
         raw("Engine: #{engine_text}")
+        raw("Screen: #{screen_text}")
+        raw("Verbose logging on (#{$DEBUG ? 'debug mode' : KIF::VERBOSE_MARKER})") if KIF.verbose?
         raw("Game folder: #{Dir.pwd}")
         raw("Save folder: #{KIF.save_dir}")
         raw("Logs: #{KIF::Paths.logs}")
@@ -74,17 +77,41 @@ module KIF
         exe = (KIF::Updater::Win.exe_path rescue nil) if defined?(KIF::Updater::Win)
         parts = ["mkxp-z #{mkxp || '?'}", platform, "Ruby #{RUBY_VERSION}"]
         parts << File.basename(exe.to_s) if exe
+        parts << "mobile" if KIF.respond_to?(:mobile?) && KIF.mobile?
         return parts.compact.join(", ")
       rescue StandardError
         return "?"
       end
 
+      def screen_text
+        parts = ["#{Graphics.width}x#{Graphics.height}"]
+        scale = ($PokemonSystem.screensize rescue nil)
+        parts << "size setting #{scale}" unless scale.nil?
+        full = (Graphics.fullscreen rescue nil)
+        parts << (full ? "fullscreen" : "window") unless full.nil?
+        lang = ($PokemonSystem.language rescue nil)
+        parts << "language #{lang}" unless lang.nil?
+        return parts.join(", ")
+      rescue StandardError
+        return "?"
+      end
+
+      def max_bytes
+        return KIF.verbose? ? MAX_BYTES_VERBOSE : MAX_BYTES
+      end
+
+      # Repeats are counted by their text without numbers and object ids, so
+      # a failure that names a different value each frame is still one line
+      def repeat_key(msg)
+        return msg.gsub(/0x\h+|\d+/, "#")
+      end
+
       def raw(line)
         return if @full
         text = line.to_s.gsub(/\r?\n/, " | ") + "\r\n"
-        if @bytes + text.bytesize > MAX_BYTES
+        if @bytes + text.bytesize > max_bytes
           @full = true
-          text = "[#{stamp}] Log full (#{MAX_BYTES / 1024} KB); nothing more is written this session.\r\n"
+          text = "[#{stamp}] Log full (#{max_bytes / 1024} KB); nothing more is written this session.\r\n"
         end
         File.open(path, "ab") { |f| f.write(text) }
         @bytes += text.bytesize
@@ -95,9 +122,10 @@ module KIF
       def write(msg)
         start
         msg = msg.to_s
-        @counts[msg] += 1
-        return if @counts[msg] > REPEATS
-        raw("[#{stamp}] #{msg}#{@counts[msg] == REPEATS ? '  (repeats from here on are only counted)' : ''}")
+        key = repeat_key(msg)
+        @counts[key] += 1
+        return if @counts[key] > REPEATS
+        raw("[#{stamp}] #{msg}#{@counts[key] == REPEATS ? '  (repeats from here on are only counted)' : ''}")
       end
 
       def finish
@@ -121,9 +149,57 @@ module KIF
         raw("[#{stamp}] CRASH #{e.class}: #{e.message[0, 300]}")
         raw("    at #{where}")
         raw("    last maps: #{@maps.map { |m| "#{m} #{(pbGetMapNameFromId(m) rescue '')}" }.join(' > ')}")
+        raw("    KIF #{(KIF::PORT_VERSION rescue '?')}#{battle_text}")
         raw("    full error: KIF_errorlog.txt / errorlog.txt")
       rescue
         nil
+      end
+
+      # The battle at a crash: turn and each battler
+      def battle_text
+        return "" unless $game_temp && $game_temp.in_battle
+        b = ObjectSpace.each_object(PokeBattle_Battle).find { |x| x.decision == 0 } rescue nil
+        return ", in a battle" unless b
+        mons = b.battlers.compact.map do |x|
+          next nil unless x.pokemon
+          st = x.status != :NONE ? " #{x.status}" : ""
+          last = x.lastMoveUsed ? " last #{x.lastMoveUsed}" : ""
+          "#{x.index}:#{x.pokemon.species} #{x.hp}/#{x.totalhp}#{st}#{last}"
+        end.compact
+        auto = ($PokemonSystem.autobattler rescue 0).to_i > 0 ? ", Auto-Battle on" : ""
+        return ", battle turn #{b.turnCount}#{b.wildBattle? ? ' (wild)' : ''}: #{mons.join(', ')}#{auto}"
+      rescue StandardError
+        return ", in a battle"
+      end
+
+      # One line when a save loads (and the details that shape it)
+      def note_load
+        return unless $Trainer && $game_map
+        secs = Graphics.frame_count / [Graphics.frame_rate, 1].max
+        slot = ($Trainer.save_slot rescue nil) || "a save"
+        write("Loaded #{slot}: map #{$game_map.map_id} #{(pbGetMapNameFromId($game_map.map_id) rescue '')}, " \
+              "played #{secs / 3600}h #{secs / 60 % 60}m, #{$Trainer.badge_count} badges")
+        if defined?(KIF::Rand) && $game_switches && $game_switches[SWITCH_RANDOMIZED_AT_LEAST_ONCE] && (KIF::Rand.available? rescue false)
+          write("Randomizer: #{KIF::Rand.settings_code}")
+        end
+        changed = changed_settings
+        write("Settings changed from default: #{changed.join(', ')}") unless changed.empty?
+        if defined?(KIF::Modules) && KIF::Modules.const_defined?(:MODULES)
+          off = KIF::Modules::MODULES.keys.select { |id| KIF::Modules.state(id) == KIF::Modules::OFF }
+          write("Modules Off: #{off.join(', ')}") unless off.empty?
+        end
+      rescue StandardError => e
+        write("Load note failed (#{e.class}: #{e.message})")
+      end
+
+      # KIF settings whose value isn't the default (names only, 40 at most)
+      def changed_settings
+        return [] unless defined?(KIF::Options) && $PokemonSystem
+        out = KIF::Options.defaults.select do |key, default|
+          v = ($PokemonSystem.send(key) rescue default)
+          !v.nil? && v != default
+        end.keys.map(&:to_s)
+        return out.length > 40 ? out[0, 40] + ["#{out.length - 40} more"] : out
       end
 
       def missing_sprite(text)
@@ -136,17 +212,20 @@ module KIF
       def sprite_report
         return if @sprites_reported
         @sprites_reported = true
+        t = Time.now
         count = ->(dir) { Dir.exist?(dir) ? Dir.children(dir).length : 0 }
         idx = "Graphics/CustomBattlers/local_sprites/indexed"
         heads = Dir.exist?(idx) ? Dir.children(idx).select { |c| File.directory?(File.join(idx, c)) } : []
-        fusion_files = heads.sum { |h| count.call(File.join(idx, h)) }
+        # every file in every head folder (236k with a sprite pack): only
+        # counted with verbose logging; players get the folder count
+        fusion_files = KIF.verbose? ? heads.sum { |h| count.call(File.join(idx, h)) } : nil
         dl = ($PokemonSystem.download_sprites rescue nil)
         write("Sprites: #{count.call('Graphics/CustomBattlers/local_sprites/BaseSprites')} base sprite files, " \
-              "#{fusion_files} fusion sprite files in #{heads.length} folders, " \
+              "#{fusion_files ? "#{fusion_files} fusion sprite files in " : 'fusion sprites in '}#{heads.length} folders, " \
               "#{count.call('Graphics/CustomBattlers/spritesheets/spritesheets_base')} base sheets, " \
               "#{count.call('Graphics/CustomBattlers/spritesheets/spritesheets_custom')} custom sheets, " \
               "#{count.call('Graphics/Battlers/spritesheets_autogen')} autogen sheets; " \
-              "Download data #{dl.nil? ? '?' : (dl == 0 ? 'on' : 'off')}")   # PIF's Download data: 0 = On
+              "Download data #{dl.nil? ? '?' : (dl == 0 ? 'on' : 'off')} (counted in #{((Time.now - t) * 1000).round} ms)")   # PIF's Download data: 0 = On
         waiting = Dir.exist?(KIF::Paths.import_sprites) ? Dir.children(KIF::Paths.import_sprites).reject { |c| c.start_with?("_") || c =~ /\.txt\z/i }.length : 0
         write("Import Sprites folder: #{waiting} item(s) waiting") if waiting > 0
       rescue => e
@@ -209,6 +288,32 @@ def pbPrintException(e)
   kif_session_pbPrintException(e)
 end
 
+# Loading and saving, a line each (logging only: nothing is shown here, the
+# map scene doesn't exist yet while a save loads)
+module Game
+  class << self
+    alias kif_session_load load unless method_defined?(:kif_session_load)
+    alias kif_session_save save unless method_defined?(:kif_session_save)
+
+    def load(*args, &blk)
+      r = kif_session_load(*args, &blk)
+      KIF::SessionLog.note_load rescue nil
+      return r
+    end
+
+    def save(*args, **kw, &blk)
+      r = kif_session_save(*args, **kw, &blk)
+      begin
+        slot = ($Trainer.save_slot rescue nil) || "save"
+        KIF::SessionLog.write("Saved#{r == false ? ' FAILED' : ''}: #{slot}, map #{$game_map ? $game_map.map_id : '?'}")
+      rescue StandardError
+        nil
+      end
+      return r
+    end
+  end
+end
+
 # The maps you visit (kept in memory; only written with a crash).
 # An alias, not a prepend: other KIF files alias transfer_player too, and an
 # alias taken after a prepend of the same method calls itself for ever
@@ -218,7 +323,10 @@ class Scene_Map
 
   def transfer_player(*args)
     r = kif_session_transfer_player(*args)
-    KIF::SessionLog.note_map($game_map.map_id) if $game_map
+    if $game_map
+      KIF::SessionLog.note_map($game_map.map_id)
+      KIF.verbose("Map #{$game_map.map_id} #{(pbGetMapNameFromId($game_map.map_id) rescue '')}") if KIF.verbose?
+    end
     return r
   end
 end

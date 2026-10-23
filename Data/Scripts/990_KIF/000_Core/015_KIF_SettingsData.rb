@@ -51,7 +51,8 @@ module KIF
         ["Export", ["Delete on Export", "Export Sprite on Export"]]]],
       [:challenges, "Challenges", [160, 80, 180], [
         ["Rules", ["Level caps", "No reviving", "No heals (battles)", "No heals (overworld)"]],
-        ["KIF challenges", ["Metronome Madness", "Letdown", "Letdown Player Only", "Berserker"]]]],
+        ["KIF challenges", ["Metronome Madness", "Letdown", "Letdown Player Only", "Berserker"]],
+        ["Nuzlocke", ["Nuzlocke", "Fainted Pokémon", "Nuzlocke whiteout", "Dupes clause", "Shiny clause", "Nuzlocke Graveyard"]]]],
       [:game, "Game", [70, 160, 170], [
         ["Difficulty", ["Difficulty"]],
         ["Movement", ["Default Movement", "Quick HMs"]],

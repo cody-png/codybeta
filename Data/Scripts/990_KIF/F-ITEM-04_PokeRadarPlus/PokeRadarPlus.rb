@@ -157,7 +157,7 @@ module KIF
       d = odds_denominator(chain, shiny_odds)
       return if @last_logged == d
       @last_logged = d
-      KIF.log("Poké Radar chain #{chain}: shiny chance per patch of shaking grass 1 in #{d}") if defined?(KIF.log)
+      KIF.verbose("Poké Radar chain #{chain}: shiny chance per patch of shaking grass 1 in #{d}") if defined?(KIF.verbose)
     end
 
     # passed: the milestone reached (a multi battle can jump past it)

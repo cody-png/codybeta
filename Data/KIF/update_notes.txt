@@ -1,9 +1,2 @@
-KIF 1.1.0
-- New: Nuzlocke (Options > Challenges). First encounter per place, Dupes and Shiny clauses, fainted Pokemon die. Fainted ones go to the Graveyard (pause menu, PC), are released or stay. A full wipe can keep playing, lock the save, or black out.
-- Randomizer: banning every non-legendary no longer freezes Randomize. Remix and Expert trainers that use a Classic team are shuffled too.
-- Overworld Encounters (mod): its Pokemon follow the Randomizer.
-- Save Backups: new Off choice; Newest 10 is the default for new players.
-- Faster start-up: PIF's Pokedex file is downloaded once a week, mod updates are checked twice a day at most.
-- Crash fixes: the Johto/Hoenn/Sinnoh starter labs, trainers missing from the Classic list, Synchronize under Safeguard, Grass + Fire Pledge, doors to maps that don't exist, the Silph Co. elevator on a new game, the Registeel ice puzzle, the Water Labyrinth, Cinnabar Lab's fossil list.
-- Security: a secret base, mystery gift code or sprite preferences file from another player can no longer run code on your PC.
-- Mods: a garbled share code no longer closes Options; a mod update never deletes a file you edited.
+KIF 1.1.1
+- Waterfalls work again: face one and press the confirm key to climb it with the HM, the Jetpack or Quick HMs.

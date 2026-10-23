@@ -42,6 +42,14 @@
 #   Robustness: slot.json fields of the wrong type are dropped, a broken
 #   items.json is ignored, and after a save is loaded its checks and goal are
 #   written again (a client of another seed may have deleted the last file).
+#   Giftsanity (2026-10-23): id = GIFT_BASE + map id * 1000 + event id;
+#   the first Pokemon or egg that event hands out (pbAddPokemon, pbAddToParty,
+#   pbAddPokemonSilent, pbAddForeignPokemon, pbGenerateEgg) sends the check,
+#   and the player keeps the Pokemon.
+#   Goals (slot.json "goal"): elite_four (the Hall of Fame, as before) or
+#   gym_leaders (the 8 "leader beaten" switches 4-11 are all on).
+#   The KIF Client writes in/status.json every few seconds; the pause menu
+#   entry says whether it runs and is connected.
 #===============================================================================
 class PokemonGlobalMetadata
   attr_accessor :kif_ap
@@ -53,6 +61,11 @@ module KIF
     POLL_FRAMES = 60
     BADGE_BASE = 9_000_000
     TRAINER_BASE = 10_000_000
+    GIFT_BASE = 20_000_000
+    # "Leader beaten" switches, Brock to Giovanni (the gym_leaders goal)
+    LEADER_SWITCHES = (4..11).to_a
+    GOALS = %w[elite_four gym_leaders]
+    STATUS_STALE = 30   # seconds without a status.json from the client: it isn't running
     # Kanto towns for free_fly (Pallet and Viridian are on the way anyway;
     # no Indigo Plateau: it would skip Victory Road and the League guards)
     FLY_TOWNS = [380, 1, 50, 108, 95, 19, 472, 98]
@@ -139,9 +152,14 @@ module KIF
         seed: slot["seed"].to_s, slot: slot["slot"].to_s, player: int_or_nil(slot["player"]) || 0,
         locations: slot["locations"].map { |x| int_or_nil(x) }.compact, death_link: slot["death_link"] ? true : false,
         aliases: aliases, badge_events: events, league_badges: (int_or_nil(slot["league_badges"]) || 8).clamp(0, 8),
-        options: options,
+        options: options, goal_kind: GOALS.include?(slot["goal"].to_s) ? slot["goal"].to_s : "elite_four",
         received: 0, checked: [], goal: false, dirty: false, death_time: Time.now.to_f
       }
+    end
+
+    # What finishes the game (a save linked by an older version: the Hall of Fame)
+    def goal_kind
+      return (on? && data[:goal_kind]) || "elite_four"
     end
 
     # Links the save and applies the slot's settings. Returns what the link
@@ -323,6 +341,43 @@ module KIF
         next unless id
         check!(id)
         found_message(id, :given)
+      end
+    end
+
+    # Giftsanity: a Pokemon or egg handed out at a gift location (the player
+    # keeps it; only the first one the event gives counts)
+    def gift_received
+      return unless on? && $game_map
+      ev = (pbMapInterpreter.instance_variable_get(:@event_id) rescue 0)
+      id = location_of($game_map.map_id, ev, GIFT_BASE)
+      return unless id
+      check!(id)
+      found_message(id, :given)
+    end
+
+    # gym_leaders goal: every Kanto leader beaten
+    def check_leaders
+      return unless on? && goal_kind == "gym_leaders" && !data[:goal]
+      goal! if LEADER_SWITCHES.all? { |s| $game_switches[s] }
+    end
+
+    # The KIF Client's last status.json: :connected, :disconnected (running,
+    # no server) or :gone (not running, or another seed's client)
+    def client_status
+      h = KIF::Mods.read_json(path("in", "status.json"))
+      return [:gone, ""] unless h.is_a?(Hash) && h["seed"].to_s == data[:seed]
+      return [:gone, ""] if (Time.now.to_f - h["time"].to_f).abs > STATUS_STALE
+      return [h["connected"] == true ? :connected : :disconnected, h["server"].to_s]
+    rescue StandardError
+      return [:gone, ""]
+    end
+
+    def client_status_text
+      state, server = client_status
+      case state
+      when :connected then _INTL("The KIF Client is connected to {1}.", server.empty? ? _INTL("the server") : server)
+      when :disconnected then _INTL("The KIF Client is running but not connected to the server.")
+      else _INTL("The KIF Client isn't running or hasn't connected yet: start it to send checks and get items.")
       end
     end
 
@@ -514,6 +569,7 @@ module KIF
       @timer += 1
       return if @timer < POLL_FRAMES
       @timer = 0
+      check_leaders
       poll   # read even when busy, so the menu can say what's waiting
       if quiet?
         @busy_since = nil
@@ -537,6 +593,7 @@ module KIF
       slot = read_slot
       if on? && (slot.nil? || slot["seed"].to_s == d[:seed])
         pbMessage(_INTL("Archipelago: {1}. {2} checks sent, {3} items received.", d[:slot], d[:checked].length, d[:received]))
+        pbMessage(client_status_text)
         poll
         n = @queue.count { |e| e["index"].to_i >= d[:received] }
         pbMessage(_INTL("{1} items waiting. They arrive once you can walk around freely (no message, menu or event running).", n)) if n > 0
@@ -614,9 +671,50 @@ def obtainBadgeMessage(*args)
 end
 
 def pbHallOfFameEntry(*args)
-  KIF::AP.goal! if KIF::AP.on?
+  KIF::AP.goal! if KIF::AP.on? && KIF::AP.goal_kind == "elite_four"
   return kif_ap_pbHallOfFameEntry(*args)
 end
+
+# Giftsanity (the Pokemon is still given; Nuzlocke's hooks of the same
+# methods run inside these)
+alias kif_ap_pbAddPokemon pbAddPokemon unless defined?(kif_ap_pbAddPokemon)
+alias kif_ap_pbAddPokemonSilent pbAddPokemonSilent unless defined?(kif_ap_pbAddPokemonSilent)
+alias kif_ap_pbAddToParty pbAddToParty unless defined?(kif_ap_pbAddToParty)
+alias kif_ap_pbAddForeignPokemon pbAddForeignPokemon unless defined?(kif_ap_pbAddForeignPokemon)
+alias kif_ap_pbGenerateEgg pbGenerateEgg unless defined?(kif_ap_pbGenerateEgg)
+
+def pbAddPokemon(*args)
+  ret = kif_ap_pbAddPokemon(*args)
+  KIF::AP.gift_received if ret && KIF::AP.on?
+  return ret
+end
+
+def pbAddPokemonSilent(*args)
+  ret = kif_ap_pbAddPokemonSilent(*args)
+  KIF::AP.gift_received if ret && KIF::AP.on?
+  return ret
+end
+
+def pbAddToParty(*args)
+  ret = kif_ap_pbAddToParty(*args)
+  KIF::AP.gift_received if ret && KIF::AP.on?
+  return ret
+end
+
+def pbAddForeignPokemon(*args)
+  ret = kif_ap_pbAddForeignPokemon(*args)
+  KIF::AP.gift_received if ret && KIF::AP.on?
+  return ret
+end
+
+def pbGenerateEgg(*args)
+  ret = kif_ap_pbGenerateEgg(*args)
+  KIF::AP.gift_received if ret && KIF::AP.on?
+  return ret
+end
+# PIF's own names for pbGenerateEgg (event scripts) point at the hook too
+alias pbAddEgg pbGenerateEgg
+alias pbGenEgg pbGenerateEgg
 
 def pbStartOver(*args)
   KIF::AP.death_out if KIF::AP.on?

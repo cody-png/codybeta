@@ -425,3 +425,41 @@ class Object
   end
   private :safeExists? if was_private
 end
+
+#===============================================================================
+# UI pictures (Graphics/Pictures/...) looked up once. pbResolveBitmap
+# (001_FileTests.rb:121) asks the disk for .png, .gif and .dat every time:
+# opening the party resolved 31 pictures 101 times, 241 file checks, most of
+# them for "_dark" variants this install doesn't ship. The game's pictures
+# don't come or go while it runs, so the answer is kept per name (and
+# language, and set of mod files: a mod that loads afterwards starts afresh).
+#===============================================================================
+module KIF
+  module Perf
+    PICTURES = %r{\AGraphics[/\\]Pictures[/\\]}i
+
+    def self.picture_memo
+      mods = defined?(KIF::ModAssets) ? KIF::ModAssets.files : nil
+      lang = ($PokemonSystem.language rescue nil)
+      unless @pic_memo && @pic_mods.equal?(mods) && @pic_lang == lang
+        @pic_memo = {}
+        @pic_mods = mods
+        @pic_lang = lang
+      end
+      return @pic_memo
+    end
+  end
+end
+
+class Object
+  was_private = private_method_defined?(:pbResolveBitmap)
+  alias kif_perf_pbResolveBitmap pbResolveBitmap unless method_defined?(:kif_perf_pbResolveBitmap) || private_method_defined?(:kif_perf_pbResolveBitmap)
+
+  def pbResolveBitmap(x)
+    return kif_perf_pbResolveBitmap(x) unless x.is_a?(String) && x.match?(KIF::Perf::PICTURES)
+    memo = KIF::Perf.picture_memo
+    ret = memo.fetch(x) { memo[x.dup] = kif_perf_pbResolveBitmap(x) }
+    return ret ? ret.dup : nil
+  end
+  private :pbResolveBitmap if was_private
+end

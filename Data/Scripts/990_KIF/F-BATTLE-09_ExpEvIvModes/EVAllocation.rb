@@ -103,8 +103,23 @@ class PokeBattle_Battle
     ret = kif_eva_pbGainEVsOne(idxParty, defeatedBattler)
     gained = KIF::EVAlloc::STATS.sum { |s| pkmn.ev[s].to_i - before[s].to_i }
     KIF::EVAlloc::STATS.each { |s| pkmn.ev[s] = before[s] }
-    KIF::EVAlloc.add_points(pkmn, gained) if gained > 0
+    if gained > 0
+      n = KIF::EVAlloc.add_points(pkmn, gained)
+      (@kif_eva_gained ||= Hash.new(0))[pkmn] += n if n > 0
+    end
     return ret
+  end
+
+  # One line per Pokémon at the end, so players know points are waiting
+  # (not after every knockout)
+  alias kif_eva_pbEndOfBattle pbEndOfBattle unless method_defined?(:kif_eva_pbEndOfBattle)
+
+  def pbEndOfBattle
+    (@kif_eva_gained || {}).each do |pkmn, n|
+      pbDisplayPaused(_INTL("{1} got {2} EV points to spend (Summary, Skills).", pkmn.name, n))
+    end
+    @kif_eva_gained = nil
+    return kif_eva_pbEndOfBattle
   end
 end
 

@@ -428,6 +428,7 @@ if defined?(KifLivingTitle)
       m = KIF::Mouse
       if m.active? && @rects
         i = @rects.index { |r| m.over_rect?(r.x, r.y, r.width, r.height) }
+        m.log_phone_test(m.x, m.y, m.moved, "title menu=#{@menu} row=#{i.inspect} of #{@rects.length} index=#{@index} rects=#{@rects.map { |r| r.y }.inspect}") if m.left
         if i.nil?
           m.swallow! if m.left
         elsif i != @index

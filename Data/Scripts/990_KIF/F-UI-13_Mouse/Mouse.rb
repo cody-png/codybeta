@@ -105,16 +105,31 @@ module KIF
       return @phone_test
     end
 
-    def self.log_phone_test(x, y, moved)
-      return unless @phone_test && (@left || @right || @held || moved)
-      @test_lines = @test_lines.to_i + 1
-      return if @test_lines > 20
-      KIF.log("Mouse test: #{x},#{y} left=#{@left} held=#{@held} right=#{@right} moved=#{moved}")
+    # its own file: the session log folds lines that differ only in numbers
+    def self.log_phone_test(x, y, moved, extra = nil)
+      return unless @phone_test && (@left || @right || moved || extra)
+      return if (@test_lines = @test_lines.to_i + 1) > 400
+      line = format("%.2f %d,%d left=%s held=%s right=%s moved=%s %s %s\r\n", Process.clock_gettime(Process::CLOCK_MONOTONIC),
+                    x, y, @left, @held, @right, moved, $scene.class, extra)
+      File.open(File.join(KIF::Paths.logs, "KIF_mousetest.txt"), "ab") { |f| f.write(line) }
+    rescue StandardError
     end
 
     # Click to move (only asked while the mouse is on)
     def self.walk?
       return (($PokemonSystem.kif_mouse_walk rescue 1) || 1).to_i == 1
+    end
+
+    # JoiPlay reports taps in the window the engine started with (640x480),
+    # not in the game's own size after PIF resizes it (512x384): a tap there
+    # landed 25% too far right and down. The PC engine already converts.
+    START_SIZE = [(Graphics.width rescue 0), (Graphics.height rescue 0)]
+
+    def self.game_xy(x, y)
+      return [x, y] unless KIF.mobile?
+      sw, sh = START_SIZE
+      return [x, y] if sw <= 0 || sh <= 0 || (sw == Graphics.width && sh == Graphics.height)
+      return [x * Graphics.width / sw, y * Graphics.height / sh]
     end
 
     def self.in_window?
@@ -140,8 +155,7 @@ module KIF
         return
       end
       inside = in_window?
-      nx = Input.mouse_x.to_i
-      ny = Input.mouse_y.to_i
+      nx, ny = game_xy(Input.mouse_x.to_i, Input.mouse_y.to_i)
       moved = inside && !@x.nil? && (nx != @x || ny != @y)
       @x = nx
       @y = ny

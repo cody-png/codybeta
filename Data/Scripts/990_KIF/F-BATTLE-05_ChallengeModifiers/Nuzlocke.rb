@@ -119,6 +119,7 @@ module KIF
     # Gift Pokémon: Counts
     def self.gift_received(pkmn, trade = false)
       return unless on? && $PokemonSystem.ch_nz_gifts == 1 && $game_map
+      return if @unfusing   # PIF's Pinkan Island unfuse adds a half with pbAddPokemon
       return if !trade && only_pokemon?   # the starter
       place = place_name($game_map.map_id)
       return if (state[:places] || {})[place]
@@ -777,7 +778,12 @@ def pbUnfuse(pokemon, scene, *args)
     scene.pbDisplay(_INTL("Nuzlocke: {1} is dead and can't be unfused.", pokemon.name))
     return false
   end
-  return kif_nz_pbUnfuse(pokemon, scene, *args)
+  KIF::Nuzlocke.instance_variable_set(:@unfusing, true)
+  begin
+    return kif_nz_pbUnfuse(pokemon, scene, *args)
+  ensure
+    KIF::Nuzlocke.instance_variable_set(:@unfusing, false)
+  end
 end
 
 #-------------------------------------------------------------------------------

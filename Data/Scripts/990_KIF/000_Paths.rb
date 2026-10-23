@@ -121,7 +121,8 @@ module KIF
       why = if plat =~ /android|ios/i then "engine platform #{plat}"
             elsif RUBY_PLATFORM =~ /android/i then "Ruby platform #{RUBY_PLATFORM}"
             elsif ENV["ANDROID_ROOT"] || ENV["ANDROID_DATA"] then "Android environment"
-            elsif (File.expand_path(".") rescue "") =~ %r{\A/(storage|sdcard|data)/} then "Android storage path"
+            # Android's own storage only: a Linux PC may mount a drive at /data or /storage
+            elsif (File.expand_path(".") rescue "") =~ %r{\A/(storage/emulated|storage/\h{4}-\h{4}|sdcard|data/user|data/data|data/media)/} then "Android storage path"
             elsif marker?(MOBILE_MARKER) then MOBILE_MARKER
             end
       @mobile_engine = why ? true : false

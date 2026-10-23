@@ -323,6 +323,15 @@ module KIF
     end
 
     # The map and the player are idle: nothing would be cut off by a message
+    def busy_reason
+      return "not on the map" unless $scene.is_a?(Scene_Map)
+      return "a message or menu is open" if $game_temp.message_window_showing || $game_temp.in_menu
+      return "an event is running (map #{$game_map.map_id}, event #{pbMapInterpreter.get_self.id rescue '?'})" if pbMapInterpreterRunning?
+      return "the player is moving"
+    rescue StandardError
+      return "unknown"
+    end
+
     def quiet?
       return false unless $scene.is_a?(Scene_Map)
       return false if $game_temp.message_window_showing || $game_temp.in_menu
@@ -341,10 +350,19 @@ module KIF
         @timer = POLL_FRAMES   # just loaded: look at once
       end
       @timer += 1
-      return if @timer < POLL_FRAMES || !quiet?
+      return if @timer < POLL_FRAMES
       @timer = 0
-      poll
-      grant_pending
+      poll   # read even when busy, so the menu can say what's waiting
+      if quiet?
+        @busy_since = nil
+        grant_pending
+      elsif !@queue.empty?
+        @busy_since ||= Time.now
+        if Time.now - @busy_since > 30 && !@busy_logged
+          @busy_logged = true
+          KIF.log("Archipelago: #{@queue.length} items waiting; not given yet because #{busy_reason}")
+        end
+      end
     rescue StandardError => e
       KIF.log("Archipelago: update failed (#{e.class}: #{e.message})")
     end
@@ -357,6 +375,9 @@ module KIF
       slot = read_slot
       if on? && (slot.nil? || slot["seed"].to_s == d[:seed])
         pbMessage(_INTL("Archipelago: {1}. {2} checks sent, {3} items received.", d[:slot], d[:checked].length, d[:received]))
+        poll
+        n = @queue.count { |e| e["index"].to_i >= d[:received] }
+        pbMessage(_INTL("{1} items waiting. They arrive once you can walk around freely (no message, menu or event running).", n)) if n > 0
         return
       end
       unless slot

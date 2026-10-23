@@ -10,9 +10,13 @@ module KIF
   module MapLoadCache
     SPARE_TILESETS  = 4    # tileset pictures kept after their map goes away
     SPARE_AUTOTILES = 40   # autotile pictures (small)
+    MOBILE_SPARE_TILESETS  = 1    # phones have far less memory for bitmaps
+    MOBILE_SPARE_AUTOTILES = 15
 
+    # read at use: on_mobile comes from the save's settings, after load
     def self.limit(store)
-      return store.is_a?(TilemapRenderer::AutotileBitmaps) ? SPARE_AUTOTILES : SPARE_TILESETS
+      mobile = KIF.respond_to?(:mobile?) && KIF.mobile?
+      return store.is_a?(TilemapRenderer::AutotileBitmaps) ? (mobile ? MOBILE_SPARE_AUTOTILES : SPARE_AUTOTILES) : (mobile ? MOBILE_SPARE_TILESETS : SPARE_TILESETS)
     end
 
     module Store

@@ -102,7 +102,13 @@ module KIF
   module Shiny
     CACHE_DIR = "Cache/KIFShiny"
     MEMORY_LIMIT = 150
+    MOBILE_MEMORY_LIMIT = 40   # phones have far less memory for bitmaps
     @memory = {}
+
+    # read at use: on_mobile comes from the save's settings, after load
+    def self.memory_limit
+      return (KIF.respond_to?(:mobile?) && KIF.mobile?) ? MOBILE_MEMORY_LIMIT : MEMORY_LIMIT
+    end
 
     #---------------------------------------------------------------------------
     # Decision (KIF pbGiveFinaleColor :515-588)
@@ -454,7 +460,7 @@ module KIF
     end
 
     def self.cache_put_memory(key, bmp)
-      if @memory.length >= MEMORY_LIMIT
+      while @memory.length >= memory_limit
         old_key, old = @memory.first
         @memory.delete(old_key)
         old.dispose if old && !old.disposed?

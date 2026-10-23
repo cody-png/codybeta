@@ -125,6 +125,18 @@ module KIF
       return all
     end
 
+    # The other side: every non-legendary banned leaves a non-legendary
+    # nothing to become but a legendary
+    def self.all_others_banned?
+      list = data[:ban_pokemon]
+      return false if !list || list.empty?
+      key = list.hash
+      return @others_banned[1] if @others_banned && @others_banned[0] == key
+      all = (1..NB_POKEMON).all? { |d| is_legendary(d) || species_banned?(d) }
+      @others_banned = [key, all]
+      return all
+    end
+
     #---------------------------------------------------------------------------
     # Original data (taken once from the loaded game data)
     #---------------------------------------------------------------------------
@@ -626,9 +638,12 @@ class Object
   alias kif_rand_legendaryOk legendaryOk unless method_defined?(:kif_rand_legendaryOk) || private_method_defined?(:kif_rand_legendaryOk)
 
   def legendaryOk(oldspecies, newspecies, includeLegendaries)
-    return false if $PokemonGlobal && KIF::Rand.species_banned?(newspecies)
+    # every Pokémon banned: the bans can't be kept, so they're ignored
+    return false if $PokemonGlobal && KIF::Rand.species_banned?(newspecies) &&
+                    !(KIF::Rand.all_legends_banned? && KIF::Rand.all_others_banned?)
     # Without this a legendary with every legendary banned has no pick and the loop never ends
     return true if $PokemonGlobal && KIF::Rand.all_legends_banned? && is_legendary(oldspecies)
+    return true if $PokemonGlobal && KIF::Rand.all_others_banned? && !is_legendary(oldspecies)
     return kif_rand_legendaryOk(oldspecies, newspecies, includeLegendaries)
   end
 end

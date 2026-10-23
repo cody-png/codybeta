@@ -21,7 +21,9 @@ module KIF
       path = defined?(KIF::Paths) ? KIF::Paths.log(FILE) : FILE
       rotate(path)
       File.open(path, "ab") do |f|
-        f.write("\r\n=================\r\n\r\n[#{Time.now}]\r\n")
+        ver = (KIF::PORT_VERSION rescue "?")
+        map = ($game_map ? $game_map.map_id : "-") rescue "-"
+        f.write("\r\n=================\r\n\r\n[#{Time.now}] KIF #{ver}, map #{map}\r\n")
         f.write(text.to_s)
         f.write("\r\n")
       end

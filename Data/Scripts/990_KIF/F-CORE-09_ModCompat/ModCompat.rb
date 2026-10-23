@@ -483,6 +483,7 @@ module KIF
       bridge_arity if respond_to?(:bridge_arity)
       register_crafting_items if respond_to?(:register_crafting_items)
       mark_mod_ai if respond_to?(:mark_mod_ai)
+      KIF::Rand.wrap_choose_for_map if defined?(KIF::Rand) && KIF::Rand.respond_to?(:wrap_choose_for_map)   # a mod may have replaced it
       KIF::ModSettings.drain_pending if defined?(KIF::ModSettings)
     end
 
@@ -504,7 +505,7 @@ module KIF
           Thread.current[:kif_mod_ai] = prev
         end
       end
-      KIF.log("Mod compat: pbChooseMoves from #{File.basename(loc[0].to_s)} - PIF AI answers adapted for it")
+      KIF.verbose("Mod compat: pbChooseMoves from #{File.basename(loc[0].to_s)} - PIF AI answers adapted for it")
     end
   end
 end
@@ -622,7 +623,7 @@ module KIF
           end
           owner.send(:private, m) if mpriv
         end
-        KIF.log("Mod compat: #{owner}##{name} takes #{max} arguments, game passes #{want} - bridged") if KIF.respond_to?(:log)
+        KIF.verbose("Mod compat: #{owner}##{name} takes #{max} arguments, game passes #{want} - bridged") if KIF.respond_to?(:verbose)
       end
     rescue StandardError => e
       KIF.log("Mod compat: argument bridge failed: #{e.class}: #{e.message}") if KIF.respond_to?(:log)

@@ -419,6 +419,33 @@ module KIF
       return defined?(kif_egc_getTrainersDataMode) ? kif_egc_getTrainersDataMode : getTrainersDataMode
     end
 
+    # Classic trainers the difficulty's list lacks: the battle falls back to
+    # their Classic team (pbLoadTrainer), so they're shuffled too (before, a
+    # Remix/Expert run crashed on ~40 of them: no shuffled team)
+    def self.fallback_trainers
+      mode = trainer_data
+      return [] if mode == GameData::Trainer
+      have = {}
+      mode.list_all.each_value { |t| have[t.id] = true }
+      return GameData::Trainer.list_all.values.uniq { |t| t.id }.reject { |t| have[t.id] }
+    end
+
+    # The same for PIF's own shuffle (Randomizer trainer features off): its
+    # pick for each of their Pokémon, added to the shuffled teams
+    def self.shuffle_fallback_trainers(_bst = nil, customs_only = false, customs = nil)
+      hash = $PokemonGlobal.randomTrainersHash
+      return unless hash.is_a?(Hash)
+      bst = pbGet(VAR_RANDOMIZER_TRAINER_BST)
+      customs_only = false if customs.nil?
+      fallback_trainers.each do |tr|
+        next if hash[tr.id]
+        hash[tr.id] = tr.pokemon.map do |p|
+          old = GameData::Species.get(p[:species]).id_number
+          customs_only ? getNewCustomSpecies(old, customs, bst) : getNewSpecies(old, bst)
+        end
+      end
+    end
+
     def self.shuffle_trainers(customs = nil)
       customs = customs.map { |c| dex_of(c) }.select { |d| d > 0 } if customs
       customs = nil if customs && customs.empty?
@@ -431,7 +458,7 @@ module KIF
       else
         data[:theme_map] = nil
       end
-      list = trainer_data.list_all.values.uniq { |t| t.id }
+      list = trainer_data.list_all.values.uniq { |t| t.id } + fallback_trainers
       list.each_with_index do |tr, ti|
         progress(_INTL("Shuffling trainers..."), ti.to_f / list.length) if ti % 40 == 0
         olds = tr.pokemon.map { |p| dex_of(p[:species]) }

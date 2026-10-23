@@ -8,13 +8,14 @@
 # backups.
 #
 # Others > "Save Backups" (all saves):
-#   Infinite (default) – backups of the saves you make in the save menu
+#   Infinite           – backups of the saves you make in the save menu
 #                        (and Quicksave) are never deleted (KIF); saves the
 #                        game makes by itself (autosave, Transfer Box, PC,
 #                        Battle Frontier) keep their newest 10 as
 #                        "<slot>_<date>_autosave", or a long game filled
 #                        gigabytes (2026-10-18; Transfer Box 2026-10-19)
-#   PIF                – 6.8.2's limit (Settings::SAVEFILE_NB_BACKUPS)
+#   Newest 10 (default since 2026-10-22) – 6.8.2's limit (Settings::SAVEFILE_NB_BACKUPS)
+#   Off                – no backups (named ones still work)
 # Save menu, either way (KIF): "Name the next backup" – type a name, then
 # save; a copy of that save is kept as a backup under the name – and
 # "Open the save folder".
@@ -23,14 +24,15 @@
 # menu lists them (named ones show "date – name"). KIF kept its own
 # "<slot> <n> <time> <map>" files next to the saves.
 #===============================================================================
-KIF::Options.define(:savebackups, 0, :global)   # 0 Infinite, 1 PIF limit
+KIF::Options.define(:savebackups, 1, :global)   # 0 Infinite, 1 Newest 10 (default, 2026-10-22), 2 Off
 
 KIF::Options.add(:others, :global) {
-  EnumOption.new(_INTL("Save Backups"), [_INTL("Infinite"), _INTL("PIF")],
+  EnumOption.new(_INTL("Save Backups"), [_INTL("Infinite"), _INTL("Newest 10"), _INTL("Off")],
                  proc { $PokemonSystem.savebackups },
                  proc { |value| $PokemonSystem.savebackups = value },
                  [_INTL("Every save you make keeps a backup; autosaves keep their newest ones"),
-                  _INTL("Only the newest backups are kept (PIF)")])
+                  _INTL("Only the newest 10 backups of each save file are kept"),
+                  _INTL("No backups (named backups still work). Backups already made are kept")])
 }
 
 module KIF
@@ -106,6 +108,7 @@ module Game
     # PIF: 6.8.2's limit, but named backups are never trimmed (6.8.2 deleted
     # any *.rxdata in the folder)
     def backup_savefile(save_path, slot)
+      return if $PokemonSystem && $PokemonSystem.savebackups.to_i == 2   # Off
       auto = !KIF::SaveBackups.player_saving
       KIF::SaveBackups.copy(save_path, slot, auto ? KIF::SaveBackups::AUTO : nil)
       KIF::SaveBackups.trim(save_path, slot, auto) if auto || !KIF::SaveBackups.infinite?

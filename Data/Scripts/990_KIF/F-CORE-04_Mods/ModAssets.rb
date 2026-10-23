@@ -57,7 +57,7 @@ module KIF
       end
       @files = files
       @memo = {}
-      KIF.log("Mod files: #{files.length} pictures and sounds from #{dirs.length} mods") if !files.empty? && defined?(KIF.log)
+      KIF.verbose("Mod files: #{files.length} pictures and sounds from #{dirs.length} mods") if !files.empty? && defined?(KIF.verbose)
       return files.length
     end
   end

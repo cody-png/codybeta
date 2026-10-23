@@ -44,4 +44,22 @@ module KIF
       return File.join(root, "Import Sprites")
     end
   end
+
+  # Running on a phone (JoiPlay / Kirin on Android): PIF's own Device:
+  # Mobile option, an engine that says Android or iOS, or a Mobile.krs marker
+  # file. JoiPlay fakes part of the Windows API, so Win32API being there says
+  # nothing; Windows-only steps (curl, cmd, robocopy, restarting the .exe)
+  # ask this first. Groundwork for mobile support (2026-10-22).
+  MOBILE_MARKER = "Mobile.krs"
+
+  def self.mobile?
+    return true if $PokemonSystem && ($PokemonSystem.on_mobile rescue false)
+    if @mobile_engine.nil?
+      plat = (defined?(System) && System.respond_to?(:platform) ? System.platform.to_s : "") rescue ""
+      @mobile_engine = (plat =~ /android|ios/i || marker?(MOBILE_MARKER)) ? true : false
+    end
+    return @mobile_engine
+  rescue StandardError
+    return false
+  end
 end

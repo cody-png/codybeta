@@ -98,6 +98,7 @@ module KIF
       end
       return nil unless text
       text = text.force_encoding("UTF-8")
+      return nil unless text.valid_encoding?   # a garbled code isn't a code
       list = text.split(",").map { |p| p.split("@", 2) }.reject { |id, _| id.nil? || id.empty? }
                  .map { |id, v| [id, v.to_s] }
       return list.empty? ? nil : list

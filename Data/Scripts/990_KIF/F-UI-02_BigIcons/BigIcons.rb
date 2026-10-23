@@ -50,7 +50,13 @@ module KIF
     # every refresh: a PC page = 30 sprite loads + 30 shiny renders). The key
     # is everything that decides the picture; a hit costs one small blt.
     CACHE_LIMIT = 80
+    MOBILE_CACHE_LIMIT = 30   # phones have far less memory for bitmaps
     @cache = {}
+
+    # read at use: on_mobile comes from the save's settings, after load
+    def self.cache_limit
+      return (KIF.respond_to?(:mobile?) && KIF.mobile?) ? MOBILE_CACHE_LIMIT : CACHE_LIMIT
+    end
 
     # A still image standing in for the AnimatedBitmap the sprites expect
     class Icon
@@ -118,7 +124,7 @@ module KIF
       small.stretch_blt(Rect.new(0, 0, w, h), src, Rect.new(0, 0, src.width, src.height))
       anim.dispose if anim.respond_to?(:dispose) && !(anim.respond_to?(:disposed?) && anim.disposed?)
       if key
-        if @cache.length >= CACHE_LIMIT
+        while @cache.length >= cache_limit
           old_key, old = @cache.first
           @cache.delete(old_key)
           old.dispose if old && !old.disposed?

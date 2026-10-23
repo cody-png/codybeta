@@ -264,6 +264,7 @@ module KIF
             end
           elsif e == "x"
             hex = @s[@i..-1][/\A[0-9a-fA-F]{1,2}/]
+            raise ParseError, "bad \\x at #{@i}" unless hex
             out << hex.to_i(16).chr
             @i += hex.length
           else

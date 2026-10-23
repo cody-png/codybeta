@@ -519,7 +519,8 @@ module KIF
         status[e.id] = { :loaded => bad.nil?, :error => bad }
         if bad.nil?
           @loaded_dirs << e.path.to_s
-          KIF.log("Mod loaded: #{e.name} (folder #{e.id}, #{scripts.length} scripts)")
+          ver = json && json["version"] ? " #{json['version']}" : ""
+          KIF.log("Mod loaded: #{e.name}#{ver} (folder #{e.id}, #{scripts.length} scripts)")
         else
           KIF::ModRules.release(e.id)
           blocked[e.id] = e.name.to_s

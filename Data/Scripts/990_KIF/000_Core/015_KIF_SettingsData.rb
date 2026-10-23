@@ -68,7 +68,7 @@ module KIF
         ["Text", ["Text Speed", "Text Entry"]],
         ["Updates and downloads", ["Updates", "Check for Updates", "Download data"]],
         ["Speed", ["Frame rate", "Sprite File Cache"]],
-        ["Start-up", ["Skip intro"]],
+        ["Start-up", ["Skip intro", "Title screen"]],
         ["Files", ["Imported Archives"]],
         ["Advanced", ["Increment Slider by", "Debug Exclusive", "DEBUG"]]]],
       [:modules, "Modules", [180, 120, 90], []],

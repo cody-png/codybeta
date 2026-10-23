@@ -14,7 +14,7 @@ Every feature belongs to a module. Each module can be:
 |---|---|
 | Auto Battle | Auto-Battle and its options, Self-Battle from the PC |
 | Shinies | Shinies: custom colours, odds, gamble, selling, Poké Radar chains |
-| Graphical Changes | EBDX battles, battle box extras, Move Effectiveness, big icons, game font, dark mode |
+| Graphical Changes | EBDX battles, battle box extras, Move Effectiveness, big icons, game font, dark mode, living title screen |
 | Information | Fusion preview and fusion screen, the improved Pokédex (evolutions, sprites), IVs and EVs in the summary, Battle Info |
 | Battles & Challenges | Battle format, damage variance, Battle AI, Challenges, battle mechanics, level caps, EXP/EV/IV modes, Rocket mode, catching extras, Gym Leader teams, trainers keeping their rolled teams |
 | Randomizer | The randomizer (incl. Entrances) and gym leader teams. Off plays a randomized save without the randomizer until it's turned back on |
@@ -352,6 +352,7 @@ Only on saves started as randomized saves: **Options > Game > Randomizer** (Rand
 ### Interface
 - **Frame rate** - 40 / 60 / 80 / 100 / 120 / Match monitor *(40, global, experimental)*. The game still runs at PIF's 40 steps a second, so all timing (walking, events, battles, menus, key repeat, play time) is exactly as in PIF. Above 40, extra frames are drawn in between, showing the overworld part of the way from one step to the next (camera, characters, shadows, weather), so walking and scrolling are smoother. Battles and menus look the same as at 40. Match monitor uses the screen's refresh rate (up to 120, the engine's limit). If the computer can't keep up, the rate steps down by itself and tries again later.
 - **Skip intro** - Off / On *(On, global)*. On: the game starts at the title screen without the opening movie (Gengar and Nidorino). The title screen and its music stay.
+- **Title screen** - Living / Simple / Classic *(Living; Simple on phones; global)*. Living: Pokémon wander through a slowly scrolling world (a grassy field, a beach, a forest) behind the title menu: Play (the save selection, unchanged), Options, Mods, Links, Quit. Diglett dig, birds fly over, and now and then two Pokémon meet and fuse: a flash, then one walks on in the other's colour, with the fusion's battle sprite above it when that sprite is on your computer. Simple: one still picture behind the same menu. Classic: PIF's own title screen. Part of Graphical Changes: with that module Off, the title is PIF's.
 - **Animated sprites** *(always on)*. A sprite drawn as an animation strip (its frames side by side) moves in battle, at 10 frames a second (the first 48 frames). Everywhere else it shows its first frame instead of the whole strip. Shinies coloured by PIF's Improved Shinies palettes always show their first frame.
 - **Soft reset (F12)** *(always on)*. Starts the game again as if you closed and reopened it. Unsaved progress is lost, as with any soft reset.
 - **Map load cache** *(always on)*. Walking back and forth between connected maps no longer reloads the next map's tileset each time it comes into view (PIF did, ~60 ms each time, a visible hitch). The last few tilesets and animated tiles no longer on screen are kept.

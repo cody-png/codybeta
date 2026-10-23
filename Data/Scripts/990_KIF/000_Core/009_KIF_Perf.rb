@@ -281,6 +281,47 @@ module KIF
     rescue StandardError
       return false
     end
+
+    #---------------------------------------------------------------------------
+    # Text tables kept ready to load. Decoding messages.dat (31 MB: XOR, then
+    # Marshal.load of ~4 million mostly empty entries, then the compacting
+    # above) takes ~2 s on a PC at every start; the same tables saved once
+    # already compacted (zlib, ~1 MB) load in ~0.1 s. Remade when the file's
+    # size or time changes; any problem reading it = the normal load.
+    #---------------------------------------------------------------------------
+    module TextCache
+      FORMAT = 1
+      DIR = "Cache/KIFText"   # in the game folder, or the save folder when that can't be written
+
+      def self.path(file)
+        return File.join(KIF::Paths.writable(DIR), File.basename(file.to_s) + ".kifcache")
+      end
+
+      def self.key(file, stamp)
+        return [FORMAT, File.basename(file.to_s), stamp[0], stamp[1].to_f]
+      end
+
+      def self.read(file, stamp)
+        f = path(file)
+        return nil unless File.file?(f)
+        k, tables = Marshal.load(Zlib::Inflate.inflate(File.binread(f)))
+        return (k == key(file, stamp) && tables.is_a?(Array)) ? tables : nil
+      rescue StandardError
+        return nil
+      end
+
+      def self.write(file, stamp, tables)
+        f = path(file)
+        KIF.mkdir_p(File.dirname(f))
+        tmp = "#{f}.#{Process.pid}.tmp"
+        File.binwrite(tmp, Zlib::Deflate.deflate(Marshal.dump([key(file, stamp), tables]), Zlib::BEST_SPEED))
+        File.delete(f) if File.exist?(f)   # (Windows: rename won't replace)
+        File.rename(tmp, f)
+      rescue StandardError => e
+        (File.delete(tmp) rescue nil) if tmp
+        KIF.log("Text cache not written (#{e.class}: #{e.message})") if KIF.respond_to?(:log)
+      end
+    end
   end
 end
 
@@ -290,8 +331,14 @@ class Messages
   def loadMessageFile(*args)
     KIF::Perf.hand_over_messages(self)
     stamp = KIF::Perf.messages_stamp(args[0])
-    ret = kif_perf_loadMessageFile(*args)
-    KIF::Perf.compact_messages(@messages)
+    cached = stamp && KIF::Perf::TextCache.read(args[0], stamp)
+    if cached
+      ret = @messages = cached
+    else
+      ret = kif_perf_loadMessageFile(*args)
+      KIF::Perf.compact_messages(@messages)
+      KIF::Perf::TextCache.write(args[0], stamp, @messages) if stamp && @messages.is_a?(Array)
+    end
     @kif_loaded_from = (@messages && stamp) ? [args[0], stamp] : nil
     return ret
   end

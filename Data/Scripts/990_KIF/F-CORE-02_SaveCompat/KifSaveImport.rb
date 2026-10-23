@@ -222,9 +222,10 @@ module KIF
         pk.instance_variable_set(:@item, nil)
       end
       return 0 if moved.empty?
-      pending[:items].concat(moved)
       KIF.log("Set aside #{moved.length} unknown item(s) from this save: " + moved.map { |id, q| "#{id} x#{q}" }.join(", "))
       return moved.length
+    ensure
+      pending[:items].concat(moved) if moved   # also when a step above raised: what was taken out stays set aside
     end
 
     # Set-aside items whose ID exists again go back into the Bag

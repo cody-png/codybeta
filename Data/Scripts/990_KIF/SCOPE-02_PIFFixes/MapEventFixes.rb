@@ -63,3 +63,14 @@ KIF::MapPatches.add(138, "PIF fix: Olivine test NPC") do |map|
     map.events.delete(21)
   end
 end
+
+# 6. Two more developer NPCs that crash: Pallet Town (map 42) event 42
+#    "LEGENDARY MODE ON" (flips mode switches, then crashes reshuffling
+#    trainers) and the Olivine Mart (map 834) event 14 "Search by tags"
+#    (crashes in search_hats). Only removed while they still say so.
+{ 42 => [42, "LEGENDARY MODE ON"], 834 => [14, "Search by tags"] }.each do |map_id, (ev_id, text)|
+  KIF::MapPatches.add(map_id, "PIF fix: developer NPC") do |map|
+    ev = map.events[ev_id]
+    map.events.delete(ev_id) if ev && ev.pages.any? { |pg| pg.list.any? { |c| c.code == 101 && c.parameters[0].to_s == text } }
+  end
+end

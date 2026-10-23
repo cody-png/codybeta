@@ -65,9 +65,9 @@ module KIF
 
     # the files that would be uploaded: [relative path, full path]
     def files(path)
-      Dir.glob(File.join(path, "**", "*"), File::FNM_DOTMATCH).select { |f| File.file?(f) }.map do |f|
-        [f.sub(path.chomp("/") + "/", ""), f]
-      end.reject do |rel, _|
+      # base: a [ ] { } in the game's path isn't read as a pattern
+      Dir.glob(File.join("**", "*"), File::FNM_DOTMATCH, base: path).map { |rel| [rel, File.join(path, rel)] }
+        .select { |rel, f| File.file?(f) && !rel.split("/").include?(".") }.reject do |rel, _|
         parts = rel.split("/")
         (parts[0..-2] & LEFT_OUT_DIRS).any? || (parts.length == 1 && LEFT_OUT_FILES.include?(parts[0]))
       end

@@ -16,7 +16,15 @@
 #     up a place; Counts = they use up the place they were received in when
 #     its encounter is still unused (pbAddPokemon / pbAddToParty /
 #     pbAddForeignPokemon / pbGenerateEgg / pbStartTrade; the Silent adders
-#     are PIF's unfusing, Day Care and Mystery Gift, not gifts).
+#     are PIF's unfusing, Day Care and Mystery Gift, not gifts). PIF's own
+#     pbAddPokemonID gifts count too. The starter never counts (Cody): every
+#     lab gives it with pbAddPokemonID as the player's first Pokémon (Oak's
+#     Lab and its Johto/Hoenn/Sinnoh/Custom copies, Legendary and randomized
+#     starters via obtainStarter); PIF's Hoenn helpers use pbAddPokemonSilent.
+#   * Kuray Shop (Cody, 2026-10-22): its Pokémon are the K-Eggs it sells
+#     (F-ITEM-02); using one never uses up a place. Counts = the run gets one
+#     K-Egg from the shop, another is refused before any money is taken;
+#     Free = no limit. Independent of Gift Pokémon.
 #   * Safari Zone (its own battle class, PokeBattle_SafariZone): only a catch
 #     uses up the place, one per area ("Area 1".."Area 5", both maps of an
 #     area are one) or one for the whole zone; after it the Ball command is
@@ -29,6 +37,7 @@ KIF::Options.define(:ch_nz_dupes, 1, :save)
 KIF::Options.define(:ch_nz_shiny, 1, :save)
 KIF::Options.define(:ch_nz_gifts, 0, :save)      # Free / Counts
 KIF::Options.define(:ch_nz_safari, 0, :save)     # One catch per area / One catch for the whole zone
+KIF::Options.define(:ch_nz_kuray, 0, :save)      # Counts / Free
 
 class PokemonGlobalMetadata
   attr_writer :kif_nuzlocke
@@ -108,14 +117,32 @@ module KIF
     end
 
     # Gift Pokémon: Counts
-    def self.gift_received(pkmn)
+    def self.gift_received(pkmn, trade = false)
       return unless on? && $PokemonSystem.ch_nz_gifts == 1 && $game_map
+      return if !trade && only_pokemon?   # the starter
       place = place_name($game_map.map_id)
       return if (state[:places] || {})[place]
       (state[:places] ||= {})[place] = [pkmn.is_a?(Pokemon) ? pkmn.species : pkmn]
       KIF.log("Nuzlocke: a gift used up #{place}")
     rescue => e
       KIF.log("Nuzlocke: gift check failed (#{e.class}: #{e.message})")
+    end
+
+    # The Pokémon just received is the only one the player has (party and PC)
+    def self.only_pokemon?
+      return false if $Trainer.party.compact.length > 1
+      $PokemonStorage.maxBoxes.times { |b| $PokemonStorage.maxPokemon(b).times { |i| return false if $PokemonStorage[b, i] } }
+      return true
+    end
+
+    # Kuray Shop: Counts limits the run to one K-Egg bought there
+    def self.shop_pokemon?(item)
+      return item.is_a?(Symbol) && defined?(KIF::KurayShop) && KIF::KurayShop.open? &&
+             defined?(KIF::KurayEggs) && KIF::KurayEggs.egg?(item)
+    end
+
+    def self.shop_limited?(item)
+      return on? && $PokemonSystem.ch_nz_kuray == 0 && shop_pokemon?(item)
     end
 
     # Safari Zone: each area ("Area 1"...) or the whole zone is one place
@@ -412,6 +439,13 @@ KIF::Options.add(:challenges, :save) {
                   _INTL("In the Safari Zone only a catch uses up the place: one catch in the whole zone.")])
 }
 KIF::Options.add(:challenges, :save) {
+  EnumOption.new(_INTL("Kuray Shop"), [_INTL("Counts"), _INTL("Free")],
+                 proc { $PokemonSystem.ch_nz_kuray },
+                 proc { |value| $PokemonSystem.ch_nz_kuray = value },
+                 [_INTL("You can get one Pokémon from the Kuray Shop on this run."),
+                  _INTL("You can get any number of Pokémon from the Kuray Shop.")])
+}
+KIF::Options.add(:challenges, :save) {
   ButtonOption.new(_INTL("Nuzlocke Graveyard"), proc { KIF::Nuzlocke.show_graveyard },
                    _INTL("The Pokémon that died on this run: a box you can look at (Summary) but not change. Also on the PC."))
 }
@@ -567,6 +601,13 @@ alias kif_nz_pbAddPokemon pbAddPokemon unless defined?(kif_nz_pbAddPokemon)
 alias kif_nz_pbAddToParty pbAddToParty unless defined?(kif_nz_pbAddToParty)
 alias kif_nz_pbAddForeignPokemon pbAddForeignPokemon unless defined?(kif_nz_pbAddForeignPokemon)
 alias kif_nz_pbGenerateEgg pbGenerateEgg unless defined?(kif_nz_pbGenerateEgg)
+alias kif_nz_pbAddPokemonID pbAddPokemonID unless defined?(kif_nz_pbAddPokemonID)
+
+def pbAddPokemonID(pkmn, *args)
+  ret = kif_nz_pbAddPokemonID(pkmn, *args)
+  KIF::Nuzlocke.gift_received(pkmn) if ret
+  return ret
+end
 
 def pbAddPokemon(pkmn, *args)
   ret = kif_nz_pbAddPokemon(pkmn, *args)
@@ -599,8 +640,38 @@ alias kif_nz_pbStartTrade pbStartTrade unless defined?(kif_nz_pbStartTrade)
 
 def pbStartTrade(pokemonIndex, newpoke, *args)
   ret = kif_nz_pbStartTrade(pokemonIndex, newpoke, *args)
-  KIF::Nuzlocke.gift_received($Trainer.party[pokemonIndex] || newpoke)
+  KIF::Nuzlocke.gift_received($Trainer.party[pokemonIndex] || newpoke, true)
   return ret
+end
+
+# Kuray Shop: Counts. A second K-Egg is refused when chosen (before the price
+# check), only one can be bought at a time, and a bought one is recorded
+class PokemonMart_Scene
+  alias kif_nz_pbChooseBuyItem pbChooseBuyItem unless method_defined?(:kif_nz_pbChooseBuyItem)
+  alias kif_nz_pbChooseNumber pbChooseNumber unless method_defined?(:kif_nz_pbChooseNumber)
+
+  def pbChooseBuyItem(*args)
+    loop do
+      item = kif_nz_pbChooseBuyItem(*args)
+      return item unless item && KIF::Nuzlocke.shop_limited?(item) && KIF::Nuzlocke.state[:kuray_shop]
+      pbDisplayPaused(_INTL("Nuzlocke: you already got your Pokémon from the Kuray Shop."))
+    end
+  end
+
+  def pbChooseNumber(helptext, item, maximum, *args)
+    maximum = 1 if KIF::Nuzlocke.shop_limited?(item)
+    return kif_nz_pbChooseNumber(helptext, item, maximum, *args)
+  end
+end
+
+class PokemonMartAdapter
+  alias kif_nz_addItem addItem unless method_defined?(:kif_nz_addItem)
+
+  def addItem(item, *args)
+    ret = kif_nz_addItem(item, *args)
+    KIF::Nuzlocke.state[:kuray_shop] = true if ret && KIF::Nuzlocke.shop_limited?(item)
+    return ret
+  end
 end
 
 alias kif_nz_pbAfterBattle pbAfterBattle unless defined?(kif_nz_pbAfterBattle)

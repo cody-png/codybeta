@@ -219,11 +219,13 @@ All options in this menu are per-save.
   - Normal: +1 every 2 turns.
   - Hard: +1 every turn.
   - Chaos: +2 every turn, and maxed out after 3 turns.
-- **Nuzlocke** - Off / On *(Off)*. Only the first wild Pokémon you meet in each place can be caught; a place is a map without its floors, so all of Mt. Moon is one place. A Pokémon that faints is dead: it can't be healed or revived, fused or unfused, and a fusion that faints takes both halves with it. Poké Balls are refused when the Pokémon can't be caught. Not covered yet: the Safari Zone and gift Pokémon.
+- **Nuzlocke** - Off / On *(Off)*. Only the first wild Pokémon you meet in each place can be caught; a place is a map without its floors, so all of Mt. Moon is one place. A Pokémon that faints is dead: it can't be healed or revived, fused or unfused, and a fusion that faints takes both halves with it. Poké Balls are refused when the Pokémon can't be caught.
   - **Fainted Pokémon** - Graveyard / Released / Stay *(Graveyard)*. After the battle a dead Pokémon goes to the Graveyard box, is released, or stays where it is, fainted for good.
   - **Nuzlocke whiteout** - Keep playing / Lock save / Blackout *(Keep playing)*. When the whole party is dead: the run is over and Nuzlocke turns Off; the run is over and the save is locked for good (the load screen marks it "Nuzlocke over" with a grave, and choosing it only offers View Graveyard); or you black out as usual and a Pokémon from the PC joins you.
   - **Dupes clause** - Off / On *(On)*. A Pokémon whose evolution line you already have (both halves, for a fusion) doesn't use up the place.
   - **Shiny clause** - Off / On *(On)*. A shiny can always be caught and doesn't use up the place.
+  - **Gift Pokémon** - Free / Counts *(Free)*. Free: gifts, eggs and trades never use up a place. Counts: a gift, egg or trade uses up the place you got it in, if you haven't had that place's encounter yet (you still get the Pokémon).
+  - **Safari Zone** - Per area / Whole zone *(Per area)*. In the Safari Zone, meeting a Pokémon or failing to catch it doesn't use up the place; only a catch does. Per area: one catch in each Safari Zone area. Whole zone: one catch in the whole Safari Zone. After that, Safari Balls are refused (Bait, Rock and Run still work). The Dupes and Shiny clauses apply as usual.
   - **Nuzlocke Graveyard** - a box of the Pokémon that died on this run. It's on the pause menu (grave icon) while Nuzlocke is On with Fainted Pokémon: Graveyard, and on the PC once one has died. You can look at each one's Summary and where it died, but nothing in it can be moved, withdrawn, fused or released, and it is never one of your PC boxes.
 
 ---

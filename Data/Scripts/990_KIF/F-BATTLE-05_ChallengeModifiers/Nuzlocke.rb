@@ -12,13 +12,23 @@
 #   * Whiteout (no Pokémon left standing): the run is over and the save
 #     carries on with Nuzlocke Off, the run is over and the save is locked,
 #     or a normal blackout (a Pokémon from the PC joins you).
-#   Not covered: the Safari Zone (its own battle class), gift Pokémon.
+#   * Gift Pokémon (Cody, 2026-10-22): Free = gifts, eggs and trades never use
+#     up a place; Counts = they use up the place they were received in when
+#     its encounter is still unused (pbAddPokemon / pbAddToParty /
+#     pbAddForeignPokemon / pbGenerateEgg / pbStartTrade; the Silent adders
+#     are PIF's unfusing, Day Care and Mystery Gift, not gifts).
+#   * Safari Zone (its own battle class, PokeBattle_SafariZone): only a catch
+#     uses up the place, one per area ("Area 1".."Area 5", both maps of an
+#     area are one) or one for the whole zone; after it the Ball command is
+#     refused. Dupes and Shiny clauses apply as usual.
 #===============================================================================
 KIF::Options.define(:ch_nuzlocke, 0, :save)
 KIF::Options.define(:ch_nz_fainted, 0, :save)    # Graveyard / Released / Stays fainted
 KIF::Options.define(:ch_nz_whiteout, 0, :save)   # Run over, keep playing / Run over, save locked / Normal blackout
 KIF::Options.define(:ch_nz_dupes, 1, :save)
 KIF::Options.define(:ch_nz_shiny, 1, :save)
+KIF::Options.define(:ch_nz_gifts, 0, :save)      # Free / Counts
+KIF::Options.define(:ch_nz_safari, 0, :save)     # One catch per area / One catch for the whole zone
 
 class PokemonGlobalMetadata
   attr_writer :kif_nuzlocke
@@ -83,8 +93,7 @@ module KIF
     # A wild battle starts: may its Pokémon be caught, and does it use up the place?
     #   :first (catchable, uses the place up), :free (catchable, doesn't),
     #   :used (the place's encounter is gone), :dupe (a line you already have)
-    def self.judge(foes)
-      place = place_name($game_map.map_id)
+    def self.judge(foes, place = place_name($game_map.map_id))
       return [place, :free] if $PokemonSystem.ch_nz_shiny == 1 && foes.any? { |p| p.shiny? }
       return [place, :used] if (state[:places] || {})[place]
       if $PokemonSystem.ch_nz_dupes == 1
@@ -96,6 +105,32 @@ module KIF
 
     def self.use_place(place, foes)
       (state[:places] ||= {})[place] = foes.map { |p| p.species }
+    end
+
+    # Gift Pokémon: Counts
+    def self.gift_received(pkmn)
+      return unless on? && $PokemonSystem.ch_nz_gifts == 1 && $game_map
+      place = place_name($game_map.map_id)
+      return if (state[:places] || {})[place]
+      (state[:places] ||= {})[place] = [pkmn.is_a?(Pokemon) ? pkmn.species : pkmn]
+      KIF.log("Nuzlocke: a gift used up #{place}")
+    rescue => e
+      KIF.log("Nuzlocke: gift check failed (#{e.class}: #{e.message})")
+    end
+
+    # Safari Zone: each area ("Area 1"...) or the whole zone is one place
+    def self.safari_place(map_id)
+      return "Safari Zone" if $PokemonSystem.ch_nz_safari == 1
+      return "Safari Zone #{place_name(map_id)}"
+    end
+
+    def self.safari_refusal(battle)
+      return nil unless battle.respond_to?(:kif_nz)
+      case battle.kif_nz
+      when :used then return _INTL("Nuzlocke: you already caught a Pokémon in {1}.", battle.kif_nz_place)
+      when :dupe then return _INTL("Nuzlocke: you already have its evolution line (Dupes clause).")
+      end
+      return nil
     end
 
     def self.death_place(p)
@@ -363,6 +398,20 @@ KIF::Options.add(:challenges, :save) {
                   _INTL("A shiny can always be caught and doesn't use up the place.")])
 }
 KIF::Options.add(:challenges, :save) {
+  EnumOption.new(_INTL("Gift Pokémon"), [_INTL("Free"), _INTL("Counts")],
+                 proc { $PokemonSystem.ch_nz_gifts },
+                 proc { |value| $PokemonSystem.ch_nz_gifts = value },
+                 [_INTL("Gifts, eggs and trades never use up a place."),
+                  _INTL("A gift, egg or trade uses up the place you got it in, if you haven't had its encounter yet.")])
+}
+KIF::Options.add(:challenges, :save) {
+  EnumOption.new(_INTL("Safari Zone"), [_INTL("Per area"), _INTL("Whole zone")],
+                 proc { $PokemonSystem.ch_nz_safari },
+                 proc { |value| $PokemonSystem.ch_nz_safari = value },
+                 [_INTL("In the Safari Zone only a catch uses up the place: one catch in each area."),
+                  _INTL("In the Safari Zone only a catch uses up the place: one catch in the whole zone.")])
+}
+KIF::Options.add(:challenges, :save) {
   ButtonOption.new(_INTL("Nuzlocke Graveyard"), proc { KIF::Nuzlocke.show_graveyard },
                    _INTL("The Pokémon that died on this run: a box you can look at (Summary) but not change. Also on the PC."))
 }
@@ -474,6 +523,84 @@ module ItemHandlers
       return kif_nz_triggerCanUseInBattle(item, pkmn, battler, move, firstAction, battle, scene, showMessages)
     end
   end
+end
+
+# Safari Zone: judged when the battle starts; only a catch (decision 4) uses
+# the place up
+class PokeBattle_SafariZone
+  alias kif_nz_safari_pbStartBattle pbStartBattle unless method_defined?(:kif_nz_safari_pbStartBattle)
+
+  def pbStartBattle
+    @kif_nz = nil
+    if KIF::Nuzlocke.on?
+      begin
+        @kif_nz_place, @kif_nz = KIF::Nuzlocke.judge(@party2.compact, KIF::Nuzlocke.safari_place($game_map.map_id))
+      rescue => e
+        KIF.log("Nuzlocke: Safari check failed (#{e.class}: #{e.message})")
+      end
+    end
+    ret = kif_nz_safari_pbStartBattle
+    KIF::Nuzlocke.use_place(@kif_nz_place, @party2.compact) if ret == 4 && @kif_nz == :first && KIF::Nuzlocke.on?
+    return ret
+  end
+
+  attr_reader :kif_nz, :kif_nz_place
+end
+
+# The Safari Ball command is refused (the turn isn't used) once the place is
+# used up; Bait, Rock and Run still work
+class PokeBattle_Scene
+  alias kif_nz_pbSafariCommandMenu pbSafariCommandMenu unless method_defined?(:kif_nz_pbSafariCommandMenu)
+
+  def pbSafariCommandMenu(index)
+    loop do
+      cmd = kif_nz_pbSafariCommandMenu(index)
+      msg = cmd == 0 ? KIF::Nuzlocke.safari_refusal(@battle) : nil
+      return cmd unless msg
+      pbDisplayMessage(msg)
+    end
+  end
+end
+
+# Gift Pokémon: Counts (the place is used up only when the Pokémon arrived)
+alias kif_nz_pbAddPokemon pbAddPokemon unless defined?(kif_nz_pbAddPokemon)
+alias kif_nz_pbAddToParty pbAddToParty unless defined?(kif_nz_pbAddToParty)
+alias kif_nz_pbAddForeignPokemon pbAddForeignPokemon unless defined?(kif_nz_pbAddForeignPokemon)
+alias kif_nz_pbGenerateEgg pbGenerateEgg unless defined?(kif_nz_pbGenerateEgg)
+
+def pbAddPokemon(pkmn, *args)
+  ret = kif_nz_pbAddPokemon(pkmn, *args)
+  KIF::Nuzlocke.gift_received(pkmn) if ret
+  return ret
+end
+
+def pbAddToParty(pkmn, *args)
+  ret = kif_nz_pbAddToParty(pkmn, *args)
+  KIF::Nuzlocke.gift_received(pkmn) if ret
+  return ret
+end
+
+def pbAddForeignPokemon(pkmn, *args)
+  ret = kif_nz_pbAddForeignPokemon(pkmn, *args)
+  KIF::Nuzlocke.gift_received(pkmn) if ret
+  return ret
+end
+
+def pbGenerateEgg(pkmn, *args)
+  ret = kif_nz_pbGenerateEgg(pkmn, *args)
+  KIF::Nuzlocke.gift_received(pkmn) if ret
+  return ret
+end
+# PIF's own aliases of pbGenerateEgg (event scripts) point at the hook too
+alias pbAddEgg pbGenerateEgg
+alias pbGenEgg pbGenerateEgg
+
+alias kif_nz_pbStartTrade pbStartTrade unless defined?(kif_nz_pbStartTrade)
+
+def pbStartTrade(pokemonIndex, newpoke, *args)
+  ret = kif_nz_pbStartTrade(pokemonIndex, newpoke, *args)
+  KIF::Nuzlocke.gift_received($Trainer.party[pokemonIndex] || newpoke)
+  return ret
 end
 
 alias kif_nz_pbAfterBattle pbAfterBattle unless defined?(kif_nz_pbAfterBattle)

@@ -18,7 +18,7 @@
 #   Off                – no backups (named ones still work)
 # Save menu, either way (KIF): "Name the next backup" – type a name, then
 # save; a copy of that save is kept as a backup under the name – and
-# "Open the save folder".
+# "Open the save folder", and "Compress old backups" (see below).
 #
 # 6.8.2 adaptations: backups use 6.8.2's folder and names, so its load-backup
 # menu lists them (named ones show "date – name"). KIF kept its own
@@ -27,7 +27,7 @@
 # Compressed backups (KIF 1.2, 2026-10-22): new backups are gzip files under
 # the same .rxdata names (about a tenth of the size); SaveData.get_data_from_file
 # reads either kind. Old plain backups stay as they are until the player uses
-# Options > Compress Old Backups.
+# the save menu's "Compress old backups".
 #===============================================================================
 KIF::Options.define(:savebackups, 1, :global)   # 0 Infinite, 1 Newest 10 (default, 2026-10-22), 2 Off
 
@@ -38,10 +38,6 @@ KIF::Options.add(:others, :global) {
                  [_INTL("Every save you make keeps a backup; autosaves keep their newest ones"),
                   _INTL("Only the newest 10 backups of each save file are kept"),
                   _INTL("No backups (named backups still work). Backups already made are kept")])
-}
-KIF::Options.add(:others, :global) {
-  ButtonOption.new(_INTL("Compress Old Backups"), proc { KIF::SaveBackups.compress_old_menu },
-                   _INTL("Shrinks backups made before KIF compressed them, to about a tenth"))
 }
 
 module KIF
@@ -115,7 +111,7 @@ module KIF
       KIF.log("Save backup failed: #{e.message}")
     end
 
-    # Options > Compress Old Backups: every plain backup is gzipped; the
+    # Save menu > Compress old backups: every plain backup is gzipped; the
     # original is replaced only once the compressed file on disk reads back
     # byte for byte. Returns [compressed, bytes freed, left as they were]
     def self.compress_old(root = File.join(SaveData::SAVE_DIR.to_s, "backups"))
@@ -258,7 +254,7 @@ end
 KIF.guard_base("052_InfiniteFusion/System/MultiSaves.rb", 381334228, "PokemonSaveScreen#pbSaveScreen")
 
 class PokemonSaveScreen
-  # Copy of PIF 6.8.2 MultiSaves.rb:822-849 with the two KIF entries
+  # Copy of PIF 6.8.2 MultiSaves.rb:822-849 with the KIF entries
   # (KIF MultiSaves_Infinite Save Backups.rb:61-118).
   def pbSaveScreen
     ret = false
@@ -273,9 +269,10 @@ class PokemonSaveScreen
         _INTL("Save to another slot"),
         _INTL("Name the next backup"),                                  # KIF
         _INTL("Open the save folder"),                                  # KIF
+        _INTL("Compress old backups"),                                  # KIF
         _INTL("Don't save")
       ]
-      opt = pbMessage(_INTL("Would you like to save the game?"), choices, 5)   # KIF: 5
+      opt = pbMessage(_INTL("Would you like to save the game?"), choices, 6)   # KIF: 6
       if opt == 0
         pbSEPlay('GUI save choice')
         ret = doSave($Trainer.save_slot)
@@ -305,6 +302,9 @@ class PokemonSaveScreen
       elsif opt == 3                                                    # KIF
         pbPlayDecisionSE
         KIF::SaveBackups.open_folder
+      elsif opt == 4                                                    # KIF
+        pbPlayDecisionSE
+        KIF::SaveBackups.compress_old_menu
       else
         pbPlayCancelSE
       end

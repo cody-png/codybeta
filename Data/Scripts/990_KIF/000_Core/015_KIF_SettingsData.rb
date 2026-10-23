@@ -60,7 +60,7 @@ module KIF
         ["Randomizer", ["Randomizer"]],
         ["Kuray Shop", ["Streamer's Dream", "Kuray QoL"]],
         ["World", ["Overworld Poison", "Tutor.net"]],
-        ["Saves", ["Autosave", "Quicksave", "Save Backups", "Compress Old Backups", "Hatch to PC Prompt"]],
+        ["Saves", ["Autosave", "Quicksave", "Save Backups", "Hatch to PC Prompt"]],
         ["Fun", ["Kuray's Shenanigans"]]]],
       [:system, "System", [130, 140, 155], [
         ["Audio", ["Music Volume", "SE Volume"]],

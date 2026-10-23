@@ -187,7 +187,14 @@ class PokemonSummary_Scene
         end
         if m.clicked?
           m.swallow!
-          m.press!(m.x >= 368 ? Input::RIGHT : Input::LEFT) if row
+          # given/taken here: at 60+ fps the Frame rate's repeat? doesn't see a pressed key
+          if row
+            st = KIF::EVAlloc::STATS[cursor]
+            n = m.x >= 368 ? KIF::EVAlloc.give(@pokemon, st) : KIF::EVAlloc.take(@pokemon, st)
+            n > 0 ? pbPlayCursorSE : pbPlayBuzzerSE
+            redraw.call
+          end
+          next
         end
       end
       stat = KIF::EVAlloc::STATS[cursor]

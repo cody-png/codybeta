@@ -255,6 +255,7 @@ module KIF
     # is one of the slot's and not checked yet
     def location_of(map_id, event_id, base = 0)
       return nil unless on? && event_id.to_i > 0
+      return nil if KIF::Rand.pinkan?(map_id.to_i)   # the quest needs its own items there
       d = data
       id = base + map_id.to_i * 1000 + event_id.to_i
       id = (d[:aliases] || {})[id] || id

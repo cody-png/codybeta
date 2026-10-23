@@ -70,8 +70,9 @@ module KIF
       return @unreachable ? true : false
     end
 
+    # in the game folder; the save folder when that can't be written
     def stage_root
-      return File.join(root, STAGE_DIR)
+      return File.expand_path(KIF::Paths.writable(STAGE_DIR))
     end
 
     def log(msg)
@@ -693,7 +694,7 @@ module KIF
     # The whole update; true when the game is about to close for it
     #---------------------------------------------------------------------------
     def update(base, version, in_game = false)
-      unless writable?(stage_root)
+      unless KIF::Paths.game_writable? && writable?(stage_root)
         pbMessage(_INTL("The game folder can't be written to, so KIF can't update itself here (a folder like Program Files?)."))
         pbMessage(_INTL("Get KIF {1} from {2}", version, PAGE))
         return false
@@ -825,6 +826,7 @@ module KIF
       if !manual && skipped_version == v
         return false
       end
+      return phone_notice(base, v, manual) if KIF.mobile?
       in_game = manual && $scene.is_a?(Scene_Map)
       loop do
         cmd = pbMessage(_INTL("KIF {1} is out (you have {2}).", v, current_version),
@@ -846,6 +848,31 @@ module KIF
     rescue StandardError => e
       hide_status
       log("check failed (#{e.class}: #{e.message}) #{e.backtrace.first(3).join(' | ')}")
+      return false
+    end
+
+    # Phones (JoiPlay): the game folder can't be written, so nothing is
+    # downloaded; the player installs the new full game from the release
+    # page. Said once per version at start-up; Check for Updates always says it.
+    RELEASE_PAGE = "https://github.com/#{REPO}/releases/latest"
+
+    def phone_notice(base, v, manual)
+      return false if !manual && stored_choices["phone_told"] == v
+      store_choice("phone_told", v)
+      log("#{v} is out: told the player (phone, no download)")
+      loop do
+        cmd = pbMessage(_INTL("KIF {1} is out (you have {2}).", v, current_version), [_INTL("What's new"), _INTL("OK")], 2)
+        break unless cmd == 0
+        show_notes(base)
+      end
+      copied = begin
+                 Input.clipboard = RELEASE_PAGE
+                 true
+               rescue StandardError, NameError
+                 false
+               end
+      pbMessage(copied ? _INTL("On phones KIF can't update itself. The link to the full new version is copied:\n{1}", RELEASE_PAGE) :
+                         _INTL("On phones KIF can't update itself. Get the full new version here:\n{1}", RELEASE_PAGE))
       return false
     end
 

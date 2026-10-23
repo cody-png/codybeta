@@ -443,23 +443,27 @@ module KIF
     end
 
     def self.make_dir(path)
-      Dir.mkdir(RAND_DIR) unless Dir.exist?(RAND_DIR)
-      Dir.mkdir(path) unless Dir.exist?(path)
+      KIF.mkdir_p(path)
     end
+
+    # Randomizer/Logs and Randomizer/Presets: in the game folder, or the save
+    # folder when the game folder can't be written (phones)
+    def self.log_dir;    return KIF::Paths.writable(LOG_DIR); end
+    def self.preset_dir; return KIF::Paths.writable(PRESET_DIR); end
 
     #---------------------------------------------------------------------------
     # Presets: "Randomizer Presets/<name>.txt", first line = settings code
     #---------------------------------------------------------------------------
     def self.preset_names
-      return [] unless Dir.exist?(PRESET_DIR)
-      return Dir.glob("#{PRESET_DIR}/*.txt").map { |f| File.basename(f, ".txt") }.sort
+      return [] unless Dir.exist?(preset_dir)
+      return Dir.glob("#{preset_dir}/*.txt").map { |f| File.basename(f, ".txt") }.sort
     end
 
     def self.save_preset(name)
       clean = name.to_s.gsub(/[\\\/:*?"<>|]/, "").strip
       return false if clean.empty?
-      make_dir(PRESET_DIR)
-      File.open("#{PRESET_DIR}/#{clean}.txt", "wb") do |f|
+      make_dir(preset_dir)
+      File.open("#{preset_dir}/#{clean}.txt", "wb") do |f|
         f.write(settings_code + "\r\n")
         f.write("# KIF randomizer preset. The first line is the settings code;\r\n")
         f.write("# paste it in Randomizer > Presets & sharing > Paste settings code.\r\n")
@@ -471,7 +475,7 @@ module KIF
     end
 
     def self.load_preset(name)
-      path = "#{PRESET_DIR}/#{name}.txt"
+      path = "#{preset_dir}/#{name}.txt"
       return false unless File.exist?(path)
       lines = File.read(path, :mode => "rb").force_encoding("UTF-8").scrub.split(/\r?\n/)
       line = lines.map(&:strip).find { |l| l.start_with?(CODE_PREFIX) || l.start_with?(CODE_PREFIX_V1) }

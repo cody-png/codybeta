@@ -100,7 +100,11 @@ KIF::Options.add(:shinies, :save) {
 
 module KIF
   module Shiny
-    CACHE_DIR = "Cache/KIFShiny"
+    CACHE_DIR = "Cache/KIFShiny"   # in the game folder, or the save folder when that can't be written
+
+    def self.cache_dir
+      return KIF::Paths.writable(CACHE_DIR)
+    end
     MEMORY_LIMIT = 150
     MOBILE_MEMORY_LIMIT = 40   # phones have far less memory for bitmaps
     @memory = {}
@@ -439,7 +443,7 @@ module KIF
     end
 
     def self.disk_path(key)
-      return "#{CACHE_DIR}/#{Settings::GAME_VERSION_NUMBER}/#{key}.png"
+      return "#{cache_dir}/#{Settings::GAME_VERSION_NUMBER}/#{key}.png"
     end
 
     def self.cache_get(key)
@@ -476,12 +480,12 @@ module KIF
       cache_put_memory(key, copy_bitmap(bmp))
       if cache_mode == 0
         begin
-          dir = "#{CACHE_DIR}/#{Settings::GAME_VERSION_NUMBER}"
-          # "Cache" itself may not exist on a fresh install (no FileUtils in the game)
-          [File.dirname(CACHE_DIR), CACHE_DIR, dir].each { |d| Dir.mkdir(d) unless File.directory?(d) }
+          top = cache_dir
+          dir = "#{top}/#{Settings::GAME_VERSION_NUMBER}"
+          KIF.mkdir_p(dir)   # "Cache" itself may not exist on a fresh install
           unless @disk_trimmed   # once a session: older game versions' folders go, this one is capped
             @disk_trimmed = true
-            Dir.children(CACHE_DIR).each { |c| KIF.rm_tree(File.join(CACHE_DIR, c)) if c != Settings::GAME_VERSION_NUMBER.to_s && File.directory?(File.join(CACHE_DIR, c)) }
+            Dir.children(top).each { |c| KIF.rm_tree(File.join(top, c)) if c != Settings::GAME_VERSION_NUMBER.to_s && File.directory?(File.join(top, c)) }
             KIF.trim_cache_dir(dir, KIF.mobile? ? 2_000 : 20_000)   # phones: less storage
           end
           bmp.save_to_png(disk_path(key)) unless File.exist?(disk_path(key))

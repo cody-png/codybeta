@@ -462,19 +462,25 @@ module KIF
       own = File.join(mods_dir, item.folder)
       return own if File.file?(File.join(own, "mod.json"))
       c = installed_index[item.id]
-      return c ? File.join(mods_dir, c) : own
+      return c ? File.join((@installed_in || {})[c] || mods_dir, c) : own
     end
 
-    # mod id => folder, read once (cleared on load and after an install)
+    # mod id => folder, read once (cleared on load and after an install);
+    # also the save folder's Mods when the game folder is read-only (phones)
     def installed_index
       return @installed_index if @installed_index
       @installed_index = {}
-      return @installed_index unless File.directory?(mods_dir)
-      Dir.children(mods_dir).sort.each do |c|
-        j = File.join(mods_dir, c, "mod.json")
-        next unless File.file?(j)
-        id = ((KIF::Mods.read_json(j) || {})["id"] || c).to_s
-        @installed_index[id] ||= c
+      @installed_in = {}   # folder => the Mods folder it is in
+      ([mods_dir] + KIF::Mods.extra_folders).each do |dir|
+        next unless File.directory?(dir)
+        Dir.children(dir).sort.each do |c|
+          j = File.join(dir, c, "mod.json")
+          next unless File.file?(j)
+          id = ((KIF::Mods.read_json(j) || {})["id"] || c).to_s
+          next if @installed_index[id]
+          @installed_index[id] = c
+          @installed_in[c] ||= dir
+        end
       end
       return @installed_index
     end
@@ -836,6 +842,13 @@ module KIF
       ups = cat.startup_updates
       return false if ups.empty?
       cat.log("updates at start-up: #{ups.map { |it| "#{it.id} #{it.version}" }.join(', ')}")
+      if KIF.mobile?   # once per set of new versions
+        told = ups.map { |it| "#{it.id} #{it.version}" }.sort.join(";")
+        return false if KIF::Updater.stored_choices["phone_mods_told"] == told
+        KIF::Updater.store_choice("phone_mods_told", told)
+        phone_notice(ups)
+        return false
+      end
       q = ups.length == 1 ? _INTL("An update for 1 mod. Open Mods > Updates?") : _INTL("Updates for {1} mods. Open Mods > Updates?", ups.length)
       return false unless pbMessage(q, [_INTL("Yes"), _INTL("Later")], 2) == 0
       KIF::SettingsScreen.mods_view = KIF::SettingsScreen::VIEWS.index(:updates)
@@ -846,7 +859,15 @@ module KIF
       return false
     end
 
+    # Phones: nothing is downloaded or installed (JoiPlay's game folder can't
+    # be written); the player is told what's new and updates mods by hand
+    def phone_notice(list)
+      pbMessage(KIF::PixelFont.utf8(_INTL("New mod versions: {1}.", list.map { |it| "#{it.name} #{it.version}" }.join(", "))))
+      pbMessage(_INTL("On phones, mods are installed and updated by hand: download the mod and put its folder in the Mods folder."))
+    end
+
     def run(list)
+      return phone_notice(list) if KIF.mobile?
       done, failed, cancelled = cat.install(list)
       if cancelled
         pbMessage(_INTL("Stopped. Nothing half-downloaded was installed."))

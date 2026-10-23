@@ -84,6 +84,8 @@ module KIF
 
     def import_dirs
       list = [import_dir]
+      extra = KIF::Paths.extra_drop_dir("Import Sprites")   # read-only game folder (phones)
+      list << extra if extra
       list << PIF_IMPORT.chomp("/") if Dir.exist?(PIF_IMPORT)
       return list
     end
@@ -167,6 +169,16 @@ module KIF
     # BaseSprites folder or loose near the top (where a player drops it) -
     # eggs, icons and outfits are numbered the same way.
     def destination(path)
+      dest = game_destination(path)
+      return dest if dest.nil? || KIF::Paths.game_writable?
+      # read-only game folder (phones): single sprite files go to the same
+      # folders in the save folder, where local_for looks too; sheets, triple
+      # fusions and eggs are read by PIF from the game folder only
+      return nil unless dest.start_with?(BASE_DIR + "/", INDEXED_DIR + "/")
+      return KIF::Paths.writable(dest)
+    end
+
+    def game_destination(path)
       name = File.basename(path)
       return nil unless name =~ /\.png\z/i
       parts = path.tr("\\", "/").split("/").reject(&:empty?)
@@ -554,8 +566,11 @@ module KIF
              end
       return nil unless path
       @exists ||= {}
-      @exists[path] = File.file?(path) unless @exists.key?(path)
-      return @exists[path] ? path : nil
+      unless @exists.key?(path)
+        # a read-only game folder: sprites imported into the save folder first
+        @exists[path] = [KIF::Paths.writable(path), path].uniq.find { |p| File.file?(p) }
+      end
+      return @exists[path]
     end
 
     def forget_lookups
@@ -588,7 +603,11 @@ module KIF
     def bitmap_cache_limit
       return KIF.respond_to?(:mobile?) && KIF.mobile? ? BITMAP_CACHE_LIMIT_MOBILE : BITMAP_CACHE_LIMIT
     end
-    DISK_CACHE_DIR = "Cache/KIFSprites"
+    DISK_CACHE_DIR = "Cache/KIFSprites"   # in the game folder, or the save folder when that can't be written
+
+    def disk_cache_dir
+      return KIF::Paths.writable(DISK_CACHE_DIR)
+    end
     require "zlib"
     @bitmaps = {}
 
@@ -635,7 +654,7 @@ module KIF
 
     # Cache/KIFSprites/<sprite name>.kbm, valid for one size + mtime of the file
     def disk_cache_path(path)
-      return "#{DISK_CACHE_DIR}/#{File.basename(path, '.png')}.kbm"
+      return "#{disk_cache_dir}/#{File.basename(path, '.png')}.kbm"
     end
 
     def disk_stamp(path)
@@ -674,8 +693,8 @@ module KIF
       return unless stamp
       raw = bmp.raw_data
       return unless raw && raw.length == bmp.width * bmp.height * 4
-      mkdir_p(DISK_CACHE_DIR) unless File.directory?(DISK_CACHE_DIR)
-      @disk_trimmed ||= (KIF.trim_cache_dir(DISK_CACHE_DIR, KIF.mobile? ? 2_000 : 20_000); true)   # ~150 MB (phones ~15 MB)
+      mkdir_p(disk_cache_dir) unless File.directory?(disk_cache_dir)
+      @disk_trimmed ||= (KIF.trim_cache_dir(disk_cache_dir, KIF.mobile? ? 2_000 : 20_000); true)   # ~150 MB (phones ~15 MB)
       cp = disk_cache_path(path)
       tmp = cp + ".tmp"
       File.binwrite(tmp, DISK_CACHE_TAG + [stamp[0], stamp[1], bmp.width, bmp.height].pack("NNNN") + Zlib::Deflate.deflate(raw, Zlib::BEST_SPEED))

@@ -6,6 +6,7 @@
 #   "root" is the game folder; if the game is started inside a folder named
 #   "Game Files" (a tidier release layout being tried), root is the folder
 #   above it, so Logs and Import Sprites stay next to the .exe.
+#   A read-only game folder (JoiPlay): see game_writable? / writable below.
 #===============================================================================
 module KIF
   module Paths
@@ -42,6 +43,40 @@ module KIF
 
     def self.import_sprites
       return File.join(root, "Import Sprites")
+    end
+
+    # Can KIF write into the game folder? On JoiPlay (Android) it can't, so
+    # everything KIF writes there goes to the save folder instead (2026-10-23).
+    # Tried once a session with a small file made and deleted.
+    WRITE_TEST = ".kif_write_test"
+
+    def self.game_writable?
+      return @game_writable unless @game_writable.nil?
+      begin
+        File.open(WRITE_TEST, "wb") { |f| f.write("") }
+        File.delete(WRITE_TEST)
+        @game_writable = true
+      rescue StandardError
+        @game_writable = false
+      end
+      KIF.log(@game_writable ? "Game folder can be written: KIF's caches and files stay in it" :
+              "Game folder is read-only: KIF's caches, Randomizer files and downloads go to the save folder (#{KIF.save_dir})") if KIF.respond_to?(:log)
+      return @game_writable
+    end
+
+    # Where KIF writes (and reads back) one of its own folders or files:
+    # the path in the game folder as before, or the same path in the save folder
+    def self.writable(sub)
+      return game_writable? ? sub : File.join(KIF.save_dir, sub)
+    end
+
+    # Folders players drop files into (Import Sprites, Mods): with a read-only
+    # game folder, the save folder's copy is looked in as well
+    def self.extra_drop_dir(name)
+      return nil if game_writable?
+      dir = File.join(KIF.save_dir, name)
+      (KIF.mkdir_p(dir) rescue nil)   # made, so phone players find where it goes
+      return dir
     end
   end
 

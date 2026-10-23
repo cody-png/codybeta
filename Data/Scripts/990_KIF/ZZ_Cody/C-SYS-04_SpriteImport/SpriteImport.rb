@@ -334,6 +334,13 @@ module KIF
         return
       end
       bytes = -> { data.is_a?(Proc) ? (data = data.call) : data }
+      # read-only game folder: a sprite the game folder already has is installed
+      if (game = game_copy_of(dest)) && File.file?(game) &&
+         (from ? same_file?(from, game) : same_bytes?(game, File.size(game), data, size, crc))
+        (File.delete(from) rescue nil) if from
+        t[:same] += 1
+        return
+      end
       mkdir_p(File.dirname(dest))
       if (old = timed(:exist) { existing_size(dest) })
         if from ? same_file?(from, dest) : same_bytes?(dest, old, data, size, crc)
@@ -348,18 +355,69 @@ module KIF
         end
         unless from && from == held
           mkdir_p(File.dirname(held))
-          data ? write_new(held, bytes.call) : File.rename(from, held)
+          data ? write_new(held, bytes.call) : move_file(from, held)
         end
         t[:conflicts][held] = dest
         return
       end
-      data ? timed(:write) { write_new(dest, bytes.call) } : File.rename(from, dest)
+      data ? timed(:write) { write_new(dest, bytes.call) } : move_file(from, dest)
       @names[File.basename(dest).downcase] = true if @names_dir == File.dirname(dest)
       t[:placed][dest] = true
       t[:moved] += 1
       bump
     rescue SystemCallError, IOError
       t[:errors] += 1   # a sprite that couldn't be written (disk full, locked): its archive is kept
+    end
+
+    # A file in a read-only game folder can't be moved out: it is copied, and
+    # the next start finds it installed ("same") instead of failing again
+    def move_file(from, to)
+      File.rename(from, to)
+    rescue SystemCallError
+      raise if KIF::Paths.game_writable?
+      write_new(to, File.binread(from))
+    end
+
+    # the game folder's copy of a sprite headed for the save folder, or nil
+    def game_copy_of(dest)
+      return nil if KIF::Paths.game_writable?
+      pre = KIF.save_dir + "/"
+      return dest.start_with?(pre) ? dest[pre.length..-1] : nil
+    end
+
+    # Archives in a read-only game folder can't be deleted once imported:
+    # remembered in the save folder (name, size, time) and not opened again
+    DONE_LIST = "KIF_imported_archives.txt"
+
+    def archive_key(path)
+      st = File.stat(path)
+      return "#{File.basename(path)}|#{st.size}|#{st.mtime.to_i}"
+    rescue SystemCallError
+      return nil
+    end
+
+    def archive_done?(path)
+      return false if KIF::Paths.game_writable?
+      list = File.join(KIF.save_dir, DONE_LIST)
+      key = archive_key(path)
+      return key && File.file?(list) && File.read(list).split(/\r?\n/).include?(key) ? true : false
+    rescue SystemCallError, IOError
+      return false
+    end
+
+    def remember_archive(path)
+      return if KIF::Paths.game_writable? || !File.exist?(path)
+      key = archive_key(path)
+      File.open(File.join(KIF.save_dir, DONE_LIST), "ab") { |f| f.write(key + "\n") } if key
+    rescue SystemCallError, IOError
+      nil
+    end
+
+    # where sprites held for the replace question go: a read-only game
+    # folder's ones in the save folder's Import Sprites
+    def hold_base(root)
+      extra = KIF::Paths.extra_drop_dir("Import Sprites")
+      return extra && root != extra ? extra : root
     end
 
     # Every file under a folder (skipping our own _done / _unpacking, links -
@@ -470,7 +528,7 @@ module KIF
           each_file(root, false) do |path|
             next if path.include?("/#{DONE_DIR}/")
             next unless ARCHIVES.include?(File.extname(path).downcase)
-            next if failed.include?(path)
+            next if failed.include?(path) || archive_done?(path)
             archives << path
           end
           archives.each do |path|
@@ -487,6 +545,7 @@ module KIF
             # a resumed run placed the first part of the pack last time
             if ok && tally[:errors] == errors && (info[:from].to_i > 0 || brought_sprites?(before, work, root))
               finish_archive(path)   # unpacked: deleted (or kept, if the player asked)
+              remember_archive(path)   # still there: a read-only game folder
             else
               failed << path
             end
@@ -504,7 +563,7 @@ module KIF
           break unless found
         end
         status("Moving sprites into place...", 0) if Dir.exist?(File.join(root, WORK_DIR))
-        hold_root = File.join(root, HOLD_DIR)
+        hold_root = File.join(hold_base(root), HOLD_DIR)
         each_file(root, false) do |path|
           next if path.include?("/#{DONE_DIR}/")
           next delete_file(path) if path.end_with?(".kiftmp", Zip::PROGRESS)   # cut-short writes, a removed pack's progress
@@ -870,7 +929,7 @@ module KIF
                 method == 8 ? si.timed(:inflate) { Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(raw) } : raw
               end
               if direct && dest
-                held = File.join(direct, KIF::SpriteImport::HOLD_DIR, File.basename(into), *safe)
+                held = File.join(si.hold_base(direct), KIF::SpriteImport::HOLD_DIR, File.basename(into), *safe)
                 started = true
                 si.place(dest, held, data: data, size: usize, crc: crc)
                 si.tick

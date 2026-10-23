@@ -47,20 +47,32 @@ module KIF
 
     # Can KIF write into the game folder? On JoiPlay (Android) it can't, so
     # everything KIF writes there goes to the save folder instead (2026-10-23).
-    # Tried once a session with a small file made and deleted.
+    # Tried once a session with a small file made and deleted; a failed try
+    # is repeated once (an antivirus lock passes), and the file name is the
+    # game's own (two copies of the game starting at once don't collide).
     WRITE_TEST = ".kif_write_test"
+
+    # nil when a file could be written, else why not
+    def self.write_probe
+      name = "#{WRITE_TEST}_#{Process.pid}_#{(Time.now.to_f * 1000).to_i}"
+      File.open(name, "wb") { |f| f.write("") }
+      File.delete(name)
+      return nil
+    rescue StandardError => e
+      (File.delete(name) rescue nil) if name
+      return "#{e.class}: #{e.message}"
+    end
 
     def self.game_writable?
       return @game_writable unless @game_writable.nil?
-      begin
-        File.open(WRITE_TEST, "wb") { |f| f.write("") }
-        File.delete(WRITE_TEST)
-        @game_writable = true
-      rescue StandardError
-        @game_writable = false
+      why = write_probe
+      if why
+        sleep(0.2)
+        why = write_probe
       end
+      @game_writable = why.nil?
       KIF.log(@game_writable ? "Game folder can be written: KIF's caches and files stay in it" :
-              "Game folder is read-only: KIF's caches, Randomizer files and downloads go to the save folder (#{KIF.save_dir})") if KIF.respond_to?(:log)
+              "Game folder is read-only (#{why}): KIF's caches, Randomizer files and downloads go to the save folder (#{KIF.save_dir})") if KIF.respond_to?(:log)
       return @game_writable
     end
 

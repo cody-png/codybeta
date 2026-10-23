@@ -458,11 +458,11 @@ module KIF
     #---------------------------------------------------------------------------
     # the installed copy's folder (by folder name, then by id), so an update
     # lands on the copy the player has even when they renamed its folder
+    # (by id first: the same folder name can be in both Mods folders on a phone)
     def folder_of(item)
-      own = File.join(mods_dir, item.folder)
-      return own if File.file?(File.join(own, "mod.json"))
       c = installed_index[item.id]
-      return c ? File.join((@installed_in || {})[c] || mods_dir, c) : own
+      return File.join((@installed_in || {})[item.id] || mods_dir, c) if c
+      return File.join(mods_dir, item.folder)
     end
 
     # mod id => folder, read once (cleared on load and after an install);
@@ -470,7 +470,7 @@ module KIF
     def installed_index
       return @installed_index if @installed_index
       @installed_index = {}
-      @installed_in = {}   # folder => the Mods folder it is in
+      @installed_in = {}   # mod id => the Mods folder it is in (a folder name can be in both)
       ([mods_dir] + KIF::Mods.extra_folders).each do |dir|
         next unless File.directory?(dir)
         Dir.children(dir).sort.each do |c|
@@ -479,7 +479,7 @@ module KIF
           id = ((KIF::Mods.read_json(j) || {})["id"] || c).to_s
           next if @installed_index[id]
           @installed_index[id] = c
-          @installed_in[c] ||= dir
+          @installed_in[id] = dir
         end
       end
       return @installed_index
@@ -567,8 +567,9 @@ module KIF
     end
 
     def installed_id?(id)
-      return false unless File.directory?(mods_dir)
-      return true if File.directory?(File.join(mods_dir, id))
+      dirs = ([mods_dir] + KIF::Mods.extra_folders).select { |d| File.directory?(d) }
+      return false if dirs.empty?
+      return true if dirs.any? { |d| File.directory?(File.join(d, id)) }
       return KIF::Mods.entries.any? { |e| e.id == id || e.name == id } rescue false
     end
 

@@ -187,6 +187,9 @@ module KIF
       @left  = inside && Input.kif_mouse_trigger?(Input::MOUSELEFT)
       @right = inside && Input.kif_mouse_trigger?(Input::MOUSERIGHT)
       @held  = inside && Input.kif_mouse_press?(Input::MOUSELEFT)
+      # phones: a tap shorter than a frame arrives as a pointer jump with no
+      # press (JoiPlay; its on-screen buttons never move the pointer)
+      @left = true if moved && !@left && !@held && KIF.mobile?
       if @phone_test
         log_phone_test(nx, ny, moved)
         # keys the engine itself sends (JoiPlay may turn a tap into a key too)

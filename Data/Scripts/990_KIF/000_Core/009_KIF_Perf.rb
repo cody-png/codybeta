@@ -247,13 +247,65 @@ module KIF
   end
 end
 
+#-------------------------------------------------------------------------------
+# messages.dat read once at start-up, not twice. 6.8.2 loads it into the main
+# table (999_Main.rb:171), then Game.set_up_system loads the language file
+# over it (001_StartGame.rb:110, "english.dat" - not shipped, so the main
+# table ends up empty), and the first text lookup then loads messages.dat
+# again for the fallback table: ~2 s on a PC thrown away (much more on a
+# phone). The first copy now goes to the fallback, when that one hasn't
+# loaded yet, is waiting for the same file, the file is unchanged and nothing
+# was written into the main table since.
+#-------------------------------------------------------------------------------
+module KIF
+  module Perf
+    def self.messages_stamp(file)
+      st = File.stat(file)
+      return [st.size, st.mtime]
+    rescue StandardError
+      return nil
+    end
+
+    # main: the Messages about to load another file
+    def self.hand_over_messages(main)
+      from = main.instance_variable_get(:@kif_loaded_from)
+      return false unless from && defined?(MessageTypes)
+      main.instance_variable_set(:@kif_loaded_from, nil)
+      return false unless main.equal?(MessageTypes.class_variable_get(:@@messages))
+      fb = MessageTypes.class_variable_get(:@@messagesFallback)
+      return false unless fb.instance_variable_get(:@messages).nil? && fb.instance_variable_get(:@filename) == from[0]
+      return false unless messages_stamp(from[0]) == from[1]
+      fb.instance_variable_set(:@messages, main.instance_variable_get(:@messages))
+      fb.instance_variable_set(:@filename, nil)
+      return true
+    rescue StandardError
+      return false
+    end
+  end
+end
+
 class Messages
   alias kif_perf_loadMessageFile loadMessageFile unless method_defined?(:kif_perf_loadMessageFile)
 
   def loadMessageFile(*args)
+    KIF::Perf.hand_over_messages(self)
+    stamp = KIF::Perf.messages_stamp(args[0])
     ret = kif_perf_loadMessageFile(*args)
     KIF::Perf.compact_messages(@messages)
+    @kif_loaded_from = (@messages && stamp) ? [args[0], stamp] : nil
     return ret
+  end
+
+  # a table something wrote into isn't the file's any more
+  [:set, :setMessages, :addMessages, :setMessagesAsHash, :addMessagesAsHash,
+   :setMapMessagesAsHash, :addMapMessagesAsHash].each do |m|
+    next unless method_defined?(m)
+    orig = :"kif_perf_#{m}"
+    alias_method orig, m unless method_defined?(orig)
+    define_method(m) do |*args, &blk|
+      @kif_loaded_from = nil
+      return send(orig, *args, &blk)
+    end
   end
 end
 

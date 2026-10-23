@@ -16,8 +16,8 @@
 #
 # Map: left click a tile and the player walks there (A* over the tiles the
 # player could step on: the map's passability, surfing, one-way ledges,
-# events that block). Clicking an event walks next to it and turns to face
-# it; clicking an event or a blocked tile next to the player interacts
+# events that block). Clicking an event walks next to it, faces it and
+# talks to it; clicking a blocked tile next to the player interacts
 # (USE). Holding the button follows the pointer. Any key (but the run key)
 # or a new click stops the walk; nothing happens while an event, message or
 # menu runs. The
@@ -385,7 +385,7 @@ module KIF
       gx = @gx
       gy = @gy
       stop
-      face(pl, dir_to(gx - pl.x, gy - pl.y)) if fe
+      interact(pl, dir_to(gx - pl.x, gy - pl.y)) if fe   # face it and talk (Cody)
     end
 
     def self.show_marker

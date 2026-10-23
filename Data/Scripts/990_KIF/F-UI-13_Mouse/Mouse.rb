@@ -5,7 +5,8 @@
 # Settings: Options > System > Controls > Mouse: Off / On (default Off; hidden
 # and off on phones; off while the Mouse UI mod is loaded, which does the
 # same its own way). Click to move: On / Off (default On, shown while Mouse
-# is On): Off keeps the mouse in menus only.
+# is On): Off keeps the mouse in menus only. Phones show Touch controls
+# (default On; JoiPlay sends taps as left clicks) and Tap to move instead.
 #
 # Menus: pointing at an entry selects it, left click confirms (it is the USE
 # key for that frame), right click is BACK, the wheel is UP/DOWN. So every
@@ -32,7 +33,8 @@
 # The pointer hides after a few seconds without moving.
 #===============================================================================
 KIF::Options.define(:kif_mouse, 0, :global)        # 1 On, 0 Off
-KIF::Options.define(:kif_mouse_walk, 1, :global)   # click to move: 1 On, 0 Off
+KIF::Options.define(:kif_mouse_walk, 1, :global)   # click (or tap) to move: 1 On, 0 Off
+KIF::Options.define(:kif_touch, 1, :global)        # phones: taps as clicks, 1 On, 0 Off
 
 KIF::Options.add(:graphics, :global) {   # placed under System > Controls (015_KIF_SettingsData)
   next nil if KIF.mobile?
@@ -50,6 +52,25 @@ KIF::Options.add(:graphics, :global) {
                  proc { |value| $PokemonSystem.kif_mouse_walk = value },
                  [_INTL("Clicking the map does nothing. The mouse works in menus only."),
                   _INTL("Click the map to walk there. Hold the button to keep walking toward the pointer.")])
+}
+
+# Phones (JoiPlay): taps arrive as left clicks, so the same code runs them
+KIF::Options.add(:graphics, :global) {
+  next nil unless KIF.mobile?
+  EnumOption.new(_INTL("Touch controls"), [_INTL("Off"), _INTL("On")],
+                 proc { $PokemonSystem.kif_touch },
+                 proc { |value| $PokemonSystem.kif_touch = value },
+                 [_INTL("Taps do nothing in the game. Use JoiPlay's on-screen buttons."),
+                  _INTL("Tap an entry to choose it. Tap the map to walk there.")])
+}
+
+KIF::Options.add(:graphics, :global) {
+  next nil if !KIF.mobile? || $PokemonSystem.kif_touch.to_i != 1
+  EnumOption.new(_INTL("Tap to move"), [_INTL("Off"), _INTL("On")],
+                 proc { $PokemonSystem.kif_mouse_walk },
+                 proc { |value| $PokemonSystem.kif_mouse_walk = value },
+                 [_INTL("Tapping the map does nothing. Taps work in menus only."),
+                  _INTL("Tap the map to walk there. Keep your finger down to keep walking toward it.")])
 }
 
 module KIF
@@ -85,22 +106,26 @@ module KIF
       @engine = (Input.respond_to?(:mouse_x) && Input.respond_to?(:mouse_y) && defined?(Input::MOUSELEFT)) ? true : false
     end
 
-    # setting On, a PC, the engine has a mouse, and the Mouse UI mod isn't loaded
+    # setting On (Mouse on a PC, Touch controls on a phone), the engine has a
+    # mouse, and the Mouse UI mod isn't loaded
     def self.on?
       return false unless engine?
       return false if defined?(::MouseUI)
-      return phone_test? if KIF.mobile?
+      if KIF.mobile?
+        phone_test?
+        return (($PokemonSystem.kif_touch rescue 1) || 1).to_i == 1
+      end
       return (($PokemonSystem.kif_mouse rescue 0) || 0).to_i == 1
     end
 
-    # Testing taps on a phone: a MouseOnPhone.krs marker file turns the mouse
-    # (and click to move) on there, and the first taps go to the log
-    PHONE_TEST = "MouseOnPhone.krs"
+    # Testing taps on a phone: a TapLog.krs marker file sends the first taps,
+    # the keys the engine sends and how each walk ended to KIF_mousetest.txt
+    PHONE_TEST = "TapLog.krs"
 
     def self.phone_test?
       if @phone_test.nil?
         @phone_test = KIF.marker?(PHONE_TEST) ? true : false
-        KIF.log("Mouse test on a phone: on (#{PHONE_TEST}); engine mouse calls: #{engine?}") if @phone_test
+        KIF.log("Tap log on (#{PHONE_TEST}); engine mouse calls: #{engine?}") if @phone_test
       end
       return @phone_test
     end

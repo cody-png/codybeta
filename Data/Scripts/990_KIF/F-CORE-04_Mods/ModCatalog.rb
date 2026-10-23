@@ -436,9 +436,13 @@ module KIF
 
     def local_tree(dir)
       out = {}
-      Dir.glob(File.join(dir, "**", "*"), File::FNM_DOTMATCH).each do |p|
+      # base: keeps the folder out of the pattern: in a typed path like
+      # D:\Mods\Catalog the backslashes (and any [ ] { }) are glob syntax, so
+      # nothing was found (2026-10-22)
+      Dir.glob(File.join("**", "*"), File::FNM_DOTMATCH, base: dir).each do |rel|
+        p = File.join(dir, rel)
         next unless File.file?(p)
-        rel = p[(dir.length + 1)..-1].tr("\\", "/")
+        rel = rel.tr("\\", "/")
         next if rel.split("/").any? { |seg| seg == ".git" }
         out[rel] = [updater.sha_ok? ? updater.git_sha(p) : "", File.size(p)]
       end

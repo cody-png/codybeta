@@ -68,8 +68,11 @@ module KIF
       attr_accessor :pending   # this wild battle: [place, counts?]
     end
 
+    # Pinkan Island plays as in PIF (KIF::Rand.pinkan?): no rule applies there.
+    # Its catches, the quest team and Diancie are free and never die; what
+    # comes back to the PC at the end is an ordinary living Pokémon.
     def self.on?
-      return $PokemonSystem && $PokemonSystem.ch_nuzlocke == 1
+      return $PokemonSystem && $PokemonSystem.ch_nuzlocke == 1 && !KIF::Rand.pinkan?
     end
 
     def self.state

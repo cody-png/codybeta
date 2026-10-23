@@ -324,11 +324,19 @@ module KIF
       pl = $game_player
       return unless pl && $game_map
       stop if @path && real_key?
-      if map_busy?(pl)
+      # a stair or bridge end of the path the player just stepped on: PIF
+      # only marks it starting at the end of that step; its interpreter takes
+      # it next frame, after this. The walk waits for it and goes on after.
+      waiting = @path && @trans && !@trans.empty? &&
+                $game_map.events.each_value.any? { |e| @trans[e.id] && e.starting }
+      if waiting || map_busy?(pl)
         @pending = nil
         return unless @path
-        # a stair or bridge end of the path runs: the walk goes on after it
-        @hold ||= @trans && @trans[pbMapInterpreter.instance_variable_get(:@event_id)]
+        if waiting
+          @hold = true
+        elsif pbMapInterpreterRunning?
+          @hold = (@trans && @trans[pbMapInterpreter.instance_variable_get(:@event_id)]) ? true : false
+        end   # else (its move route still going): as it was
         return stop unless @hold
         @dir = 0
         return show_marker
@@ -456,11 +464,12 @@ module KIF
     def self.follow(pl)
       return stop if @map_id != $game_map.map_id
       return show_marker if pl.moving? || pl.jumping?
-      # the tile reached (a stair's move route may have carried the player
-      # several tiles along the path)
+      # the tile reached: the next one, or the one after it when a stair's
+      # move route carried the player past its own tile (no further: a path
+      # may cross a tile twice, under a bridge and then over it)
       j = @pi
-      j += 2 while j < @path.length && !(pl.x == @path[j] && pl.y == @path[j + 1])
-      if j < @path.length
+      j += 2 if j < @path.length && !(pl.x == @path[j] && pl.y == @path[j + 1])
+      if j < @path.length && pl.x == @path[j] && pl.y == @path[j + 1]
         @pi = j + 2
         @repaths = 0
       end
@@ -572,7 +581,7 @@ module KIF
       end
       glob = $PokemonGlobal
       bridge0 = glob ? glob.bridge.to_i : 0
-      on_h = bridge0 > 0 ? bridge0 : 2
+      on_h = bridge0 > 0 ? bridge0 : 2   # passability only asks bridge > 0, not the height
       surfing = glob && glob.surfing
       # a state is a tile and the bridge mode: tile * 2 + (bridge on ? 1 : 0)
       g = Array.new(2 * n)
@@ -642,7 +651,6 @@ module KIF
                 ev_id = ev.id
                 if br
                   nb = br > 0 ? 1 : 0
-                  on_h = br if br > 0
                 end
                 if lx != nx || ly != ny
                   next if lx < x0 || lx > x1 || ly < y0 || ly > y1
@@ -703,7 +711,7 @@ module KIF
       while i < list.length
         c = list[i]
         case c.code
-        when 0, 106, 108, 210, 408, 412, 509
+        when 0, 106, 108, 121, 122, 123, 210, 408, 412, 509   # (switches, variables, self switches)
         when 111   # Conditional Branch: only "the player faces ..."
           p = c.parameters
           return nil unless p[0] == 6 && p[1] == -1
@@ -714,7 +722,10 @@ module KIF
         when 411   # the branch taken ends here: past the Else part
           i += 1 while i < list.length && !(list[i].code == 412 && list[i].indent == c.indent)
         when 209   # Set Move Route
-          return nil unless c.parameters[0] == -1
+          if c.parameters[0] != -1   # another event's route (a scene around the step): not the player's way
+            i += 1
+            next
+          end
           route = c.parameters[1]
           return nil if route.repeat
           through = false

@@ -6,7 +6,7 @@
 # and off on phones; off while the Mouse UI mod is loaded, which does the
 # same its own way). Click to move: On / Off (default On, shown while Mouse
 # is On): Off keeps the mouse in menus only. Phones show Touch controls
-# (default On; JoiPlay sends taps as left clicks) and Tap to move instead.
+# (default Off; JoiPlay sends taps as left clicks) and Tap to move instead.
 #
 # Menus: pointing at an entry selects it, left click confirms (it is the USE
 # key for that frame), right click is BACK, the wheel is UP/DOWN. So every
@@ -34,7 +34,7 @@
 #===============================================================================
 KIF::Options.define(:kif_mouse, 0, :global)        # 1 On, 0 Off
 KIF::Options.define(:kif_mouse_walk, 1, :global)   # click (or tap) to move: 1 On, 0 Off
-KIF::Options.define(:kif_touch, 1, :global)        # phones: taps as clicks, 1 On, 0 Off
+KIF::Options.define(:kif_touch, 0, :global)        # phones: taps as clicks, 1 On, 0 Off
 
 KIF::Options.add(:graphics, :global) {   # placed under System > Controls (015_KIF_SettingsData)
   next nil if KIF.mobile?
@@ -113,7 +113,7 @@ module KIF
       return false if defined?(::MouseUI)
       if KIF.mobile?
         phone_test?
-        return (($PokemonSystem.kif_touch rescue 1) || 1).to_i == 1
+        return (($PokemonSystem.kif_touch rescue 0) || 0).to_i == 1
       end
       return (($PokemonSystem.kif_mouse rescue 0) || 0).to_i == 1
     end

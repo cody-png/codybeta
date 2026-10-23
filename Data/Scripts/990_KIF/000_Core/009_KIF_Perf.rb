@@ -299,3 +299,30 @@ module Encryption
     end
   end
 end
+
+#===============================================================================
+# "./Game.rgssad" (an encrypted archive; KIF ships none): 6.8.2 asks the disk
+# for it before every picture or data file lookup (pbGetFileChar, pbRgssOpen,
+# pbRgssExists?, 001_Technical/002_Files/001_FileTests.rb), so about half of
+# all file checks are for it (273 of 553 opening the party, 182 of 364 opening
+# the PC). It can't appear or vanish while the game runs: checked once.
+#===============================================================================
+module KIF
+  module Perf
+    def self.archive?
+      @archive = yield if @archive.nil?
+      return @archive
+    end
+  end
+end
+
+class Object
+  was_private = private_method_defined?(:safeExists?)
+  alias kif_perf_safeExists? safeExists? unless method_defined?(:kif_perf_safeExists?) || private_method_defined?(:kif_perf_safeExists?)
+
+  def safeExists?(f)
+    return KIF::Perf.archive? { kif_perf_safeExists?(f) } if f == "./Game.rgssad"
+    return kif_perf_safeExists?(f)
+  end
+  private :safeExists? if was_private
+end

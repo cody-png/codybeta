@@ -14,7 +14,7 @@ module KIF
 
     # (worked out each time: cheap, and follows the current folder)
     def self.root
-      here = Dir.pwd
+      here = File.expand_path(".")   # JoiPlay rewrites the usual working-folder call to ""
       return File.basename(here) == GAME_FILES ? File.dirname(here) : here
     rescue
       return "."
@@ -121,7 +121,7 @@ module KIF
       why = if plat =~ /android|ios/i then "engine platform #{plat}"
             elsif RUBY_PLATFORM =~ /android/i then "Ruby platform #{RUBY_PLATFORM}"
             elsif ENV["ANDROID_ROOT"] || ENV["ANDROID_DATA"] then "Android environment"
-            elsif (Dir.pwd rescue "") =~ %r{\A/(storage|sdcard|data)/} then "Android storage path"
+            elsif (File.expand_path(".") rescue "") =~ %r{\A/(storage|sdcard|data)/} then "Android storage path"
             elsif marker?(MOBILE_MARKER) then MOBILE_MARKER
             end
       @mobile_engine = why ? true : false

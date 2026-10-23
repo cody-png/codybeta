@@ -329,7 +329,7 @@ module KIF
 
     # Map texts load as raw bytes (RPG Maker data); read them as UTF-8
     def self.utf8(s)
-      return s if s.encoding == Encoding::UTF_8
+      return s if s.encoding.to_s == "UTF-8"
       u = s.dup.force_encoding(Encoding::UTF_8)
       return u.valid_encoding? ? u : s
     end

@@ -62,7 +62,7 @@ module KIF
     # the folder the game runs in: Data, Graphics and Mods live here, also in
     # a "Game Files" layout (only Logs / Import Sprites sit next to the .exe)
     def root
-      return Dir.pwd
+      return File.expand_path(".")   # JoiPlay rewrites the usual working-folder call to ""
     end
 
     # the last check got no version back (offline, blocked, filtered)

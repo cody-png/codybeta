@@ -62,6 +62,8 @@ module KIF
 
     module_function
 
+    # TODO: a read-only game folder (phones) can't take this folder; use
+    # KIF::Paths.writable(FOLDER) once that is on this branch (kif-int has it)
     def dir; File.join(KIF::Paths.root, FOLDER); end
     def path(*parts); File.join(dir, *parts); end
 
@@ -87,8 +89,14 @@ module KIF
       return on? ? FORCED[key] : nil
     end
 
+    # Links the save and applies the slot's settings. Returns what the link
+    # turns off, or nil when applying failed (the save is left as it was).
     def link!(slot)
       turned_off = rand_turned_off
+      old = $PokemonGlobal.kif_ap
+      saved = KIF::Rand.capture
+      saved_seed = KIF::Rand.data[:seed]
+      difficulty = [$game_switches[SWITCH_GAME_DIFFICULTY_EASY], $game_switches[SWITCH_GAME_DIFFICULTY_HARD]]
       aliases = {}
       (slot["aliases"] || {}).each { |k, v| aliases[k.to_i] = v.to_i }
       $PokemonGlobal.kif_ap = {
@@ -98,10 +106,20 @@ module KIF
         league_badges: (slot["league_badges"] || 8).to_i,
         received: 0, checked: [], goal: false, dirty: false, death_time: Time.now.to_f
       }
+      reset_cache
+      begin
+        apply_settings(slot)   # linked already, so the forced settings hold while it runs
+      rescue StandardError => e
+        $PokemonGlobal.kif_ap = old
+        KIF::Rand.restore(saved)
+        KIF::Rand.data[:seed] = saved_seed
+        $game_switches[SWITCH_GAME_DIFFICULTY_EASY], $game_switches[SWITCH_GAME_DIFFICULTY_HARD] = difficulty
+        reset_cache
+        KIF.log("Archipelago: link failed, save left as it was (#{e.class}: #{e.message})")
+        return nil
+      end
       # assumed decision: start with the DNA Splicers
       $PokemonBag.pbStoreItem(:DNASPLICERS, 1) if $PokemonBag && !$PokemonBag.pbHasItem?(:DNASPLICERS)
-      reset_cache
-      apply_settings(slot)
       KIF.log("Archipelago: save linked to #{slot['slot']} (seed #{slot['seed']}, #{slot['locations'].length} locations)")
       return turned_off
     end
@@ -119,7 +137,10 @@ module KIF
 
     # The slot's difficulty and randomizer: the same world for every save
     # linked to the slot. A slot without randomizer settings (older apworld)
-    # leaves the save's own; the FORCED ones are set either way.
+    # leaves the save's own settings and seed. The FORCED settings and the
+    # door settings are never written: the hooks (C-RAND-01 018) fix them
+    # live, so an unlinked copy of the save keeps its doors and items.
+    # Raises on failure (link! undoes the link).
     def apply_settings(slot)
       d = DIFFICULTY[slot["difficulty"].to_s]
       if d
@@ -129,22 +150,22 @@ module KIF
       r = KIF::Rand
       settings = slot["randomizer"]
       if settings.is_a?(Hash) && !settings.empty?
-        r.code_enums.each { |key, _k, _max| r.set(key, r::DATA_DEFAULTS[key] || 0) }   # as a built-in preset
+        keep = proc { |key| FORCED.key?(key) || key.to_s.start_with?("ent_") }
+        r.code_enums.each { |key, _k, _max| r.set(key, r::DATA_DEFAULTS[key] || 0) unless keep.call(key) }   # as a built-in preset
         settings.each do |k, v|
           key = k.to_s.to_sym
-          r.set(key, v.to_i) if r.setting_max(key) && !FORCED.key?(key)
+          r.set(key, v.to_i) if r.setting_max(key) && !keep.call(key)
         end
       end
-      FORCED.each { |k, v| r.set(k, v) }
-      seed = r.parse_seed(slot["randomizer_seed"])
-      r.seed = seed if seed
       return unless settings.is_a?(Hash) && !settings.empty?
       # (the Strength ranges alone randomize nothing; a randomized save is
-      # randomized again, to the slot's settings)
+      # randomized again, to the slot's settings). The seed changes only
+      # with a Randomize now: lazily rolled parts must match the tables.
       on = settings.any? { |k, v| v.to_i != 0 && !%w[wild_bst trainer_bst].include?(k.to_s) }
-      r.randomize_now if on || r.available?
-    rescue StandardError => e
-      KIF.log("Archipelago: randomizer settings not applied (#{e.class}: #{e.message})")
+      return unless on || r.available?
+      seed = r.parse_seed(slot["randomizer_seed"])
+      r.seed = seed if seed
+      r.randomize_now
     end
 
     def reset_cache
@@ -444,6 +465,10 @@ module KIF
                 _INTL("Link this save to Archipelago as {1}?", slot["slot"])
       return unless pbConfirmMessage(q)
       off = link!(slot)
+      unless off
+        pbMessage(_INTL("The Archipelago settings couldn't be applied, so the save was not linked. Details are in the log."))
+        return
+      end
       pbMessage(_INTL("Linked. Keep the KIF Client running to send checks and get items."))
       pbMessage(_INTL("Archipelago needs the normal doors and places the items itself, so these are off for this save: {1}.", off.join(", "))) unless off.empty?
     end

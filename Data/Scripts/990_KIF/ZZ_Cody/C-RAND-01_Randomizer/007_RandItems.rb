@@ -176,6 +176,7 @@ module KIF
     end
 
     def self.random_item_for(it, ctx)
+      return it if pinkan?   # Pinkan Island: its HMs, Pinkan Berries and the rest stay
       return it unless sw(SWITCH_RANDOM_ITEMS_GENERAL) && item_part_on?(it, ctx)
       return it unless item_randomizable?(it)
       new = dynamic_items? ? roll_item(it, ctx, map_id, event_id) : mapped_item(it)
@@ -352,10 +353,15 @@ module GameData
     def to_trainer
       KIF::Rand.held_ctx = [self.id, 0]
       begin
-        return kif_rand_items_to_trainer
+        trainer = kif_rand_items_to_trainer
       ensure
         KIF::Rand.held_ctx = nil
       end
+      # Pinkan Island: the team's own held items (PIF rolls them in to_trainer)
+      if trainer && KIF::Rand.pinkan? && $game_switches[SWITCH_RANDOM_HELD_ITEMS]
+        @pokemon.each_with_index { |d, i| trainer.party[i].item = d[:item] if trainer.party[i] }
+      end
+      return trainer
     end
   end
 end

@@ -1120,6 +1120,7 @@ module KIF
 
       def self.scale_wild(pkmn, map_id = nil)
         return unless pkmn && wild_scaling?
+        return if Rand.pinkan?(map_id)   # Pinkan Island keeps its levels
         map_id ||= $game_map ? $game_map.map_id : nil
         return unless map_id
         f = level_factor(map_id)
@@ -1197,6 +1198,7 @@ module KIF
 
       def self.scale_trainer(trainer, map_id = nil)
         return trainer unless trainer && scaling?
+        return trainer if Rand.pinkan?(map_id)
         # Endgame Challenge teams are already tuned to your party (Lv100)
         return trainer if defined?(KIF::Endgame) && KIF::Endgame.on? && KIF::Endgame.challenge_map?
         map_id ||= $game_map ? $game_map.map_id : nil

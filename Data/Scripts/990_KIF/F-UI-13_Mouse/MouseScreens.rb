@@ -28,7 +28,7 @@ module KIF
     def self.focus_frame
       @target = nil
       f = @focus.last
-      return unless f && @on && (@moved || @left)
+      return unless f && @on && (@moved || @left || @wheel != 0)   # the wheel alone too (PC boxes)
       f.kif_mouse_frame
     rescue StandardError => e
       KIF.log("Mouse (#{f.class}): #{e.class}: #{e.message}")
@@ -141,6 +141,8 @@ class PokemonStorageScene
     box = @sprites["box"]
     return unless box
     m = KIF::Mouse
+    # the wheel flips boxes, like PIF's box keys (Cody, 2026-10-23): up = previous
+    return m.wheel_press!(m.wheel > 0 ? Input::JUMPUP : Input::JUMPDOWN) if m.wheel != 0
     w = PokemonBox::BOX_WIDTH
     slot = nil
     if m.over_rect?(box.x + 10, box.y + 30, 48 * w, 48 * PokemonBox::BOX_HEIGHT, box.viewport)

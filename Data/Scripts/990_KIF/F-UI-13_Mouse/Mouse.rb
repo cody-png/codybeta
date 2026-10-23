@@ -145,6 +145,12 @@ module KIF
       @any = true
       @swallow = true
     end
+    # a screen turns the wheel into another key (PC: boxes), not UP/DOWN
+    def self.wheel_press!(k)
+      @key = k
+      @any = true
+      @wheel = 0
+    end
     def self.clicked?; @on && @left && !@swallow; end
     def self.active?; @on && (@moved || @left); end
 

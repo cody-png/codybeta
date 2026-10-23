@@ -334,9 +334,15 @@ module KIF
       follow(pl) if @path
     end
 
+    # the map tile under the pointer; past the map's edge (small maps, the
+    # black border) the nearest tile of the map
     def self.mouse_tile
-      tx = (($game_map.display_x + @x * Game_Map::X_SUBPIXELS) / Game_Map::REAL_RES_X.to_f).floor
-      ty = (($game_map.display_y + @y * Game_Map::Y_SUBPIXELS) / Game_Map::REAL_RES_Y.to_f).floor
+      px = [[@x, 0].max, Graphics.width - 1].min
+      py = [[@y, 0].max, Graphics.height - 1].min
+      tx = (($game_map.display_x + px * Game_Map::X_SUBPIXELS) / Game_Map::REAL_RES_X.to_f).floor
+      ty = (($game_map.display_y + py * Game_Map::Y_SUBPIXELS) / Game_Map::REAL_RES_Y.to_f).floor
+      tx = [[tx, 0].max, $game_map.width - 1].min
+      ty = [[ty, 0].max, $game_map.height - 1].min
       return [tx, ty]
     end
 
@@ -391,12 +397,13 @@ module KIF
     end
 
     def self.walk_to(pl, tx, ty, ev)
-      path = find_path(pl.x, pl.y, tx, ty, !ev.nil?)
-      return false unless path
+      # a tile that can't be reached: as close to it as the way goes
+      path = find_path(pl.x, pl.y, tx, ty, !ev.nil?, closest: ev.nil?)
+      return false unless path && (!path.empty? || ev)
       @path = path
       @pi = 0
-      @gx = tx
-      @gy = ty
+      @gx = ev ? tx : path[-2]
+      @gy = ev ? ty : path[-1]
       @face_event = !ev.nil?
       @repaths = 0
       @map_id = $game_map.map_id
@@ -448,6 +455,25 @@ module KIF
       interact(pl, dir_to(gx - pl.x, gy - pl.y)) if fe   # face it and talk (Cody)
     end
 
+    # the marker's four corners, each an L turned outward (top-left, top-right,
+    # bottom-left, bottom-right): [x, y, w, h] of their bars in a 32x32 tile
+    def self.marker_rects
+      s = Game_Map::TILE_WIDTH
+      inset = 3
+      len = 8
+      th = 2
+      out = []
+      [[1, 1], [-1, 1], [1, -1], [-1, -1]].each do |sx, sy|
+        x = sx > 0 ? inset : s - inset - len   # the horizontal bar runs from the corner inward
+        y = sy > 0 ? inset : s - inset - th
+        out << [x, y, len, th]
+        x = sx > 0 ? inset : s - inset - th
+        y = sy > 0 ? inset : s - inset - len
+        out << [x, y, th, len]
+      end
+      return out
+    end
+
     def self.show_marker
       return unless @gx
       if @marker.nil? || @marker.disposed?
@@ -457,14 +483,10 @@ module KIF
         b = Bitmap.new(Game_Map::TILE_WIDTH, Game_Map::TILE_HEIGHT)
         dark = Color.new(24, 24, 32, 200)
         light = Color.new(248, 248, 248, 230)
-        [[4, 4, 1, 1], [20, 4, -1, 1], [4, 20, 1, -1], [20, 20, -1, -1]].each do |cx, cy, sx, sy|
-          bx = sx > 0 ? cx : cx + 8
-          by = sy > 0 ? cy : cy + 8
-          b.fill_rect(bx - 1, by - 1, 10, 4, dark)
-          b.fill_rect(bx - 1, by - 1, 4, 10, dark)
-          b.fill_rect(bx, by, 8, 2, light)
-          b.fill_rect(bx, by, 2, 8, light)
+        marker_rects.each do |x, y, w, h|
+          b.fill_rect(x - 1, y - 1, w + 2, h + 2, dark)
         end
+        marker_rects.each { |x, y, w, h| b.fill_rect(x, y, w, h, light) }
         @marker.bitmap = b
       end
       @marker.x = ((@gx * Game_Map::REAL_RES_X - $game_map.display_x) / Game_Map::X_SUBPIXELS).round
@@ -478,7 +500,7 @@ module KIF
     # through as [x1, y1, x2, y2, ...] (a ledge jump skips its ledge tile),
     # or nil when the goal can't be reached.
     #---------------------------------------------------------------------------
-    def self.find_path(sx, sy, tx, ty, near = false, pl = $game_player, map = $game_map)
+    def self.find_path(sx, sy, tx, ty, near = false, pl = $game_player, map = $game_map, closest: false)
       x0 = [[sx, tx].min - MARGIN, 0].max
       y0 = [[sy, ty].min - MARGIN, 0].max
       x1 = [[sx, tx].max + MARGIN, map.width - 1].min
@@ -504,6 +526,8 @@ module KIF
       heap_push(heap_f, heap_n, 0, start)
       seen = 0
       goal = nil
+      best = nil     # closest: the reached tile nearest the goal
+      best_d = nil
       until heap_n.empty?
         cur = heap_pop(heap_f, heap_n)
         cx = cur % bw + x0
@@ -517,6 +541,10 @@ module KIF
         if at_goal
           goal = cur
           break
+        end
+        if closest && (best_d.nil? || dist < best_d)
+          best = cur
+          best_d = dist
         end
         seen += 1
         break if seen > SEARCH_CAP
@@ -551,6 +579,7 @@ module KIF
           heap_push(heap_f, heap_n, ng + h, ni)
         end
       end
+      goal = best if goal.nil? && best && best != start
       return nil unless goal
       out = []
       c = goal

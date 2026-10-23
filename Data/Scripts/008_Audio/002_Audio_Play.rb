@@ -28,6 +28,11 @@ def pbResolveAudioFile(str, volume = nil, pitch = nil)
     str.pitch = pitch || 100
   end
   if str.is_a?(RPG::AudioFile)
+    # Names saved with an extension (move animations use "PRSFX- X.wav") still play after
+    # the sound was re-encoded to another format: the file is found by its base name.
+    if str.name && str.name[/\.(wav|mp3|ogg)\z/i]
+      str = RPG::AudioFile.new(str.name.sub(/\.(wav|mp3|ogg)\z/i, ""), str.volume, str.pitch)
+    end
     if volume || pitch
       return RPG::AudioFile.new(str.name, volume || str.volume || 100,
                                 pitch || str.pitch || 100)

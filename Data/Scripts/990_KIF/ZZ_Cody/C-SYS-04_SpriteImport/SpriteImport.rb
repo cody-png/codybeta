@@ -353,9 +353,14 @@ module KIF
           t[:eggs] += 1
           return
         end
+        if from && from != held && in_list?(KEPT_LIST, kept_key(from))
+          t[:same] += 1   # the player kept theirs last time
+          return
+        end
         unless from && from == held
           mkdir_p(File.dirname(held))
           data ? write_new(held, bytes.call) : move_file(from, held)
+          copied_sources[held] = from if from && File.exist?(from)
         end
         t[:conflicts][held] = dest
         return
@@ -396,22 +401,43 @@ module KIF
       return nil
     end
 
-    def archive_done?(path)
-      return false if KIF::Paths.game_writable?
-      list = File.join(KIF.save_dir, DONE_LIST)
-      key = archive_key(path)
-      return key && File.file?(list) && File.read(list).split(/\r?\n/).include?(key) ? true : false
+    # Differing sprites in a read-only game folder the player chose not to
+    # use ("Keep the ones I have"): remembered by path, size and time, so the
+    # question doesn't come back every start (a changed file asks again)
+    KEPT_LIST = "KIF_import_kept.txt"
+
+    def in_list?(name, key)
+      return false if KIF::Paths.game_writable? || key.nil?
+      list = File.join(KIF.save_dir, name)
+      return File.file?(list) && File.read(list).split(/\r?\n/).include?(key)
     rescue SystemCallError, IOError
       return false
     end
 
-    def remember_archive(path)
-      return if KIF::Paths.game_writable? || !File.exist?(path)
-      key = archive_key(path)
-      File.open(File.join(KIF.save_dir, DONE_LIST), "ab") { |f| f.write(key + "\n") } if key
+    def add_to_list(name, key)
+      return if KIF::Paths.game_writable? || key.nil?
+      File.open(File.join(KIF.save_dir, name), "ab") { |f| f.write(key + "\n") }
     rescue SystemCallError, IOError
       nil
     end
+
+    def archive_done?(path)
+      return in_list?(DONE_LIST, archive_key(path))
+    end
+
+    def remember_archive(path)
+      add_to_list(DONE_LIST, archive_key(path)) if File.exist?(path)
+    end
+
+    def kept_key(path)
+      st = File.stat(path)
+      return "#{File.expand_path(path)}|#{st.size}|#{st.mtime.to_i}"
+    rescue SystemCallError
+      return nil
+    end
+
+    # held copy => its source left in a read-only game folder (this session)
+    def copied_sources; return @copied_sources ||= {}; end
 
     # where sprites held for the replace question go: a read-only game
     # folder's ones in the save folder's Import Sprites
@@ -1114,6 +1140,8 @@ module KIF
             done += 1
           else
             File.delete(held)
+            src = copied_sources[held]
+            add_to_list(KEPT_LIST, kept_key(src)) if src && File.exist?(src)
           end
         rescue => e
           KIF.log("Sprite import: #{File.basename(held)} (#{e.class}: #{e.message})") if defined?(KIF.log)

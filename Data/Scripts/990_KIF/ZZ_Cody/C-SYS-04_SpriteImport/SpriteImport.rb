@@ -271,6 +271,9 @@ module KIF
     # Written to <path>.kiftmp, then renamed: a game closed mid-write never
     # leaves a cut-off sprite (it would look "different" next time)
     def write_new(path, data)
+      # phones: one write, no temp file and rename (each file operation on
+      # Android's shared storage is slow; this doubled the import speed)
+      return File.binwrite(path, data) if KIF.mobile?
       tmp = path + ".kiftmp"
       File.open(tmp, "wb") { |f| f.write(data) }   # "wb": a leftover .kiftmp is overwritten
       File.rename(tmp, path)
@@ -351,6 +354,12 @@ module KIF
         if egg_dest?(dest)
           (File.delete(from) rescue nil) if from
           t[:eggs] += 1
+          return
+        end
+        if data && info[:redo]   # maybe half-written by the interrupted run: written again
+          timed(:write) { write_new(dest, bytes.call) }
+          t[:placed][dest] = true
+          t[:moved] += 1
           return
         end
         if from && from != held && in_list?(KEPT_LIST, kept_key(from))
@@ -920,6 +929,9 @@ module KIF
               si.log_timing(i) if i % 5000 == 0
             end
             next if i < from   # placed by the run that was cut short
+            # phones write sprites in place (no temp file): the entries after
+            # the last saved progress may have been cut off mid-write
+            si.info[:redo] = mobile && from > 0 && i < from + PROGRESS_EVERY
             next if name.end_with?("/")
             safe = name.tr("\\", "/").split("/").reject { |p| p.empty? || p == "." || p == ".." }
             next if safe.empty?

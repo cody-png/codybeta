@@ -812,8 +812,9 @@ class PokemonLoadPanel
     kif_nz_refresh
     return unless redraw && @isContinue && @trainer && @trainer.respond_to?(:kif_nz_failed) && @trainer.kif_nz_failed
     begin
-      grave = Bitmap.new("Graphics/Icons/menuIcons/GRAVEYARD")
-      self.bitmap.blt(32 + self.bitmap.text_size(@title.to_s).width + 10, 4, grave, grave.rect)
+      # 12x14 art drawn at 2x, like the panel's own doubled pixels; centred on the title line
+      grave = Bitmap.new("Graphics/Pictures/nuzlocke_grave")
+      self.bitmap.stretch_blt(Rect.new(32 + self.bitmap.text_size(@title.to_s).width + 8, 6, 24, 28), grave, grave.rect)
       grave.dispose
       pbDrawTextPositions(self.bitmap, [[_INTL("Nuzlocke over"), 112, 80, 0, Color.new(240, 72, 88), Color.new(160, 64, 64)]])
     rescue => e

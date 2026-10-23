@@ -900,6 +900,49 @@ module KIF
       return false
     end
 
+    # Format twins (1.2.0 turned ~1,800 WAVs/MP3s into Oggs): an installer
+    # copied over an older KIF never deletes, so "x.wav" stays beside the
+    # shipped "x.ogg", and the game tries .wav and .mp3 before .ogg. Once per
+    # version, an Audio/ file the installed file list doesn't have is removed
+    # when the list has the same name in another audio format.
+    AUDIO_EXTS = %w[.wav .mp3 .ogg .mid .midi .wma]
+
+    def remove_format_twins(dir = root)
+      return 0 if stored_choices["twins"] == current_version || !KIF::Paths.game_writable?
+      man = local_manifest
+      return 0 unless man
+      listed = {}
+      stems = {}
+      man.files.each_key do |p|
+        listed[p.downcase] = true   # Windows and Android storage ignore case
+        ext = File.extname(p).downcase
+        stems[p[0, p.length - ext.length].downcase] = true if p.start_with?("Audio/") && AUDIO_EXTS.include?(ext)
+      end
+      removed = 0
+      walk = lambda do |rel|
+        Dir.children(File.join(dir, rel)).each do |c|
+          r = "#{rel}/#{c}"
+          full = File.join(dir, r)
+          next walk.call(r) if File.directory?(full)
+          ext = File.extname(c).downcase
+          next unless AUDIO_EXTS.include?(ext) && !listed[r.downcase] && stems[r[0, r.length - ext.length].downcase]
+          begin
+            File.delete(full)
+            removed += 1
+          rescue StandardError => e
+            log("couldn't remove #{r} (#{e.class})")
+          end
+        end
+      end
+      walk.call("Audio") if File.directory?(File.join(dir, "Audio"))
+      log("removed #{removed} old audio files the shipped Ogg/other format replaced") if removed > 0
+      store_choice("twins", current_version)
+      return removed
+    rescue StandardError => e
+      log("format twin check failed (#{e.class}: #{e.message})")
+      return 0
+    end
+
     # An update that was moved in (or wasn't) since the last start
     def after_update
       dir0 = stage_root
@@ -947,6 +990,11 @@ module KIF
       Dir.rmdir(dir0) if File.directory?(dir0) && Dir.children(dir0).empty?
     rescue StandardError => e
       log("after-update check failed (#{e.class}: #{e.message})")
+    ensure
+      # after the files are in: during a move the file list still names the old formats
+      d = stage_root
+      pending = (File.directory?(d) && Dir.children(d).any? { |v| File.file?(File.join(d, v, "failed.txt")) }) rescue true
+      remove_format_twins unless pending
     end
   end
 end

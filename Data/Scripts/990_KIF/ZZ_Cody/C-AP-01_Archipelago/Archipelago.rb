@@ -27,6 +27,10 @@
 #   Received items are given on the map at a quiet moment (no message, menu
 #   or event), checked every 60 frames and right after a save is loaded.
 #   "BADGE_<n>" sets the badge (badge count, field moves, level caps).
+#   Randomizer: slot.json carries the slot's KIF randomizer settings, seed
+#   and difficulty; linking sets them and randomizes, so every save linked to
+#   the slot gets the same world. Entrances and the found/given item
+#   randomizer stay off for a linked save (FORCED; C-RAND-01 018).
 #===============================================================================
 class PokemonGlobalMetadata
   attr_accessor :kif_ap
@@ -40,6 +44,10 @@ module KIF
     BADGE_SET_RE = /\$Trainer\.badges\[(\d+)\]\s*=\s*true/
     LEAGUE_MAP = 148          # Pokemon League entrance: the 8-badge guards
     LEAGUE_RE = /numbadges\s*>=\s*8/
+    # Randomizer settings fixed for a linked save: the logic needs the normal
+    # doors, Archipelago places the items, and NPC requests must be doable
+    FORCED = { entrances: 0, found_items: 0, given_items: 0, found_tms: 0, given_tms: 0, npc_requests: 2 }
+    DIFFICULTY = { "easy" => [true, false], "normal" => [false, false], "hard" => [false, true] }
     @timer = 0
     @global = nil
     @mtime = nil
@@ -75,7 +83,12 @@ module KIF
       return nil
     end
 
+    def forced(key)
+      return on? ? FORCED[key] : nil
+    end
+
     def link!(slot)
+      turned_off = rand_turned_off
       aliases = {}
       (slot["aliases"] || {}).each { |k, v| aliases[k.to_i] = v.to_i }
       $PokemonGlobal.kif_ap = {
@@ -88,7 +101,50 @@ module KIF
       # assumed decision: start with the DNA Splicers
       $PokemonBag.pbStoreItem(:DNASPLICERS, 1) if $PokemonBag && !$PokemonBag.pbHasItem?(:DNASPLICERS)
       reset_cache
+      apply_settings(slot)
       KIF.log("Archipelago: save linked to #{slot['slot']} (seed #{slot['seed']}, #{slot['locations'].length} locations)")
+      return turned_off
+    end
+
+    # What the save had on that a link turns off (checked before linking)
+    def rand_turned_off
+      r = KIF::Rand
+      off = []
+      off << _INTL("shuffled doors") if r.get(:entrances) > 0 || r::ER.active?
+      off << _INTL("random found and given items") if [:found_items, :given_items, :found_tms, :given_tms].any? { |k| r.get(k) > 0 }
+      return off
+    rescue StandardError
+      return []
+    end
+
+    # The slot's difficulty and randomizer: the same world for every save
+    # linked to the slot. A slot without randomizer settings (older apworld)
+    # leaves the save's own; the FORCED ones are set either way.
+    def apply_settings(slot)
+      d = DIFFICULTY[slot["difficulty"].to_s]
+      if d
+        $game_switches[SWITCH_GAME_DIFFICULTY_EASY] = d[0]
+        $game_switches[SWITCH_GAME_DIFFICULTY_HARD] = d[1]
+      end
+      r = KIF::Rand
+      settings = slot["randomizer"]
+      if settings.is_a?(Hash) && !settings.empty?
+        r.code_enums.each { |key, _k, _max| r.set(key, r::DATA_DEFAULTS[key] || 0) }   # as a built-in preset
+        settings.each do |k, v|
+          key = k.to_s.to_sym
+          r.set(key, v.to_i) if r.setting_max(key) && !FORCED.key?(key)
+        end
+      end
+      FORCED.each { |k, v| r.set(k, v) }
+      seed = r.parse_seed(slot["randomizer_seed"])
+      r.seed = seed if seed
+      return unless settings.is_a?(Hash) && !settings.empty?
+      # (the Strength ranges alone randomize nothing; a randomized save is
+      # randomized again, to the slot's settings)
+      on = settings.any? { |k, v| v.to_i != 0 && !%w[wild_bst trainer_bst].include?(k.to_s) }
+      r.randomize_now if on || r.available?
+    rescue StandardError => e
+      KIF.log("Archipelago: randomizer settings not applied (#{e.class}: #{e.message})")
     end
 
     def reset_cache
@@ -387,8 +443,9 @@ module KIF
       q = on? ? _INTL("This save is linked to another Archipelago game. Link it to {1} instead?", slot["slot"]) :
                 _INTL("Link this save to Archipelago as {1}?", slot["slot"])
       return unless pbConfirmMessage(q)
-      link!(slot)
+      off = link!(slot)
       pbMessage(_INTL("Linked. Keep the KIF Client running to send checks and get items."))
+      pbMessage(_INTL("Archipelago needs the normal doors and places the items itself, so these are off for this save: {1}.", off.join(", "))) unless off.empty?
     end
   end
 end

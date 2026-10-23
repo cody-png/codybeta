@@ -176,6 +176,20 @@ class PokemonSummary_Scene
       Graphics.update
       Input.update
       pbUpdate
+      # mouse (F-UI-13): point at a stat; click its left half -, right half +
+      m = defined?(KIF::Mouse) ? KIF::Mouse : nil
+      if m && m.active?
+        row = KIF_EVA_YS.index { |y| m.over_rect?(222, y + 2, 292, 30) }
+        if row && row != cursor
+          cursor = row
+          pbPlayCursorSE
+          redraw.call
+        end
+        if m.clicked?
+          m.swallow!
+          m.press!(m.x >= 368 ? Input::RIGHT : Input::LEFT) if row
+        end
+      end
       stat = KIF::EVAlloc::STATS[cursor]
       if Input.trigger?(Input::USE) || Input.trigger?(Input::BACK)
         pbPlayCloseMenuSE

@@ -44,6 +44,10 @@ module KIF
     SEARCH_CAP = 2000  # tiles one path search may look at
     MARGIN     = 8     # tiles around the start and goal a path may use
     REPATHS    = 3     # new paths tried when someone steps in the way
+    WHEEL_QUEUE   = 3  # wheel notches kept for the next frames
+    WHEEL_LOCK_PX = 6  # pointer travel that ends the hover pause after a wheel turn
+    RECT_SET = Rect.instance_method(:set) unless const_defined?(:RECT_SET)
+    SPRITEWINDOW_WIDTH = SpriteWindow.instance_method(:width=) unless const_defined?(:SPRITEWINDOW_WIDTH)
     DIRS = [2, 4, 6, 8].freeze
     DXA  = [0, 0, 0, 0, -1, 0, 1, 0, 0].freeze
     DYA  = [0, 0, 1, 0, 0, 0, 0, 0, -1].freeze
@@ -97,13 +101,35 @@ module KIF
       inside = in_window?
       nx = Input.mouse_x.to_i
       ny = Input.mouse_y.to_i
-      @moved = inside && !@x.nil? && (nx != @x || ny != @y)
+      moved = inside && !@x.nil? && (nx != @x || ny != @y)
       @x = nx
       @y = ny
       @left  = inside && Input.kif_mouse_trigger?(Input::MOUSELEFT)
       @right = inside && Input.kif_mouse_trigger?(Input::MOUSERIGHT)
       @held  = inside && Input.kif_mouse_press?(Input::MOUSELEFT)
-      @wheel = (inside && Input.respond_to?(:scroll_v)) ? Input.scroll_v.to_i : 0
+      # scroll_v: the notches turned since the last Input.update (mkxp-z sums
+      # SDL wheel events and resets it each update; up is positive). One step
+      # a frame; notches that came together follow on the next frames.
+      raw = (inside && Input.respond_to?(:scroll_v)) ? Input.scroll_v.to_i : 0
+      rest = inside ? @wheel_rest.to_i : 0
+      rest = 0 if raw != 0 && (raw > 0) != (rest > 0)
+      rest = [[rest + raw, WHEEL_QUEUE].min, -WHEEL_QUEUE].max
+      @wheel = rest <=> 0
+      @wheel_rest = rest - @wheel
+      # after a wheel turn the list moved under a still pointer: pointing
+      # counts again only once the pointer really moves
+      if @wheel != 0
+        @lock_x = nx
+        @lock_y = ny
+        moved = false
+      elsif moved && @lock_x
+        if (nx - @lock_x).abs + (ny - @lock_y).abs <= WHEEL_LOCK_PX
+          moved = false
+        else
+          @lock_x = nil
+        end
+      end
+      @moved = moved
       @any = @left || @right || @wheel != 0
       stop if @path && $game_temp && $game_temp.in_battle
       now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -151,6 +177,8 @@ module KIF
       @any = true
       @wheel = 0
     end
+    # a screen used the wheel itself: it isn't UP/DOWN too
+    def self.eat_wheel!; @wheel = 0; end
     def self.clicked?; @on && @left && !@swallow; end
     def self.active?; @on && (@moved || @left); end
 
@@ -214,13 +242,39 @@ module KIF
     # PIF's lists keep the cursor in the middle: pointing at an entry would
     # scroll the list under the pointer, so the list stays where it was
     def self.select_keep_scroll(w, i)
+      set_index_top(w, i, w.top_row)
+    end
+
+    # The wheel steps an active list by one row, before the list's own update
+    # (which would read it as UP/DOWN and re-centre the list: a jump of
+    # several rows after pointing). The list scrolls only when the entry
+    # would leave it.
+    def self.window_wheel(w)
+      return if w.disposed? || !w.active || !w.visible || w.index < 0 || w.itemCount <= 0
+      return if w.instance_variable_get(:@ignore_input)
+      cols = [w.columns, 1].max
+      ni = w.index + (@wheel > 0 ? -cols : cols)
+      @wheel = 0   # this list took the turn
+      return if ni < 0 || ni >= w.itemCount
+      row = ni / cols
+      page = [w.page_row_max, 1].max
       top = w.top_row
+      top = row if row < top
+      top = row - page + 1 if row > top + page - 1
+      set_index_top(w, ni, top)
+      pbPlayCursorSE
+    end
+
+    def self.set_index_top(w, i, top)
       w.index = i
       return if w.top_row == top
       w.top_row = top
       cols = [w.columns, 1].max
       cw = (w.width - w.borderX) / cols
-      w.cursor_rect.set(i % cols * (cw + w.columnSpacing), i / cols * w.rowHeight - top * w.rowHeight, cw, w.rowHeight)
+      # WindowCursorRect#set re-applies the width, and Window_CommandPokemon#width=
+      # re-centres the list: set the plain Rect and redraw the frame directly
+      RECT_SET.bind(w.cursor_rect).call(i % cols * (cw + w.columnSpacing), i / cols * w.rowHeight - top * w.rowHeight, cw, w.rowHeight)
+      SPRITEWINDOW_WIDTH.bind(w).call(w.width) if w.is_a?(SpriteWindow)
       w.refresh
     end
 
@@ -594,6 +648,7 @@ class SpriteWindow_Selectable
   alias kif_mouse_win_update update unless method_defined?(:kif_mouse_win_update)
 
   def update
+    KIF::Mouse.window_wheel(self) if KIF::Mouse.wheel != 0
     kif_mouse_win_update
     KIF::Mouse.window(self) if KIF::Mouse.active?
   end

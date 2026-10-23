@@ -50,6 +50,7 @@ module KIF
     # hover moves to slot (when it isn't the current one); a click picks it
     # (steer + the click's own USE), a click on nothing is dropped
     def self.pick(slot, current)
+      return unless @moved || @left   # a wheel turn alone leaves the cursor to the wheel
       if slot.nil?
         swallow! if @left
       elsif slot != current
@@ -347,6 +348,7 @@ module KIF
   module Mouse
     module LoadChoose
       def pbChoose(*args)
+        @kif_mouse_continue = args[1]   # MultiSaves: pbChoose(commands, continue_idx)
         return KIF::Mouse.with_focus(self) { super(*args) }
       end
     end
@@ -355,32 +357,62 @@ end
 PokemonLoad_Scene.prepend(KIF::Mouse::LoadChoose) unless PokemonLoad_Scene.ancestors.include?(KIF::Mouse::LoadChoose)
 
 class PokemonLoad_Scene
+  # Every panel's bitmap is 222 px tall, but only the Continue panel fills it;
+  # the other rows draw 46 px (a hit test on the bitmap found an earlier row)
+  def kif_mouse_panel_at
+    m = KIF::Mouse
+    i = 0
+    while (s = @sprites["panel#{i}"])
+      h = s.instance_variable_get(:@isContinue) ? 222 : 46
+      # rows pushed to an edge would scroll the list under the pointer
+      if s.visible && s.y >= 0 && s.y + h <= Graphics.height && m.over_rect?(s.x, s.y, s.bitmap ? s.bitmap.width : 416, h, s.viewport)
+        return i
+      end
+      i += 1
+    end
+    return nil
+  end
+
+  def kif_mouse_select(cw, slot)
+    old = cw.index
+    cw.index = slot
+    pbSelectPanel(old, slot) if respond_to?(:pbSelectPanel)
+    pbPlayCursorSE
+  end
+
   def kif_mouse_frame
     m = KIF::Mouse
     cw = @sprites["cmdwindow"]
     return unless cw
+    lang = @sprites["langicon"]
+    if @language_option_selected   # the globe is chosen (MultiSaves)
+      return if m.over_sprite?(lang)          # a click there is USE
+      m.eat_wheel!
+      return m.press!(Input::DOWN) if m.left || (m.moved && kif_mouse_panel_at)   # back to Continue
+      return
+    end
+    if m.wheel != 0   # one row per notch (as UP on Continue would pick the globe)
+      n = (@sprites["cmdwindow"].commands.length rescue 0)
+      slot = cw.index - m.wheel
+      m.eat_wheel!
+      kif_mouse_select(cw, slot) if slot >= 0 && slot < n
+      return
+    end
     if m.left
       %w[leftarrow rightarrow].each do |k|
         next unless m.over_sprite?(@sprites[k])
         return m.press!(k == "leftarrow" ? Input::LEFT : Input::RIGHT)
       end
-    end
-    slot = nil
-    i = 0
-    while (s = @sprites["panel#{i}"])
-      if m.over_sprite?(s)
-        slot = i
-        break
+      if @show_language_option && @kif_mouse_continue && m.over_sprite?(lang)
+        kif_mouse_select(cw, @kif_mouse_continue) if cw.index != @kif_mouse_continue
+        return m.press!(Input::UP)   # MultiSaves: UP on Continue picks the globe
       end
-      i += 1
     end
+    slot = kif_mouse_panel_at
     if slot.nil?
       m.swallow! if m.left
     elsif slot != cw.index
-      old = cw.index
-      cw.index = slot
-      pbSelectPanel(old, slot) if respond_to?(:pbSelectPanel)
-      pbPlayCursorSE
+      kif_mouse_select(cw, slot)
     end
   end
 end
@@ -415,8 +447,21 @@ class KifSettingsScreen
   alias kif_mouse_handle_input handle_input unless method_defined?(:kif_mouse_handle_input)
 
   def handle_input
+    kif_mouse_wheel_focus if KIF::Mouse.wheel != 0 && !@editing
     kif_mouse_settings if KIF::Mouse.active?
     return kif_mouse_handle_input
+  end
+
+  # the wheel scrolls the part under the pointer: the sections or the list
+  # (it stays UP/DOWN for the screen's own code)
+  def kif_mouse_wheel_focus
+    m = KIF::Mouse
+    if m.x < SIDE_X1
+      @focus = :side if !@query && !@sub && @focus != :side
+    elsif @focus != :list && !opt_rows.empty?
+      @focus = :list
+      refresh
+    end
   end
 
   def kif_mouse_settings

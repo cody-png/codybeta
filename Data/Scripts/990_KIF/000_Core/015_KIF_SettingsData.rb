@@ -67,6 +67,7 @@ module KIF
         ["Screen", ["Screen Size", "Device"]],
         ["Text", ["Text Speed", "Text Entry"]],
         ["Controls", ["Mouse"]],
+        ["Multiplayer", ["Multiplayer"]],
         ["Updates and downloads", ["Updates", "Check for Updates", "Download data"]],
         ["Speed", ["Frame rate", "Sprite File Cache"]],
         ["Start-up", ["Skip intro", "Title screen"]],

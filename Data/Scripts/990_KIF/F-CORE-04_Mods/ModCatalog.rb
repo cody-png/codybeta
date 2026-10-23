@@ -843,7 +843,7 @@ module KIF
       ups = cat.startup_updates
       return false if ups.empty?
       cat.log("updates at start-up: #{ups.map { |it| "#{it.id} #{it.version}" }.join(', ')}")
-      if KIF.mobile?   # once per set of new versions
+      if by_hand?   # once per set of new versions
         told = ups.map { |it| "#{it.id} #{it.version}" }.sort.join(";")
         return false if KIF::Updater.stored_choices["phone_mods_told"] == told
         KIF::Updater.store_choice("phone_mods_told", told)
@@ -860,15 +860,20 @@ module KIF
       return false
     end
 
-    # Phones: nothing is downloaded or installed (JoiPlay's game folder can't
-    # be written); the player is told what's new and updates mods by hand
+    # A phone whose game folder can't be written (JoiPlay's usually can):
+    # nothing is downloaded or installed; the player is told what's new and
+    # updates mods by hand
+    def by_hand?
+      return KIF.mobile? && !KIF::Paths.game_writable?
+    end
+
     def phone_notice(list)
       pbMessage(KIF::PixelFont.utf8(_INTL("New mod versions: {1}.", list.map { |it| "#{it.name} #{it.version}" }.join(", "))))
       pbMessage(_INTL("On phones, mods are installed and updated by hand: download the mod and put its folder in the Mods folder."))
     end
 
     def run(list)
-      return phone_notice(list) if KIF.mobile?
+      return phone_notice(list) if by_hand?
       done, failed, cancelled = cat.install(list)
       if cancelled
         pbMessage(_INTL("Stopped. Nothing half-downloaded was installed."))

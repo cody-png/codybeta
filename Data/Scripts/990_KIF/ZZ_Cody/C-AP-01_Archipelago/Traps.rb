@@ -14,8 +14,9 @@
 #                the Safari Zone or the Bug-Catching Contest; with Nuzlocke on
 #                no battle starts, so no Pokemon can die and no route's
 #                encounter is used up)
-#     CONFUSION  the direction buttons walk the other way for 50 steps on the
-#                map (menus, battles and move routes are not touched)
+#     CONFUSION  the four direction buttons are shuffled for 50 steps on the
+#                map, a new random shuffle each time (Cody); menus, battles
+#                and move routes are not touched
 #     MONEY      10% of your money, at most $5,000
 #     SWAP       a fused party Pokemon swaps head and body (as the DNA
 #                Reverser does; never an egg, a fainted or a rental one; it
@@ -124,7 +125,8 @@ module KIF
       def run_confusion(who)
         d = KIF::AP.data
         d[:confused] = CONFUSION_STEPS
-        pbMessage(_INTL("A Confusion Trap from {1}! Your directions are reversed for {2} steps.", who, CONFUSION_STEPS))
+        d[:confused_map] = shuffled_directions
+        pbMessage(_INTL("A Confusion Trap from {1}! Your directions are shuffled for {2} steps.", who, CONFUSION_STEPS))
       end
 
       def run_money(who)
@@ -167,8 +169,21 @@ module KIF
         pbMessage(_INTL("Your directions are back to normal."))
       end
 
-      FLIP = { 2 => 8, 8 => 2, 4 => 6, 6 => 4 }
-      def flip(dir); FLIP[dir] || dir; end
+      FLIP = { 2 => 8, 8 => 2, 4 => 6, 6 => 4 }   # a confusion from before the shuffle (kept in older saves)
+      DIRS = [2, 4, 6, 8]
+
+      # a random order of the four directions in which no button keeps its own
+      def shuffled_directions
+        loop do
+          to = DIRS.shuffle
+          return DIRS.zip(to).to_h if DIRS.each_index.none? { |i| DIRS[i] == to[i] }
+        end
+      end
+
+      def flip(dir)
+        map = (KIF::AP.data[:confused_map] rescue nil)
+        return (map.is_a?(Hash) ? map : FLIP)[dir] || dir
+      end
     end
   end
 end

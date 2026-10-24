@@ -70,7 +70,7 @@ module KIF
     # a checked pr_look: an id that isn't a plain name becomes "" (not drawn)
     def self.read_look(msg)
       look = {}
-      %w[skin clothes hair hat hat2 surf].each { |k| look[k] = msg[k].to_s =~ ID ? msg[k].to_s : "" }
+      %w[skin clothes hair hat hat2 surf].each { |k| look[k] = msg[k].to_s =~ ID && !(k.start_with?("hat") && msg[k].to_s == "0") ? msg[k].to_s : "" }
       look["skin"] = "default" if look["skin"].empty?
       %w[cc hc tc t2c bc].each { |k| look[k] = msg[k].to_i % 360 }   # a hue shift: only 0-359 differ
       return look
@@ -354,6 +354,12 @@ module KIF
       return Outfit_Offsets.const_get("#{set}_OFFSETS_#{ROWS[row]}")
     end
 
+    # the first row with a drawn pixel in that part of bmp (h when empty)
+    def self.opaque_top(bmp, x, y, w, h)
+      h.times { |j| w.times { |i| return j if bmp.get_pixel(x + i, y + j).alpha > 0 } }
+      return h
+    end
+
     # a frame of `src` moved by off (+ lift up), kept inside its cell
     def self.cell_blt(out, src, sx, sy, dx, dy, off, lift, cw, ch)
       ox = off[0]
@@ -475,11 +481,17 @@ module KIF
       def draw_body(g)
         sheet = g.sheet
         ch = 64
+        @head_top = 22   # no picture: where PIF's player head starts in its 80 px frames
         if sheet
-          @body.bitmap = sheet unless @body.bitmap.equal?(sheet)
+          unless @body.bitmap.equal?(sheet)
+            @body.bitmap = sheet
+            @tops = {}
+          end
           cw = sheet.width / 4
           ch = sheet.height / 4
-          @body.src_rect.set(g.pattern * cw, (g.direction - 2) / 2 * ch, cw, ch)
+          row = (g.direction - 2) / 2
+          @body.src_rect.set(g.pattern * cw, row * ch, cw, ch)
+          @head_top = (@tops[row] ||= Presence.opaque_top(sheet, 0, row * ch, cw, ch))   # the row's first frame: the tag doesn't bob
           @body.ox = cw / 2
           @body.oy = (LOW.include?(g.action) ? ch - 16 : ch) - g.bob_height
         else
@@ -531,7 +543,7 @@ module KIF
         @tag.ox = @tag_bmp.width / 2
         @tag.oy = @tag_bmp.height
         @tag.x = @body.x
-        @tag.y = top + 14   # just over the head (the head starts ~22 px into PIF's 80 px frames)
+        @tag.y = top + @head_top - 8   # just over the top of what is drawn (a tall hat too)
         @tag.z = TAG_Z
         @tag.opacity = g.opacity
         @tag.visible = true
@@ -625,7 +637,7 @@ module KIF
       look = {}
       { "skin" => [t.skin_tone || 0, 24], "clothes" => [t.clothes, 40], "hair" => [t.hair, 40],
         "hat" => [t.hat, 40], "hat2" => [t.hat2, 40], "surf" => [shape, 24] }.each do |k, (v, n)|
-        look[k] = v.to_s.gsub(/[\x00-\x1f\x7f]/, "")[0, n]
+        look[k] = k.start_with?("hat") && v.to_s == "0" ? "" : v.to_s.gsub(/[\x00-\x1f\x7f]/, "")[0, n]   # a hat of 0: none (PIF's empty slot)
       end
       { "cc" => t.clothes_color, "hc" => t.hair_color, "tc" => t.hat_color, "t2c" => t.hat2_color,
         "bc" => t.bike_color }.each { |k, v| look[k] = v.to_i.clamp(COLOR[1], COLOR[2]) }

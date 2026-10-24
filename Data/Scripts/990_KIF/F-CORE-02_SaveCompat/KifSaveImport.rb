@@ -231,14 +231,30 @@ module KIF
       pending[:items].concat(moved) if moved   # also when a step above raised: what was taken out stays set aside
     end
 
-    # Set-aside items whose ID exists again go back into the Bag
+    # Set-aside items whose ID exists again go back into the Bag, one entry at
+    # a time: an entry leaves the list right after it is in the Bag, also when
+    # a store hook raised after storing it, so it is never in both
     def self.return_known_items(data, pending)
       bag = data[:bag]
       return 0 if GameData::Item::DATA.empty? || !bag.is_a?(PokemonBag)
-      back = pending[:items].select { |id, qty| item_known?(id) && bag.pbStoreItem(id, qty) }
+      back = []
+      pending[:items].dup.each do |entry|
+        id, qty = entry
+        next unless item_known?(id)
+        had = bag.pbQuantity(id)
+        stored = begin
+                   bag.pbStoreItem(id, qty)
+                 rescue => e
+                   KIF.log("Giving back #{id} x#{qty}: #{e.class}: #{e.message}")
+                   bag.pbQuantity(id) > had
+                 end
+        next unless stored
+        # one entry per item returned (Array#- would drop every equal entry, also those that didn't fit)
+        i = pending[:items].index(entry)
+        pending[:items].delete_at(i) if i
+        back << entry
+      end
       return 0 if back.empty?
-      # one entry per item returned (Array#- would drop every equal entry, also those that didn't fit)
-      back.each { |b| i = pending[:items].index(b); pending[:items].delete_at(i) if i }
       KIF.log("#{back.length} set-aside item(s) are back in the Bag: " + back.map { |id, q| "#{id} x#{q}" }.join(", "))
       return back.length
     end
@@ -356,6 +372,16 @@ module SaveData
       return kif_import_load_all_values(save_data)
     end
   end
+end
+
+# A set-aside berry given back while a save loads from the title screen: the
+# Berry Dex hook on PokemonBag#pbStoreItem (053_PIF_Hoenn) registers it on
+# $Trainer, which is nil there, and raised after the berry was stored
+alias kif_si_pbRegisterBerry pbRegisterBerry unless defined?(kif_si_pbRegisterBerry)
+
+def pbRegisterBerry(berry)
+  return false unless $Trainer
+  return kif_si_pbRegisterBerry(berry)
 end
 
 # No ensure_class (see :kif_save_settings in 000_Core/002_KIF_Options.rb).

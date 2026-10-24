@@ -227,7 +227,7 @@ module KIF
           (t.count(":") >= 2 ? t.match(/\A([0-9a-fA-F:.]+)()\z/) : t.match(/\A([A-Za-z0-9.\-]+)(?::(\d{1,5}))?\z/))
       return nil unless m
       port = m[2].to_s.empty? ? default_port : m[2].to_i
-      return nil unless port.between?(1, 65_535)
+      return nil unless port.nil? || port.between?(1, 65_535)   # nil: the port comes from the code
       return [m[1], port]
     end
 
@@ -488,7 +488,7 @@ module KIF
                  else _INTL("That isn't a join code. Join codes start with KIF-.")
                  end
           head = _INTL("Join with a code\n{1}", text.empty? ? "_" : text.scan(/.{1,30}/).join("\n"))
-          head += "\n" + _INTL("Address: {1}", address.join(":")) if address
+          head += "\n" + _INTL("Address: {1}", address.compact.join(":")) if address
           case pick(head, [_INTL("Type the code"), _INTL("Paste"), _INTL("Connect"), _INTL("Back")], help)
           when 0 then text = (pbMessageFreeText(_INTL("Join code:"), text, false, 60) || text).strip
           when 1 then text = (Input.clipboard.to_s rescue "").strip[0, 60]
@@ -507,7 +507,7 @@ module KIF
       def join_address
         t = pbMessageFreeText(_INTL("Address of your friend's game (for example 100.101.102.103):"), "", false, 60)
         return if t.nil? || t.strip.empty?
-        addr = Net.parse_address(t, Net::PORT)
+        addr = Net.parse_address(t, nil)   # no port typed: the code's (the host may not be on 52411)
         return pbMessage(_INTL("That isn't an address. It looks like 100.101.102.103 or 100.101.102.103:52411.")) unless addr
         pbMessage(_INTL("Now the code your friend sent: it holds the key. The address you typed is used instead of the one in the code."))
         join_code(addr)

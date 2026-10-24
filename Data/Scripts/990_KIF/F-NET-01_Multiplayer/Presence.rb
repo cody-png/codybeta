@@ -455,6 +455,9 @@ module KIF
         top = draw_body(g)
         draw_base(g)
         draw_tag(g, top)
+      rescue StandardError => e   # runs inside the map's spriteset: never take the game down
+        Presence.oops(e)
+        hide
       end
 
       private

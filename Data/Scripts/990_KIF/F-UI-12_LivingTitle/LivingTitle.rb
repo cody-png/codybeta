@@ -138,7 +138,7 @@ class KifLivingTitle
   def load_bitmap(path)
     return @bitmaps[path] if @bitmaps.has_key?(path)
     file = pbResolveBitmap(path)
-    return @bitmaps[path] = (file ? Bitmap.new(file) : nil)
+    return @bitmaps[path] = KIF::UnreadableSprites.read(file)   # a broken sprite file is skipped
   end
 
   def follower(species)
@@ -504,7 +504,7 @@ class KifLivingTitle
     # shortcut: no fusion without a local custom sprite; preload a sheet during the fade-in if autogens are wanted
     file = pbResolveBitmap("#{Settings::CUSTOM_BATTLERS_FOLDER_INDEXED}#{h}/#{h}.#{b}")
     @stats[:no_sprite] += 1 unless file
-    return file ? Bitmap.new(file) : nil
+    return KIF::UnreadableSprites.read(file)   # a broken sprite file is skipped
   rescue StandardError => e
     KIF.log("Living title: no fusion sprite for #{head}/#{body} (#{e.class}: #{e.message})")
     return nil

@@ -59,7 +59,7 @@ module KIF
 
     module ER
       DATA_PATH = "Data/KIF/entrances.dat"
-      RETRIES = 150      # most layouts are found in a few tries (~0.1-0.2 s each); Simple mode needs up to ~75; mid-run, the old doors stay after these
+      RETRIES = 400      # most layouts are found in a few tries (~0.1-0.2 s each); Simple + coupled with Johto needs up to ~140 (sweep 2026-10-24: 150 failed ~1%); mid-run, the old doors stay after these
       BADGE_PREFIX = "badge_"
       OAK_LABS = [77, 551, 552, 593, 659, 724, 740, 847]   # every variant of Oak's Lab
       NO_START = [303, 167]   # Indigo Plateau, Crimson City (nowhere to go without 8 badges)

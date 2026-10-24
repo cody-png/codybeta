@@ -455,7 +455,7 @@ module KIF
       if cache_mode == 0
         path = disk_path(key)
         if File.exist?(path)
-          bmp = Bitmap.new(path) rescue nil
+          bmp = KIF::UnreadableSprites.read(path)   # a cut-off cache file is skipped (SDLError gets past rescue nil)
           if bmp
             cache_put_memory(key, bmp)
             return copy_bitmap(bmp)

@@ -1,9 +1,12 @@
-KIF 1.1.0
-- New: Nuzlocke (Options > Challenges). First encounter per place, Dupes and Shiny clauses, fainted Pokemon die. Fainted ones go to the Graveyard (pause menu, PC), are released or stay. A full wipe can keep playing, lock the save, or black out.
-- Randomizer: banning every non-legendary no longer freezes Randomize. Remix and Expert trainers that use a Classic team are shuffled too.
-- Overworld Encounters (mod): its Pokemon follow the Randomizer.
-- Save Backups: new Off choice; Newest 10 is the default for new players.
-- Faster start-up: PIF's Pokedex file is downloaded once a week, mod updates are checked twice a day at most.
-- Crash fixes: the Johto/Hoenn/Sinnoh starter labs, trainers missing from the Classic list, Synchronize under Safeguard, Grass + Fire Pledge, doors to maps that don't exist, the Silph Co. elevator on a new game, the Registeel ice puzzle, the Water Labyrinth, Cinnabar Lab's fossil list.
-- Security: a secret base, mystery gift code or sprite preferences file from another player can no longer run code on your PC.
-- Mods: a garbled share code no longer closes Options; a mod update never deletes a file you edited.
+KIF 1.2.0
+- A much smaller game: about 920 MB instead of 1.68 GB (this update is about 680 MB). Pictures look the same; music and sounds are now Ogg.
+- Faster start-up, and menus check the disk far less.
+- New: Mouse and touch controls (Options > System > Controls, Off by default). Click or tap to choose, click or tap the map to walk there.
+- New: EV Allocation (Options > Battles, Off by default). EVs from battles become points you spend on the Summary's Skills page.
+- New: Living title screen (Options > System > Title screen).
+- New: Archipelago (beta). Play KIF in a multiworld: Kanto, Sevii and Johto, Trainersanity, Giftsanity and 10 kinds of traps. Use apworld 0.6.2.
+- Nuzlocke: options for gift Pokemon and the Safari Zone. Pinkan Island now plays as in PIF with the Randomizer, Nuzlocke and Archipelago.
+- Saves: new backups are compressed, and Compress old backups (Save menu) shrinks older ones. Compressed backups only load in 1.2.0 and later.
+- Mods: publish your own mod to the catalog (Options > Mods > Installed, PC).
+- Phones: KIF updates itself on JoiPlay and Kirin from the next update on, and mods download from the catalog.
+- Fixes: waterfalls, Chip Away / Sacred Sword / Darkest Lariat against evasion, Wonder Trade's banned list, the Celadon Cafe seller, Level caps on a new save, and a broken custom sprite file no longer crashes the game.

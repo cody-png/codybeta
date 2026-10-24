@@ -1,0 +1,552 @@
+﻿# Q. What is this file?
+# A. This file contains options which allow you to configure your multiworld experience while allowing
+#    others to play how they want as well.
+#
+# Q. How do I use it?
+# A. The options in this file are weighted. This means the higher number you assign to a value, the
+#    more chances you have for that option to be chosen. For example, an option like this:
+#
+#    map_shuffle:
+#      on: 5
+#      off: 15
+#
+#    Means you have 5 chances for map shuffle to occur, and 15 chances for map shuffle to be turned
+#    off.
+#
+# Q. I've never seen a file like this before. What characters am I allowed to use?
+# A. This is a .yaml file. You are allowed to use most characters.
+#    To test if your yaml is valid or not, you can use this website:
+#        http://www.yamllint.com/
+#    You can also verify that your Archipelago options are valid at this site:
+#        https://archipelago.gg/check
+
+# Your name in-game, limited to 16 characters.
+#     {player} will be replaced with the player's slot number.
+#     {PLAYER} will be replaced with the player's slot number, if that slot number is greater than 1.
+#     {number} will be replaced with the counter value of the name.
+#     {NUMBER} will be replaced with the counter value of the name, if the counter value is greater than 1.
+name: Player{number}
+
+# Used to describe your yaml. Useful if you have multiple files.
+description: Default Kuray Infinite Fusion Template
+
+game: Kuray Infinite Fusion
+requires:
+  version: 0.6.2 # Version of Archipelago required for this yaml to work as expected.
+  game:
+    Kuray Infinite Fusion: 0.6.2 # Version of the world required for this yaml to work as expected.
+
+Kuray Infinite Fusion:
+  ################
+  # Game Options #
+  ################
+  progression_balancing:
+    # A system that can move progression earlier, to try and prevent the player from getting stuck and bored early.
+    # 
+    # A lower setting means more getting stuck. A higher setting means less getting stuck.
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 0
+    # Maximum value is 99
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-0-99: 0 # random value between 0 and 99
+    disabled: 0 # equivalent to 0
+    normal: 50 # equivalent to 50
+    extreme: 0 # equivalent to 99
+
+  accessibility:
+    # Set rules for reachability of your items/locations.
+    # 
+    # **Full:** ensure everything can be reached and acquired.
+    # 
+    # **Minimal:** ensure what is needed to reach your goal can be acquired.
+    full: 50
+    minimal: 0
+
+  goal:
+    # What finishes your game.
+    # 
+    # - Elite Four: enter the Hall of Fame (beat the Kanto Elite Four and the Champion).
+    # - Gym Leaders: beat the 8 Kanto gym leaders (Brock to Giovanni). A shorter game; the League isn't needed.
+    # - All Gym Leaders: beat every gym leader whose badge is a check in your regions (Kanto's 8; with Johto
+    #   also Kurt, Falkner, Clair, Pryce and Morty; with the Sevii Islands also Chuck and Jasmine, who battle
+    #   you there). Whitney (Goldenrod) only opens after the Hall of Fame, so she never counts.
+    elite_four: 50
+    gym_leaders: 0
+    all_gym_leaders: 0
+
+  regions:
+    # Which regions have checks. The rest of the world plays as normal (its items and badges are what the
+    # game gives there, and the logic never counts on its badges).
+    # 
+    # - Kanto: Kanto only, as before.
+    # - Kanto Sevii: also the Sevii Islands (the ferry from Cinnabar Island's harbour with the Seagallop Pass, or
+    #   Offshore Road with Surf), including Chuck's and Jasmine's badges. Pinkan Island stays out.
+    # - Kanto Johto: also Johto (the Magnet Train from Saffron City, $1000) and its 5 badges you can earn before
+    #   the Hall of Fame (Kurt, Falkner, Clair, Pryce, Morty).
+    # - All: Kanto, Johto and the Sevii Islands.
+    # 
+    # Johto and Sevii badges count for the League guards and for field moves, as in the game.
+    kanto: 50
+    kanto_sevii: 0
+    kanto_johto: 0
+    all: 0
+
+  league_badges:
+    # How many badges the guards at the Pokemon League entrance (Route 23) ask for.
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 0
+    # Maximum value is 8
+    8: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-0-8: 0 # random value between 0 and 8
+
+  shuffle_badges:
+    # The 8 Kanto gym badges are shuffled into the item pool. Off: each gym leader gives their own badge.
+    'false': 0
+    'true': 50
+
+  trainersanity:
+    # How many trainers of your regions send a check the first time you beat them (picked at random; all =
+    # every one: kanto 219, kanto_sevii 243, kanto_johto 306, all 330). Only trainers who stand still until beaten count: story battles (rival, Team Rocket
+    # that comes and goes) and double-battle pairs don't. Each adds a Potion, Poke Ball, Rare Candy or similar
+    # to the pool. A number above your regions' count means all of them.
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 0
+    # Maximum value is 330
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-0-330: 0 # random value between 0 and 330
+    none: 50 # equivalent to 0
+    all: 0 # equivalent to 330
+
+  giftsanity:
+    # NPCs of your regions who give you a Pokemon or an egg (the Fighting Dojo's Hitmon, Lapras in Silph Co.,
+    # the Day Care's egg...) also send a check; you still get the Pokemon. kanto 26, kanto_sevii 35, kanto_johto 35, all 44; each adds a filler item.
+    'false': 50
+    'true': 0
+
+  game_difficulty:
+    # KIF's difficulty, set when you link a save. Keep: whatever the save already uses.
+    keep: 50
+    easy: 0
+    normal: 0
+    hard: 0
+
+  randomize_wild_pokemon:
+    # Wild encounters.
+    # 
+    # - Vanilla: not randomized
+    # - Swap: each species becomes one other species everywhere
+    # - By Route: every route rolls its own Pokemon
+    # - Dynamic: every encounter rolls its own Pokemon
+    # - Dynamic Route: like By Route, but a route rolls again every time you enter it
+    vanilla: 50
+    swap: 0
+    by_route: 0
+    dynamic: 0
+    dynamic_route: 0
+
+  wild_strength_range:
+    # How close in base stat total a random wild, static, gift or traded Pokemon must be to the one it
+    # replaces. 999 = anything.
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 0
+    # Maximum value is 999
+    50: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-0-999: 0 # random value between 0 and 999
+
+  wild_legendaries:
+    # Any Pokemon can become a legendary (off: only legendaries become legendaries).
+    'false': 50
+    'true': 0
+
+  wild_fusions:
+    # Every random wild Pokemon is already a fusion.
+    'false': 50
+    'true': 0
+
+  custom_sprites_only:
+    # Random fusions (wild, trainers, gyms) only use fusions with a custom sprite.
+    'false': 50
+    'true': 0
+
+  randomize_starters:
+    # The starters in Oak's Lab. First Stage: random first-stage Pokemon. Any: any Pokemon.
+    # Link your save before you pick your starter.
+    vanilla: 50
+    first_stage: 0
+    any: 0
+
+  randomize_static_encounters:
+    # Overworld Pokemon (Snorlax, legendaries...) are randomized.
+    'false': 50
+    'true': 0
+
+  randomize_gift_pokemon:
+    # Pokemon given to you are randomized.
+    'false': 50
+    'true': 0
+
+  randomize_trades:
+    # In-game trades. Swap: you get what the traded Pokemon became in the swap table. Randomized: each trade
+    # rolls its own. NPCs asking for a Pokemon accept any Pokemon in a linked save whenever wild Pokemon
+    # are randomized.
+    vanilla: 50
+    swap: 0
+    randomized: 0
+
+  randomize_trainer_parties:
+    # Trainer teams. Randomized: every trainer's Pokemon are rolled on their own. Follow Wild: a trainer's
+    # Pidgey becomes whatever wild Pidgey became.
+    vanilla: 50
+    randomized: 0
+    follow_wild: 0
+
+  trainer_strength_range:
+    # How close in base stat total a random trainer Pokemon must be to the one it replaces. 999 = anything.
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 0
+    # Maximum value is 999
+    50: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-0-999: 0 # random value between 0 and 999
+
+  trainer_team_size:
+    # Extra Pokemon for trainers (needs random trainer parties). Full: every trainer has 6.
+    vanilla: 50
+    plus_one: 0
+    plus_two: 0
+    full: 0
+
+  trainer_fusions:
+    # Every trainer Pokemon is a fusion (needs random trainer parties).
+    'false': 50
+    'true': 0
+
+  randomize_gym_trainers:
+    # Gym teams stick to the gym's type (needs random trainer parties).
+    'false': 50
+    'true': 0
+
+  randomize_gym_types:
+    # Gym types are shuffled.
+    'false': 50
+    'true': 0
+
+  leader_team_size:
+    # Extra Pokemon for gym leaders (needs random trainer parties). Full: every leader has 6.
+    vanilla: 50
+    plus_one: 0
+    plus_two: 0
+    full: 0
+
+  randomize_types:
+    # Pokemon types. Randomized: each evolution family gets new types. Dual: new types, and every Pokemon gets two.
+    vanilla: 50
+    randomized: 0
+    dual: 0
+
+  randomize_abilities:
+    # Pokemon abilities. Type Flavoured: themed to the Pokemon's type. Type Bound: abilities Pokemon of that
+    # type have in the base game.
+    vanilla: 50
+    randomized: 0
+    type_flavoured: 0
+    type_bound: 0
+
+  randomize_base_stats:
+    # Base stats. Shuffle: same numbers, new order. Keep BST: random spread, same total. Chaos: each 1-255.
+    vanilla: 50
+    shuffle: 0
+    keep_bst: 0
+    chaos: 0
+
+  randomize_evolutions:
+    # Pokemon that evolve evolve into something else (same level, item or method).
+    'false': 50
+    'true': 0
+
+  randomize_moves:
+    # Learnsets. Follow Types: level-up and egg moves of a Pokemon's old type become moves of its new type
+    # (with Randomize Types). KIF has no fully random learnsets.
+    vanilla: 50
+    follow_types: 0
+
+  tm_tutor_compatibility:
+    # TM and tutor compatibility. Follow Types: TM/tutor moves of a Pokemon's old type become ones of its new
+    # type (with Randomize Types). HM moves of another type stay, so every HM keeps its learners.
+    vanilla: 50
+    follow_types: 0
+
+  randomize_shop_items:
+    # Shop stock is randomized (Poke Balls and Splicers stay buyable). Nothing in the logic is bought.
+    'false': 50
+    'true': 0
+
+  trainer_held_items:
+    # Items trainers' Pokemon hold. Randomized: new every battle. Fixed: the same every battle.
+    vanilla: 50
+    randomized: 0
+    fixed: 0
+
+  remove_badge_requirements:
+    # Field moves (Cut, Fly, Surf, Strength, Rock Smash, Flash, Waterfall, Dive...) work without the badges
+    # they normally need. The logic then only asks for the HM (or the item that stands in for it).
+    'false': 50
+    'true': 0
+
+  exp_modifier:
+    # Multiplies the experience your Pokemon gain, in percent: 100 is normal, 50 half, 200 double.
+    # Applied after KIF's own Trainer Exp. Boost and Exp All settings.
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 0
+    # Maximum value is 1000
+    100: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-0-1000: 0 # random value between 0 and 1000
+
+  min_catch_rate:
+    # Pokemon with a catch rate below this are caught as if it were this (3 = normal; legendaries are 3,
+    # Pidgey 255).
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 3
+    # Maximum value is 255
+    3: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-3-255: 0 # random value between 3 and 255
+
+  guaranteed_catch:
+    # Every Poke Ball you throw at a wild Pokemon catches it.
+    'false': 50
+    'true': 0
+
+  starting_money:
+    # Money the save gets when you link it. Keep: leave the save's money alone.
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 0
+    # Maximum value is 999999
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-0-999999: 0 # random value between 0 and 999999
+    keep: 50 # equivalent to -1
+
+  free_fly_location:
+    # When you link the save, one random Kanto town you haven't visited yet opens for Fly
+    # (not Indigo Plateau). You still need Fly to go there.
+    'false': 50
+    'true': 0
+
+  trap_percentage:
+    # Chance for each filler item (Potions, Poke Balls, the trainersanity / giftsanity extras...) to become a
+    # trap instead. 0 = no traps. The weights below pick which trap. A trap arrives like an item and goes off
+    # when you can walk around freely (never in a battle, a cutscene, a menu or on Pinkan Island).
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 0
+    # Maximum value is 100
+    0: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-0-100: 0 # random value between 0 and 100
+
+  poison_trap_weight:
+    # Poison Trap: poisons every healthy Pokemon in your party that can be poisoned. Walking with poison never
+    # makes a Pokemon faint (it stops at 1 HP).
+    disabled: 0
+    low: 0
+    medium: 50
+    high: 0
+
+  paralysis_trap_weight:
+    # Paralysis Trap: paralyzes every healthy Pokemon in your party that can be paralyzed.
+    disabled: 0
+    low: 0
+    medium: 50
+    high: 0
+
+  battle_trap_weight:
+    # Battle Trap: a wild Pokemon of the map you are on attacks, at your party's average level. You can run.
+    # It waits for a map with wild Pokemon, and never starts in the Safari Zone or the Bug-Catching Contest.
+    # With KIF's Nuzlocke mode on, no battle starts.
+    disabled: 0
+    low: 0
+    medium: 50
+    high: 0
+
+  confusion_trap_weight:
+    # Confusion Trap: for 50 steps, the four direction buttons are shuffled (a new random shuffle each time).
+    # Menus and battles are not affected.
+    disabled: 0
+    low: 0
+    medium: 50
+    high: 0
+
+  money_trap_weight:
+    # Money Trap: you drop 10% of your money (at most $5,000).
+    disabled: 0
+    low: 0
+    medium: 50
+    high: 0
+
+  swap_trap_weight:
+    # Fusion Swap Trap: a random fused Pokemon in your party swaps head and body, as with a DNA Reverser
+    # (use one to swap it back). Nothing happens if none is fused.
+    disabled: 0
+    low: 0
+    medium: 50
+    high: 0
+
+  party_lock_trap_weight:
+    # Party Lock Trap: one random party Pokemon won't battle for a while (Party Lock Unlock says how long). It
+    # still uses field moves. Never your last Pokemon that can battle, never an egg or a fainted one, at most 2 locked
+    # at a time (a third waits), and it is let back in at once if no other Pokemon can battle.
+    disabled: 0
+    low: 0
+    medium: 50
+    high: 0
+
+  party_lock_unlock:
+    # What unlocks a Pokemon from a Party Lock Trap. Battles: after Party Lock Battles battles (any battle you
+    # fight: won, lost, run from). Checks: after you send Party Lock Checks more location checks. Pokemon Center:
+    # at your next heal by a Pokemon Center nurse.
+    battles: 50
+    checks: 0
+    pokemon_center: 0
+
+  party_lock_battles:
+    # Battles a Party Lock lasts (Party Lock Unlock: battles).
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 1
+    # Maximum value is 20
+    3: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-1-20: 0 # random value between 1 and 20
+
+  party_lock_checks:
+    # Location checks a Party Lock lasts (Party Lock Unlock: checks).
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 1
+    # Maximum value is 50
+    5: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-1-50: 0 # random value between 1 and 50
+
+  warp_trap_weight:
+    # Warp Trap: you are sent back to the last Pokemon Center you healed at (home before the first one), as after
+    # a defeat but with no money lost and no heal. It waits while you are in the Safari Zone, the Bug-Catching
+    # Contest, the Pokemon League or walking with someone.
+    disabled: 0
+    low: 0
+    medium: 50
+    high: 0
+
+  pp_drain_trap_weight:
+    # PP Drain Trap: one random move of your lead Pokemon (the first one that can battle) drops to 0 PP. A
+    # Pokemon Center or an Ether restores it as usual. Nothing happens if no move has PP left.
+    disabled: 0
+    low: 0
+    medium: 50
+    high: 0
+
+  curse_trap_weight:
+    # Disobedience Curse: until your next heal by a Pokemon Center nurse, your Pokemon sometimes disobey in
+    # battle (Curse Disobey Percent of their moves): they use another move or do nothing, as a disobedient Pokemon
+    # does, but never nap or hurt themselves. Only your own Pokemon; switching, items and running still work.
+    disabled: 0
+    low: 0
+    medium: 50
+    high: 0
+
+  curse_disobey_percent:
+    # How often a cursed Pokemon disobeys a move (Disobedience Curse), in percent.
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 5
+    # Maximum value is 75
+    25: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-5-75: 0 # random value between 5 and 75
+
+  death_link:
+    # When you die, everyone who enabled death link dies. Of course, the reverse is true too.
+    # 
+    # In KIF, whiting out sends a death and receiving a death whites you out.
+    'false': 50
+    'true': 0
+
+  ###########################
+  # Item & Location Options #
+  ###########################
+  local_items:
+    # Forces these items to be in their native world.
+    []
+
+  non_local_items:
+    # Forces these items to be outside their native world.
+    []
+
+  start_inventory:
+    # Start with the specified amount of these items. Example: {Bomb: 1, Arrow: 3}
+    {}
+
+  start_inventory_from_pool:
+    # Start with the specified amount of these items and don't place them in the world. Example: {Bomb: 1, Arrow: 3}
+    # 
+    # The game decides what the replacement items will be.
+    {}
+
+  start_hints:
+    # Start with these item's locations prefilled into the ``!hint`` command.
+    []
+
+  start_location_hints:
+    # Start with these locations and their item prefilled into the ``!hint`` command.
+    []
+
+  exclude_locations:
+    # Prevent these locations from having an important item.
+    []
+
+  priority_locations:
+    # Prevent these locations from having an unimportant item.
+    []
+
+  item_links:
+    # Share part of your item pool with other players.
+    []
+
+  plando_items:
+    # Generic items plando.
+    []

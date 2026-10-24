@@ -7,7 +7,7 @@
 #  downloads the game from GitHub into it and unpacks it.
 #  KIF is a Windows game: it runs through Wine or Proton (see the end).
 #  After that the game keeps itself up to date (in-game updater).
-#  Needs about 4.5 GB free while installing (2 GB once done).
+#  Needs about 4.5 GB free while installing (about 1 to 2 GB once done).
 #  Options: --stable / --beta (skip the question), KIF_INSTALL_URL=<url> to
 #  download from somewhere else (testing).
 # ============================================================================
@@ -103,7 +103,7 @@ if [ -n "${FREE_KB:-}" ] && [ "$FREE_KB" -lt 4500000 ]; then
 fi
 
 say ""
-say "  Downloading KIF ($BRANCH) - about 1.9 GB, this takes a while..."
+say "  Downloading KIF ($BRANCH) - about 1 to 2 GB, this takes a while..."
 rm -f "$ZIP"
 if [ "$DL" = curl ]; then
   curl -L --fail --retry 5 --retry-delay 3 -o "$ZIP" "$URL" || {

@@ -72,7 +72,7 @@ module KIF
       look = {}
       %w[skin clothes hair hat hat2 surf].each { |k| look[k] = msg[k].to_s =~ ID ? msg[k].to_s : "" }
       look["skin"] = "default" if look["skin"].empty?
-      %w[cc hc tc t2c bc].each { |k| look[k] = msg[k].to_i }
+      %w[cc hc tc t2c bc].each { |k| look[k] = msg[k].to_i % 360 }   # a hue shift: only 0-359 differ
       return look
     end
 
@@ -235,6 +235,7 @@ module KIF
 
       def update
         return unless @map_id
+        @fade_to = 0 if @pending && @plan.empty? && !moving? && !jumping?   # at the door: now fade out
         fade
         @moved_last_frame = @moved_this_frame
         start_next unless moving? || jumping?
@@ -257,11 +258,10 @@ module KIF
       private
 
       def warp(m, target)
-        @plan.clear
         if @map_id && Presence.loaded?(@map_id) && @opacity > 0
-          @pending = [m, target]
-          @fade_to = 0
+          @pending = [m, target]   # the old map's last steps are walked first (update fades after them)
         else
+          @plan.clear
           arrive(m, target)
         end
         return true
@@ -343,9 +343,10 @@ module KIF
     # PIF's: the default skin, the stand-in outfit, no hair or hat. nil when
     # there's no base picture at all (only the name is shown then).
     #---------------------------------------------------------------------------
+    # an AnimatedBitmap, or nil; build_sheet frees it once drawn
     def self.layer(file, hue = 0)
       return nil if file.nil? || !pbResolveBitmap(file)
-      return AnimatedBitmap.new(file, hue.to_i).bitmap
+      return AnimatedBitmap.new(file, hue.to_i % 360)
     end
 
     def self.offsets(action, row)
@@ -367,25 +368,27 @@ module KIF
 
     def self.build_sheet(look, action)
       look ||= DEFAULT_LOOK
+      loaded = []   # every layer is freed below: a hued copy would otherwise stay in RPG::Cache for good
+      use = ->(ab) { ab && (loaded << ab) && ab.bitmap }
       skin = look["skin"]
       file = getBaseOverworldSpriteFilename(action, skin)
       unless file
         action = "walk"
         file = getBaseOverworldSpriteFilename(action, skin)
       end
-      base = layer(file) or return nil
+      base = use.(layer(file)) or return nil
       out = Bitmap.new(base.width, base.height)
       cw = base.width / 4
       ch = base.height / 4
-      if action == "bike" && (bike = layer(getOverworldBicycleFilename, look["bc"]))
+      if action == "bike" && (bike = use.(layer(getOverworldBicycleFilename, look["bc"])))
         out.blt(0, 0, bike, bike.rect)   # Sprite_Bicycle is under the player
       end
       out.blt(0, 0, base, base.rect)
-      clothes = layer(getOverworldOutfitFilename(look["clothes"], action), look["cc"]) ||
-                layer(getOverworldOutfitFilename(Settings::PLAYER_TEMP_OUTFIT_FALLBACK, action))
+      clothes = use.(layer(getOverworldOutfitFilename(look["clothes"], action), look["cc"])) ||
+                use.(layer(getOverworldOutfitFilename(Settings::PLAYER_TEMP_OUTFIT_FALLBACK, action)))
       out.blt(0, 0, clothes, clothes.rect) if clothes
-      hair = look["hair"].empty? ? nil : layer(getOverworldHairFilename(look["hair"]), look["hc"])
-      hats = [["hat2", "t2c"], ["hat", "tc"]].map { |k, c| look[k].empty? ? nil : layer(getOverworldHatFilename(look[k]), look[c]) }.compact
+      hair = look["hair"].empty? ? nil : use.(layer(getOverworldHairFilename(look["hair"]), look["hc"]))
+      hats = [["hat2", "t2c"], ["hat", "tc"]].map { |k, c| look[k].empty? ? nil : use.(layer(getOverworldHatFilename(look[k]), look[c])) }.compact
       4.times do |row|
         off = offsets(action, row)
         4.times do |f|
@@ -400,6 +403,8 @@ module KIF
     rescue StandardError => e
       oops(e)
       return nil
+    ensure
+      loaded&.each { |ab| ab.dispose unless ab.disposed? }
     end
 
     # the Pokémon the partner surfs or dives on (Sprite_SurfBase's pictures)
@@ -607,7 +612,7 @@ module KIF
       p = $game_player
       m = $game_map
       return nil unless p && m && m.map_id.to_i > 0
-      a = p.character_name.to_s
+      a = p.instance_variable_get(:@character_name).to_s   # not the getter: it changes PIF's run/walk state
       a = "walk" unless ACTIONS.include?(a)
       d = [2, 4, 6, 8].include?(p.direction) ? p.direction : 2
       return State.new(m.map_id, p.x, p.y, d, a, (p.move_speed.to_f * 10).round.clamp(1, 80),

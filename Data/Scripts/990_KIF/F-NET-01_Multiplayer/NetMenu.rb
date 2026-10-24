@@ -582,6 +582,7 @@ module KIF
       # Connected (MP5b, MP6b)
       #-------------------------------------------------------------------------
       def connected
+        note = nil   # kept when the screen is only drawn again (the watch), until a row is picked
         loop do
           s = Net.session
           unless s&.connected?
@@ -598,7 +599,8 @@ module KIF
           end
           where = defined?(KIF::Presence) && KIF::Presence.where_line(s.partner)
           lines << where if where
-          help = Net.notes.shift ||
+          note = Net.notes.shift || note
+          help = note ||
                  (relay ? _INTL("Connected through relay.\nPlay works the same, just a bit slower.")
                         : _INTL("Connected to {1} (direct).\nYour games talk to each other directly.", s.partner))
           sl = defined?(KIF::SoulLink) && KIF::SoulLink.on?
@@ -606,11 +608,13 @@ module KIF
           cmds.unshift(_INTL("Soul Link")) if sl
           co = defined?(KIF::Coop) ? KIF::Coop.menu_label : nil   # last row: the rows above keep their places
           cmds << co if co
-          help = KIF::Coop.take_notes.last || help if co
+          note = KIF::Coop.take_notes.last || note if co
+          help = note || help
           r = pick(lines.join("\n"), cmds, help,
                    proc { [Net.session&.connected?, Net.notes.length, co && KIF::Coop.menu_label,
                            defined?(KIF::Presence) && KIF::Presence.ghost&.map_id] })
           next if r.nil?
+          note = nil
           return if r < 0
           next KIF::Coop.menu_pick if co && r == cmds.length - 1
           r -= 1 if sl

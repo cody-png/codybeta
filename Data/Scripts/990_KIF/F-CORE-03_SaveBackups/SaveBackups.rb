@@ -45,8 +45,9 @@ module KIF
     AUTO = "autosave"
     @next_name = nil
     @player_saving = false
+    @normal_box = false   # save menu / load screen open: messages use the normal bottom box
     class << self
-      attr_accessor :next_name, :player_saving
+      attr_accessor :next_name, :player_saving, :normal_box
     end
 
     def self.infinite?
@@ -92,6 +93,14 @@ module KIF
       File.rename(tmp, dest)
     ensure
       (File.delete(tmp) if tmp && File.exist?(tmp)) rescue nil
+    end
+
+    # The save itself (SaveData.save_to_file). PIF 6.8.2 (001_SaveData.rb:56-60)
+    # wrote it in place: a save that failed part way (an object that can't be
+    # saved, a full disk, the game closed) left neither the old save nor the
+    # new one. Now written whole to a temp file and renamed over the old one.
+    def self.save_file(file_path)
+      write_file(file_path, Marshal.dump(SaveData.compile_save_hash))
     end
 
     def self.copy(save_path, slot, name = nil)
@@ -240,6 +249,11 @@ module SaveData
       end
       return save_data
     end
+
+    def save_to_file(file_path)
+      validate file_path => String
+      KIF::SaveBackups.save_file(file_path)
+    end
   end
 end
 
@@ -262,6 +276,8 @@ class PokemonSaveScreen
   # (KIF MultiSaves_Infinite Save Backups.rb:61-118).
   def pbSaveScreen
     ret = false
+    box = KIF::SaveBackups.normal_box                                   # KIF
+    KIF::SaveBackups.normal_box = true                                  # KIF
     @scene.pbStartScreen
     if !$Trainer.save_slot
       # New Game - must select slot
@@ -315,6 +331,50 @@ class PokemonSaveScreen
     end
     @scene.pbEndScreen
     return ret
+  ensure
+    KIF::SaveBackups.normal_box = box                                   # KIF
+  end
+end
+
+# The load screen too: its $game_system is the last session's (title after
+# playing) or the newest save's (start-up), with whatever text options an
+# event left there (the intro: top, no frame, over the save panel). A
+# prepended module, not an alias: Session Log, Save Folder and Sprite Import
+# prepend pbStartLoadScreen too.
+module KIF
+  module SaveBackups
+    module LoadScreenBox
+      def pbStartLoadScreen(*args)
+        box = KIF::SaveBackups.normal_box
+        KIF::SaveBackups.normal_box = true
+        return super
+      ensure
+        KIF::SaveBackups.normal_box = box
+      end
+    end
+  end
+end
+
+PokemonLoadScreen.prepend(KIF::SaveBackups::LoadScreenBox)
+
+# The save menu's question and messages use the normal box at the bottom even
+# when the event that opened it set other text options (the new-game intro:
+# top of the screen, no frame, which put them over the save panel). Set for
+# the whole message: pbMessageDisplay picks the text colour from the frame
+# option before it places the box. $game_system only changes while a message
+# shows (nothing saves inside one), so a save made there keeps the event's
+# options.
+alias kif_bk_pbMessageDisplay pbMessageDisplay unless defined?(kif_bk_pbMessageDisplay)
+
+def pbMessageDisplay(msgwindow, message, *args, &block)
+  sys = $game_system
+  return kif_bk_pbMessageDisplay(msgwindow, message, *args, &block) unless KIF::SaveBackups.normal_box && sys
+  old = [sys.message_position, sys.message_frame]
+  begin
+    sys.message_position, sys.message_frame = 2, 0
+    return kif_bk_pbMessageDisplay(msgwindow, message, *args, &block)
+  ensure
+    sys.message_position, sys.message_frame = old
   end
 end
 

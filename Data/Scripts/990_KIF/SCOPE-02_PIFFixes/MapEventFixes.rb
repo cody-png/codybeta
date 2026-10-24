@@ -99,3 +99,106 @@ end
 def pbDexDataOffset(dexdata, species, offset)
   dexdata.seek_species(species, offset) if dexdata.respond_to?(:seek_species)
 end
+
+# 8. Prices in event texts: PIF wrote some "$200 000" (a comma would split a
+#    \ch[] choice), and the same event then also wrote "$50000" or "15,000$"
+#    (the Celadon Café sellers: "$15 000" in the choice list, "15,000$" in the
+#    question, "$15,000" in the rest). Every price in an event that has a
+#    "$200 000" one now reads like PIF's Poké Mart ("$200,000"); a \ch[]
+#    choice with a comma is quoted, which \ch[] reads. Only the text changes:
+#    what is charged is the event's own money commands. A line or choice the
+#    loaded language translates (french.dat) is left alone: the English text
+#    is its translation key. The maps (and common event 77) are the ones
+#    whose events have such a price.
+module KIF
+  module EventPrices
+    MAPS = [15, 18, 22, 65, 66, 122, 405, 407, 415, 463, 501]
+    SPACED = /\$\d{1,3}(?: \d{3})+(?!\d)/
+
+    def self.money(digits)
+      return "$" + digits.delete(" ,").to_i.to_s_formatted
+    end
+
+    # "$200 000", "$50000", "15,000$", "50$" -> "$200,000", "$50,000", "$15,000", "$50"
+    def self.prices(text)
+      t = text.gsub(/(?<![\d$,])(\d{1,3}(?:,\d{3})+|\d+)\$/) { money($1) }
+      return t.gsub(/\$(\d{1,3}(?:[ ,]\d{3})+|\d+)(?![\d,])/) { money($1) }
+    end
+
+    def self.fix_text(text)
+      m = text.match(/\\ch\[(\d+,\d+,)(.*)\]\z/)
+      return prices(text) unless m
+      fields = m[2].split(",").map { |f| g = prices(f); g.include?(",") ? "\"#{g}\"" : g }
+      return prices(m.pre_match) + "\\ch[" + m[1] + fields.join(",") + "]"
+    end
+
+    def self.translated?(map_id, text)
+      return MessageTypes.getFromMapHash(map_id, text) != text
+    end
+
+    def self.utf8(s)
+      return s.to_s.dup.force_encoding("UTF-8")
+    end
+
+    # The shown texts of one command: a Show Text line or a choice list
+    def self.texts(cmd)
+      return [utf8(cmd.parameters[0])] if [101, 401].include?(cmd.code)
+      return cmd.parameters[0].map { |s| utf8(s) } if cmd.code == 102 && cmd.parameters[0].is_a?(Array)
+      return []
+    end
+
+    # pages: an event's pages (or a common event); true when it was one to fix
+    def self.fix_event(pages, map_id)
+      lists = pages.map { |pg| pg.list || [] }
+      return false unless lists.flatten.any? { |c| texts(c).any? { |t| t =~ SPACED } }
+      lists.each { |list| fix_list(list, map_id) }
+      return true
+    end
+
+    def self.fix_list(list, map_id)
+      list.each_with_index do |cmd, i|
+        if cmd.code == 102 && cmd.parameters[0].is_a?(Array)
+          cmd.parameters[0] = cmd.parameters[0].map do |s|
+            u = utf8(s)
+            f = prices(u)
+            (f == u || translated?(map_id, u)) ? s : f
+          end
+          next
+        end
+        next unless cmd.code == 101
+        lines = [cmd]
+        lines << list[i + lines.length] while list[i + lines.length] && list[i + lines.length].code == 401
+        # joined the way Interpreter#command_101 joins them
+        text = lines.map { |c| utf8(c.parameters[0]) }.inject { |a, t| (t != "" && !a.end_with?(" ")) ? "#{a} #{t}" : a + t }
+        fixed = fix_text(text)
+        next if fixed == text || translated?(map_id, text)
+        cmd.parameters[0] = fixed
+        lines[1..-1].each { |c| c.parameters[0] = "" }
+      end
+    end
+  end
+end
+
+KIF::EventPrices::MAPS.each do |map_id|
+  KIF::MapPatches.add(map_id, "PIF fix: price format") do |map|
+    map.events.each_value { |ev| KIF::EventPrices.fix_event(ev.pages, map_id) }
+  end
+end
+
+# Common events (the Saffron gate guard, 77) once the language is loaded:
+# they are read at start-up, before Game.set_up_system loads it
+module Game
+  class << self
+    alias kif_mef_set_up_system set_up_system unless method_defined?(:kif_mef_set_up_system)
+
+    def set_up_system(*args)
+      ret = kif_mef_set_up_system(*args)
+      begin
+        ($data_common_events || []).each { |ce| KIF::EventPrices.fix_event([ce], 0) if ce }
+      rescue => e
+        KIF.log("Common event prices not changed: #{e.class}: #{e.message}")
+      end
+      return ret
+    end
+  end
+end

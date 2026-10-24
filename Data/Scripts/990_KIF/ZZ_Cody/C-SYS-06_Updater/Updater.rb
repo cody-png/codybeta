@@ -580,6 +580,7 @@ module KIF
       bad = curl ? items.reject { |path, sha, size| good_file?(staged(dir, path), sha, size) } : todo
       log("#{bad.length} files left for one at a time") unless bad.empty? || todo.empty? || !curl
       last = 0
+      streak = 0   # out here: a variable first set inside the block starts again for every file
       bad.each_with_index do |(path, sha, size), i|
         # drawn 4 times a second: a frame per file added minutes to thousands of files
         if Time.now.to_f - last > 0.25 || i + 1 == bad.length
@@ -600,7 +601,7 @@ module KIF
           streak = 0
         else
           failed << path
-          streak = streak.to_i + 1
+          streak += 1
           # the server is gone: don't spend an hour trying every file (what was fetched is kept)
           if streak >= 20
             failed.concat(bad[(i + 1)..-1].map(&:first))
@@ -660,7 +661,8 @@ module KIF
     # Without Windows (phones, Wine, the kit): move the files in now; the game
     # uses them from the next start. Scripts are read once at start-up and an
     # open sound or font keeps its old file on Android/Linux, so replacing
-    # files under the running game is safe.
+    # files under the running game is safe. Under Wine a file the game has
+    # open (the .exe, its DLLs) is renamed aside instead (UpdateFinish.discard).
     def apply_in_ruby(dir)
       files = File.join(dir, "files")
       failed = File.join(dir, "failed.txt")
@@ -686,7 +688,7 @@ module KIF
           rel = rel.tr("\\", "/")
           next if rel.empty? || !removable?(rel)
           p = File.join(root, rel)
-          File.delete(p) if File.file?(p)
+          KIF::UpdateFinish.discard(p) if File.file?(p)
         end
       end
       # the version last: an update cut off before here is still the old one's
@@ -762,8 +764,8 @@ module KIF
         return false
       end
       msg = _INTL("{1} files to download ({2}).", n, size_text(plan[:bytes]))
-      # (a phone isn't restarted: the player closes it when they like)
-      msg += " " + _INTL("Any progress since your last save will be lost when the game restarts.") if in_game && windows?
+      # every platform closes the game once the update is moved in (Windows and Wine start it again, phones don't)
+      msg += " " + _INTL("Any progress since your last save will be lost when the game closes for the update.") if in_game
       return false unless pbConfirmMessage(msg + " " + _INTL("Update now?"))
       dir = File.join(stage_root, version)
       mkdir_p(File.join(dir, "files"))
@@ -1010,6 +1012,8 @@ module KIF
             log("#{v}: finishing an update that was cut off while moving files in") if moving
             File.delete(File.join(dir, "failed.txt")) rescue nil
             apply_in_ruby(dir)
+            # as in the done.txt branch: the update removed the formats it shipped (a phone's close runs the ensure below)
+            store_choice(twins_key, current_version)
             restart_after_apply(v)
           elsif cmd == 0
             File.delete(File.join(dir, "failed.txt")) rescue nil
@@ -1024,8 +1028,10 @@ module KIF
           else
             rm_tree(dir)
           end
-        elsif !File.file?(File.join(dir, "apply.cmd")) && (newer?(current_version, v) || v == current_version)
-          rm_tree(dir)   # an unfinished download of a version we already have
+        elsif !newer?(v, current_version)
+          # an unfinished download or update of a version we already have (an
+          # older one's apply.cmd is never finished and kept the twin cleanup waiting)
+          rm_tree(dir)
         end
       end
       Dir.rmdir(dir0) if File.directory?(dir0) && Dir.children(dir0).empty?

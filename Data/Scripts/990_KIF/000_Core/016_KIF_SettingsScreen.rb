@@ -825,25 +825,27 @@ class KifSettingsScreen
       when :mod_category
         name = r.action[1]
         open_sub(_INTL(name)) { category_page(name) }
+      # These only ask questions and show the download box (drawn above), so
+      # the screen stays behind them instead of the map
       when :mod_menu
-        hidden { KIF::SettingsScreen.mod_menu(r.action[1]) }
+        KIF::SettingsScreen.mod_menu(r.action[1])
         after_change
       when :catalog_install
-        hidden { KIF::ModCatalogUI.install(r.action[1]) }
+        KIF::ModCatalogUI.install(r.action[1])
         after_change
       when :catalog_update_all
-        hidden { KIF::ModCatalogUI.update_all }
+        KIF::ModCatalogUI.update_all
         after_change
       when :catalog_reload
-        hidden { KIF::ModCatalog.load(true) }
+        KIF::ModCatalog.load(true)
         after_change
       when :pack_install
-        hidden { KIF::ModCatalogUI.install_pack(r.action[1]) }
+        KIF::ModCatalogUI.install_pack(r.action[1])
         after_change
       when :share_export
-        hidden { KIF::ModCatalogUI.share_export }
+        KIF::ModCatalogUI.share_export
       when :share_import
-        hidden { KIF::ModCatalogUI.share_import }
+        KIF::ModCatalogUI.share_import
         after_change
       end
       return

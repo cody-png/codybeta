@@ -116,7 +116,8 @@ class PokeBattle_Battle
 
   def pbEndOfBattle
     (@kif_eva_gained || {}).each do |pkmn, n|
-      pbDisplayPaused(_INTL("{1} got {2} EV points to spend (Summary, Skills).", pkmn.name, n))
+      pbDisplayPaused(n == 1 ? _INTL("{1} got 1 EV point to spend (Summary, Skills).", pkmn.name) :
+                               _INTL("{1} got {2} EV points to spend (Summary, Skills).", pkmn.name, n))
     end
     @kif_eva_gained = nil
     return kif_eva_pbEndOfBattle
@@ -131,6 +132,11 @@ class PokemonSummary_Scene
 
   def drawPageThree
     kif_eva_drawPageThree
+    kif_eva_page_three_points
+  end
+
+  # also called by the IV/EV Skills page (F-UI-04), which draws without this hook
+  def kif_eva_page_three_points
     kif_eva_draw_points if @is_player && KIF::EVAlloc.available?(@pokemon) && !@contestpage
   end
 
@@ -141,7 +147,11 @@ class PokemonSummary_Scene
     overlay = @sprites["overlay"].bitmap
     green = [Color.new(54, 84, 54), Color.new(24, 192, 32)]
     if cursor
-      overlay.fill_rect(222, KIF_EVA_YS[cursor] + 2, 292, 30, Color.new(248, 200, 72, 110))
+      # blended over the row (fill_rect would replace its text with a flat bar)
+      bar = Bitmap.new(292, 30)
+      bar.fill_rect(0, 0, 292, 30, Color.new(248, 200, 72))
+      overlay.blt(222, KIF_EVA_YS[cursor] + 2, bar, bar.rect, 110)
+      bar.dispose
       overlay.fill_rect(220, 274, 292, 110, Color.new(0, 0, 0, 0))
       pbDrawTextPositions(overlay, [
         [_INTL("EV points left: {1}", @pokemon.kif_ev_pool), 224, 278, 0, Color.new(248, 248, 248), Color.new(104, 104, 104)],

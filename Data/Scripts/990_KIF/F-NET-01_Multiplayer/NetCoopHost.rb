@@ -245,7 +245,7 @@ module KIF
         end
       end
 
-      def wait_text; _INTL("Waiting for {1}... (B: the game picks)", @name); end
+      def wait_text; _INTL("Waiting for {1}... ({2}: the game picks)", @name, KIF::Keys.name(Input::BACK)); end
 
       #-------------------------------------------------------------------------
       # Turns

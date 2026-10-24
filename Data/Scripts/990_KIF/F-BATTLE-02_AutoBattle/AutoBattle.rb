@@ -68,10 +68,13 @@ class PokeBattle_Battle
     return kif_auto_pbOwnedByPlayer?(idxBattler)
   end
 
-  # where the AI chooses for the player
+  # where the AI chooses for the player (alias lines spelled out: the module
+  # gate reads them, so Auto Battle Off keeps the layers below)
+  alias kif_auto_ch_pbCommandPhase pbCommandPhase unless method_defined?(:kif_auto_ch_pbCommandPhase)
+  alias kif_auto_ch_pbEORSwitch pbEORSwitch unless method_defined?(:kif_auto_ch_pbEORSwitch)
+  alias kif_auto_ch_pbSwitchInBetween pbSwitchInBetween unless method_defined?(:kif_auto_ch_pbSwitchInBetween)
   [:pbCommandPhase, :pbEORSwitch, :pbSwitchInBetween].each do |m|
     orig = :"kif_auto_ch_#{m}"
-    alias_method orig, m unless method_defined?(orig)
     define_method(m) do |*args, &blk|
       @kif_auto_choosing = @kif_auto_choosing.to_i + 1
       begin
@@ -95,10 +98,11 @@ end
 
 # Battle text confirms itself while Auto-Battle is on
 class PokeBattle_Scene
+  alias kif_auto_pbDisplayMessage pbDisplayMessage unless method_defined?(:kif_auto_pbDisplayMessage)
+  alias kif_auto_pbDisplay pbDisplay unless method_defined?(:kif_auto_pbDisplay)
+  alias kif_auto_pbDisplayPausedMessage pbDisplayPausedMessage unless method_defined?(:kif_auto_pbDisplayPausedMessage)
   [:pbDisplayMessage, :pbDisplay, :pbDisplayPausedMessage].each do |m|
-    next unless method_defined?(m)
     orig = "kif_auto_#{m}".to_sym
-    alias_method orig, m unless method_defined?(orig)
     define_method(m) do |*args, &block|
       old = KIF::AutoBattle.confirming
       KIF::AutoBattle.confirming = KIF::AutoBattle.on?

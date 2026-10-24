@@ -395,6 +395,12 @@ module KIF
     end
   end
 end
+# The layer below also by name: the module gate reads this line, so with the
+# Randomizer Off the pick goes to the PIF fix (ChooseForMap), not PIF's
+# original that raises NameError (Bug-Catching Contest)
+class PokemonEncounters
+  alias kif_rand_choose_wild_pokemon_for_map choose_wild_pokemon_for_map unless method_defined?(:kif_rand_choose_wild_pokemon_for_map)
+end
 KIF::Rand.wrap_choose_for_map
 
 # Common Event 15 asks for the strength ranges with its own menus right after

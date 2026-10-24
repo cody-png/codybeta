@@ -334,8 +334,9 @@ module KIF
     #---------------------------------------------------------------------------
     class NativeSource
       attr_reader :dir
-      # extra: more Mods folders (the save folder's on phones); a mod already
-      # found in an earlier folder wins
+      # extra: more Mods folders (the save folder's on phones); a mod in a
+      # later folder replaces one of the same name in an earlier one: a
+      # read-only game folder's mod can only be updated by hand there
       def initialize(dir, extra = []); @dir = dir; @extra = extra; @entries = nil; end
       def dirs; return [@dir] + @extra; end
 
@@ -349,7 +350,10 @@ module KIF
         list = []
         dirs.each do |d|
           next unless File.directory?(d)
-          list.concat(entries_in(d).reject { |e| list.any? { |o| o.id == e.id } })
+          entries_in(d).each do |e|
+            i = list.index { |o| o.id == e.id }
+            i ? list[i] = e : list << e   # keeps its place in the load order
+          end
         end
         return @entries = list
       end

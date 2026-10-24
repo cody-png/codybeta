@@ -43,8 +43,42 @@ module KIF
       File.rename(src, dest)
     rescue SystemCallError
       raise unless File.file?(src) && File.exist?(dest)
-      File.delete(dest)
+      discard(dest)
       File.rename(src, dest)
+    end
+
+    SET_ASIDE = "old_files.txt"   # in STAGE_DIR: files renamed aside, deleted at the next start
+    OLD_EXT   = ".kifold"
+
+    # Deletes a file. One the running game has open can't be replaced or
+    # deleted on Windows/Wine (the .exe and its DLLs in an engine update) but
+    # can be renamed: it is renamed aside and deleted at the next start.
+    def discard(path, root = File.expand_path("."))
+      File.delete(path)
+    rescue SystemCallError
+      raise unless File.file?(path)
+      old = path + OLD_EXT
+      File.rename(path, old)
+      list = File.join(root, STAGE_DIR, SET_ASIDE)
+      KIF.mkdir_p(File.dirname(list))
+      File.open(list, "ab") { |f| f.write(old + "\n") }
+    end
+
+    # the files an earlier update renamed aside: the game that had them open is closed now
+    def remove_set_aside(root = File.expand_path("."))
+      list = File.join(root, STAGE_DIR, SET_ASIDE)
+      return unless File.file?(list)
+      left = File.read(list).split("\n").reject(&:empty?).select do |p|
+        begin
+          File.delete(p) if File.exist?(p)
+          false
+        rescue SystemCallError
+          true   # the old game hasn't quite closed yet: the start after this one
+        end
+      end
+      left.empty? ? File.delete(list) : File.open(list, "wb") { |f| f.write(left.join("\n") + "\n") }
+    rescue StandardError
+      nil
     end
 
     # true when version v is older than this game's (Data/VERSION: it is moved
@@ -60,6 +94,7 @@ module KIF
     def finish_cut_off(root = File.expand_path("."))
       dir0 = File.join(root, STAGE_DIR)
       return 0 unless File.directory?(dir0)
+      remove_set_aside(root)
       moved = 0
       Dir.children(dir0).sort.each do |v|
         dir = File.join(dir0, v)

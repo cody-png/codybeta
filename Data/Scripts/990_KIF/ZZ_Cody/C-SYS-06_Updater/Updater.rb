@@ -28,7 +28,7 @@
 # so once every file is downloaded and checked the game moves them in itself
 # (apply_in_ruby): scripts last, then the file list, removals, Data/VERSION.
 # "failed.txt" says "moving" meanwhile; if the game is closed then, the next
-# start finishes the move before KIF's scripts load (000_UpdateFinish.rb).
+# start finishes the move before KIF's scripts load (000_0UpdateFinish.rb).
 # A phone can't restart the game: the player is asked to close and reopen it.
 # A phone whose game folder is read-only only gets told (phone_notice).
 #
@@ -302,8 +302,11 @@ module KIF
       end
       removals = []
       if local
+        # a name that only changes case is the same file on Windows/Android: never removed after the new one moved in
+        new_names = {}
+        remote.files.each_key { |p| new_names[p.downcase] = true }
         local.files.each_key do |path|
-          next if remote.files.has_key?(path) || !removable?(path)
+          next if new_names[path.downcase] || !removable?(path)
           # only files still as shipped (a sprite the player replaced is theirs)
           removals << path if File.exist?(File.join(dir, path)) && good_file?(File.join(dir, path), *local.files[path])
         end
@@ -648,7 +651,7 @@ module KIF
     def apply_in_ruby(dir)
       files = File.join(dir, "files")
       failed = File.join(dir, "failed.txt")
-      # stays if anything below raises or the game is closed: 000_UpdateFinish.rb finishes it
+      # stays if anything below raises or the game is closed: 000_0UpdateFinish.rb finishes it
       File.open(failed, "wb") { |f| f.write(KIF::UpdateFinish::MOVING) }
       list = KIF::UpdateFinish.staged_files(files)
       title = _INTL("Installing KIF {1}", File.basename(dir))
@@ -702,7 +705,17 @@ module KIF
         log("#{version}: the game couldn't start itself again")
       end
       pbMessage(_INTL("KIF {1} is installed. Close the game and start it again to use it.", version))
+      # phones: the old scripts must not keep running on the new maps and data
+      unless exe
+        log("#{version}: moved in by the game, closing")
+        (KIF::SessionLog.finish rescue nil) if defined?(KIF::SessionLog)
+        close_game
+      end
       return true
+    end
+
+    def close_game
+      exit
     end
 
     #---------------------------------------------------------------------------
@@ -906,11 +919,14 @@ module KIF
     # version, an Audio/ file the installed file list doesn't have is removed
     # when the list has the same name in another audio format and that file
     # is really there (a stale list, as in a dev checkout, never costs the
-    # only copy of a sound).
+    # only copy of a sound) and is newer (a sound the player put in after
+    # installing, to replace a shipped one, is theirs). Kept per game folder:
+    # two installs can share the save folder.
     AUDIO_EXTS = %w[.wav .mp3 .ogg .mid .midi .wma]
 
     def remove_format_twins(dir = root)
-      return 0 if stored_choices["twins"] == current_version || !KIF::Paths.game_writable?
+      key = "twins:" + File.expand_path(dir).downcase
+      return 0 if stored_choices[key] == current_version || !KIF::Paths.game_writable?
       man = local_manifest
       return 0 unless man
       listed = {}
@@ -928,7 +944,7 @@ module KIF
           next walk.call(r) if File.directory?(full)
           ext = File.extname(c).downcase
           twins = AUDIO_EXTS.include?(ext) && !listed[r.downcase] && stems[r[0, r.length - ext.length].downcase]
-          next unless twins && twins.any? { |q| File.file?(File.join(dir, q)) }
+          next unless twins && twins.any? { |q| (t = File.join(dir, q)) && File.file?(t) && File.mtime(full) <= File.mtime(t) }
           begin
             File.delete(full)
             removed += 1
@@ -939,7 +955,7 @@ module KIF
       end
       walk.call("Audio") if File.directory?(File.join(dir, "Audio"))
       log("removed #{removed} old audio files the shipped Ogg/other format replaced") if removed > 0
-      store_choice("twins", current_version)
+      store_choice(key, current_version)
       return removed
     rescue StandardError => e
       log("format twin check failed (#{e.class}: #{e.message})")
@@ -966,8 +982,11 @@ module KIF
           # moved in by the game itself and cut off (closed partway): finished
           # without asking, half an update can't be safely discarded
           moving = (File.read(File.join(dir, "failed.txt")) rescue "") == KIF::UpdateFinish::MOVING
-          cmd = moving ? 0 : pbMessage(_INTL("The update to KIF {1} didn't finish (a file was in use).", v),
-                                       [_INTL("Try again"), _INTL("Discard it")], 0)
+          # once the scripts (and so the version) are new, discarding would leave a mixed game the updater calls up to date
+          choices = [_INTL("Try again")]
+          choices << _INTL("Discard it") unless v == current_version
+          cmd = moving ? 0 : pbMessage(_INTL("The update to KIF {1} didn't finish (a file was in use).", v), choices, 0)
+          cmd = 0 if cmd < 0 || cmd >= choices.length
           if cmd == 0 && (moving || !update_window?)
             log("#{v}: finishing an update that was cut off while moving files in") if moving
             File.delete(File.join(dir, "failed.txt")) rescue nil

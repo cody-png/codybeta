@@ -234,7 +234,8 @@ module KIF
       return 0 if GameData::Item::DATA.empty? || !bag.is_a?(PokemonBag)
       back = pending[:items].select { |id, qty| item_known?(id) && bag.pbStoreItem(id, qty) }
       return 0 if back.empty?
-      pending[:items] -= back
+      # one entry per item returned (Array#- would drop every equal entry, also those that didn't fit)
+      back.each { |b| i = pending[:items].index(b); pending[:items].delete_at(i) if i }
       KIF.log("#{back.length} set-aside item(s) are back in the Bag: " + back.map { |id, q| "#{id} x#{q}" }.join(", "))
       return back.length
     end

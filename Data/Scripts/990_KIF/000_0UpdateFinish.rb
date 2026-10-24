@@ -2,10 +2,14 @@
 # C-SYS-06 – finishing an update the game was moving in itself (2026-10-23)
 #   Phones and Wine/Proton move a downloaded update in from Ruby
 #   (KIF::Updater.apply_in_ruby). If the game is closed or killed while it
-#   does, "KIF Update/<v>/failed.txt" still says "moving". This file loads
-#   before the rest of KIF's scripts, so the remaining files are moved in
-#   here and KIF's scripts and data all load from the new build; the load
-#   screen (Updater.after_update) then does the rest and asks for a restart.
+#   does, "KIF Update/<v>/failed.txt" still says "moving". This file is
+#   named to load first of all of KIF's scripts (000_0...: the loader lists a
+#   folder before running it, so a file that sorts later and was replaced
+#   here runs its new copy), so the remaining files are moved in here and
+#   KIF's scripts and data load from the new build (PIF's own scripts before
+#   990_KIF already ran from the old one; KIF updates don't change them).
+#   The load screen (Updater.after_update) then does the rest and asks for a
+#   restart.
 #===============================================================================
 module KIF
   module UpdateFinish
@@ -43,9 +47,10 @@ module KIF
       File.rename(src, dest)
     end
 
-    # true when version v is older than this game's (000_README.rb loads first)
-    def older?(v)
-      mine = (defined?(KIF::PORT_VERSION) ? KIF::PORT_VERSION.to_s : "0").scan(/\d+/).map(&:to_i)
+    # true when version v is older than this game's (Data/VERSION: it is moved
+    # in last, so during a cut-off move it still names the installed version)
+    def older?(v, root = File.expand_path("."))
+      mine = ((File.read(File.join(root, VERSION_FILE)) rescue nil) || (defined?(KIF::PORT_VERSION) ? KIF::PORT_VERSION.to_s : "0")).scan(/\d+/).map(&:to_i)
       theirs = v.to_s.scan(/\d+/).map(&:to_i)
       n = [mine.length, theirs.length].max
       return ((theirs + [0] * (n - theirs.length)) <=> (mine + [0] * (n - mine.length))) == -1
@@ -60,7 +65,7 @@ module KIF
         dir = File.join(dir0, v)
         marker = File.join(dir, MARKER)
         next unless File.file?(marker) && File.read(marker) == MOVING
-        next if older?(v)   # a newer game was installed over it since: the load screen removes it
+        next if older?(v, root)   # a newer game was installed over it since: the load screen removes it
         files = File.join(dir, "files")
         staged_files(files).each do |rel|
           move(File.join(files, rel), File.join(root, rel))

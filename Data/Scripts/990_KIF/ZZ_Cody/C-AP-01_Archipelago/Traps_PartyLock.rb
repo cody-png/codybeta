@@ -30,6 +30,8 @@
 #       saving and the PC; it keeps counting down in a PC box
 #     * an unlinked save ignores locks; Pinkan Island and Nuzlocke as every
 #       trap (nothing here can faint a Pokemon)
+#   The party screen shows LOCKED (and CURSED on every Pokemon while the
+#   Disobedience Curse is on, Traps_Curse.rb) over the Pokemon's icon.
 #===============================================================================
 class Pokemon
   attr_accessor :kif_ap_lock   # [kind, left]: "BATTLES" / "CHECKS" / "CENTER"
@@ -206,10 +208,16 @@ class PokemonPartyPanel
     redraw = @refreshBitmap
     kif_ap_lock_refresh
     begin
-      return unless redraw && @pokemon && KIF::AP::Traps.locked?(@pokemon)
+      return unless redraw && @pokemon
+      tags = []
+      tags << [_INTL("LOCKED"), Color.new(248, 96, 96), Color.new(72, 24, 24)] if KIF::AP::Traps.locked?(@pokemon)
+      tags << [_INTL("CURSED"), Color.new(216, 136, 248), Color.new(56, 24, 80)] if KIF::AP::Traps.cursed? && !@pokemon.egg?   # Traps_Curse.rb
+      return if tags.empty?
       return unless @overlaysprite && !@overlaysprite.disposed? && @overlaysprite.bitmap
       pbSetSmallFont(@overlaysprite.bitmap)
-      pbDrawTextPositions(@overlaysprite.bitmap, [[_INTL("LOCKED"), 150, 70, 0, Color.new(248, 96, 96), Color.new(72, 24, 24)]])
+      # centred on the Pokemon's icon, clear of the HP numbers; two tags stack
+      top = tags.length == 1 ? 38 : 26
+      pbDrawTextPositions(@overlaysprite.bitmap, tags.each_with_index.map { |(t, base, shadow), i| [t, 46, top + i * 16, 2, base, shadow] })
     rescue StandardError => e
       KIF.log("Archipelago: Party Lock tag failed (#{e.class}: #{e.message})")
     end

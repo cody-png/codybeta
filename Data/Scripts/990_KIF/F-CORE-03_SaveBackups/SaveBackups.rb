@@ -156,8 +156,10 @@ module KIF
       if done == 0 && kept == 0
         pbMessage(_INTL("There are no old backups to compress."))
       else
-        pbMessage(_INTL("Compressed {1} backups and freed {2} MB.", done, format("%.1f", freed / 1048576.0))) if done > 0
-        pbMessage(_INTL("{1} backups couldn't be checked, so they were left as they were.", kept)) if kept > 0
+        mb = format("%.1f", freed / 1048576.0)
+        pbMessage(done == 1 ? _INTL("Compressed 1 backup and freed {1} MB.", mb) : _INTL("Compressed {1} backups and freed {2} MB.", done, mb)) if done > 0
+        pbMessage(kept == 1 ? _INTL("1 backup couldn't be checked, so it was left as it was.") :
+                              _INTL("{1} backups couldn't be checked, so they were left as they were.", kept)) if kept > 0
       end
     end
 

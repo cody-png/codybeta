@@ -554,7 +554,7 @@ module KIF
       h = @death
       @death = nil
       d[:death_time] = h["time"].to_f
-      pbMessage(_INTL("{1} fainted, and so does your team...", h["source"].to_s.empty? ? _INTL("Someone") : h["source"].to_s))
+      pbMessage(_INTL("{1}'s team fainted, so yours does too.", h["source"].to_s.empty? ? _INTL("Someone") : h["source"].to_s))
       @dying = true
       begin
         $Trainer.party.each { |pk| pk.hp = 0 }
@@ -623,7 +623,8 @@ module KIF
         pbMessage(client_status_text)
         poll
         n = @queue.count { |e| e["index"].to_i >= d[:received] }
-        pbMessage(_INTL("{1} items waiting. They arrive once you can walk around freely (no message, menu or event running).", n)) if n > 0
+        pbMessage(n == 1 ? _INTL("1 item waiting. It arrives once you can walk around freely (no message, menu or event running).") :
+                           _INTL("{1} items waiting. They arrive once you can walk around freely (no message, menu or event running).", n)) if n > 0
         return
       end
       unless slot

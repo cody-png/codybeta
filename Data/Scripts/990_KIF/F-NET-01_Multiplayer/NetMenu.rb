@@ -121,7 +121,7 @@ module KIF
       if @pm && @pm[:mapping] && now > @renew_at
         @renew_at = now + 3600
         m = @pm[:mapping]
-        Thread.new { PortMap.renew(m) }.report_on_exception = false
+        Thread.new { log("router: the port's lease wasn't renewed") unless PortMap.renew(m) }.report_on_exception = false
       end
       s = @session
       s.poll.each do |ev|

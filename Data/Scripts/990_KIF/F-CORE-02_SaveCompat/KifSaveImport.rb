@@ -33,6 +33,9 @@
 #      PIF 6.8.2 showed them as "UNKNOWN" (GameData::Item.get falls back to
 #      it), where Toss and Give act on :UNKNOWN instead. Once the ID exists
 #      again they go back into the Bag (held ones too). Added 2026-10-22.
+# Steps 1-4 run on every read; 5-6 only when the save's values are loaded
+# (SaveData.load_all_values, 2026-10-24): the load screen's previews read
+# every save 2-3 times per start and must not change or log anything.
 #
 # Old KIF saves are found automatically because Game.ini Title is
 # "kurayinfinitefusion" (KIF's save folder, %APPDATA%\kurayinfinitefusion).
@@ -240,15 +243,28 @@ module KIF
       return back.length
     end
 
+    # Both steps, as a loaded save gets them
     def self.convert!(data)
-      return data unless data.is_a?(Hash) && !data.empty?
+      convert_format!(data)
+      set_aside!(data)
+      return data
+    end
+
+    def self.pending_in(data)
       pending = data[:kif_pending]
       pending = {} unless pending.is_a?(Hash)
       pending[:pokemon] ||= []
       # in the save data before any Pokémon moves into it: if a step below
       # raises, what was already taken out of the party / boxes isn't lost
       data[:kif_pending] = pending
+      return pending
+    end
+
+    # Steps 1-4, on every read (the load screen's previews too)
+    def self.convert_format!(data)
+      return data unless data.is_a?(Hash) && !data.empty?
       if kif_save?(data)
+        pending = pending_in(data)
         MODDED_KEYS.each do |kif_key, key|
           data[key] = data[kif_key] if data[kif_key]
           data.delete(kif_key)
@@ -263,9 +279,18 @@ module KIF
         end
         pending[:from] = _INTL("KIF (PIF {1})", data[:game_version].to_s)
         pending[:notified] = false
-        KIF.log("Converted a KIF save (game_version #{data[:game_version]})")
       end
       fill_pokemon_system(data[:pokemon_system])
+      return data
+    end
+
+    # Steps 5-6, only when a save is really loaded (SaveData.load_all_values):
+    # the load screen reads every save several times for its previews, which
+    # must change nothing (and logged each line 2-3 times per start)
+    def self.set_aside!(data)
+      return data unless data.is_a?(Hash) && !data.empty?
+      pending = pending_in(data)
+      KIF.log("Converted a KIF save (game_version #{data[:game_version]})") if pending[:from]
       returned = return_known_pokemon(data, pending)
       moved = set_aside_unknown_pokemon(data, pending)
       pending[:notified] = false if moved > 0 || returned > 0
@@ -308,11 +333,27 @@ module SaveData
     def read_from_file(file_path)
       data = kif_read_from_file(file_path)
       begin
-        KIF::SaveImport.convert!(data)
+        KIF::SaveImport.convert_format!(data)
       rescue => e
         KIF.log("KIF save conversion failed for #{file_path}: #{e.message}")
       end
       return data
+    end
+  end
+end
+
+# The real load (Game.load and everything else that loads a save's values)
+module SaveData
+  class << self
+    alias kif_import_load_all_values load_all_values unless method_defined?(:kif_import_load_all_values)
+
+    def load_all_values(save_data)
+      begin
+        KIF::SaveImport.set_aside!(save_data)
+      rescue => e
+        KIF.log("Setting aside unknown Pokémon / items failed: #{e.message}")
+      end
+      return kif_import_load_all_values(save_data)
     end
   end
 end

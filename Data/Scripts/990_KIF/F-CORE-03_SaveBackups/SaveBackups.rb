@@ -45,8 +45,9 @@ module KIF
     AUTO = "autosave"
     @next_name = nil
     @player_saving = false
+    @menu_open = false
     class << self
-      attr_accessor :next_name, :player_saving
+      attr_accessor :next_name, :player_saving, :menu_open
     end
 
     def self.infinite?
@@ -262,6 +263,7 @@ class PokemonSaveScreen
   # (KIF MultiSaves_Infinite Save Backups.rb:61-118).
   def pbSaveScreen
     ret = false
+    KIF::SaveBackups.menu_open = true                                   # KIF
     @scene.pbStartScreen
     if !$Trainer.save_slot
       # New Game - must select slot
@@ -315,6 +317,27 @@ class PokemonSaveScreen
     end
     @scene.pbEndScreen
     return ret
+  ensure
+    KIF::SaveBackups.menu_open = false                                  # KIF
+  end
+end
+
+# The save menu's question and messages use the normal box at the bottom even
+# when the event that opened it set other text options (the new-game intro:
+# top of the screen, no frame, which put them over the save panel).
+# $game_system only changes while a box is placed, so a save made there keeps
+# the event's options.
+alias kif_bk_pbRepositionMessageWindow pbRepositionMessageWindow unless defined?(kif_bk_pbRepositionMessageWindow)
+
+def pbRepositionMessageWindow(msgwindow, linecount = 2)
+  sys = $game_system
+  return kif_bk_pbRepositionMessageWindow(msgwindow, linecount) unless KIF::SaveBackups.menu_open && sys
+  old = [sys.message_position, sys.message_frame]
+  begin
+    sys.message_position, sys.message_frame = 2, 0
+    return kif_bk_pbRepositionMessageWindow(msgwindow, linecount)
+  ensure
+    sys.message_position, sys.message_frame = old
   end
 end
 

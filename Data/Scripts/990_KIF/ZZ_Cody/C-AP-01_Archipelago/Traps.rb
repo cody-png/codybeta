@@ -218,6 +218,9 @@ module Input
 
   def self.dir4
     d = kif_ap_dir4
-    return KIF::AP::Traps.instance_variable_get(:@flipping) ? KIF::AP::Traps.flip(d) : d
+    return d unless KIF::AP::Traps.instance_variable_get(:@flipping)
+    # a click-to-move walk plans its own path: flipping its steps bumped into walls forever (playtest 2026-10-23)
+    return d if defined?(KIF::Mouse) && KIF::Mouse.dir > 0 && KIF::Mouse.on_map
+    return KIF::AP::Traps.flip(d)
   end
 end

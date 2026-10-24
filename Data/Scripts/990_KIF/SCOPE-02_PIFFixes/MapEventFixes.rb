@@ -106,10 +106,11 @@ end
 #    or choices now reads like PIF's Poké Mart ("$200,000", "$50"); a \ch[]
 #    choice with a comma is quoted, which \ch[] reads. Only the text changes:
 #    what is charged is the event's own money commands. A price shown from a
-#    game variable ("$\v[15]") prints as the game gives it. A line or choice
-#    the loaded language translates (french.dat) is left alone: the English
-#    text is its translation key. Maps are done as they load, common events
-#    once the language is loaded (Cody, 2026-10-24: all of them).
+#    game variable ("$\v[15]") is formatted when the message shows (below).
+#    A line or choice the loaded language translates (french.dat) is left
+#    alone: the English text is its translation key. Maps are done as they
+#    load, common events once the language is loaded (Cody, 2026-10-24: all
+#    of them).
 module KIF
   module EventPrices
     def self.money(digits)
@@ -120,6 +121,16 @@ module KIF
     def self.prices(text)
       t = text.gsub(/(?<![\d$,])(\d{1,3}(?:,\d{3})+|\d+)\$/) { money($1) }
       return t.gsub(/\$(\d{1,3}(?:[ ,]\d{3})+|\d+)(?!\d|,\d)/) { money($1) }
+    end
+
+    # "$\v[15]" with an Integer in variable 15 -> "$5,000" (a String or nil
+    # is left for PIF to print)
+    def self.variable_prices(text)
+      return text.gsub(/\$\\v\[(\d+)\]/i) do
+        whole = $&
+        v = $game_variables ? $game_variables[$1.to_i] : nil
+        v.is_a?(Integer) ? money(v.to_s) : whole
+      end
     end
 
     def self.fix_text(text)
@@ -199,4 +210,14 @@ module Game
       return ret
     end
   end
+end
+
+# A price from a game variable ("$\v[15]", "\C[5]$\V[329]": tutors, gamblers'
+# bets, debts) prints like the Poké Mart, before pbMessageDisplay fills \v[]
+# in (011_Messages.rb:678-682). Choices don't fill \v[] in, so only messages.
+alias kif_mef_pbMessageDisplay pbMessageDisplay unless defined?(kif_mef_pbMessageDisplay)
+
+def pbMessageDisplay(msgwindow, message, *args, &block)
+  message = KIF::EventPrices.variable_prices(message) if message.is_a?(String) && message.include?("$")
+  return kif_mef_pbMessageDisplay(msgwindow, message, *args, &block)
 end

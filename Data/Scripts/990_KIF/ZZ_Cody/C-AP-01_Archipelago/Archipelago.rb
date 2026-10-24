@@ -50,6 +50,11 @@
 #   gym_leaders (the 8 "leader beaten" switches 4-11 are all on).
 #   The KIF Client writes in/status.json every few seconds; the pause menu
 #   entry says whether it runs and is connected.
+#   Regions (apworld 0.6.0): Johto's and the Sevii Islands' item balls, gifts,
+#   trainers, gift Pokemon and badges are checks when the slot lists them;
+#   nothing here is Kanto-only (badge_events names every shuffled badge).
+#   Goal all_gym_leaders: every badge location of the slot checked (each
+#   leader of the regions in play beaten). Traps ("TRAP_<kind>"): Traps.rb.
 #===============================================================================
 class PokemonGlobalMetadata
   attr_accessor :kif_ap
@@ -64,7 +69,7 @@ module KIF
     GIFT_BASE = 20_000_000
     # "Leader beaten" switches, Brock to Giovanni (the gym_leaders goal)
     LEADER_SWITCHES = (4..11).to_a
-    GOALS = %w[elite_four gym_leaders]
+    GOALS = %w[elite_four gym_leaders all_gym_leaders]
     STATUS_STALE = 30   # seconds without a status.json from the client: it isn't running
     # Kanto towns for free_fly (Pallet and Viridian are on the way anyway;
     # no Indigo Plateau: it would skip Victory Road and the League guards)
@@ -355,10 +360,16 @@ module KIF
       found_message(id, :given)
     end
 
-    # gym_leaders goal: every Kanto leader beaten
+    # gym_leaders goal: every Kanto leader beaten; all_gym_leaders: every
+    # badge location of the slot checked (the leaders of every region in play)
     def check_leaders
-      return unless on? && goal_kind == "gym_leaders" && !data[:goal]
-      goal! if LEADER_SWITCHES.all? { |s| $game_switches[s] }
+      return unless on? && !data[:goal]
+      case goal_kind
+      when "gym_leaders" then goal! if LEADER_SWITCHES.all? { |s| $game_switches[s] }
+      when "all_gym_leaders"
+        badges = data[:locations].select { |id| id >= BADGE_BASE && id < TRAINER_BASE }
+        goal! if !badges.empty? && (badges - data[:checked]).empty?
+      end
     end
 
     # The KIF Client's last status.json: :connected, :disconnected (running,
@@ -491,6 +502,10 @@ module KIF
     # One received item; false = can't take it now (bag pocket full)
     def grant(e, d)
       who = e["from"].to_s
+      if e["item"].to_s =~ /\ATRAP_(\w+)\z/
+        Traps.add($1, who, d)   # runs at the next quiet moment (Traps.rb)
+        return true
+      end
       if e["item"].to_s =~ /\ABADGE_(\d+)\z/
         n = $1.to_i
         $Trainer.badges[n] = true
@@ -520,6 +535,8 @@ module KIF
         end
         @queue.shift
       end
+      Traps.tell_normal
+      Traps.run_one(d)
       grant_death(d) if @death
     end
 

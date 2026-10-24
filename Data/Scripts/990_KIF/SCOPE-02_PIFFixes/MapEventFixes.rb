@@ -194,22 +194,23 @@ def load_data(filename, *args)
   return ret
 end
 
-# Common events once the language is loaded: they are read at start-up,
-# before Game.set_up_system loads it
-module Game
-  class << self
-    alias kif_mef_set_up_system set_up_system unless method_defined?(:kif_mef_set_up_system)
+# Common events each time a language is loaded (start-up, and the load
+# screen's flag, which never reloads them): read again from the file, so a
+# line the new language translates keeps PIF's text, its translation key
+alias kif_mef_pbLoadMessages pbLoadMessages unless defined?(kif_mef_pbLoadMessages)
 
-    def set_up_system(*args)
-      ret = kif_mef_set_up_system(*args)
-      begin
-        ($data_common_events || []).each { |ce| KIF::EventPrices.fix_list(ce.list, 0) if ce && ce.list }
-      rescue => e
-        KIF.log("Common event prices not changed: #{e.class}: #{e.message}")
-      end
-      return ret
+def pbLoadMessages(file)
+  ret = kif_mef_pbLoadMessages(file)
+  if $data_common_events
+    begin
+      ces = load_data("Data/CommonEvents.rxdata")
+      ces.each { |ce| KIF::EventPrices.fix_list(ce.list, 0) if ce && ce.list }
+      $data_common_events = ces
+    rescue => e
+      KIF.log("Common event prices not changed: #{e.class}: #{e.message}")
     end
   end
+  return ret
 end
 
 # A price from a game variable ("$\v[15]", "\C[5]$\V[329]": tutors, gamblers'

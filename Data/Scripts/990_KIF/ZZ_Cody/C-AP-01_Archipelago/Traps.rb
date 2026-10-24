@@ -23,11 +23,14 @@
 #                keeps at least 1 HP)
 #     PARTY_LOCK one party Pokemon won't battle for a while (Traps_PartyLock.rb)
 #     WARP       back to the last Pokemon Center (Traps_Warp.rb)
+#     PP_DRAIN   one move of the lead Pokemon drops to 0 PP (Traps_PPDrain.rb)
+#     CURSE      the party sometimes disobeys in battle until the next
+#                Pokemon Center (Traps_Curse.rb)
 #===============================================================================
 module KIF
   module AP
     module Traps
-      KINDS = %w[POISON PARALYSIS BATTLE CONFUSION MONEY SWAP PARTY_LOCK WARP]   # PARTY_LOCK, WARP: Traps_PartyLock.rb, Traps_Warp.rb
+      KINDS = %w[POISON PARALYSIS BATTLE CONFUSION MONEY SWAP PARTY_LOCK WARP PP_DRAIN CURSE]   # the last four: Traps_<name>.rb
       CONFUSION_STEPS = 50
       MONEY_PERCENT = 10
       MONEY_MAX = 5000

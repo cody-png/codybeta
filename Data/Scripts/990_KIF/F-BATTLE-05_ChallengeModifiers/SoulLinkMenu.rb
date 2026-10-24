@@ -20,7 +20,11 @@ class Window_KifSLRows < Window_CommandPokemon
     rect = drawCursor(index, rect)
     base, shadow = row.last == :grey ? KIF::SoulLink::Menu.grey(windowskin) : [baseColor, shadowColor]
     pbSetSmallFont(contents)
-    row.each { |c| pbDrawShadowText(contents, rect.x + c[1], rect.y, c[2], rect.height, c[0].to_s, base, shadow, c[3] || 0) if c.is_a?(Array) }
+    row.each do |c|
+      next unless c.is_a?(Array)
+      text = KIF::SoulLink::Menu.fit(contents, c[0].to_s, c[2])   # never wider than its column (the engine would squeeze it)
+      pbDrawShadowText(contents, rect.x + c[1], rect.y, c[2], rect.height, text, base, shadow, c[3] || 0)
+    end
     pbSetSystemFont(contents)
   end
 end
@@ -52,6 +56,14 @@ module KIF
       end
 
       def clip; (Input.clipboard.to_s rescue "").strip; end
+
+      # text cut to width in bmp's font, with "..." when cut
+      def fit(bmp, text, width)
+        return text if text.empty? || bmp.text_size(text).width <= width
+        t = text
+        t = t[0...-1] while t.length > 0 && bmp.text_size(t.rstrip + "...").width > width
+        return t.rstrip + "..."
+      end
       def say(text); pbMessage(text); true; end
       def copy(text); (Input.clipboard = text) ? true : false; rescue StandardError; false; end
 
@@ -103,12 +115,11 @@ module KIF
         same_game = info["g"] == SoulLink.game_hash
         same_mode = info["m"] == $PokemonSystem.ch_sl_mode
         modes = [_INTL("Linked"), _INTL("Fused")]
-        head = [_INTL("Soul Link"), _INTL("Partner: {1}", info["n"]),
-                _INTL("Connection: {1}", net ? _INTL("Direct") : _INTL("Codes")),
+        # 5 lines: the box above the list shows no more (pairs are always by place, so that isn't a line)
+        head = [_INTL("Soul Link"), _INTL("Partner: {1} ({2})", info["n"], net ? _INTL("connected") : _INTL("link code")),
                 _INTL("Nuzlocke rules: {1}", same_rules ? _INTL("Same") : _INTL("Different")),
                 _INTL("Game mode / randomizer: {1}", same_game ? _INTL("Same") : _INTL("Different")),
-                _INTL("Link mode: {1}{2}", modes[$PokemonSystem.ch_sl_mode], same_mode ? "" : _INTL(" (theirs: {1})", modes[info["m"]])),
-                _INTL("Pairs by: Place")]
+                _INTL("Link mode: {1}{2}", modes[$PokemonSystem.ch_sl_mode], same_mode ? "" : _INTL(" (theirs: {1})", modes[info["m"]]))]
         match = same_rules && same_game && same_mode
         help = match ? _INTL("Both runs match. Link with {1}?\nDeaths will be shared from now on.", info["n"]) :
                        _INTL("Your settings differ from {1}'s. You can link anyway.", info["n"])
@@ -230,7 +241,7 @@ module KIF
         evs = st[:my_log].map { |e| [e, SoulLink.my_name] } + st[:their_log].map { |e| [e, name] }
         evs.sort_by { |e, _w| [e["t"] || 0, e["q"]] }.reverse.map do |e, who|
           time = e["t"] ? Time.at(e["t"]).strftime("%m-%d %H:%M") : "--"
-          [[time, 0, 100], [who, 110, 80], [event_text(e), 194, 216], [e["dbg"] ? _INTL("Debug") : nil, 410, 50, 2]]
+          [[time, 0, 100], [who, 110, 80], [event_text(e), 194, 236], [e["dbg"] ? _INTL("D") : nil, 440, 20, 2]]
         end
       end
 
@@ -238,7 +249,7 @@ module KIF
         rows = log_rows(name)
         return say(_INTL("Nothing has happened since you linked with {1}.", name)) if rows.empty?
         table(_INTL("Soul Link log with {1}\nNewest first", name), rows,
-              _INTL("Debug: made while Debug mode was on."))
+              _INTL("D: made while Debug mode was on."))
       end
 
       #-------------------------------------------------------------------------
@@ -286,14 +297,14 @@ module KIF
       ICON_RECT = [224, 58, 32, 32]   # the partner's icon, half size, right of the HP numbers
       DOT_POS   = [238, 46]
       DOT_COLORS = { alive: [96, 216, 96], hurt: [248, 200, 40], dead: [232, 64, 64], missed: [232, 64, 64], waiting: [168, 168, 168] }
-      # 5x5 at the party's 2x pixel size: o outline, x colour
-      DOT_ROWS = [" ooo ", "oxxxo", "oxxxo", "oxxxo", " ooo "]
+      # 7x7 at the party's 2x pixel size, drawn from DOT_POS one cell up and left:
+      # w light ring (stands out on the selected panel's green), o outline, x colour
+      DOT_ROWS = ["  www  ", " wooow ", "woxxxow", "woxxxow", "woxxxow", " wooow ", "  www  "]
 
       def draw_dot(bmp, x, y, rgb)
-        fill = Color.new(*rgb)
-        line = Color.new(40, 40, 40)
+        cols = { "x" => Color.new(*rgb), "o" => Color.new(40, 40, 40), "w" => Color.new(248, 248, 248) }
         DOT_ROWS.each_with_index do |row, j|
-          row.chars.each_with_index { |c, i| bmp.fill_rect(x + i * 2, y + j * 2, 2, 2, c == "o" ? line : fill) unless c == " " }
+          row.chars.each_with_index { |c, i| bmp.fill_rect(x - 2 + i * 2, y - 2 + j * 2, 2, 2, cols[c]) if cols[c] }
         end
       end
 

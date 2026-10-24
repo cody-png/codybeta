@@ -241,7 +241,7 @@ module KIF
         evs = st[:my_log].map { |e| [e, SoulLink.my_name] } + st[:their_log].map { |e| [e, name] }
         evs.sort_by { |e, _w| [e["t"] || 0, e["q"]] }.reverse.map do |e, who|
           time = e["t"] ? Time.at(e["t"]).strftime("%m-%d %H:%M") : "--"
-          [[time, 0, 100], [who, 110, 80], [event_text(e), 194, 236], [e["dbg"] ? _INTL("D") : nil, 440, 20, 2]]
+          [[time, 0, 106], [who, 112, 70], [event_text(e), 188, 246], [e["dbg"] ? _INTL("D") : nil, 440, 20, 2]]   # the time is 102 px in the game's small font
         end
       end
 

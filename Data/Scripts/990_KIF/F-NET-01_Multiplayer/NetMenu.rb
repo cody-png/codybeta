@@ -638,7 +638,8 @@ end
 
 KIF::PauseMenu.add(:kif_multiplayer, "Multiplayer", icon: "menuIcons/PLAYER", order: 60,
   condition: proc { KIF::Net.menu_on? },
-  handler: proc { |_scene|
+  handler: proc { |scene|
+    scene.pbHideMenu if scene.respond_to?(:pbHideMenu)   # the pause menu draws over the screens (z 99999)
     KIF::Net::Menu.open
     :stay
   })

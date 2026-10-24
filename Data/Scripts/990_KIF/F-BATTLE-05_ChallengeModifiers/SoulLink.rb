@@ -762,7 +762,11 @@ KIF::Options.add(:challenges, :save) {
 
 KIF::PauseMenu.add(:kif_soullink, "Soul Link", icon: "menuIcons/PLAYER", order: 55,
   condition: proc { KIF::SoulLink.on? },
-  handler: proc { |_scene| KIF::SoulLink::Menu.open; :stay })
+  handler: proc { |scene|
+    scene.pbHideMenu if scene.respond_to?(:pbHideMenu)   # the pause menu draws over the screens (z 99999)
+    KIF::SoulLink::Menu.open
+    :stay
+  })
 
 #-------------------------------------------------------------------------------
 # Hooks

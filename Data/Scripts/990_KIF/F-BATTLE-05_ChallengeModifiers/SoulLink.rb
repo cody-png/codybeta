@@ -143,6 +143,9 @@ module KIF
       names = Object.constants.grep(/\ASWITCH_\w*RANDOM/).reject { |c| c.to_s =~ /AT_LEAST_ONCE|INTRO|DONT/ }.sort + MODE_SWITCHES
       v = names.map { |c| Object.const_defined?(c) && $game_switches && $game_switches[Object.const_get(c)] ? 1 : 0 }
       v << ($Trainer.game_mode rescue 0).to_i
+      if defined?(KIF::Rand)   # KIF's randomizer keeps most of its settings in its own data, not in switches (seed left out)
+        v += (KIF::Rand.code_enums.map { |s| KIF::Rand.get(s[0]) } + [KIF::Rand.get(:wild_bst), KIF::Rand.get(:trainer_bst)] rescue [])
+      end
       return crypto.hex(crypto.sha256("KIF SL game " + v.join(",")))[0, 8]
     end
 
@@ -316,7 +319,7 @@ module KIF
     end
 
     EV_KINDS = %w[c m d o]
-    SPECIES_RE = /\A[A-Za-z0-9_]{1,48}\z/   # :NIDORANfE has a small letter
+    SPECIES_RE = /\A(?!.*_x_)[A-Za-z0-9_]{1,48}\z/   # :NIDORANfE has a small letter; "_x_" ids make PIF's fusion lookup raise
 
     def self.valid_event?(e)
       return false unless e.is_a?(Hash) && e["q"].is_a?(Integer) && e["q"] > 0 && EV_KINDS.include?(e["k"]) &&
@@ -400,7 +403,7 @@ module KIF
     end
 
     def self.species_name(s)
-      d = GameData::Species.try_get(s.to_s.to_sym) if s
+      d = (GameData::Species.try_get(s.to_s.to_sym) rescue nil) if s   # the partner's id: a bad one already in a save shows as text
       return d ? d.name : s.to_s
     end
 
@@ -564,9 +567,11 @@ module KIF
 
     def self.on_disconnect
       @peer = nil
+      @peer_info = nil   # (a new partner must not be linked with the last one's code)
       @offer = nil
       @asked = false
       @party_sent = nil
+      @hello_sent = false
     end
 
     def self.send_hello
@@ -576,6 +581,12 @@ module KIF
       s.post("sl_hello", "link" => st[:link] || "", "seen" => st[:their_seq] || 0, "acked" => st[:acked] || 0,
                          "code" => link_code)
       s.post("sl_party", "ids" => @party_sent = party_ids) if st[:key]
+      @hello_sent = true
+    end
+
+    # Soul Link turned on while connected: say hello then (checked every second on the map)
+    def self.hello_late
+      send_hello if !@hello_sent && session && on?
     end
 
     # id:species:level:hp:totalhp for each link in the party (a fusion has two)
@@ -614,12 +625,14 @@ module KIF
 
     # a message from the partner's game (KIF::Net.update)
     def self.receive(type, msg)
+      if type == "sl_hello"   # kept while Off too: linking needs it once Soul Link is turned on
+        @peer = msg
+        @peer_info = read_link_code(msg["code"])
+      end
       return unless on?
       st = state
       case type
       when "sl_hello"
-        @peer = msg
-        @peer_info = read_link_code(msg["code"])
         return unless st[:key] && msg["link"] == st[:link]
         st[:acked] = [msg["seen"], st[:my_seq]].min
         s = session
@@ -828,6 +841,13 @@ module KIF
 end
 
 Events.onMapUpdate += proc { |_sender, _e|
+  if Graphics.frame_count % 60 == 0
+    begin
+      KIF::SoulLink.hello_late
+    rescue => e
+      KIF.log("Soul Link: hello not sent (#{e.class}: #{e.message})")
+    end
+  end
   if Graphics.frame_count % 60 == 0 && KIF::SoulLink.linked?
     begin
       KIF::SoulLink.send_party

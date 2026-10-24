@@ -260,7 +260,9 @@ module KIF
           base, shadow = win.baseColor, win.shadowColor
           pbDrawTextPositions(txt.bitmap, [[lines[0], 76, 12, 0, base, shadow], [lines[1], 76, 42, 0, base, shadow]])
           data = their_species && GameData::Species.try_get(their_species.to_s.to_sym)
-          [[data && Pokemon.new(data.id, 1), 46], [mine, 318]].each do |pk, x|
+          theirs = data && Pokemon.new(data.id, 1)
+          theirs.shiny = false if theirs   # a stand-in: not shiny at random (KIF's shiny odds)
+          [[theirs, 46], [mine, 318]].each do |pk, x|
             next unless pk
             s = PokemonIconSprite.new(pk, vp)
             s.setOffset(PictureOrigin::Center)
@@ -297,7 +299,9 @@ module KIF
 
       def draw_icon(bmp, species, rect, opacity = 255)
         data = GameData::Species.try_get(species.to_s.to_sym) or return
-        spr = PokemonIconSprite.new(Pokemon.new(data.id, 1))
+        pk = Pokemon.new(data.id, 1)
+        pk.shiny = false   # a stand-in: not shiny at random (KIF's shiny odds)
+        spr = PokemonIconSprite.new(pk)
         src = spr.bitmap
         bmp.stretch_blt(Rect.new(*rect), src, Rect.new(0, 0, src.height, src.height), opacity) if src
       rescue StandardError => e   # no icon file: the dot still shows
@@ -394,6 +398,8 @@ class PokemonParty_Scene
       kif_sl_box if @sprites && !@kif_sl_failed && (@sprites["kif_sl_box"] || KIF::SoulLink.linked?)
     rescue StandardError => e
       @kif_sl_failed = true
+      (@sprites["helpwindow"].contents_opacity = 255) rescue nil   # the prompts show again
+      (@sprites["kif_sl_box"].visible = false) rescue nil
       KIF.log("Soul Link: party box failed (#{e.class}: #{e.message})")
     end
     return ret

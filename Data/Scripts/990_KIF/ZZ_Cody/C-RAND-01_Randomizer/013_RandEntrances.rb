@@ -144,7 +144,7 @@ module KIF
         a << :surf if (have.include?(:item_HM03) && badges >= 6) || have.include?(:item_SURFBOARD)
         a << :waterfall if (have.include?(:item_HM05) && badges >= 9) || have.include?(:item_JETPACK)
         a << :rockclimb if have.include?(:item_CLIMBINGGEAR)
-        a << :dive if (have.include?(:item_HM08) && badges >= 9) || have.include?(:item_SCUBAGEAR)
+        a << :dive if (have.include?(:item_HM06) && badges >= 9) || have.include?(:item_SCUBAGEAR)   # HM06 is Dive (HM08 is Flash)
         a << :pokeflute if have.include?(:item_POKEFLUTE)
         a << :bike if have.include?(:item_BICYCLE)
         return a

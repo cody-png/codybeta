@@ -904,7 +904,9 @@ module KIF
     # copied over an older KIF never deletes, so "x.wav" stays beside the
     # shipped "x.ogg", and the game tries .wav and .mp3 before .ogg. Once per
     # version, an Audio/ file the installed file list doesn't have is removed
-    # when the list has the same name in another audio format.
+    # when the list has the same name in another audio format and that file
+    # is really there (a stale list, as in a dev checkout, never costs the
+    # only copy of a sound).
     AUDIO_EXTS = %w[.wav .mp3 .ogg .mid .midi .wma]
 
     def remove_format_twins(dir = root)
@@ -916,7 +918,7 @@ module KIF
       man.files.each_key do |p|
         listed[p.downcase] = true   # Windows and Android storage ignore case
         ext = File.extname(p).downcase
-        stems[p[0, p.length - ext.length].downcase] = true if p.start_with?("Audio/") && AUDIO_EXTS.include?(ext)
+        (stems[p[0, p.length - ext.length].downcase] ||= []) << p if p.start_with?("Audio/") && AUDIO_EXTS.include?(ext)
       end
       removed = 0
       walk = lambda do |rel|
@@ -925,7 +927,8 @@ module KIF
           full = File.join(dir, r)
           next walk.call(r) if File.directory?(full)
           ext = File.extname(c).downcase
-          next unless AUDIO_EXTS.include?(ext) && !listed[r.downcase] && stems[r[0, r.length - ext.length].downcase]
+          twins = AUDIO_EXTS.include?(ext) && !listed[r.downcase] && stems[r[0, r.length - ext.length].downcase]
+          next unless twins && twins.any? { |q| File.file?(File.join(dir, q)) }
           begin
             File.delete(full)
             removed += 1

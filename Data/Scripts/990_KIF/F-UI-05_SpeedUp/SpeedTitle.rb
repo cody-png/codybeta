@@ -49,7 +49,9 @@ module KIF
       key = [current_speed,
              ps && ps.respond_to?(:autobattler) ? ps.autobattler.to_i : nil,
              ps && ps.respond_to?(:sb_loopinput) ? ps.sb_loopinput.to_i : nil]
+      fade_notice
       return if key == @last_key
+      phone_notice(key, @last_key) if @last_key && KIF.mobile?
       @last_key = key
       text = title_text
       return if text == @last_title
@@ -57,6 +59,44 @@ module KIF
       System.set_window_title(text) if defined?(System) && System.respond_to?(:set_window_title)
     rescue
       nil
+    end
+
+    # Phones have no window title: a change shows at the top of the screen
+    # for two seconds instead
+    NOTICE_SECONDS = 2
+
+    def self.phone_notice(key, old)
+      lines = []
+      lines << _INTL("Speed: x{1}", key[0]) if key[0] != old[0]
+      lines << _INTL("Auto-Battler: {1}", key[1] == 1 ? _INTL("On") : _INTL("Off")) if key[1] != old[1]
+      lines << _INTL("Loop Self-Battle: {1}", key[2] == 1 ? _INTL("On") : _INTL("Off")) if key[2] != old[2]
+      return if lines.empty?
+      @notice_text = lines.join("   ")
+      @notice_until = Time.now + NOTICE_SECONDS
+      unless @notice && !@notice.disposed?
+        @notice = Sprite.new
+        @notice.z = 999_998
+        @notice.bitmap = Bitmap.new(Graphics.width, 32)
+      end
+      b = @notice.bitmap
+      b.clear
+      b.fill_rect(0, 0, b.width, b.height, Color.new(0, 0, 0, 160))
+      b.font.color = Color.new(248, 248, 248)
+      b.draw_text(0, 0, b.width, b.height, @notice_text, 1)
+    rescue StandardError
+      nil
+    end
+
+    def self.fade_notice
+      return unless @notice
+      return if !@notice.disposed? && Time.now < @notice_until
+      (@notice.bitmap.dispose rescue nil)
+      (@notice.dispose rescue nil)
+      @notice = nil
+    end
+
+    def self.notice_text
+      return @notice && !@notice.disposed? ? @notice_text : nil
     end
 
     # Map with nothing open, or any battle

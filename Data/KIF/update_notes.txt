@@ -1,2 +1,12 @@
-KIF 1.1.1
-- Waterfalls work again: face one and press the confirm key to climb it with the HM, the Jetpack or Quick HMs.
+KIF 1.2.0
+- A much smaller game: about 920 MB instead of 1.68 GB (this update is about 680 MB). Pictures look the same; music and sounds are now Ogg.
+- Faster start-up, and menus check the disk far less.
+- New: Mouse and touch controls (Options > System > Controls, Off by default). Click or tap to choose, click or tap the map to walk there.
+- New: EV Allocation (Options > Battles, Off by default). EVs from battles become points you spend on the Summary's Skills page.
+- New: Living title screen (Options > System > Title screen).
+- New: Archipelago (beta). Play KIF in a multiworld: Kanto, Sevii and Johto, Trainersanity, Giftsanity and 10 kinds of traps. Use apworld 0.6.2.
+- Nuzlocke: options for gift Pokemon and the Safari Zone. Pinkan Island now plays as in PIF with the Randomizer, Nuzlocke and Archipelago.
+- Saves: new backups are compressed, and Compress old backups (Save menu) shrinks older ones. Compressed backups only load in 1.2.0 and later.
+- Mods: publish your own mod to the catalog (Options > Mods > Installed, PC).
+- Phones: KIF updates itself on JoiPlay and Kirin from the next update on, and mods download from the catalog.
+- Fixes: waterfalls, Chip Away / Sacred Sword / Darkest Lariat against evasion, Wonder Trade's banned list, the Celadon Cafe seller, Level caps on a new save, and a broken custom sprite file no longer crashes the game.

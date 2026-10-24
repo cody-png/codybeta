@@ -59,7 +59,7 @@ module KIF
 
     module ER
       DATA_PATH = "Data/KIF/entrances.dat"
-      RETRIES = 150      # most layouts are found in a few tries (~0.1-0.2 s each); Simple mode needs up to ~75; mid-run, the old doors stay after these
+      RETRIES = 400      # most layouts are found in a few tries (~0.1-0.2 s each); Simple + coupled with Johto needs up to ~140 (sweep 2026-10-24: 150 failed ~1%); mid-run, the old doors stay after these
       BADGE_PREFIX = "badge_"
       OAK_LABS = [77, 551, 552, 593, 659, 724, 740, 847]   # every variant of Oak's Lab
       NO_START = [303, 167]   # Indigo Plateau, Crimson City (nowhere to go without 8 badges)
@@ -144,7 +144,7 @@ module KIF
         a << :surf if (have.include?(:item_HM03) && badges >= 6) || have.include?(:item_SURFBOARD)
         a << :waterfall if (have.include?(:item_HM05) && badges >= 9) || have.include?(:item_JETPACK)
         a << :rockclimb if have.include?(:item_CLIMBINGGEAR)
-        a << :dive if (have.include?(:item_HM08) && badges >= 9) || have.include?(:item_SCUBAGEAR)
+        a << :dive if (have.include?(:item_HM06) && badges >= 9) || have.include?(:item_SCUBAGEAR)   # HM06 is Dive (HM08 is Flash)
         a << :pokeflute if have.include?(:item_POKEFLUTE)
         a << :bike if have.include?(:item_BICYCLE)
         return a
@@ -458,6 +458,7 @@ module KIF
         free_exits = ids - map_out.keys                  # exits without a doorstep
         free_steps = ids - map_out.values                # doorsteps nobody comes out on
         byid = d[:door_by_id]
+        closed = closed_doors(d)
         pending = {}
         ids.each { |id| pending[id] = true }
         batch = 6
@@ -486,6 +487,15 @@ module KIF
             free_exits.delete(x); free_steps.delete(y)
           end
         end
+        # a door nothing opens leads first, into a place that gives nothing
+        # or sets no flag (that place is lost behind it)
+        closed.each_key do |id|
+          next unless free_doors.include?(id) && !groups[id]
+          pool = free_places.reject { |p| groups[p] }
+          quiet = pool.select { |p| byid[p][:gives].to_i == 0 && byid[p][:siblings].to_i == 0 && (byid[p][:flags] || []).empty? }
+          pool = quiet unless quiet.empty?
+          link_in.call(id, pool[rng.rand(pool.length)]) unless pool.empty?
+        end
         # the graph, built once and given each new link's edges as it comes
         edges = edges_for(d, map_in, map_out, pending)
         # one id per unit (a group counts once, by its first door)
@@ -512,7 +522,8 @@ module KIF
           open_doors = heads.call(free_doors).select { |id| reached_door.call(id) }
           open_exits = heads.call(free_exits).select { |id| reached_in.call(id) }
           far_places = heads.call(free_places).reject { |id| reached_in.call(id) }
-          far_steps = heads.call(free_steps).reject { |id| reached_door.call(id) }
+          # a doorstep nothing ever opens is never waited for (it pairs with the rest)
+          far_steps = heads.call(free_steps).reject { |id| reached_door.call(id) || (groups[id] || [id]).all? { |x| closed[x] } }
           moves = open_doors.map { |id| [:door, id] } + open_exits.map { |id| [:exit, id] }
           # dead end: reached doors all used up, places still out of reach
           return nil if moves.empty? && !(far_places.empty? && far_steps.empty?)
@@ -572,6 +583,19 @@ module KIF
         return [map_in, map_out]
       end
 
+      # Doors whose own condition nothing in the game meets (Lavender's Hidden
+      # Tomb opens at 3 a.m.; the clock isn't in the logic): door id => true
+      def self.closed_doors(d)
+        return d[:closed_doors] if d[:closed_doors]
+        res = sweep(d, edges_for(d, {}, {}))
+        out = {}
+        d[:doors].each do |o|
+          out[o[:id]] = true unless o[:out_edges].any? { |_s, needs| needs.all? { |r| satisfied?(r, res[:all], d[:gates], res[:badges]) } }
+        end
+        d[:closed_doors] = out
+        return out
+      end
+
       # Simple: the doors of a place with several (a gate, a cave with two
       # ends) move together, onto another such place with as many doors
       def self.simple_groups(doors)
@@ -586,12 +610,31 @@ module KIF
 
       # Everything the unshuffled game reaches is reached, and every shuffled
       # door has both its doorstep and its place in reach: no door is cut off
-      def self.complete?(d, doors, res)
+      # (but the place behind a door nothing opens, see closed_doors)
+      def self.complete?(d, doors, res, map_in = {})
         seen = res[:seen]
-        return false unless doors.all? { |o| o[:out_edges].any? { |src, _| seen[src] } && seen[o[:in_node]] }
+        lost = {}
+        closed_doors(d).each_key { |id| lost[map_in[id]] = true if map_in[id] }
+        return false unless doors.all? { |o| o[:out_edges].any? { |src, _| seen[src] } && (seen[o[:in_node]] || lost[o[:id]]) }
         reached = {}
         seen.each_key { |k| reached[node_map(k)] = true }
+        lost.each_key { |p| inside_maps(d, d[:door_by_id][p][:in_node]).each { |m| reached[m] = true } }
         return vanilla_maps(d).all? { |m| reached[m] }
+      end
+
+      # The maps of a place: walking from its landing without going outdoors
+      # (the maps doors stand on) or through a shuffled door
+      def self.inside_maps(d, node)
+        @outdoor ||= {}
+        outdoor = (@outdoor[d.object_id] ||= begin h = {}; d[:doors].each { |o| h[o[:map].to_s] = true }; h end)
+        seen = { node => true }; queue = [node]
+        until queue.empty?
+          (d[:edges][queue.shift] || []).each do |to, _req|
+            next if seen[to] || outdoor[node_map(to)]
+            seen[to] = true; queue << to
+          end
+        end
+        return seen.keys.map { |n| node_map(n) }.uniq
       end
 
       def self.vanilla_maps(d)
@@ -649,11 +692,11 @@ module KIF
           edges = edges_for(d, map_in, map_out)
           res = sweep(d, edges, extra, nil, start)
           next unless beatable?(d, res[:seen])
-          next unless complete?(d, doors, res)
+          next unless complete?(d, doors, res, map_in)
           # mid-game: the player isn't in Pallet Town; from wherever they
           # may stand on the current map the end, and every place, must be
           # reachable too, with what the save really has
-          next unless start_door || beatable_from_here?(d, edges, res, doors)
+          next unless start_door || beatable_from_here?(d, edges, res, doors, map_in)
           regions = regions_on
           rsig = {}
           regions.each { |r| rsig[r] = (d[:region_sigs] || {})[r] if r != 0 }
@@ -730,7 +773,7 @@ module KIF
         return list
       end
 
-      def self.beatable_from_here?(d, edges, res, doors = nil)
+      def self.beatable_from_here?(d, edges, res, doors = nil, map_in = {})
         return true unless mid_run?
         nodes = here_strict(d)
         return true if nodes.empty?   # not a place the model knows (an interior stair, a cutscene map)
@@ -745,7 +788,7 @@ module KIF
         return nodes.all? { |n|
           next true if walks_to?(d, edges, n, home, all, nb)
           r = sweep(d, edges, mine, nil, n)
-          beatable?(d, r[:seen]) && (doors.nil? || complete?(d, doors, r))
+          beatable?(d, r[:seen]) && (doors.nil? || complete?(d, doors, r, map_in))
         }
       end
 
@@ -1120,6 +1163,7 @@ module KIF
 
       def self.scale_wild(pkmn, map_id = nil)
         return unless pkmn && wild_scaling?
+        return if Rand.pinkan?(map_id)   # Pinkan Island keeps its levels
         map_id ||= $game_map ? $game_map.map_id : nil
         return unless map_id
         f = level_factor(map_id)
@@ -1197,6 +1241,7 @@ module KIF
 
       def self.scale_trainer(trainer, map_id = nil)
         return trainer unless trainer && scaling?
+        return trainer if Rand.pinkan?(map_id)
         # Endgame Challenge teams are already tuned to your party (Lv100)
         return trainer if defined?(KIF::Endgame) && KIF::Endgame.on? && KIF::Endgame.challenge_map?
         map_id ||= $game_map ? $game_map.map_id : nil

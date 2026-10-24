@@ -78,10 +78,14 @@ module KIF
 
     def self.wanted
       c = choice
-      return (c == :monitor) ? monitor_hz : c
+      c = (c == :monitor) ? monitor_hz : c
+      return KIF.mobile? ? [c, 60].min : c   # phones: 60 at most (no monitor rate to ask, and battery)
     end
 
+    # phones: 40 and 60 only (frames above 60 aren't drawn there, and there's
+    # no monitor rate to match)
     def self.labels
+      return CHOICES.first(2).map(&:to_s) if KIF.mobile?
       return CHOICES.map { |c| (c == :monitor) ? _INTL("Match monitor ({1})", monitor_hz) : c.to_s }
     end
 
@@ -386,6 +390,11 @@ module KIF
       end
     end
 
+    # the mouse wheel's list used this press itself: don't repeat it this step
+    def self.forget(b)
+      @repeating = nil if @repeating == button(b)
+    end
+
     def self.repeated?(b)
       return false unless @repeating && button(b) == @repeating
       return @repeat_count == 0 ||
@@ -533,7 +542,7 @@ end
 
 KIF::Options.add(:cody_interface, :global) {
   KIF::FrameRate::Choice.new(_INTL("Frame rate"), KIF::FrameRate.labels,
-                             proc { [[$PokemonSystem.cody_framerate.to_i, 0].max, KIF::FrameRate::CHOICES.length - 1].min },
+                             proc { [[$PokemonSystem.cody_framerate.to_i, 0].max, KIF::FrameRate.labels.length - 1].min },
                              proc { |value|
                                $PokemonSystem.cody_framerate = value
                                KIF::FrameRate.apply

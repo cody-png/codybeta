@@ -38,6 +38,7 @@ class PokemonSummary_Scene
       return kif_ivev_drawPageThree
     end
     kif_draw_page_three_ivev
+    kif_eva_page_three_points if respond_to?(:kif_eva_page_three_points)   # EV Allocation's line (its hook sits under this one)
   end
 
   # Copy of 6.8.2 drawPageThree (006_UI_Summary.rb:692-745) with KIF's

@@ -42,6 +42,8 @@
 #                       SceneElements.rb:542-578). They run KIF's own
 #                       status icon and Type Display (F-BATTLE-07), or draw the
 #                       status like 6.8.2 when that isn't set up.
+#   GenOneStyle#getFusedIdIntro  KIF 0.20.7's title screen helper Mouse UI
+#                       hooks (2026-10-22; at the end of this file).
 #   sprite_bitmap_from_pokemon  KIF 0.20.7 had a 4th argument, makeShiny
 #                       (009_Species_Files.rb:113); Counterfeit Shinies passes
 #                       it on. Accepted again; false draws the Pokémon without
@@ -405,7 +407,7 @@ module KIF
     # true when this game's window is the foreground window (Windows);
     # true when it can't be told (Wine, no Win32API), like Mod Manager
     def self.game_focused?
-      return true if wine?
+      return true if wine? || KIF.mobile?   # a phone's fake Windows API has no foreground window
       @gfw ||= (Win32API.new('user32', 'GetForegroundWindow', [], 'l') rescue false)
       @gwtpi ||= (Win32API.new('user32', 'GetWindowThreadProcessId', ['l', 'p'], 'l') rescue false)
       return true unless @gfw && @gwtpi
@@ -794,3 +796,18 @@ module KIF
   end
 end
 Pokemon.prepend(KIF::ModCompat::AlphaMoveList)
+
+# GenOneStyle#getFusedIdIntro: KIF 0.20.7's title screen picked its fusion
+# with it (052_AddOns/IntroScreen.rb:450); PIF 6.8.2's title doesn't have it.
+# Mouse UI hooks it, so the whole mod failed to load. Back with KIF's code;
+# nothing in 6.8.2 calls it, so it only gives that hook something to wrap.
+if defined?(GenOneStyle)
+  class GenOneStyle
+    def getFusedIdIntro(randpoke1, randpoke2)
+      id = rand(2) == 0 ? getSpeciesIdForFusion(randpoke1, randpoke2) : getSpeciesIdForFusion(randpoke2, randpoke1)
+      id = getSpeciesIdForFusion(randpoke2, randpoke1) if Input.press?(Input::RIGHT)
+      id = getSpeciesIdForFusion(randpoke1, randpoke2) if Input.press?(Input::LEFT)
+      return id
+    end unless method_defined?(:getFusedIdIntro)
+  end
+end

@@ -390,6 +390,11 @@ module KIF
       end
     end
 
+    # the mouse wheel's list used this press itself: don't repeat it this step
+    def self.forget(b)
+      @repeating = nil if @repeating == button(b)
+    end
+
     def self.repeated?(b)
       return false unless @repeating && button(b) == @repeating
       return @repeat_count == 0 ||

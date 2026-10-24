@@ -223,6 +223,7 @@ module KIF
       @moved = moved
       @any = @left || @right || @wheel != 0
       stop if @path && $game_temp && $game_temp.in_battle
+      stop if @path && !$scene.is_a?(Scene_Map)   # F12 soft reset: the title screen
       now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       @seen = now if @moved || @left || @right || @wheel != 0
       cursor(!@seen.nil? && now - @seen < HIDE_AFTER)
@@ -345,7 +346,9 @@ module KIF
       return if w.instance_variable_get(:@ignore_input)
       cols = [w.columns, 1].max
       ni = w.index + (@wheel > 0 ? -cols : cols)
-      @wheel = 0   # this list took the turn
+      # this list took the turn (and Frame rate above 40 would repeat its key)
+      KIF::FrameRate.forget(@wheel > 0 ? Input::UP : Input::DOWN) if defined?(KIF::FrameRate)
+      @wheel = 0
       return if ni < 0 || ni >= w.itemCount
       row = ni / cols
       page = [w.page_row_max, 1].max

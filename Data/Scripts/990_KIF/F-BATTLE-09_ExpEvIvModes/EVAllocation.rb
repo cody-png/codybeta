@@ -10,6 +10,8 @@
 #   already choose those). Points left over after turning it Off can still
 #   be spent. No-EVs Mode: EVs don't count for stats, so there's nothing to
 #   spend points on (they still pile up, for when it's turned off).
+#   EVs Train Mode: foes yield 0 EVs (ExpEvIvModes.rb), so the only points
+#   banked are a held Power item's +4 (doubled by Pokérus).
 #   Mockups: Claude Docs/Base KIF/mockups/EV mockups.
 #===============================================================================
 KIF::Options.define(:ev_alloc, 0, :save)
@@ -111,16 +113,28 @@ class PokeBattle_Battle
   end
 
   # One line per Pokémon at the end, so players know points are waiting
-  # (not after every knockout)
+  # (not after every knockout). A win (or a catch) shows it in pbGainMoney,
+  # after PIF's "You defeated ..." and the trainer's last words; anything
+  # else before PIF's end-of-battle lines, while the battle is still shown.
   alias kif_eva_pbEndOfBattle pbEndOfBattle unless method_defined?(:kif_eva_pbEndOfBattle)
+  alias kif_eva_pbGainMoney pbGainMoney unless method_defined?(:kif_eva_pbGainMoney)
 
   def pbEndOfBattle
+    kif_eva_show_points unless @decision == 1 || @decision == 4
+    return kif_eva_pbEndOfBattle
+  end
+
+  def pbGainMoney(*args)
+    kif_eva_show_points
+    return kif_eva_pbGainMoney(*args)
+  end
+
+  def kif_eva_show_points
     (@kif_eva_gained || {}).each do |pkmn, n|
       pbDisplayPaused(n == 1 ? _INTL("{1} got 1 EV point to spend (Summary, Skills).", pkmn.name) :
                                _INTL("{1} got {2} EV points to spend (Summary, Skills).", pkmn.name, n))
     end
     @kif_eva_gained = nil
-    return kif_eva_pbEndOfBattle
   end
 end
 

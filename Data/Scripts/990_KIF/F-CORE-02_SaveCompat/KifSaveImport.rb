@@ -58,6 +58,12 @@ module KIF
       attr_accessor :pending
     end
 
+    # A read save's :kif_pending by its player object (weak: kept only while
+    # that read's data is), for New Game+, which only gets the player
+    def self.read_pending
+      return @read_pending ||= ObjectSpace::WeakMap.new
+    end
+
     def self.kif_save?(data)
       return false unless data.is_a?(Hash)
       return MODDED_KEYS.keys.any? { |k| data.has_key?(k) } || data.has_key?(:kuray_pokemon_system_file)
@@ -350,6 +356,7 @@ module SaveData
       data = kif_read_from_file(file_path)
       begin
         KIF::SaveImport.convert_format!(data)
+        KIF::SaveImport.read_pending[data[:player]] = data[:kif_pending] if data.is_a?(Hash) && data[:player] && data[:kif_pending].is_a?(Hash)
       rescue => e
         KIF.log("KIF save conversion failed for #{file_path}: #{e.message}")
       end
@@ -370,6 +377,39 @@ module SaveData
         KIF.log("Setting aside unknown Pokémon / items failed: #{e.message}")
       end
       return kif_import_load_all_values(save_data)
+    end
+  end
+end
+
+# New Game+ (MultiSaves pbStartLoadScreen: Game.start_new(true, bag, storage,
+# player)) starts from the load screen's preview data, where Pokémon of
+# unknown species aren't set aside: ngp_clean_pc_data turned them into Pichu
+# (GameData::Species.get falls back to Pikachu). They are set aside first and
+# stay set aside in the new game, coming back once their species exists, and
+# so do the Pokémon and items the old save had set aside already (held mod
+# items of its boxed Pokémon among them).
+module Game
+  class << self
+    alias kif_si_start_new start_new unless method_defined?(:kif_si_start_new)
+
+    def start_new(*args, &blk)
+      storage = args[2]
+      return kif_si_start_new(*args, &blk) unless storage
+      old = (args[3] && KIF::SaveImport.read_pending[args[3]]) || {}
+      carried = { :pokemon => (old[:pokemon] || []).dup, :items => (old[:items] || []).dup }
+      data = { :player => args[3], :storage_system => storage, :kif_pending => carried }
+      begin
+        KIF::SaveImport.set_aside!(data)
+      rescue => e
+        KIF.log("New Game+: setting aside unknown Pokémon failed: #{e.message}")
+      end
+      ret = kif_si_start_new(*args, &blk)
+      pend = data[:kif_pending]
+      if pend   # the new game's own (was {})
+        pend[:notified] = false unless pend[:pokemon].empty?
+        KIF::SaveImport.pending = pend
+      end
+      return ret
     end
   end
 end

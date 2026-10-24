@@ -69,12 +69,16 @@ module KIF
 
     # Called before the Mods folder loads
     def self.install(dir = "Mods")
-      return false if defined?(::ModSettingsMenu)
+      # KIF's own, still defined after an F12 in the same game (phones, Linux, macOS), is used again
+      ours = defined?(::ModSettingsMenu) && ::ModSettingsMenu.singleton_class.include?(API)
+      return false if defined?(::ModSettingsMenu) && !ours
       return false if kanto_reloaded_installed?(dir)
       return false if mm_mod_installed?("mod_settings_menu", dir)   # the original Mod Settings Menu mod
-      Object.const_set(:ModSettingsMenu, Module.new)
-      ::ModSettingsMenu.const_set(:NOCATEGORY, "__nocategory__")
-      ::ModSettingsMenu.extend(API)
+      unless ours
+        Object.const_set(:ModSettingsMenu, Module.new)
+        ::ModSettingsMenu.const_set(:NOCATEGORY, "__nocategory__")
+        ::ModSettingsMenu.extend(API)
+      end
       @active = true
       drain_pending
       return true

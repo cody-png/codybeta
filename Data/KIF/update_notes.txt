@@ -1,9 +1,4 @@
-KIF 1.2.1
-- Fixes: the Bug-Catching Contest no longer crashes when the Randomizer module is Off.
-- Modules: Battles & Challenges Off now also turns off KIF's critical captures and Challenge Modifiers, and Pokemon & Fusion Off turns off Head Legendary Breeding.
-- Updates: the updater gives up after many failed downloads in a row, warns about unsaved progress when you update from inside the game, and finishes under Wine or Proton (Steam Deck) even when a file is in use.
-- Saves: an unreadable save no longer crashes the save menu, and when no save can be read the load screen opens its newest backup. Saving writes a temporary file first, so a failed save keeps the old one.
-- Mods: catalog updates go to the copy of a mod that actually loads, and a mod you update by hand in the save folder's Mods folder wins over the game's older copy.
-- Gate, reward and Celadon Cafe prices read like the Poke Mart's ($200,000).
-- New Game+: Pokemon of unknown species are set aside instead of turning into Pichu.
-- Save menu and load screen messages use the normal text box.
+KIF 1.2.2
+- Prices: every price in shops, hotels, gates, tutors and gifts now reads like the Poke Mart's ($1,000).
+- Entrance Randomizer: Pokemon whose level is scaled now know the moves of their new level.
+- Mods: mod settings stay visible after F12 on phones, Linux and macOS.

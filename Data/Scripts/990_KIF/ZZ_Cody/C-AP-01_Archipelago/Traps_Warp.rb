@@ -49,7 +49,7 @@ module KIF
         pbMessage(t[4] == :center ? _INTL("A Warp Trap from {1}! You were sent back to the last Pokémon Center.", who) :
                                     _INTL("A Warp Trap from {1}! You were sent back home.", who))
         KIF.log("Archipelago: Warp trap from map #{$game_map.map_id} to #{t[0]} (#{t[4]})")
-        KIF::Rand::ER.do_return
+        KIF::Rand::ER.do_return(t)
       end
     end
   end

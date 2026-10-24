@@ -45,9 +45,9 @@ module KIF
     AUTO = "autosave"
     @next_name = nil
     @player_saving = false
-    @menu_open = false
+    @normal_box = false   # save menu / load screen open: messages use the normal bottom box
     class << self
-      attr_accessor :next_name, :player_saving, :menu_open
+      attr_accessor :next_name, :player_saving, :normal_box
     end
 
     def self.infinite?
@@ -263,7 +263,8 @@ class PokemonSaveScreen
   # (KIF MultiSaves_Infinite Save Backups.rb:61-118).
   def pbSaveScreen
     ret = false
-    KIF::SaveBackups.menu_open = true                                   # KIF
+    box = KIF::SaveBackups.normal_box                                   # KIF
+    KIF::SaveBackups.normal_box = true                                  # KIF
     @scene.pbStartScreen
     if !$Trainer.save_slot
       # New Game - must select slot
@@ -318,9 +319,30 @@ class PokemonSaveScreen
     @scene.pbEndScreen
     return ret
   ensure
-    KIF::SaveBackups.menu_open = false                                  # KIF
+    KIF::SaveBackups.normal_box = box                                   # KIF
   end
 end
+
+# The load screen too: its $game_system is the last session's (title after
+# playing) or the newest save's (start-up), with whatever text options an
+# event left there (the intro: top, no frame, over the save panel). A
+# prepended module, not an alias: Session Log, Save Folder and Sprite Import
+# prepend pbStartLoadScreen too.
+module KIF
+  module SaveBackups
+    module LoadScreenBox
+      def pbStartLoadScreen(*args)
+        box = KIF::SaveBackups.normal_box
+        KIF::SaveBackups.normal_box = true
+        return super
+      ensure
+        KIF::SaveBackups.normal_box = box
+      end
+    end
+  end
+end
+
+PokemonLoadScreen.prepend(KIF::SaveBackups::LoadScreenBox)
 
 # The save menu's question and messages use the normal box at the bottom even
 # when the event that opened it set other text options (the new-game intro:
@@ -331,7 +353,7 @@ alias kif_bk_pbRepositionMessageWindow pbRepositionMessageWindow unless defined?
 
 def pbRepositionMessageWindow(msgwindow, linecount = 2)
   sys = $game_system
-  return kif_bk_pbRepositionMessageWindow(msgwindow, linecount) unless KIF::SaveBackups.menu_open && sys
+  return kif_bk_pbRepositionMessageWindow(msgwindow, linecount) unless KIF::SaveBackups.normal_box && sys
   old = [sys.message_position, sys.message_frame]
   begin
     sys.message_position, sys.message_frame = 2, 0

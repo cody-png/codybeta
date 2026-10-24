@@ -188,7 +188,10 @@ class Interpreter
   def command_314
     ret = kif_ap_command_314
     begin
-      KIF::AP::Traps.count_down("CENTER") if @parameters[0] == 0 && KIF::AP::Traps.nurse_page?(@list)
+      if @parameters[0] == 0 && KIF::AP::Traps.nurse_page?(@list)
+        KIF::AP::Traps.count_down("CENTER")
+        KIF::AP::Traps.lift_curse   # Traps_Curse.rb
+      end
     rescue StandardError => e
       KIF.log("Archipelago: Party Lock Center check failed (#{e.class}: #{e.message})")
     end

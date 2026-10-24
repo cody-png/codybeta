@@ -39,7 +39,8 @@
 #   badges), and once when linking starting_money (-1 = keep) and free_fly
 #   (an index into the Kanto towns not visited yet; -1 = off); the Party Lock
 #   trap's party_lock_unlock (0 battles, 1 checks, 2 Pokemon Center),
-#   party_lock_battles and party_lock_checks (Traps.rb). A save linked
+#   party_lock_battles and party_lock_checks (Traps.rb); the Disobedience
+#   Curse's curse_disobey_percent (Traps_Curse.rb). A save linked
 #   by an older version has no options: everything vanilla.
 #   Robustness: slot.json fields of the wrong type are dropped, a broken
 #   items.json is ignored, and after a save is loaded its checks and goal are
@@ -79,7 +80,8 @@ module KIF
     # Game options and their value when the slot doesn't set them (vanilla)
     OPTION_DEFAULTS = { "exp_modifier" => 100, "min_catch_rate" => 3, "guaranteed_catch" => 0,
                         "hm_badges_off" => 0, "starting_money" => -1, "free_fly" => -1,
-                        "party_lock_unlock" => 0, "party_lock_battles" => 3, "party_lock_checks" => 5 }
+                        "party_lock_unlock" => 0, "party_lock_battles" => 3, "party_lock_checks" => 5,
+                        "curse_disobey_percent" => 25 }
     BADGE_SET_RE = /\$Trainer\.badges\[(\d+)\]\s*=\s*true/
     LEAGUE_MAP = 148          # Pokemon League entrance: the 8-badge guards
     LEAGUE_RE = /numbadges\s*>=\s*8/
@@ -542,6 +544,7 @@ module KIF
         @queue.shift
       end
       Traps.tell_normal
+      Traps.tell_curse_lifted
       Traps.release_locks
       Traps.run_one(d)
       grant_death(d) if @death

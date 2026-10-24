@@ -131,6 +131,7 @@ module KIF
         when :connected
           log("connected to #{ev[1]} (#{s.via})")
           KIF::SoulLink.on_connect(s) if defined?(KIF::SoulLink)
+          KIF::Presence.on_connect if defined?(KIF::Presence)
         when :message
           if ev[1] == "wave"
             @notes << _INTL("{1} says hello!", s.partner)
@@ -140,9 +141,12 @@ module KIF
             rescue => e
               log("Soul Link message failed (#{e.class}: #{e.message})")
             end
+          elsif ev[1].start_with?("pr_") && defined?(KIF::Presence)
+            KIF::Presence.receive(ev[1], ev[2])
           end
         when :disconnected
           KIF::SoulLink.on_disconnect if defined?(KIF::SoulLink)
+          KIF::Presence.on_disconnect if defined?(KIF::Presence)
           @notes << (ev[1] == :bye ? _INTL("Your friend disconnected.") : _INTL("Lost the connection to your friend."))
           log("disconnected (#{ev[1]})")
         when :failed
@@ -581,13 +585,16 @@ module KIF
           if s.partner_ver != Net.version
             lines << _INTL("{1} has KIF {2}, you have KIF {3}.", s.partner, s.partner_ver, Net.version)
           end
+          where = defined?(KIF::Presence) && KIF::Presence.where_line(s.partner)
+          lines << where if where
           help = Net.notes.shift ||
                  (relay ? _INTL("Connected through relay.\nPlay works the same, just a bit slower.")
                         : _INTL("Connected to {1} (direct).\nYour games talk to each other directly.", s.partner))
           sl = defined?(KIF::SoulLink) && KIF::SoulLink.on?
           cmds = [_INTL("Send hello"), _INTL("Disconnect")]
           cmds.unshift(_INTL("Soul Link")) if sl
-          r = pick(lines.join("\n"), cmds, help, proc { [Net.session&.connected?, Net.notes.length] })
+          r = pick(lines.join("\n"), cmds, help,
+                   proc { [Net.session&.connected?, Net.notes.length, defined?(KIF::Presence) && KIF::Presence.ghost&.map_id] })
           next if r.nil?
           return if r < 0
           r -= 1 if sl

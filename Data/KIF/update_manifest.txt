@@ -1,4 +1,6 @@
-KIF-MANIFEST 1 version=1.2.0 channel=beta files=29614
+KIF-MANIFEST 1 version=1.2.0 channel=beta files=29616
+ada8b298d9bae0702976ab6345778a69486927c5 19732 Archipelago/KIF.yaml
+63e0114f0c2595bbe98d342d7cd71153441cb026 440130 Archipelago/kif.apworld
 9535e6ead24be7e2c9c1c4e7d9e62b77c0da28df 1973679 Audio/BGM/Azalea Town.ogg
 c1bf8a69360590600d95f7b17970c9bbc1e317ef 2505405 Audio/BGM/BW2_Ghetsis Battle.mp3
 fc522881c06a4cb076d61a14911405c3da74338e 2722742 Audio/BGM/BW2_K_leader.mp3

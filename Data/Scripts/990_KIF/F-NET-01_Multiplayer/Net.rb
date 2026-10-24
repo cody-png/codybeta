@@ -62,7 +62,7 @@ module KIF
                       "acked" => [Integer, 0, 1_000_000_000], "code" => [String, 600] },
       "sl_link"  => { "code" => [String, 600] },
       "sl_up"    => { "code" => [String, 60_000] },
-      "sl_party" => { "ids" => [String, 120] },
+      "sl_party" => { "ids" => [String, 600] },   # id:species:level:hp:totalhp,...
     }
     NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined }
 

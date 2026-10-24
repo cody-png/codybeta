@@ -27,9 +27,12 @@
 #      and Day Care into the :kif_pending save key, so they are not shown or
 #      used as placeholder Pikachu. They will be given back when their data is
 #      ported. A party is never emptied this way.
-# Items: PIF 6.8.2 shows unknown item IDs (KIF K-Eggs etc.) as "UNKNOWN"
-# without crashing, and keeps the original ID, so they are left in place and
-# become real items again once K-Eggs (F-ITEM-02) is ported.
+#   6. Items whose ID doesn't exist (an item mod switched Off or removed) are
+#      taken out of the Bag, the PC item storage and the held items of the
+#      party, boxes and Day Care into :kif_pending[:items] as [id, qty] pairs.
+#      PIF 6.8.2 showed them as "UNKNOWN" (GameData::Item.get falls back to
+#      it), where Toss and Give act on :UNKNOWN instead. Once the ID exists
+#      again they go back into the Bag (held ones too). Added 2026-10-22.
 #
 # Old KIF saves are found automatically because Game.ini Title is
 # "kurayinfinitefusion" (KIF's save folder, %APPDATA%\kurayinfinitefusion).
@@ -180,6 +183,63 @@ module KIF
       return back
     end
 
+    def self.item_known?(id)
+      return true unless id.is_a?(Symbol)
+      return GameData::Item.exists?(id)
+    end
+
+    # Every Pokémon in the party, boxes (not the Transfer Box, see above) and Day Care
+    def self.each_saved_pokemon(data)
+      player = data[:player]
+      (player.party || []).each { |pk| yield pk if pk.is_a?(Pokemon) } if player.respond_to?(:party)
+      boxes = (data[:storage_system].instance_variable_get(:@boxes) rescue nil)
+      (boxes || []).each do |box|
+        next if defined?(StorageTransferBox) && box.is_a?(StorageTransferBox)
+        (box.instance_variable_get(:@pokemon) || []).each { |pk| yield pk if pk.is_a?(Pokemon) }
+      end
+      daycare = (data[:global_metadata].instance_variable_get(:@daycare) rescue nil)
+      (daycare || []).each { |slot| yield slot[0] if slot.is_a?(Array) && slot[0].is_a?(Pokemon) }
+    end
+
+    # Moves items with unknown IDs into pending[:items]
+    def self.set_aside_unknown_items(data, pending)
+      return 0 if GameData::Item::DATA.empty?
+      moved = []
+      bag = data[:bag]
+      if bag.is_a?(PokemonBag)
+        (bag.instance_variable_get(:@pockets) || []).each do |pocket|
+          next unless pocket.is_a?(Array)
+          pocket.reject! { |slot| slot.is_a?(Array) && !item_known?(slot[0]) && moved << [slot[0], slot[1].to_i] }
+        end
+        (bag.instance_variable_get(:@registeredItems) || []).reject! { |id| !item_known?(id) }
+      end
+      pc = (data[:global_metadata].pcItemStorage rescue nil)
+      (pc.items || []).reject! { |slot| slot.is_a?(Array) && !item_known?(slot[0]) && moved << [slot[0], slot[1].to_i] } if pc
+      each_saved_pokemon(data) do |pk|
+        id = pk.instance_variable_get(:@item)
+        next if item_known?(id)
+        moved << [id, 1]
+        pk.instance_variable_set(:@item, nil)
+      end
+      return 0 if moved.empty?
+      KIF.log("Set aside #{moved.length} unknown item(s) from this save: " + moved.map { |id, q| "#{id} x#{q}" }.join(", "))
+      return moved.length
+    ensure
+      pending[:items].concat(moved) if moved   # also when a step above raised: what was taken out stays set aside
+    end
+
+    # Set-aside items whose ID exists again go back into the Bag
+    def self.return_known_items(data, pending)
+      bag = data[:bag]
+      return 0 if GameData::Item::DATA.empty? || !bag.is_a?(PokemonBag)
+      back = pending[:items].select { |id, qty| item_known?(id) && bag.pbStoreItem(id, qty) }
+      return 0 if back.empty?
+      # one entry per item returned (Array#- would drop every equal entry, also those that didn't fit)
+      back.each { |b| i = pending[:items].index(b); pending[:items].delete_at(i) if i }
+      KIF.log("#{back.length} set-aside item(s) are back in the Bag: " + back.map { |id, q| "#{id} x#{q}" }.join(", "))
+      return back.length
+    end
+
     def self.convert!(data)
       return data unless data.is_a?(Hash) && !data.empty?
       pending = data[:kif_pending]
@@ -209,6 +269,14 @@ module KIF
       returned = return_known_pokemon(data, pending)
       moved = set_aside_unknown_pokemon(data, pending)
       pending[:notified] = false if moved > 0 || returned > 0
+      pending[:items] ||= []
+      begin
+        return_known_items(data, pending)
+        set_aside_unknown_items(data, pending)
+      rescue => e
+        KIF.log("Setting aside unknown items failed: #{e.message}")
+      end
+      pending.delete(:items) if pending[:items].empty?
       data.delete(:kif_pending) unless pending.length > 1 || !pending[:pokemon].empty?
       return data
     end

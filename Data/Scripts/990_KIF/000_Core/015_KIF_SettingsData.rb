@@ -28,7 +28,7 @@ module KIF
         ["EBDX", ["EBDX Battles", "EBDX Camera Zoom", "EBDX Stat Stage Icons", "EBDX Own Trainer Animation"]]]],
       [:pokemon, "Pokémon", [90, 170, 100], [
         ["Levels and EXP", ["Level Cap", "Cap Behavior", "Trainer Exp. Boost", "ExpAll Redistribution"]],
-        ["EVs and IVs", ["No-EVs Mode", "Max IVs Mode", "EVs Train Mode"]],
+        ["EVs and IVs", ["No-EVs Mode", "Max IVs Mode", "EVs Train Mode", "EV Allocation"]],
         ["Catching", ["Prompt Nicknames", "Critical Captures", "Rocket Mode", "Skip Caught Prompt",
                       "Recover Consumables"]],
         ["Fusion", ["Fusion BaseStats", "NPC Fusion BaseStats", "Self-Fusion Stat Boost",
@@ -52,7 +52,7 @@ module KIF
       [:challenges, "Challenges", [160, 80, 180], [
         ["Rules", ["Level caps", "No reviving", "No heals (battles)", "No heals (overworld)"]],
         ["KIF challenges", ["Metronome Madness", "Letdown", "Letdown Player Only", "Berserker"]],
-        ["Nuzlocke", ["Nuzlocke", "Fainted Pokémon", "Nuzlocke whiteout", "Dupes clause", "Shiny clause", "Nuzlocke Graveyard"]]]],
+        ["Nuzlocke", ["Nuzlocke", "Fainted Pokémon", "Nuzlocke whiteout", "Dupes clause", "Shiny clause", "Gift Pokémon", "Kuray Shop", "Safari Zone", "Nuzlocke Graveyard"]]]],
       [:game, "Game", [70, 160, 170], [
         ["Difficulty", ["Difficulty"]],
         ["Movement", ["Default Movement", "Quick HMs"]],
@@ -66,9 +66,10 @@ module KIF
         ["Audio", ["Music Volume", "SE Volume"]],
         ["Screen", ["Screen Size", "Device"]],
         ["Text", ["Text Speed", "Text Entry"]],
+        ["Controls", ["Mouse", "Click to move", "Touch controls", "Tap to move"]],
         ["Updates and downloads", ["Updates", "Check for Updates", "Download data"]],
         ["Speed", ["Frame rate", "Sprite File Cache"]],
-        ["Start-up", ["Skip intro"]],
+        ["Start-up", ["Skip intro", "Title screen"]],
         ["Files", ["Imported Archives"]],
         ["Advanced", ["Increment Slider by", "Debug Exclusive", "DEBUG"]]]],
       [:modules, "Modules", [180, 120, 90], []],

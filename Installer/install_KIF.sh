@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================================
-#  KIF Beta installer for Linux / Steam Deck
+#  KIF installer for Linux / Steam Deck
 #  Put this file in the folder you want and run it: double-click it (after
 #  Properties > Permissions > "Is executable"), right-click > Run in Konsole,
 #  or bash install_KIF.sh. It makes a "KIF" folder next to itself,
 #  downloads the game from GitHub into it and unpacks it.
 #  KIF is a Windows game: it runs through Wine or Proton (see the end).
 #  After that the game keeps itself up to date (in-game updater).
-#  Needs about 4.5 GB free while installing (2 GB once done).
+#  Needs about 4.5 GB free while installing (about 1 to 2 GB once done).
 #  Options: --stable / --beta (skip the question), KIF_INSTALL_URL=<url> to
 #  download from somewhere else (testing).
 # ============================================================================
@@ -30,6 +30,10 @@ if [ -n "${KIF_IN_TERMINAL:-}" ] && [ -t 0 ]; then
   trap 'printf "\n  Press Enter to close this window. "; read -r _' EXIT
 fi
 REPO="https://github.com/cody-png/codybeta/archive/refs/heads"
+TAGS="https://github.com/cody-png/codybeta/archive/refs/tags"
+# PIN: the version a release's installer belongs to (set when a release is
+# published, e.g. 1.1.0); empty = only Stable / Beta are offered.
+PIN=""
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TARGET="$HERE/KIF"
 ZIP="$TARGET/KIF_download.zip"
@@ -46,7 +50,7 @@ ask()  { # ask "question" default -> answer (default when not interactive)
 
 say ""
 say "  ==================================="
-say "    KIF Beta installer"
+say "    KIF installer"
 say "  ==================================="
 say ""
 say "  The game will be installed into:"
@@ -72,18 +76,25 @@ for arg in "$@"; do
   case "$arg" in
     --beta) BRANCH="beta-testing" ;;
     --stable) BRANCH="release" ;;
+    --pinned) [ -n "$PIN" ] && BRANCH="$PIN" ;;
   esac
 done
 if [ -z "$BRANCH" ]; then
   say "  Which version?"
-  say "    [S] Stable - the released version (recommended)"
+  say "    [S] Stable - the newest released version, keeps itself updated (recommended)"
   say "    [B] Beta   - test builds: newest features, may have bugs"
-  case "$(ask 'Choose S or B :' S)" in
+  [ -n "$PIN" ] && say "    [V] KIF $PIN only - stays on this version, no updates"
+  case "$(ask 'Choose S, B or V :' S)" in
     b|B) BRANCH="beta-testing" ;;
+    v|V) if [ -n "$PIN" ]; then BRANCH="$PIN"; else BRANCH="release"; fi ;;
     *) BRANCH="release" ;;
   esac
 fi
-URL="${KIF_INSTALL_URL:-$REPO/$BRANCH.zip}"
+if [ -n "$PIN" ] && [ "$BRANCH" = "$PIN" ]; then
+  URL="${KIF_INSTALL_URL:-$TAGS/$PIN.zip}"
+else
+  URL="${KIF_INSTALL_URL:-$REPO/$BRANCH.zip}"
+fi
 
 mkdir -p "$TARGET" 2>/dev/null || fail "Couldn't make the folder $TARGET - move the installer somewhere you can write to."
 FREE_KB=$(df -Pk "$TARGET" 2>/dev/null | awk 'NR==2 {print $4}')
@@ -92,7 +103,7 @@ if [ -n "${FREE_KB:-}" ] && [ "$FREE_KB" -lt 4500000 ]; then
 fi
 
 say ""
-say "  Downloading KIF Beta ($BRANCH) - about 1.9 GB, this takes a while..."
+say "  Downloading KIF ($BRANCH) - about 1 to 2 GB, this takes a while..."
 rm -f "$ZIP"
 if [ "$DL" = curl ]; then
   curl -L --fail --retry 5 --retry-delay 3 -o "$ZIP" "$URL" || {
@@ -116,9 +127,11 @@ else
   fail "This installer needs unzip, bsdtar or python3 to unpack the game."
 fi
 TOP="$(find "$UNPACK" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-[ -n "$TOP" ] && [ -f "$TOP/InfiniteFusion.exe" ] || fail "The download doesn't look like KIF Beta (no InfiniteFusion.exe inside)."
+[ -n "$TOP" ] && [ -f "$TOP/InfiniteFusion.exe" ] || fail "The download doesn't look like KIF (no InfiniteFusion.exe inside)."
 cp -a "$TOP/." "$TARGET/" || fail "Copying the game into $TARGET failed (disk space?)."
 rm -rf "$UNPACK" "$ZIP"
+# a fixed version: the game skips its automatic update check (KIF_pinned.txt)
+if [ -n "$PIN" ] && [ "$BRANCH" = "$PIN" ]; then printf '%s\n' "$PIN" > "$TARGET/KIF_pinned.txt"; else rm -f "$TARGET/KIF_pinned.txt"; fi
 
 # a launcher: Wine if it is installed, otherwise Proton through Steam
 cat > "$TARGET/run_KIF.sh" <<'LAUNCH'
@@ -137,7 +150,7 @@ chmod +x "$TARGET/run_KIF.sh"
 
 say ""
 say "  ==================================="
-say "    KIF Beta is installed!"
+say "    KIF is installed!"
 say "  ==================================="
 say ""
 say "  Folder: $TARGET"

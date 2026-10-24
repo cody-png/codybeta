@@ -866,7 +866,7 @@ def pbMoveTutorNetChoose(commands, cmd, movelist = nil, bymachine = false, oneus
                 if $Trainer.tutorlist[i][0]==move         
                   if pbLearnMove(pokemon,move,false,false)
                     pokemon.add_first_move(move) # DemICE Move Remember
-                    pbSEPlay("Slots coin",volume=80,pitch=80)
+                    pbSEPlay("SlotsCoin",volume=80,pitch=80)
                     $Trainer.money-=cost
                     if KIF::TutorNet::PERMANENT_TUTOR_MOVE_UNLOCK 
                       cost=0
@@ -904,7 +904,7 @@ def pbMoveTutorNetChoose(commands, cmd, movelist = nil, bymachine = false, oneus
                 if $Trainer.tutorlist[i][0]==move         
                   if pbLearnMove(pokemon,move,false,false)
                     pokemon.add_first_move(move) # DemICE Move Remember
-                    pbSEPlay("Slots coin",volume=80,pitch=80)
+                    pbSEPlay("SlotsCoin",volume=80,pitch=80)
                     $Trainer.coins-=cost
                     if KIF::TutorNet::PERMANENT_TUTOR_MOVE_UNLOCK 
                       cost=0
@@ -939,7 +939,7 @@ def pbMoveTutorNetChoose(commands, cmd, movelist = nil, bymachine = false, oneus
                 if $Trainer.tutorlist[i][0]==move       
                   if pbLearnMove(pokemon,move,false,false)
                     pokemon.add_first_move(move) # DemICE Move Remember
-                    pbSEPlay("Slots coin",volume=80,pitch=80)
+                    pbSEPlay("SlotsCoin",volume=80,pitch=80)
                     $PokemonBag.pbDeleteItem(currency,cost)
                     if KIF::TutorNet::PERMANENT_TUTOR_MOVE_UNLOCK 
                       cost=0

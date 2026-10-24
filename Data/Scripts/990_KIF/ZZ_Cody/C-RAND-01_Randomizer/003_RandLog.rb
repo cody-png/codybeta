@@ -52,7 +52,7 @@ module KIF
     }
 
     def self.log_path
-      return "#{LOG_DIR}/#{LOG_PREFIX}#{format_seed}.txt"
+      return "#{log_dir}/#{LOG_PREFIX}#{format_seed}.txt"
     end
 
     # Triple fusions have dex numbers from 999999; GameData::Species.get reads
@@ -305,7 +305,7 @@ module KIF
       return if @log_suspended
       return unless log_on? && $PokemonGlobal && $game_switches
       sections = build_log
-      make_dir(LOG_DIR)
+      make_dir(log_dir)
       File.open(log_path, "wb") do |f|
         f.write("KIF - Randomizer spoiler log\r\n")
         sections.each do |title, lines|

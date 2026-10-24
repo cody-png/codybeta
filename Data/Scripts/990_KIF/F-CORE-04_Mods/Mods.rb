@@ -71,6 +71,12 @@ module KIF
       end
     end
 
+    # A read-only game folder (phones): <save folder>/Mods is read as well
+    def self.extra_folders
+      dir = KIF::Paths.extra_drop_dir(FOLDER)
+      return dir ? [dir] : []
+    end
+
     # file names loaded straight from the Mods folder this session
     def self.loaded_root; @loaded_root || []; end
     def self.loaded_dirs; @loaded_dirs || []; end
@@ -82,8 +88,8 @@ module KIF
     def self.uninstall(e)
       return false unless e && e.source.is_a?(NativeSource)
       path = File.expand_path(e.path.to_s)
-      root = File.expand_path(e.source.dir.to_s)
-      return false unless path.start_with?(root + "/") && File.exist?(path)
+      roots = e.source.dirs.map { |d| File.expand_path(d.to_s) }
+      return false unless roots.any? { |root| path.start_with?(root + "/") } && File.exist?(path)
       KIF::ModSettings.stash(e.id) if defined?(KIF::ModSettings) && KIF::ModSettings.active?
       File.directory?(path) ? KIF.rm_tree(path) : File.delete(path)
       set_disabled(e.id, false) if disabled.include?(e.id)
@@ -136,7 +142,7 @@ module KIF
 
     def self.entries
       list = []
-      add_source(NativeSource.new(File.join(".", FOLDER))) if @sources.empty?
+      add_source(NativeSource.new(File.join(".", FOLDER), extra_folders)) if @sources.empty?
       @sources.each do |s|
         begin
           list.concat(Array(s.entries))
@@ -328,7 +334,10 @@ module KIF
     #---------------------------------------------------------------------------
     class NativeSource
       attr_reader :dir
-      def initialize(dir); @dir = dir; @entries = nil; end
+      # extra: more Mods folders (the save folder's on phones); a mod already
+      # found in an earlier folder wins
+      def initialize(dir, extra = []); @dir = dir; @extra = extra; @entries = nil; end
+      def dirs; return [@dir] + @extra; end
 
       def mod_manager_folders?
         return defined?(::ModManager) ? true : false
@@ -338,9 +347,17 @@ module KIF
       def entries
         return @entries if @entries
         list = []
-        return list unless File.directory?(@dir)
-        Dir.children(@dir).sort.each do |c|
-          path = File.join(@dir, c)
+        dirs.each do |d|
+          next unless File.directory?(d)
+          list.concat(entries_in(d).reject { |e| list.any? { |o| o.id == e.id } })
+        end
+        return @entries = list
+      end
+
+      def entries_in(dir)
+        list = []
+        Dir.children(dir).sort.each do |c|
+          path = File.join(dir, c)
           if File.file?(path) && c =~ /\.rb\z/i
             list << Entry.new(:id => c, :name => File.basename(c, ".*").sub(/\A\d+[_ -]*/, "").tr("_", " "),
                               :kind => :file, :path => path, :source => self)
@@ -362,7 +379,7 @@ module KIF
             end
           end
         end
-        return @entries = list
+        return list
       end
 
       def enabled?(e); return !KIF::Mods.disabled.include?(e.id); end
@@ -466,7 +483,7 @@ module KIF
     end
 
     # Everything in one Mods folder (the game's, or a test's)
-    def self.load_dir(dir)
+    def self.load_dir(dir, extra = [])
       @loaded_root = []
       @loaded_root_paths = {}
       @loaded_dirs = []   # folder mods that loaded, in order (their pictures / sounds)
@@ -475,10 +492,10 @@ module KIF
       @names = {}
       KIF::Features.reset! if defined?(KIF::Features)
       KIF::Locks.reset! if defined?(KIF::Locks)
-      native = NativeSource.new(dir)
+      native = NativeSource.new(dir, extra)
       add_source(native)
       add_source(ModManagerSource.new)
-      unpack_zips(dir)
+      native.dirs.each { |d| unpack_zips(d) if File.directory?(d) }
       off = []
       on = mods_on(native)
       # loose .rb files first, in name order (as KIF 0.20.7)
@@ -558,10 +575,10 @@ module KIF
       KIF::DataLoad.after_load_all("Modded Pokémon (Mods folder)") { KIF::Mods.apply_species }
       KIF::ModCompat.patch_mod_manager if defined?(KIF::ModCompat)
       KIF::ModCompat.before_mods_load if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:before_mods_load)
-      Dir.mkdir(FOLDER) unless File.directory?(FOLDER)
+      (Dir.mkdir(FOLDER) rescue nil) unless File.directory?(FOLDER)   # a read-only game folder still loads its mods
       KIF::ModSettings.install(FOLDER) if defined?(KIF::ModSettings)
       KIF::ModCatalog.migrate_copied_assets(FOLDER) if defined?(KIF::ModCatalog)   # once: files older KIF copied into the game
-      load_dir(File.join(".", FOLDER))
+      load_dir(File.join(".", FOLDER), extra_folders)
       KIF::ModAssets.build(@loaded_dirs || []) if defined?(KIF::ModAssets)
       KIF::ModCompat.after_mods_loaded if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:after_mods_loaded)
       KIF::AbilityText.install if defined?(KIF::AbilityText)   # outside mods' own ability-text aliases

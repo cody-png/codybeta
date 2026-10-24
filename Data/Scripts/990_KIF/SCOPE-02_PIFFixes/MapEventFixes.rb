@@ -74,3 +74,28 @@ end
     map.events.delete(ev_id) if ev && ev.pages.any? { |pg| pg.list.any? { |c| c.code == 101 && c.parameters[0].to_s == text } }
   end
 end
+
+# 7. Celadon Café Backstore (map 407) event 9, the Pokémon seller: it prices
+#    its daily stock from base stats through the old Essentials dex file
+#    (pbOpenDexData / pbDexDataOffset(dexdata, species, 10), then six fgetb),
+#    which 6.8.2 removed: restocking crashed. A stand-in reads the same
+#    numbers from GameData. Only offset 10 (base stats) is used by any event.
+class KIFDexDataStandIn
+  ORDER = [:HP, :ATTACK, :DEFENSE, :SPEED, :SPECIAL_ATTACK, :SPECIAL_DEFENSE]
+
+  def seek_species(species, offset)
+    data = (GameData::Species.get(species) rescue nil)
+    @bytes = (offset == 10 && data) ? ORDER.map { |s| data.base_stats[s].to_i } : []
+  end
+
+  def fgetb; return (@bytes || []).shift.to_i; end
+  def close; end
+end
+
+def pbOpenDexData(*_args)
+  return KIFDexDataStandIn.new
+end
+
+def pbDexDataOffset(dexdata, species, offset)
+  dexdata.seek_species(species, offset) if dexdata.respond_to?(:seek_species)
+end

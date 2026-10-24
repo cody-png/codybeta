@@ -4,7 +4,6 @@ abilities.dat
 Actors.rxdata 
 Animations.rxdata 
 Armors.rxdata 
-attacksRS.dat 
 berry_plants.dat 
 Classes.rxdata 
 CommonEvents.rxdata 
@@ -13,9 +12,7 @@ connections.dat
 Constants.rxdata 
 Copy - Scripts.rxdata 
 CUSTOM_SPRITES.csv 
-dexdata.rxdata 
 EditorScripts.rxdata 
-eggEmerald.dat 
 encounters - Copie.dat 
 encounters - Copy.dat 
 encounters.dat 
@@ -829,7 +826,6 @@ MapInfos.rxdata
 map_connections.dat 
 map_metadata.dat 
 messages.dat 
-messages_fr.dat 
 metadata.dat 
 metrics.dat 
 move2anim.dat 

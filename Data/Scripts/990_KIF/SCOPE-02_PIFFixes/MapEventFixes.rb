@@ -99,3 +99,29 @@ end
 def pbDexDataOffset(dexdata, species, offset)
   dexdata.seek_species(species, offset) if dexdata.respond_to?(:seek_species)
 end
+
+# 8. The same Café sellers (events 8 and 9) wrote prices three ways: "$15 000"
+#    in the choice list (a comma there splits the choice), "$15,000" in what
+#    they say and "15,000$" in the question. All now read "$15,000" like
+#    PIF's Poké Mart; a choice with a comma is quoted, which \ch[] reads.
+KIF::MapPatches.add(407, "PIF fix: Cafe price format") do |map|
+  map.events.each_value do |ev|
+    ev.pages.each do |pg|
+      pg.list.each_with_index do |cmd, i|
+        next unless cmd.code == 101
+        lines = [cmd]
+        lines << pg.list[lines.length + i] while pg.list[lines.length + i] && pg.list[lines.length + i].code == 401
+        # joined the way Interpreter#command_101 joins them
+        text = lines.map { |c| KIF::MapPatches.text_of(c) }.inject { |m, t| (t != "" && !m.end_with?(" ")) ? "#{m} #{t}" : m + t }
+        fixed = text.gsub(/(\d+),(\d{3})\$/, '$\1,\2')
+        fixed = fixed.sub(/(\\ch\[\d+,\d+,)(.*)\]\z/) do
+          head = $1
+          head + $2.split(",").map { |f| f =~ /\$\d+ \d{3}/ ? "\"#{f.sub(/\$(\d+) (\d{3})/, '$\1,\2')}\"" : f }.join(",") + "]"
+        end
+        next if fixed == text
+        cmd.parameters[0] = fixed
+        lines[1..-1].each { |c| c.parameters[0] = "" }
+      end
+    end
+  end
+end

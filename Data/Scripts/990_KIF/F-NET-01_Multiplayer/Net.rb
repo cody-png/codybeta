@@ -588,6 +588,17 @@ module KIF
             next
           end
         end
+        # all taken, or reserved: Windows with Hyper-V/WSL2/Docker keeps blocks of
+        # 49152-65535 for itself (seen: 52344-52443). A port Windows picks works
+        # the same: the join code and the router mapping carry it.
+        unless @port
+          begin
+            @servers = [TCPServer.new(bind, 0)]
+            @port = @servers[0].addr[1]
+          rescue SystemCallError
+            nil
+          end
+        end
         return nil unless @port
         begin
           @servers << TCPServer.new("::", @port) if ipv6 && bind == "0.0.0.0"

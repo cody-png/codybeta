@@ -112,8 +112,10 @@ module KIF
 
     def self.inflate(z)
       zi = Zlib::Inflate.new
-      out = zi.inflate(z)
-      zi.finish
+      out = +"".b
+      # in chunks: a small code that unpacks to megabytes is refused early
+      zi.inflate(z) { |chunk| out << chunk; raise "too big" if out.bytesize > MAX_JSON }
+      out << zi.finish.to_s
       return out.bytesize <= MAX_JSON ? out : nil
     rescue StandardError
       return nil

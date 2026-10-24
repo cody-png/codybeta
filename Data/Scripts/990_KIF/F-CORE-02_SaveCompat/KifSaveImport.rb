@@ -222,9 +222,10 @@ module KIF
         pk.instance_variable_set(:@item, nil)
       end
       return 0 if moved.empty?
-      pending[:items].concat(moved)
       KIF.log("Set aside #{moved.length} unknown item(s) from this save: " + moved.map { |id, q| "#{id} x#{q}" }.join(", "))
       return moved.length
+    ensure
+      pending[:items].concat(moved) if moved   # also when a step above raised: what was taken out stays set aside
     end
 
     # Set-aside items whose ID exists again go back into the Bag
@@ -233,7 +234,8 @@ module KIF
       return 0 if GameData::Item::DATA.empty? || !bag.is_a?(PokemonBag)
       back = pending[:items].select { |id, qty| item_known?(id) && bag.pbStoreItem(id, qty) }
       return 0 if back.empty?
-      pending[:items] -= back
+      # one entry per item returned (Array#- would drop every equal entry, also those that didn't fit)
+      back.each { |b| i = pending[:items].index(b); pending[:items].delete_at(i) if i }
       KIF.log("#{back.length} set-aside item(s) are back in the Bag: " + back.map { |id, q| "#{id} x#{q}" }.join(", "))
       return back.length
     end

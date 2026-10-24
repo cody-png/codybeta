@@ -779,6 +779,8 @@ class KifSettingsScreen
     return if KIF::SettingsScreen.button?(o)
     return locked_buzz(r) if locked_by(o)
     cur = (o.get rescue nil)
+    # a choice PIF never gave a value (Level caps on a new save) shows its first entry
+    cur = 0 if cur.nil? && o.is_a?(EnumOption)
     return if cur.nil?
     nv = dir > 0 ? o.next(cur) : o.prev(cur)
     return if nv == cur

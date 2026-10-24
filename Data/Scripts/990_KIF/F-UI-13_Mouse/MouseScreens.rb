@@ -428,6 +428,7 @@ if defined?(KifLivingTitle)
       m = KIF::Mouse
       if m.active? && @rects
         i = @rects.index { |r| m.over_rect?(r.x, r.y, r.width, r.height) }
+        m.log_phone_test(m.x, m.y, m.moved, "title menu=#{@menu} row=#{i.inspect} of #{@rects.length} index=#{@index} rects=#{@rects.map { |r| r.y }.inspect}") if m.left
         if i.nil?
           m.swallow! if m.left
         elsif i != @index
@@ -550,5 +551,17 @@ class KifSettingsScreen
     end
     # arrows: left half back, right half on
     change(m.x < VAL_X1 - 80 ? -1 : 1)
+  end
+end
+
+#-------------------------------------------------------------------------------
+# Pause menu (focus set in KIF::PauseMenu.show_commands): PIF reads USE right
+# after Input.update, before the list's next update would point it at the
+# clicked row or drop a click beside it
+#-------------------------------------------------------------------------------
+class PokemonPauseMenu_Scene
+  def kif_mouse_frame
+    w = @sprites["cmdwindow"]
+    KIF::Mouse.window(w) if w && !w.disposed?
   end
 end

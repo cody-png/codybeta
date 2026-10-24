@@ -78,7 +78,7 @@ module KIF
       idx = anc.index(mod)
       return nil unless idx
       anc[(idx + 1)..-1].each do |a|
-        next unless a.instance_methods(false).include?(name) || a.private_instance_methods(false).include?(name)
+        next unless a.method_defined?(name, false) || a.private_method_defined?(name, false)   # (no method-list Arrays per ancestor)
         return [:um, own_method(a, name) || a.instance_method(name)]
       end
       return nil

@@ -647,3 +647,20 @@ class Object
     return kif_rand_legendaryOk(oldspecies, newspecies, includeLegendaries)
   end
 end
+
+# Pinkan Island's bosses teach Surf, Waterfall, Strength and Rock Smash with
+# PIF's move tutor; with Types / Moves / TMs follow type no island Pokémon
+# might learn one (Waterfall: none on some seeds) and the quest would stop.
+# There a Pokémon also learns what PIF's own data lets it learn.
+class Pokemon
+  alias kif_rand_pokemon_can_learn_move pokemon_can_learn_move unless method_defined?(:kif_rand_pokemon_can_learn_move)
+
+  def pokemon_can_learn_move(species_data, move_data)
+    return true if kif_rand_pokemon_can_learn_move(species_data, move_data)
+    return false unless KIF::Rand.pinkan? && move_data
+    o = KIF::Rand.originals[species_data.species]
+    return false unless o
+    id = move_data.id
+    return o[:@tutor_moves].include?(id) || o[:@egg_moves].include?(id) || o[:@moves].any? { |m| m[1] == id }
+  end
+end

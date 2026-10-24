@@ -78,11 +78,20 @@ module KIF
       }
     end
 
+    # Phones: the on-screen pad's button letters (no keyboard to name)
+    def pad
+      return @pad ||= %w[A B C X Y Z L R].each_with_object({}) do |c, h|
+        h[Input.const_get(c)] ||= c if Input.const_defined?(c)
+      end
+    end
+
     def name(button)
+      return pad[button] || "?" if KIF.mobile?
       return label(button, defaults[button] || "?")
     end
 
     def short(button)
+      return pad[button] || "?" if KIF.mobile?
       names = (bindings[button] || []).map { |c| NAMES[c] && NAMES[c][0] }.compact
       return names.min_by(&:length) || defaults[button] || "?"
     end

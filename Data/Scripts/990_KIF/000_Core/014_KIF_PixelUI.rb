@@ -27,7 +27,7 @@ module KIF
     # game data strings can come in as raw bytes; read them as UTF-8
     def utf8(str)
       s = str.to_s
-      return s if s.encoding == Encoding::UTF_8 && s.valid_encoding?
+      return s if s.encoding.to_s == "UTF-8" && s.valid_encoding?
       s = s.dup.force_encoding(Encoding::UTF_8)
       return s.valid_encoding? ? s : s.scrub("?")
     end

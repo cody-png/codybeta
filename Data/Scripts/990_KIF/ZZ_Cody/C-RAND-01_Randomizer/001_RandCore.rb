@@ -214,6 +214,15 @@ module KIF
       return $game_switches && sw(SWITCH_RANDOM_WILD)
     end
 
+    # Pinkan Island (PIF's Team Rocket / police quest: Settings::PINKAN_ISLAND_MAPS)
+    # plays as in PIF: its wild Pokémon, bosses, gifts, trainers, items and
+    # levels are never randomized, Nuzlocke's rules and Archipelago's checks
+    # don't apply there, so the quest can always be finished (Cody, 2026-10-23)
+    def self.pinkan?(map_id = nil)
+      map_id ||= $game_map ? $game_map.map_id : nil
+      return Settings::PINKAN_ISLAND_MAPS.include?(map_id)
+    end
+
     # Randomizer button in Cody Settings: saves started as randomized saves
     def self.available?
       return $game_switches && $PokemonGlobal && sw(SWITCH_RANDOMIZED_AT_LEAST_ONCE)
@@ -329,7 +338,7 @@ module KIF
 
     # Map texts load as raw bytes (RPG Maker data); read them as UTF-8
     def self.utf8(s)
-      return s if s.encoding == Encoding::UTF_8
+      return s if s.encoding.to_s == "UTF-8"
       u = s.dup.force_encoding(Encoding::UTF_8)
       return u.valid_encoding? ? u : s
     end
@@ -443,23 +452,27 @@ module KIF
     end
 
     def self.make_dir(path)
-      Dir.mkdir(RAND_DIR) unless Dir.exist?(RAND_DIR)
-      Dir.mkdir(path) unless Dir.exist?(path)
+      KIF.mkdir_p(path)
     end
+
+    # Randomizer/Logs and Randomizer/Presets: in the game folder, or the save
+    # folder when the game folder can't be written (phones)
+    def self.log_dir;    return KIF::Paths.writable(LOG_DIR); end
+    def self.preset_dir; return KIF::Paths.writable(PRESET_DIR); end
 
     #---------------------------------------------------------------------------
     # Presets: "Randomizer Presets/<name>.txt", first line = settings code
     #---------------------------------------------------------------------------
     def self.preset_names
-      return [] unless Dir.exist?(PRESET_DIR)
-      return Dir.glob("#{PRESET_DIR}/*.txt").map { |f| File.basename(f, ".txt") }.sort
+      return [] unless Dir.exist?(preset_dir)
+      return Dir.glob("#{preset_dir}/*.txt").map { |f| File.basename(f, ".txt") }.sort
     end
 
     def self.save_preset(name)
       clean = name.to_s.gsub(/[\\\/:*?"<>|]/, "").strip
       return false if clean.empty?
-      make_dir(PRESET_DIR)
-      File.open("#{PRESET_DIR}/#{clean}.txt", "wb") do |f|
+      make_dir(preset_dir)
+      File.open("#{preset_dir}/#{clean}.txt", "wb") do |f|
         f.write(settings_code + "\r\n")
         f.write("# KIF randomizer preset. The first line is the settings code;\r\n")
         f.write("# paste it in Randomizer > Presets & sharing > Paste settings code.\r\n")
@@ -471,7 +484,7 @@ module KIF
     end
 
     def self.load_preset(name)
-      path = "#{PRESET_DIR}/#{name}.txt"
+      path = "#{preset_dir}/#{name}.txt"
       return false unless File.exist?(path)
       lines = File.read(path, :mode => "rb").force_encoding("UTF-8").scrub.split(/\r?\n/)
       line = lines.map(&:strip).find { |l| l.start_with?(CODE_PREFIX) || l.start_with?(CODE_PREFIX_V1) }

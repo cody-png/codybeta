@@ -227,7 +227,7 @@ class Interpreter
   alias kif_rand_req_execute_command execute_command unless method_defined?(:kif_rand_req_execute_command)
 
   def execute_command
-    return kif_rand_req_execute_command unless @list && $PokemonGlobal && $game_switches && $game_switches[SWITCH_RANDOM_WILD]
+    return kif_rand_req_execute_command unless @list && $PokemonGlobal && $game_switches && $game_switches[SWITCH_RANDOM_WILD] && !KIF::Rand.pinkan?
     old = KIF::Rand.req_ctx
     ctx = (KIF::Rand.request_subs(@list) rescue nil)
     KIF::Rand.reset_any_notes if ctx && @index == 0

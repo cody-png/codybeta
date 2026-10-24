@@ -63,7 +63,7 @@ module KIF
         raw("Engine: #{engine_text}")
         raw("Screen: #{screen_text}")
         raw("Verbose logging on (#{$DEBUG ? 'debug mode' : KIF::VERBOSE_MARKER})") if KIF.verbose?
-        raw("Game folder: #{Dir.pwd}")
+        raw("Game folder: #{File.expand_path(".")}")
         raw("Save folder: #{KIF.save_dir}")
         raw("Logs: #{KIF::Paths.logs}")
         at_exit { finish }

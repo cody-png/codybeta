@@ -2,9 +2,11 @@
 # F-UI-13 – Mouse (new in KIF 1.2, 2026-10-22; KIF 0.20.7 and PIF 6.8.2 had
 # no mouse support besides PIF's unused Mouse.getMousePos)
 #
-# Setting: Options > System > Controls > Mouse: Off / On (default On; hidden
+# Settings: Options > System > Controls > Mouse: Off / On (default Off; hidden
 # and off on phones; off while the Mouse UI mod is loaded, which does the
-# same its own way).
+# same its own way). Click to move: On / Off (default On, shown while Mouse
+# is On): Off keeps the mouse in menus only. Phones show Touch controls
+# (default Off; JoiPlay sends taps as left clicks) and Tap to move instead.
 #
 # Menus: pointing at an entry selects it, left click confirms (it is the USE
 # key for that frame), right click is BACK, the wheel is UP/DOWN. So every
@@ -16,18 +18,23 @@
 #
 # Map: left click a tile and the player walks there (A* over the tiles the
 # player could step on: the map's passability, surfing, one-way ledges,
-# events that block). Clicking an event walks next to it, faces it and
+# events that block, and what stepping on a map's own triggers does: stairs
+# that move the player, bridge ends that turn bridge mode on or off). Clicking an event walks next to it, faces it and
 # talks to it; clicking a blocked tile next to the player interacts
 # (USE). Holding the button follows the pointer. Any key (but the run key)
 # or a new click stops the walk; nothing happens while an event, message or
-# menu runs. The
+# menu runs (but the stairs and bridge ends on the way: the walk waits for
+# them and goes on). Holding searches again only when the pointer reaches
+# another tile or the walk ended. The
 # walk drives Input.dir4, so the player's own movement code does each step.
 #
 # Engine: mkxp-z's Input.mouse_x/mouse_y/mouse_in_window?, MOUSELEFT/RIGHT,
 # scroll_v and Graphics.show_cursor; every call checks the engine has it.
 # The pointer hides after a few seconds without moving.
 #===============================================================================
-KIF::Options.define(:kif_mouse, 1, :global)   # 1 On, 0 Off
+KIF::Options.define(:kif_mouse, 0, :global)        # 1 On, 0 Off
+KIF::Options.define(:kif_mouse_walk, 1, :global)   # click (or tap) to move: 1 On, 0 Off
+KIF::Options.define(:kif_touch, 0, :global)        # phones: taps as clicks, 1 On, 0 Off
 
 KIF::Options.add(:graphics, :global) {   # placed under System > Controls (015_KIF_SettingsData)
   next nil if KIF.mobile?
@@ -35,7 +42,35 @@ KIF::Options.add(:graphics, :global) {   # placed under System > Controls (015_K
                  proc { $PokemonSystem.kif_mouse },
                  proc { |value| $PokemonSystem.kif_mouse = value },
                  [_INTL("The mouse does nothing in the game."),
-                  _INTL("Point to choose, left click to confirm, right click to go back, wheel to scroll. Click the map to walk there.")])
+                  _INTL("Point to choose, left click to confirm, right click to go back, wheel to scroll.")])
+}
+
+KIF::Options.add(:graphics, :global) {
+  next nil if KIF.mobile? || $PokemonSystem.kif_mouse.to_i != 1
+  EnumOption.new(_INTL("Click to move"), [_INTL("Off"), _INTL("On")],
+                 proc { $PokemonSystem.kif_mouse_walk },
+                 proc { |value| $PokemonSystem.kif_mouse_walk = value },
+                 [_INTL("Clicking the map does nothing. The mouse works in menus only."),
+                  _INTL("Click the map to walk there. Hold the button to keep walking toward the pointer.")])
+}
+
+# Phones (JoiPlay): taps arrive as left clicks, so the same code runs them
+KIF::Options.add(:graphics, :global) {
+  next nil unless KIF.mobile?
+  EnumOption.new(_INTL("Touch controls"), [_INTL("Off"), _INTL("On")],
+                 proc { $PokemonSystem.kif_touch },
+                 proc { |value| $PokemonSystem.kif_touch = value },
+                 [_INTL("Taps do nothing in the game. Use JoiPlay's on-screen buttons."),
+                  _INTL("Tap an entry to choose it. Tap the map to walk there.")])
+}
+
+KIF::Options.add(:graphics, :global) {
+  next nil if !KIF.mobile? || $PokemonSystem.kif_touch.to_i != 1
+  EnumOption.new(_INTL("Tap to move"), [_INTL("Off"), _INTL("On")],
+                 proc { $PokemonSystem.kif_mouse_walk },
+                 proc { |value| $PokemonSystem.kif_mouse_walk = value },
+                 [_INTL("Tapping the map does nothing. Taps work in menus only."),
+                  _INTL("Tap the map to walk there. Keep your finger down to keep walking toward it.")])
 }
 
 module KIF
@@ -71,12 +106,55 @@ module KIF
       @engine = (Input.respond_to?(:mouse_x) && Input.respond_to?(:mouse_y) && defined?(Input::MOUSELEFT)) ? true : false
     end
 
-    # setting On, a PC, the engine has a mouse, and the Mouse UI mod isn't loaded
+    # setting On (Mouse on a PC, Touch controls on a phone), the engine has a
+    # mouse, and the Mouse UI mod isn't loaded
     def self.on?
       return false unless engine?
       return false if defined?(::MouseUI)
-      return false if KIF.mobile?
-      return (($PokemonSystem.kif_mouse rescue 1) || 1).to_i == 1
+      if KIF.mobile?
+        phone_test?
+        return (($PokemonSystem.kif_touch rescue 0) || 0).to_i == 1
+      end
+      return (($PokemonSystem.kif_mouse rescue 0) || 0).to_i == 1
+    end
+
+    # Testing taps on a phone: a TapLog.krs marker file sends the first taps,
+    # the keys the engine sends and how each walk ended to KIF_mousetest.txt
+    PHONE_TEST = "TapLog.krs"
+
+    def self.phone_test?
+      if @phone_test.nil?
+        @phone_test = KIF.marker?(PHONE_TEST) ? true : false
+        KIF.log("Tap log on (#{PHONE_TEST}); engine mouse calls: #{engine?}") if @phone_test
+      end
+      return @phone_test
+    end
+
+    # its own file: the session log folds lines that differ only in numbers
+    def self.log_phone_test(x, y, moved, extra = nil)
+      return unless @phone_test && (@left || @right || moved || extra)
+      return if (@test_lines = @test_lines.to_i + 1) > 400
+      line = format("%.2f %d,%d left=%s held=%s right=%s moved=%s %s %s\r\n", Process.clock_gettime(Process::CLOCK_MONOTONIC),
+                    x, y, @left, @held, @right, moved, $scene.class, extra)
+      File.open(File.join(KIF::Paths.logs, "KIF_mousetest.txt"), "ab") { |f| f.write(line) }
+    rescue StandardError
+    end
+
+    # Click to move (only asked while the mouse is on)
+    def self.walk?
+      return (($PokemonSystem.kif_mouse_walk rescue 1) || 1).to_i == 1
+    end
+
+    # JoiPlay reports taps in the window the engine started with (640x480),
+    # not in the game's own size after PIF resizes it (512x384): a tap there
+    # landed 25% too far right and down. The PC engine already converts.
+    START_SIZE = [(Graphics.width rescue 0), (Graphics.height rescue 0)]
+
+    def self.game_xy(x, y)
+      return [x, y] unless KIF.mobile?
+      sw, sh = START_SIZE
+      return [x, y] if sw <= 0 || sh <= 0 || (sw == Graphics.width && sh == Graphics.height)
+      return [x * Graphics.width / sw, y * Graphics.height / sh]
     end
 
     def self.in_window?
@@ -89,7 +167,10 @@ module KIF
     def self.poll
       @swallow = @on_map = @use_now = @left_used = false
       @key = nil
-      @marker.visible = false if @marker && !@marker.disposed?
+      # the marker stays up while the walk goes on; it goes when the map
+      # stopped updating (a scene over it) or the walk ended
+      @polls = @polls.to_i + 1
+      hide_marker if @marker_poll != @polls - 1 || @path.nil?
       @on = on?
       unless @on
         @moved = @left = @right = @held = @any = false
@@ -99,14 +180,24 @@ module KIF
         return
       end
       inside = in_window?
-      nx = Input.mouse_x.to_i
-      ny = Input.mouse_y.to_i
+      nx, ny = game_xy(Input.mouse_x.to_i, Input.mouse_y.to_i)
       moved = inside && !@x.nil? && (nx != @x || ny != @y)
       @x = nx
       @y = ny
       @left  = inside && Input.kif_mouse_trigger?(Input::MOUSELEFT)
       @right = inside && Input.kif_mouse_trigger?(Input::MOUSERIGHT)
       @held  = inside && Input.kif_mouse_press?(Input::MOUSELEFT)
+      # phones: a tap shorter than a frame arrives as a pointer jump with no
+      # press (JoiPlay; its on-screen buttons never move the pointer)
+      @left = true if moved && !@left && !@held && KIF.mobile?
+      if @phone_test
+        log_phone_test(nx, ny, moved)
+        # keys the engine itself sends (JoiPlay may turn a tap into a key too)
+        keys = [:USE, :BACK, :ACTION, :SPECIAL].select { |k| Input.kif_mouse_trigger?(Input.const_get(k)) }
+        d = Input.kif_mouse_dir4
+        log_phone_test(nx, ny, false, "keys=#{keys.join('+')} dir=#{d}") if !keys.empty? || d != @test_dir.to_i
+        @test_dir = d
+      end
       # scroll_v: the notches turned since the last Input.update (mkxp-z sums
       # SDL wheel events and resets it each update; up is positive). One step
       # a frame; notches that came together follow on the next frames.
@@ -132,6 +223,7 @@ module KIF
       @moved = moved
       @any = @left || @right || @wheel != 0
       stop if @path && $game_temp && $game_temp.in_battle
+      stop if @path && !$scene.is_a?(Scene_Map)   # F12 soft reset: the title screen
       now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       @seen = now if @moved || @left || @right || @wheel != 0
       cursor(!@seen.nil? && now - @seen < HIDE_AFTER)
@@ -254,7 +346,9 @@ module KIF
       return if w.instance_variable_get(:@ignore_input)
       cols = [w.columns, 1].max
       ni = w.index + (@wheel > 0 ? -cols : cols)
-      @wheel = 0   # this list took the turn
+      # this list took the turn (and Frame rate above 40 would repeat its key)
+      KIF::FrameRate.forget(@wheel > 0 ? Input::UP : Input::DOWN) if defined?(KIF::FrameRate)
+      @wheel = 0
       return if ni < 0 || ni >= w.itemCount
       row = ni / cols
       page = [w.page_row_max, 1].max
@@ -290,28 +384,54 @@ module KIF
     def self.map_busy?(pl)
       return true if pbMapInterpreterRunning? || $game_temp.message_window_showing || $game_temp.in_menu
       return true if $game_temp.player_transferring || $game_temp.transition_processing
-      return true if pl.move_route_forcing || ($PokemonTemp && $PokemonTemp.miniupdate)
+      return true if route_moves?(pl) || ($PokemonTemp && $PokemonTemp.miniupdate)
       return false
+    end
+
+    # a forced route that steps, jumps or waits (a cutscene); not one that only
+    # changes how the player looks (some maps' parallel events set the
+    # player's opacity every frame)
+    def self.route_moves?(pl)
+      return false unless pl.move_route_forcing
+      route = pl.instance_variable_get(:@move_route)
+      return true unless route && route.list
+      return route.list.any? { |c| c.code.between?(1, 15) }
     end
 
     # Start of every Scene_Map#update
     def self.map_step
       @on_map = true
-      return unless @on
+      return stop if @path && !(@on && walk?)
+      return unless @on && walk?
       pl = $game_player
       return unless pl && $game_map
       stop if @path && real_key?
-      if map_busy?(pl)
-        stop if @path
+      # a stair or bridge end of the path the player just stepped on: PIF
+      # only marks it starting at the end of that step; its interpreter takes
+      # it next frame, after this. The walk waits for it and goes on after.
+      waiting = @path && @trans && !@trans.empty? &&
+                $game_map.events.each_value.any? { |e| @trans[e.id] && e.starting }
+      if waiting || map_busy?(pl)
         @pending = nil
-        return
+        return unless @path
+        if waiting
+          @hold = true
+        elsif pbMapInterpreterRunning?
+          @hold = (@trans && @trans[pbMapInterpreter.instance_variable_get(:@event_id)]) ? true : false
+        end   # else (its move route still going): as it was
+        return stop unless @hold
+        @dir = 0
+        return show_marker
       end
+      @hold = false
+      @drag_moved = true if @drag && @moved
       if @left && !@left_used
         @left_used = true
         stop
         @pending = mouse_tile
         @drag = true
         @drag_x, @drag_y = @pending
+        @drag_moved = false
       elsif @right
         stop
         @drag = false
@@ -322,8 +442,12 @@ module KIF
         tx, ty = @pending
         @pending = nil
         click_tile(pl, tx, ty)
-      elsif @drag
-        # holding the button: follow the pointer (one search per tile it enters)
+        log_phone_test(@x, @y, false, "tile=#{tx},#{ty} player=#{pl.x},#{pl.y} path=#{@path ? @path.length / 2 : 'none'}") if @phone_test
+      elsif @drag && (@drag_moved || @path.nil?)
+        # holding the button: a new search when the pointer moved to another
+        # tile, or once the last walk ended (not every step: the map scrolls
+        # under a still pointer)
+        @drag_moved = false
         tx, ty = mouse_tile
         if (tx != @drag_x || ty != @drag_y) && $game_map.valid?(tx, ty) && (tx != pl.x || ty != pl.y)
           @drag_x = tx
@@ -401,6 +525,7 @@ module KIF
       path = find_path(pl.x, pl.y, tx, ty, !ev.nil?, closest: ev.nil?)
       return false unless path && (!path.empty? || ev)
       @path = path
+      @trans = @found_trans
       @pi = 0
       @gx = ev ? tx : path[-2]
       @gy = ev ? ty : path[-1]
@@ -411,16 +536,25 @@ module KIF
     end
 
     def self.stop
+      log_phone_test(@x.to_i, @y.to_i, false, "walk stopped at line #{caller_locations(1, 1)[0].lineno}") if @phone_test && @path
       @path = nil
+      @trans = nil
+      @hold = false
       @dir = 0
       @face_event = false
+      hide_marker
     end
 
     def self.follow(pl)
       return stop if @map_id != $game_map.map_id
-      return if pl.moving? || pl.jumping?
-      while @pi < @path.length && pl.x == @path[@pi] && pl.y == @path[@pi + 1]
-        @pi += 2
+      return show_marker if pl.moving? || pl.jumping?
+      # the tile reached: the next one, or the one after it when a stair's
+      # move route carried the player past its own tile (no further: a path
+      # may cross a tile twice, under a bridge and then over it)
+      j = @pi
+      j += 2 if j < @path.length && !(pl.x == @path[j] && pl.y == @path[j + 1])
+      if j < @path.length && pl.x == @path[j] && pl.y == @path[j + 1]
+        @pi = j + 2
         @repaths = 0
       end
       if @pi >= @path.length
@@ -474,7 +608,13 @@ module KIF
       return out
     end
 
+    def self.hide_marker
+      @marker.visible = false if @marker && !@marker.disposed? && @marker.visible
+    end
+
+    # every frame of the walk, so it stays up (one sprite for the whole game)
     def self.show_marker
+      @marker_poll = @polls
       return unless @gx
       if @marker.nil? || @marker.disposed?
         @marker_vp = Viewport.new(0, 0, Graphics.width, Graphics.height)
@@ -497,8 +637,13 @@ module KIF
     #---------------------------------------------------------------------------
     # A* over the tiles the player can step on. near: stop on a tile next to
     # the goal (or across a counter from it). Returns the tiles to walk
-    # through as [x1, y1, x2, y2, ...] (a ledge jump skips its ledge tile),
-    # or nil when the goal can't be reached.
+    # through as [x1, y1, x2, y2, ...] (a ledge jump skips its ledge tile; a
+    # stair event's tile is followed by the tile its move route ends on), or
+    # nil when the goal can't be reached.
+    # Each step is searched in the bridge mode the player would be in there:
+    # stepping on a bridge end (an event with pbBridgeOn/pbBridgeOff) changes
+    # which tiles count from then on, as it does for the player.
+    # @found_trans: the ids of the stair and bridge events the path steps on.
     #---------------------------------------------------------------------------
     def self.find_path(sx, sy, tx, ty, near = false, pl = $game_player, map = $game_map, closest: false)
       x0 = [[sx, tx].min - MARGIN, 0].max
@@ -508,87 +653,215 @@ module KIF
       return nil if tx < x0 || tx > x1 || ty < y0 || ty > y1
       bw = x1 - x0 + 1
       n = bw * (y1 - y0 + 1)
-      # events that block a tile on the way (the goal itself may hold one)
-      blocked = Array.new(n, false)
+      # events a step onto starts (Player/Event Touch, mostly without a
+      # graphic): stairs, bridge ends, doors, scenes. Events in the way are
+      # left to the player's own passable?, as for a key press (one without
+      # a graphic isn't in the way: PIF lets the player walk over it).
+      touch = {}
       map.events.each_value do |ev|
-        next if ev.through || ev == pl
-        ev.each_occupied_tile do |i, j|
-          blocked[(j - y0) * bw + (i - x0)] = true if i >= x0 && i <= x1 && j >= y0 && j <= y1
-        end
+        next if ev == pl || !(ev.trigger == 1 || ev.trigger == 2) || ev.list.nil?
+        next if ev.x < x0 || ev.x > x1 || ev.y < y0 || ev.y > y1
+        touch[(ev.y - y0) * bw + (ev.x - x0)] = ev
       end
-      surfing = $PokemonGlobal && $PokemonGlobal.surfing
-      g = Array.new(n)
-      came = Array.new(n)
+      glob = $PokemonGlobal
+      bridge0 = glob ? glob.bridge.to_i : 0
+      on_h = bridge0 > 0 ? bridge0 : 2   # passability only asks bridge > 0, not the height
+      surfing = glob && glob.surfing
+      # a state is a tile and the bridge mode: tile * 2 + (bridge on ? 1 : 0)
+      g = Array.new(2 * n)
+      came = Array.new(2 * n)
+      lands = {}   # state reached by a stair: the stair's own tile
+      trans = {}   # state reached over a stair or bridge end: its event id
       heap_f = []
       heap_n = []
-      start = (sy - y0) * bw + (sx - x0)
+      start = ((sy - y0) * bw + (sx - x0)) * 2 + (bridge0 > 0 ? 1 : 0)
       g[start] = 0
       heap_push(heap_f, heap_n, 0, start)
       seen = 0
       goal = nil
       best = nil     # closest: the reached tile nearest the goal
       best_d = nil
-      until heap_n.empty?
-        cur = heap_pop(heap_f, heap_n)
-        cx = cur % bw + x0
-        cy = cur / bw + y0
-        dist = (cx - tx).abs + (cy - ty).abs
-        at_goal = if near
-                    dist == 1 || (dist == 2 && (cx == tx || cy == ty) && map.counter?((cx + tx) / 2, (cy + ty) / 2))
-                  else
-                    dist == 0
-                  end
-        if at_goal
-          goal = cur
-          break
-        end
-        if closest && (best_d.nil? || dist < best_d)
-          best = cur
-          best_d = dist
-        end
-        seen += 1
-        break if seen > SEARCH_CAP
-        here_water = surfing && map.terrain_tag(cx, cy).can_surf
-        DIRS.each do |d|
-          next unless pl.passable?(cx, cy, d)
-          nx = cx + DXA[d]
-          ny = cy + DYA[d]
-          next if nx < x0 || nx > x1 || ny < y0 || ny > y1
-          tag = map.terrain_tag(nx, ny)
-          cost = 1
-          if tag.ledge
-            next if surfing
-            nx += DXA[d]
-            ny += DYA[d]
-            next if nx < x0 || nx > x1 || ny < y0 || ny > y1
-            next unless pl.passable?(nx, ny, 0)   # the landing, as Game_Character#jump checks it
-            tag = map.terrain_tag(nx, ny)
-            cost = 2
+      begin
+        until heap_n.empty?
+          cur = heap_pop(heap_f, heap_n)
+          cell = cur >> 1
+          cx = cell % bw + x0
+          cy = cell / bw + y0
+          dist = (cx - tx).abs + (cy - ty).abs
+          at_goal = if near
+                      dist == 1 || (dist == 2 && (cx == tx || cy == ty) && map.counter?((cx + tx) / 2, (cy + ty) / 2))
+                    else
+                      dist == 0
+                    end
+          if at_goal
+            goal = cur
+            break
           end
-          next if surfing && !here_water && tag.can_surf   # off the water, Surf ends
-          next if tag.respond_to?(:chair) && tag.chair
-          next if near && nx == tx && ny == ty
-          ni = (ny - y0) * bw + (nx - x0)
-          next if blocked[ni] && !(nx == tx && ny == ty)
-          ng = g[cur] + cost
-          next if g[ni] && g[ni] <= ng
-          g[ni] = ng
-          came[ni] = cur
-          h = (nx - tx).abs + (ny - ty).abs
-          h -= 1 if near && h > 0
-          heap_push(heap_f, heap_n, ng + h, ni)
+          if closest && (best_d.nil? || dist < best_d)
+            best = cur
+            best_d = dist
+          end
+          seen += 1
+          break if seen > SEARCH_CAP
+          glob.bridge = ((cur & 1) == 1 ? on_h : 0) if glob
+          here_water = surfing && map.terrain_tag(cx, cy).can_surf
+          DIRS.each do |d|
+            next unless pl.passable?(cx, cy, d)
+            nx = cx + DXA[d]
+            ny = cy + DYA[d]
+            next if nx < x0 || nx > x1 || ny < y0 || ny > y1
+            tag = map.terrain_tag(nx, ny)
+            cost = 1
+            if tag.ledge
+              next if surfing
+              nx += DXA[d]
+              ny += DYA[d]
+              next if nx < x0 || nx > x1 || ny < y0 || ny > y1
+              next unless pl.passable?(nx, ny, 0)   # the landing, as Game_Character#jump checks it
+              tag = map.terrain_tag(nx, ny)
+              cost = 2
+            end
+            next if surfing && !here_water && tag.can_surf   # off the water, Surf ends
+            next if tag.respond_to?(:chair) && tag.chair
+            next if near && nx == tx && ny == ty
+            nb = cur & 1
+            land = nil
+            ev_id = nil
+            ev = touch[(ny - y0) * bw + (nx - x0)]
+            if ev
+              r = touch_result(ev, d, nx, ny, pl)
+              if r
+                lx, ly, br = r
+                ev_id = ev.id
+                if br
+                  nb = br > 0 ? 1 : 0
+                end
+                if lx != nx || ly != ny
+                  next if lx < x0 || lx > x1 || ly < y0 || ly > y1
+                  land = [nx, ny]
+                  cost += (lx - nx).abs + (ly - ny).abs
+                  nx = lx
+                  ny = ly
+                end
+              elsif !(nx == tx && ny == ty)
+                next if ev.list.any? { |c| c.code == 201 }   # a door: only when clicked
+                cost += 8   # a scene starts there: only when there's no other way
+              end
+            end
+            ni = ((ny - y0) * bw + (nx - x0)) * 2 + nb
+            ng = g[cur] + cost
+            next if g[ni] && g[ni] <= ng
+            g[ni] = ng
+            came[ni] = cur
+            if land then lands[ni] = land else lands.delete(ni) end
+            if ev_id then trans[ni] = ev_id else trans.delete(ni) end
+            h = (nx - tx).abs + (ny - ty).abs
+            h -= 1 if near && h > 0
+            heap_push(heap_f, heap_n, ng + h, ni)
+          end
         end
+      ensure
+        glob.bridge = bridge0 if glob
       end
       goal = best if goal.nil? && best && best != start
       return nil unless goal
       out = []
+      @found_trans = {}
       c = goal
       while c != start
-        out.unshift(c / bw + y0)
-        out.unshift(c % bw + x0)
+        cell = c >> 1
+        out.unshift(cell / bw + y0)
+        out.unshift(cell % bw + x0)
+        if (st = lands[c])
+          out.unshift(st[1])
+          out.unshift(st[0])
+        end
+        @found_trans[trans[c]] = true if trans[c]
         c = came[c]
       end
       return out
+    end
+
+    # Where stepping onto a touch event (moving toward d) leaves the player:
+    # [x, y, bridge] (bridge: the height pbBridgeOn sets, 0 for pbBridgeOff,
+    # nil when it stays). Only for events that do nothing else: a branch on
+    # the player's direction, player move routes, waits, bridge scripts (PIF's
+    # stairs and bridge ends). nil for anything else (a scene, a door...).
+    def self.touch_result(ev, d, x, y, pl)
+      list = ev.list
+      bridge = nil
+      dir = d
+      i = 0
+      while i < list.length
+        c = list[i]
+        case c.code
+        when 0, 106, 108, 121, 122, 123, 210, 408, 412, 509   # (switches, variables, self switches)
+        when 111   # Conditional Branch: only "the player faces ..."
+          p = c.parameters
+          return nil unless p[0] == 6 && p[1] == -1
+          if p[2] != dir   # false: on to its Else, or past its end
+            i += 1
+            i += 1 while i < list.length && !((list[i].code == 411 || list[i].code == 412) && list[i].indent == c.indent)
+          end
+        when 411   # the branch taken ends here: past the Else part
+          i += 1 while i < list.length && !(list[i].code == 412 && list[i].indent == c.indent)
+        when 209   # Set Move Route
+          if c.parameters[0] != -1   # another event's route (a scene around the step): not the player's way
+            i += 1
+            next
+          end
+          route = c.parameters[1]
+          return nil if route.repeat
+          through = false
+          route.list.each do |mc|
+            code = mc.code
+            if (1..4).include?(code) || code == 12 || code == 13
+              md = code <= 4 ? code * 2 : (code == 12 ? dir : 10 - dir)
+              if through || pl.passable?(x, y, md)
+                x += DXA[md]
+                y += DYA[md]
+              elsif !route.skippable
+                return nil
+              end
+              dir = md unless code == 13
+            elsif (5..8).include?(code)   # diagonals, turning as Game_Character does
+              dx = (code == 5 || code == 7) ? -1 : 1
+              dy = code <= 6 ? 1 : -1
+              x += dx
+              y += dy
+              hd = dx < 0 ? 4 : 6
+              vd = dy > 0 ? 2 : 8
+              dir = dir == 10 - hd ? hd : (dir == 10 - vd ? vd : dir)
+            elsif code == 14
+              x += mc.parameters[0].to_i
+              y += mc.parameters[1].to_i
+            elsif (16..19).include?(code)
+              dir = (code - 15) * 2
+            elsif code == 20 || code == 21
+              dir = (code == 20 ? { 2 => 4, 4 => 8, 6 => 2, 8 => 6 } : { 2 => 6, 4 => 2, 6 => 8, 8 => 4 })[dir] || dir
+            elsif code == 22
+              dir = 10 - dir
+            elsif code == 37 || code == 38
+              through = code == 37
+            elsif !(code == 0 || code == 15 || (29..44).include?(code))
+              return nil   # random moves, scripts...
+            end
+          end
+        when 355, 655
+          s = c.parameters[0].to_s.strip
+          if s =~ /\ApbBridgeOn(?:\((\d*)\))?\z/
+            bridge = $1.to_s.empty? ? 2 : $1.to_i
+          elsif s =~ /\ApbBridgeOff(?:\(\))?\z/
+            bridge = 0
+          else
+            return nil
+          end
+        else
+          return nil
+        end
+        i += 1
+      end
+      return [x, y, bridge]
     end
 
     def self.heap_push(f, nodes, pri, node)

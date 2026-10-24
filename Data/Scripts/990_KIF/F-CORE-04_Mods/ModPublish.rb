@@ -30,7 +30,8 @@ module KIF
 
     def log(msg); KIF.log("Publish a mod: #{msg}"); end
     def t(s); return KIF::PixelFont.utf8(s.to_s); end
-    def root; return KIF::Paths.root; end
+    # the folder the game runs in (Mods, ModDev, Tools; Paths.root is its parent in the "Game Files" layout)
+    def root; return File.expand_path("."); end   # JoiPlay rewrites the usual working-folder call
 
     # phones never start programs; neither does a game without a way to
     def available?
@@ -53,7 +54,7 @@ module KIF
         Dir.children(dir).sort.each do |c|
           p = File.join(dir, c)
           next unless File.directory?(p) && !c.start_with?(".", "_") && !KIF::Mods::SKIP_DIRS.include?(c)
-          next unless File.file?(File.join(p, "mod.json")) || !Dir[File.join(p, "**", "*.rb")].empty?
+          next unless File.file?(File.join(p, "mod.json")) || !Dir.glob(File.join("**", "*.rb"), base: p).empty?
           out << ["#{c} (#{where})", p]
         end
       end
@@ -66,7 +67,7 @@ module KIF
       j = File.join(path, "mod.json")
       unless File.file?(j)
         id = File.basename(path).downcase.gsub(/[^a-z0-9_\-]+/, "_").sub(/\A[_\-]+/, "")
-        rbs = Dir[File.join(path, "*.rb")].map { |f| File.basename(f) }.sort
+        rbs = Dir.glob("*.rb", base: path).sort   # base: a [ ] { } in the path isn't read as a pattern
         h = { "id" => id, "name" => File.basename(path).tr("_", " "), "version" => "1.0.0", "author" => "", "description" => "" }
         h["scripts"] = rbs unless rbs.empty?
         return h

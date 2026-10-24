@@ -10,6 +10,8 @@
 #   already choose those). Points left over after turning it Off can still
 #   be spent. No-EVs Mode: EVs don't count for stats, so there's nothing to
 #   spend points on (they still pile up, for when it's turned off).
+#   EVs Train Mode: foes yield 0 EVs (ExpEvIvModes.rb), so the only points
+#   banked are a held Power item's +4 (doubled by Pokérus).
 #   Mockups: Claude Docs/Base KIF/mockups/EV mockups.
 #===============================================================================
 KIF::Options.define(:ev_alloc, 0, :save)
@@ -111,15 +113,28 @@ class PokeBattle_Battle
   end
 
   # One line per Pokémon at the end, so players know points are waiting
-  # (not after every knockout)
+  # (not after every knockout). A win (or a catch) shows it in pbGainMoney,
+  # after PIF's "You defeated ..." and the trainer's last words; anything
+  # else before PIF's end-of-battle lines, while the battle is still shown.
   alias kif_eva_pbEndOfBattle pbEndOfBattle unless method_defined?(:kif_eva_pbEndOfBattle)
+  alias kif_eva_pbGainMoney pbGainMoney unless method_defined?(:kif_eva_pbGainMoney)
 
   def pbEndOfBattle
+    kif_eva_show_points unless @decision == 1 || @decision == 4
+    return kif_eva_pbEndOfBattle
+  end
+
+  def pbGainMoney(*args)
+    kif_eva_show_points
+    return kif_eva_pbGainMoney(*args)
+  end
+
+  def kif_eva_show_points
     (@kif_eva_gained || {}).each do |pkmn, n|
-      pbDisplayPaused(_INTL("{1} got {2} EV points to spend (Summary, Skills).", pkmn.name, n))
+      pbDisplayPaused(n == 1 ? _INTL("{1} got 1 EV point to spend (Summary, Skills).", pkmn.name) :
+                               _INTL("{1} got {2} EV points to spend (Summary, Skills).", pkmn.name, n))
     end
     @kif_eva_gained = nil
-    return kif_eva_pbEndOfBattle
   end
 end
 
@@ -131,6 +146,11 @@ class PokemonSummary_Scene
 
   def drawPageThree
     kif_eva_drawPageThree
+    kif_eva_page_three_points
+  end
+
+  # also called by the IV/EV Skills page (F-UI-04), which draws without this hook
+  def kif_eva_page_three_points
     kif_eva_draw_points if @is_player && KIF::EVAlloc.available?(@pokemon) && !@contestpage
   end
 
@@ -141,7 +161,11 @@ class PokemonSummary_Scene
     overlay = @sprites["overlay"].bitmap
     green = [Color.new(54, 84, 54), Color.new(24, 192, 32)]
     if cursor
-      overlay.fill_rect(222, KIF_EVA_YS[cursor] + 2, 292, 30, Color.new(248, 200, 72, 110))
+      # blended over the row (fill_rect would replace its text with a flat bar)
+      bar = Bitmap.new(292, 30)
+      bar.fill_rect(0, 0, 292, 30, Color.new(248, 200, 72))
+      overlay.blt(222, KIF_EVA_YS[cursor] + 2, bar, bar.rect, 110)
+      bar.dispose
       overlay.fill_rect(220, 274, 292, 110, Color.new(0, 0, 0, 0))
       pbDrawTextPositions(overlay, [
         [_INTL("EV points left: {1}", @pokemon.kif_ev_pool), 224, 278, 0, Color.new(248, 248, 248), Color.new(104, 104, 104)],
@@ -187,7 +211,14 @@ class PokemonSummary_Scene
         end
         if m.clicked?
           m.swallow!
-          m.press!(m.x >= 368 ? Input::RIGHT : Input::LEFT) if row
+          # given/taken here: at 60+ fps the Frame rate's repeat? doesn't see a pressed key
+          if row
+            st = KIF::EVAlloc::STATS[cursor]
+            n = m.x >= 368 ? KIF::EVAlloc.give(@pokemon, st) : KIF::EVAlloc.take(@pokemon, st)
+            n > 0 ? pbPlayCursorSE : pbPlayBuzzerSE
+            redraw.call
+          end
+          next
         end
       end
       stat = KIF::EVAlloc::STATS[cursor]

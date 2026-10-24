@@ -122,8 +122,7 @@ module KIF
         KIF.log("Return log failed (#{e.class}: #{e.message})")
       end
 
-      def self.do_return
-        t = return_target
+      def self.do_return(t = return_target)
         return unless t
         pbFadeOutIn {
           $game_temp.player_new_map_id    = t[0]

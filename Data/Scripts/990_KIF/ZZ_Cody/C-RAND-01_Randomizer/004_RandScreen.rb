@@ -399,7 +399,7 @@ module KIF
                 next
               end
               ok = KIF::Rand.save_preset(name)
-              pbMessage(ok ? _INTL("Saved to the {1} folder.", KIF::Rand::PRESET_DIR) : _INTL("Couldn't save that preset."))
+              pbMessage(ok ? _INTL("Saved to the {1} folder.", KIF::Rand.preset_dir) : _INTL("Couldn't save that preset."))
             end
           }, _INTL("Saves these settings as a file you can share.")),
           ButtonOption.new(_INTL("Built-in presets"), proc {
@@ -414,7 +414,7 @@ module KIF
           ButtonOption.new(_INTL("Load preset"), proc {
             names = KIF::Rand.preset_names
             if names.empty?
-              pbMessage(_INTL("No presets yet. They're kept in the {1} folder.", KIF::Rand::PRESET_DIR))
+              pbMessage(_INTL("No presets yet. They're kept in the {1} folder.", KIF::Rand.preset_dir))
             else
               i = pbMessage(_INTL("Which preset?"), names + [_INTL("Cancel")], names.length + 1)
               if i >= 0 && i < names.length
@@ -422,7 +422,7 @@ module KIF
                 pbMessage(ok ? _INTL("Loaded. Use Randomize now for it to take effect.") : _INTL("That preset couldn't be read."))
               end
             end
-          }, _INTL("Loads one of your presets from the {1} folder.", KIF::Rand::PRESET_DIR))
+          }, _INTL("Loads one of your presets from the {1} folder.", KIF::Rand.preset_dir))
         ]
       }
     end
@@ -730,7 +730,7 @@ class RandomizerOptionsScene < PokemonOption_Scene
                               proc { r.log_on? ? 1 : 0 },
                               proc { |v| r.data[:log] = (v == 1) },
                               [_INTL("No spoiler log is written."),
-                               _INTL("Writes \"Randomizer Log - <seed>.txt\" in the Randomizer/Logs folder.")])
+                               _INTL("Writes \"Randomizer Log - <seed>.txt\" in the {1} folder.", KIF::Rand.log_dir)])
     options << ButtonOption.new(_INTL("View spoiler log"), proc { r.view_log },
                                 _INTL("Shows everything that was randomized (asks first)."))
     [[:pokemon, _INTL("Pokémon"), _INTL("Wild encounters, starters, statics, gifts and trades.")],

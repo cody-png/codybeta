@@ -247,13 +247,112 @@ module KIF
   end
 end
 
+#-------------------------------------------------------------------------------
+# messages.dat read once at start-up, not twice. 6.8.2 loads it into the main
+# table (999_Main.rb:171), then Game.set_up_system loads the language file
+# over it (001_StartGame.rb:110, "english.dat" - not shipped, so the main
+# table ends up empty), and the first text lookup then loads messages.dat
+# again for the fallback table: ~2 s on a PC thrown away (much more on a
+# phone). The first copy now goes to the fallback, when that one hasn't
+# loaded yet, is waiting for the same file, the file is unchanged and nothing
+# was written into the main table since.
+#-------------------------------------------------------------------------------
+module KIF
+  module Perf
+    def self.messages_stamp(file)
+      st = File.stat(file)
+      return [st.size, st.mtime]
+    rescue StandardError
+      return nil
+    end
+
+    # main: the Messages about to load another file
+    def self.hand_over_messages(main)
+      from = main.instance_variable_get(:@kif_loaded_from)
+      return false unless from && defined?(MessageTypes)
+      main.instance_variable_set(:@kif_loaded_from, nil)
+      return false unless main.equal?(MessageTypes.class_variable_get(:@@messages))
+      fb = MessageTypes.class_variable_get(:@@messagesFallback)
+      return false unless fb.instance_variable_get(:@messages).nil? && fb.instance_variable_get(:@filename) == from[0]
+      return false unless messages_stamp(from[0]) == from[1]
+      fb.instance_variable_set(:@messages, main.instance_variable_get(:@messages))
+      fb.instance_variable_set(:@filename, nil)
+      return true
+    rescue StandardError
+      return false
+    end
+
+    #---------------------------------------------------------------------------
+    # Text tables kept ready to load. Decoding messages.dat (31 MB: XOR, then
+    # Marshal.load of ~4 million mostly empty entries, then the compacting
+    # above) takes ~2 s on a PC at every start; the same tables saved once
+    # already compacted (zlib, ~1 MB) load in ~0.1 s. Remade when the file's
+    # size or time changes; any problem reading it = the normal load.
+    #---------------------------------------------------------------------------
+    module TextCache
+      FORMAT = 1
+      DIR = "Cache/KIFText"   # in the game folder, or the save folder when that can't be written
+
+      def self.path(file)
+        return File.join(KIF::Paths.writable(DIR), File.basename(file.to_s) + ".kifcache")
+      end
+
+      def self.key(file, stamp)
+        return [FORMAT, File.basename(file.to_s), stamp[0], stamp[1].to_f]
+      end
+
+      def self.read(file, stamp)
+        f = path(file)
+        return nil unless File.file?(f)
+        k, tables = Marshal.load(Zlib::Inflate.inflate(File.binread(f)))
+        return (k == key(file, stamp) && tables.is_a?(Array)) ? tables : nil
+      rescue StandardError
+        return nil
+      end
+
+      def self.write(file, stamp, tables)
+        f = path(file)
+        KIF.mkdir_p(File.dirname(f))
+        tmp = "#{f}.#{Process.pid}.tmp"
+        File.binwrite(tmp, Zlib::Deflate.deflate(Marshal.dump([key(file, stamp), tables]), Zlib::BEST_SPEED))
+        File.delete(f) if File.exist?(f)   # (Windows: rename won't replace)
+        File.rename(tmp, f)
+      rescue StandardError => e
+        (File.delete(tmp) rescue nil) if tmp
+        KIF.log("Text cache not written (#{e.class}: #{e.message})") if KIF.respond_to?(:log)
+      end
+    end
+  end
+end
+
 class Messages
   alias kif_perf_loadMessageFile loadMessageFile unless method_defined?(:kif_perf_loadMessageFile)
 
   def loadMessageFile(*args)
-    ret = kif_perf_loadMessageFile(*args)
-    KIF::Perf.compact_messages(@messages)
+    KIF::Perf.hand_over_messages(self)
+    stamp = KIF::Perf.messages_stamp(args[0])
+    cached = stamp && KIF::Perf::TextCache.read(args[0], stamp)
+    if cached
+      ret = @messages = cached
+    else
+      ret = kif_perf_loadMessageFile(*args)
+      KIF::Perf.compact_messages(@messages)
+      KIF::Perf::TextCache.write(args[0], stamp, @messages) if stamp && @messages.is_a?(Array)
+    end
+    @kif_loaded_from = (@messages && stamp) ? [args[0], stamp] : nil
     return ret
+  end
+
+  # a table something wrote into isn't the file's any more
+  [:set, :setMessages, :addMessages, :setMessagesAsHash, :addMessagesAsHash,
+   :setMapMessagesAsHash, :addMapMessagesAsHash].each do |m|
+    next unless method_defined?(m)
+    orig = :"kif_perf_#{m}"
+    alias_method orig, m unless method_defined?(orig)
+    define_method(m) do |*args, &blk|
+      @kif_loaded_from = nil
+      return send(orig, *args, &blk)
+    end
   end
 end
 
@@ -298,4 +397,69 @@ module Encryption
       return out
     end
   end
+end
+
+#===============================================================================
+# "./Game.rgssad" (an encrypted archive; KIF ships none): 6.8.2 asks the disk
+# for it before every picture or data file lookup (pbGetFileChar, pbRgssOpen,
+# pbRgssExists?, 001_Technical/002_Files/001_FileTests.rb), so about half of
+# all file checks are for it (273 of 553 opening the party, 182 of 364 opening
+# the PC). It can't appear or vanish while the game runs: checked once.
+#===============================================================================
+module KIF
+  module Perf
+    def self.archive?
+      @archive = yield if @archive.nil?
+      return @archive
+    end
+  end
+end
+
+class Object
+  was_private = private_method_defined?(:safeExists?)
+  alias kif_perf_safeExists? safeExists? unless method_defined?(:kif_perf_safeExists?) || private_method_defined?(:kif_perf_safeExists?)
+
+  def safeExists?(f)
+    return KIF::Perf.archive? { kif_perf_safeExists?(f) } if f == "./Game.rgssad"
+    return kif_perf_safeExists?(f)
+  end
+  private :safeExists? if was_private
+end
+
+#===============================================================================
+# UI pictures (Graphics/Pictures/...) looked up once. pbResolveBitmap
+# (001_FileTests.rb:121) asks the disk for .png, .gif and .dat every time:
+# opening the party resolved 31 pictures 101 times, 241 file checks, most of
+# them for "_dark" variants this install doesn't ship. The game's pictures
+# don't come or go while it runs, so the answer is kept per name (and
+# language, and set of mod files: a mod that loads afterwards starts afresh).
+#===============================================================================
+module KIF
+  module Perf
+    PICTURES = %r{\AGraphics[/\\]Pictures[/\\]}i
+
+    def self.picture_memo
+      mods = defined?(KIF::ModAssets) ? KIF::ModAssets.files : nil
+      lang = ($PokemonSystem.language rescue nil)
+      unless @pic_memo && @pic_mods.equal?(mods) && @pic_lang == lang
+        @pic_memo = {}
+        @pic_mods = mods
+        @pic_lang = lang
+      end
+      return @pic_memo
+    end
+  end
+end
+
+class Object
+  was_private = private_method_defined?(:pbResolveBitmap)
+  alias kif_perf_pbResolveBitmap pbResolveBitmap unless method_defined?(:kif_perf_pbResolveBitmap) || private_method_defined?(:kif_perf_pbResolveBitmap)
+
+  def pbResolveBitmap(x)
+    return kif_perf_pbResolveBitmap(x) unless x.is_a?(String) && x.match?(KIF::Perf::PICTURES)
+    memo = KIF::Perf.picture_memo
+    ret = memo.fetch(x) { memo[x.dup] = kif_perf_pbResolveBitmap(x) }
+    return ret ? ret.dup : nil
+  end
+  private :pbResolveBitmap if was_private
 end

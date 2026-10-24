@@ -81,14 +81,21 @@ module KIF
       end
     end
 
-    def self.show_commands(scene, commands)
+    # the mouse picks the row under the pointer inside Input.update (PIF reads
+    # USE right after it); only around PIF's loop, not KIF's own handlers
+    def self.focused(scene, list)
+      return yield(list) unless defined?(KIF::Mouse) && KIF::Mouse.respond_to?(:with_focus)
+      return KIF::Mouse.with_focus(scene) { yield(list) }
+    end
+
+    def self.show_commands(scene, commands, &block)
       entries = active_entries
-      return yield(commands) if entries.empty?
+      return focused(scene, commands, &block) if entries.empty?
       pos = insert_position(commands)
       shown = commands.dup
       shown.insert(pos, *entries.map { |e| label_for(e) })
       loop do
-        ret = yield(shown)
+        ret = focused(scene, shown, &block)
         return ret if ret < 0 || ret < pos
         return ret - entries.length if ret >= pos + entries.length
         entry = entries[ret - pos]

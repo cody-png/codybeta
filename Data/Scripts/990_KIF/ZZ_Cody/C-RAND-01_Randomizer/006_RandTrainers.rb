@@ -526,7 +526,7 @@ module GameData
 
     def kif_add_extras(trainer)
       return unless trainer && $game_switches && $game_switches[SWITCH_RANDOM_TRAINERS]
-      return if $game_switches[SWITCH_FIRST_RIVAL_BATTLE]
+      return if $game_switches[SWITCH_FIRST_RIVAL_BATTLE] || KIF::Rand.pinkan?
       return if KIF::Rand.team_extra_setting(@trainer_type) == 0
       th = $PokemonGlobal.randomTrainersHash
       team = th && th[self.id]

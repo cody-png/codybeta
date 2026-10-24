@@ -11,7 +11,7 @@
 # box in the party screen (SL1), "Soul Link: <partner>" on the load screen.
 #===============================================================================
 
-# A list whose rows may have columns: [[text, x, width, align], ...], with
+# A list whose rows may have columns: [[text, x, width, align (2 right)], ...], with
 # :grey last for a greyed row. Text rows draw as usual.
 class Window_KifSLRows < Window_CommandPokemon
   def drawItem(index, count, rect)
@@ -174,6 +174,7 @@ module KIF
       end
 
       def table(head, rows, help)
+        @scr.visible = false if @scr
         t = KIF::Net::Screen.new(Window_KifSLRows)
         loop do
           t.show(head, rows, help)
@@ -182,6 +183,7 @@ module KIF
         end
       ensure
         t&.dispose
+        @scr.visible = true if @scr
       end
 
       STATE_TEXT = { alive: "alive", hurt: "hurt", dead: "dead", missed: "no pair", waiting: "waiting", open: "waiting" }
@@ -198,7 +200,7 @@ module KIF
         SoulLink.pairs.map do |r|
           mine = r[:mine].is_a?(String) ? my_name_of(r[:mine]) : r[:mine] == :missed ? _INTL("no catch") : "-"
           theirs = r[:theirs].is_a?(Hash) ? SoulLink.their_name(r) : r[:theirs] == :missed ? _INTL("no catch") : "-"
-          row = [[r[:place], 0, 150], [mine, 156, 108], [theirs, 270, 108], [_INTL(STATE_TEXT[r[:state]]), 384, 76, 1]]
+          row = [[r[:place], 0, 150], [mine, 156, 108], [theirs, 270, 108], [_INTL(STATE_TEXT[r[:state]]), 384, 76, 2]]
           [:dead, :missed].include?(r[:state]) ? row + [:grey] : row
         end
       end
@@ -228,7 +230,7 @@ module KIF
         evs = st[:my_log].map { |e| [e, SoulLink.my_name] } + st[:their_log].map { |e| [e, name] }
         evs.sort_by { |e, _w| [e["t"] || 0, e["q"]] }.reverse.map do |e, who|
           time = e["t"] ? Time.at(e["t"]).strftime("%m-%d %H:%M") : "--"
-          [[time, 0, 92], [who, 96, 84], [event_text(e), 184, 222], [e["dbg"] ? _INTL("Debug") : nil, 410, 50, 1]]
+          [[time, 0, 100], [who, 110, 80], [event_text(e), 194, 216], [e["dbg"] ? _INTL("Debug") : nil, 410, 50, 2]]
         end
       end
 
@@ -252,10 +254,10 @@ module KIF
           parts.unshift(win)
           txt = BitmapSprite.new(352, 84, vp)
           txt.x = txt.y = 12
-          txt.z = 2
+          txt.z = win.z + 3   # over the window (its sprites use z to z + 2)
           parts.unshift(txt)
           pbSetSystemFont(txt.bitmap)
-          base, shadow = getDefaultTextColors(win.windowskin)
+          base, shadow = win.baseColor, win.shadowColor
           pbDrawTextPositions(txt.bitmap, [[lines[0], 76, 12, 0, base, shadow], [lines[1], 76, 42, 0, base, shadow]])
           data = their_species && GameData::Species.try_get(their_species.to_s.to_sym)
           [[data && Pokemon.new(data.id, 1), 46], [mine, 318]].each do |pk, x|
@@ -264,7 +266,7 @@ module KIF
             s.setOffset(PictureOrigin::Center)
             s.x = 12 + x
             s.y = 12 + 42
-            s.z = 3
+            s.z = win.z + 4
             s.tone = Tone.new(0, 0, 0, 255)   # grey
             parts.unshift(s)
           end
@@ -279,7 +281,7 @@ module KIF
       #-------------------------------------------------------------------------
       # SL1: party panels and the party screen's Soul Link box
       #-------------------------------------------------------------------------
-      ICON_RECT = [222, 58, 32, 32]   # the partner's icon, half size, below the HP numbers
+      ICON_RECT = [224, 58, 32, 32]   # the partner's icon, half size, right of the HP numbers
       DOT_POS   = [238, 46]
       DOT_COLORS = { alive: [96, 216, 96], hurt: [248, 200, 40], dead: [232, 64, 64], missed: [232, 64, 64], waiting: [168, 168, 168] }
       # 5x5 at the party's 2x pixel size: o outline, x colour
@@ -406,7 +408,7 @@ class PokemonParty_Scene
     unless box
       return unless show
       box = @sprites["kif_sl_box"] = BitmapSprite.new(Graphics.width, 64, @viewport)
-      box.z = help.z + 1
+      box.z = help.z + 3   # over the help window (its sprites use z to z + 2)
     end
     box.visible = show
     return unless show
@@ -421,7 +423,7 @@ class PokemonParty_Scene
     @kif_sl_lines = lines
     bmp = box.bitmap
     bmp.clear
-    base, shadow = getDefaultTextColors(help.windowskin)
+    base, shadow = help.baseColor, help.shadowColor
     pbSetSystemFont(bmp)
     pbDrawShadowText(bmp, 16, 4, help.width - 32, 26, lines[0], base, shadow)
     pbSetSmallFont(bmp)
@@ -474,7 +476,7 @@ class PokemonLoadPanel
     return if @trainer.respond_to?(:kif_nz_failed) && @trainer.kif_nz_failed   # "Nuzlocke over" is there
     begin
       pbSetSmallFont(self.bitmap)
-      pbDrawShadowText(self.bitmap, 112, 76, 140, 24, _INTL("Soul Link: {1}", name), TEXTCOLOR, TEXTSHADOWCOLOR)
+      pbDrawShadowText(self.bitmap, 112, 84, 140, 24, _INTL("Soul Link: {1}", name), TEXTCOLOR, TEXTSHADOWCOLOR)   # under the name
       pbSetSystemFont(self.bitmap)
     rescue StandardError => e
       KIF.log("Soul Link: load-screen line failed (#{e.class}: #{e.message})")

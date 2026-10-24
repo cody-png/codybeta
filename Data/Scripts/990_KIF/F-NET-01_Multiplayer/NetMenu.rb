@@ -275,6 +275,9 @@ module KIF
         [@head, @cmd, @help].each(&:dispose)
         @vp.dispose
       end
+
+      # hidden while another screen is on top (the windows let it show through)
+      def visible=(value); @vp.visible = value; end
     end
 
     module Menu

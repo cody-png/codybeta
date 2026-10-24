@@ -230,11 +230,11 @@ module KIF
       HEAD_H = 128
       HELP_H = 96
 
-      def initialize
+      def initialize(list = Window_CommandPokemon)   # Soul Link lists pass a window with columns
         @vp = Viewport.new(0, 0, Graphics.width, Graphics.height)
         @vp.z = 99_990
         @head = Window_UnformattedTextPokemon.newWithSize("", 0, 0, Graphics.width, HEAD_H, @vp)
-        @cmd = Window_CommandPokemon.newWithSize([""], 0, HEAD_H, Graphics.width, Graphics.height - HEAD_H - HELP_H, @vp)
+        @cmd = list.newWithSize([""], 0, HEAD_H, Graphics.width, Graphics.height - HEAD_H - HELP_H, @vp)
         @help = Window_UnformattedTextPokemon.newWithSize("", 0, Graphics.height - HELP_H, Graphics.width, HELP_H, @vp)
         @cmds = nil
       end
@@ -279,6 +279,9 @@ module KIF
         [@head, @cmd, @help].each(&:dispose)
         @vp.dispose
       end
+
+      # hidden while another screen is on top (the windows let it show through)
+      def visible=(value); @vp.visible = value; end
     end
 
     module Menu

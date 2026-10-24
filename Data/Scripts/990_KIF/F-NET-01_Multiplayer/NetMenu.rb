@@ -131,6 +131,7 @@ module KIF
         when :connected
           log("connected to #{ev[1]} (#{s.via})")
           KIF::SoulLink.on_connect(s) if defined?(KIF::SoulLink)
+          KIF::Coop.on_connect(s) if defined?(KIF::Coop)
         when :message
           if ev[1] == "wave"
             @notes << _INTL("{1} says hello!", s.partner)
@@ -140,9 +141,16 @@ module KIF
             rescue => e
               log("Soul Link message failed (#{e.class}: #{e.message})")
             end
+          elsif ev[1].start_with?("co_") && defined?(KIF::Coop)
+            begin
+              KIF::Coop.receive(ev[1], ev[2])
+            rescue => e
+              log("co-op message failed (#{e.class}: #{e.message})")
+            end
           end
         when :disconnected
           KIF::SoulLink.on_disconnect if defined?(KIF::SoulLink)
+          KIF::Coop.on_disconnect if defined?(KIF::Coop)
           @notes << (ev[1] == :bye ? _INTL("Your friend disconnected.") : _INTL("Lost the connection to your friend."))
           log("disconnected (#{ev[1]})")
         when :failed
@@ -587,9 +595,13 @@ module KIF
           sl = defined?(KIF::SoulLink) && KIF::SoulLink.on?
           cmds = [_INTL("Send hello"), _INTL("Disconnect")]
           cmds.unshift(_INTL("Soul Link")) if sl
-          r = pick(lines.join("\n"), cmds, help, proc { [Net.session&.connected?, Net.notes.length] })
+          co = defined?(KIF::Coop) ? KIF::Coop.menu_label : nil   # last row: the rows above keep their places
+          cmds << co if co
+          help = KIF::Coop.take_notes.last || help if co
+          r = pick(lines.join("\n"), cmds, help, proc { [Net.session&.connected?, Net.notes.length, co && KIF::Coop.menu_label] })
           next if r.nil?
           return if r < 0
+          next KIF::Coop.menu_pick if co && r == cmds.length - 1
           r -= 1 if sl
           case r
           when -1

@@ -21,11 +21,12 @@
 #     SWAP       a fused party Pokemon swaps head and body (as the DNA
 #                Reverser does; never an egg, a fainted or a rental one; it
 #                keeps at least 1 HP)
+#     PARTY_LOCK one party Pokemon won't battle for a while (Traps_PartyLock.rb)
 #===============================================================================
 module KIF
   module AP
     module Traps
-      KINDS = %w[POISON PARALYSIS BATTLE CONFUSION MONEY SWAP]
+      KINDS = %w[POISON PARALYSIS BATTLE CONFUSION MONEY SWAP PARTY_LOCK]   # PARTY_LOCK: Traps_PartyLock.rb
       CONFUSION_STEPS = 50
       MONEY_PERCENT = 10
       MONEY_MAX = 5000
@@ -64,6 +65,7 @@ module KIF
       end
 
       def ready?(kind)
+        return locks.length < MAX_LOCKS if kind == "PARTY_LOCK"   # a third waits for an unlock
         return true unless kind == "BATTLE"
         return true if KIF::Nuzlocke.on?   # shown, but no battle
         return false if pbInSafari? || pbInBugContest?

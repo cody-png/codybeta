@@ -1205,11 +1205,12 @@ module KIF
     module LocalFirst
       def load_sprite(pif_sprite, download_allowed = true)
         path = KIF::SpriteImport.local_for(pif_sprite)
+        path = nil if KIF::UnreadableSprites.bad?(path)
         if path
           begin
             return KIF::SpriteImport.load_local(path)
-          rescue => e
-            KIF.log("Sprite file #{path} couldn't be read (#{e.class}: #{e.message})") if defined?(KIF.log)
+          rescue *KIF::UnreadableSprites::ERRORS => e   # SDLError isn't a StandardError (SCOPE-02 UnreadableSprites.rb)
+            KIF::UnreadableSprites.mark(path, e)
           end
         end
         return super

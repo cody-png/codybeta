@@ -7,7 +7,7 @@ rem  Put this file in the folder you want and double-click it. It makes a
 rem  "KIF" folder next to itself, downloads the game from GitHub into it and
 rem  unpacks it. After that the game keeps itself up to date (in-game updater).
 rem  Saves live in %APPDATA%\KIF and are never touched by this installer.
-rem  Needs about 4.5 GB free while installing (2 GB once done).
+rem  Needs about 4.5 GB free while installing (about 1 to 2 GB once done).
 rem ==========================================================================
 set "REPO=https://github.com/cody-png/codybeta/archive/refs/heads"
 set "HERE=%~dp0"
@@ -69,7 +69,7 @@ if not exist "%TARGET%" (
   goto :end_fail
 )
 
-echo  Downloading KIF ^(%BRANCH%^) - about 1.9 GB, this takes a while...
+echo  Downloading KIF ^(%BRANCH%^) - about 1 to 2 GB, this takes a while...
 echo.
 if exist "%ZIP%" del /f /q "%ZIP%" >nul 2>&1
 "%CURL%" -L --fail --retry 5 --retry-delay 3 -o "%ZIP%" "%URL%"

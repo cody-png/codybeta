@@ -70,16 +70,20 @@ module KIF
         cur_file = loc[0]
         cur_um = other
       end
-      snap = @snapshot[[mod, name]]
-      if snap && snap.source_location != um.source_location
-        return [:um, snap]
+      # an alias a later layer took of a method the module replaced outright
+      # (kif_ap_pbCaptureCalc, kif_bi_pbUseMove) holds, without the module, what
+      # the original name had before the features
+      names = [name, orig].uniq
+      names.each do |n|
+        snap = @snapshot[[mod, n]]
+        return [:um, snap] if snap && snap.source_location != um.source_location
       end
       anc = mod.ancestors
       idx = anc.index(mod)
       return nil unless idx
       anc[(idx + 1)..-1].each do |a|
-        next unless a.method_defined?(name, false) || a.private_method_defined?(name, false)   # (no method-list Arrays per ancestor)
-        return [:um, own_method(a, name) || a.instance_method(name)]
+        n = names.find { |x| a.method_defined?(x, false) || a.private_method_defined?(x, false) }   # (no method-list Arrays per ancestor)
+        return [:um, own_method(a, n) || a.instance_method(n)] if n
       end
       return nil
     end

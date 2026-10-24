@@ -456,24 +456,41 @@ module KIF
     #---------------------------------------------------------------------------
     # What is installed
     #---------------------------------------------------------------------------
-    # the installed copy's folder (by folder name, then by id), so an update
-    # lands on the copy the player has even when they renamed its folder
-    # (by id first: the same folder name can be in both Mods folders on a phone)
+    # Mods folders, the one whose copy loads first: the save folder's on a
+    # phone, as in KIF::Mods (a read-only game folder's mod is updated there)
+    def mod_dirs
+      return KIF::Mods.extra_folders + [mods_dir]
+    end
+
+    # the installed copy's folder: the catalog's folder name when it holds
+    # this mod (the copy that loads), then the mod's id among mods that load,
+    # so an update lands on the copy the player has even when they renamed
+    # its folder, and never on a switched-Off or "_" copy of it beside the
+    # live one (a backup, a template). A folder name can hold another mod
+    # in the other Mods folder on a phone.
     def folder_of(item)
+      d = mod_dirs.find do |x|
+        j = File.join(x, item.folder.to_s, "mod.json")
+        id = File.file?(j) ? (KIF::Mods.read_json(j) || {}).fetch("id", item.id) : nil
+        id.to_s == item.id
+      end
+      return File.join(d, item.folder) if d
       c = installed_index[item.id]
       return File.join((@installed_in || {})[item.id] || mods_dir, c) if c
       return File.join(mods_dir, item.folder)
     end
 
-    # mod id => folder, read once (cleared on load and after an install);
-    # also the save folder's Mods when the game folder is read-only (phones)
+    # mod id => folder of the mods that load, read once (cleared on load and
+    # after an install); also the save folder's Mods when the game folder is
+    # read-only (phones)
     def installed_index
       return @installed_index if @installed_index
       @installed_index = {}
       @installed_in = {}   # mod id => the Mods folder it is in (a folder name can be in both)
-      ([mods_dir] + KIF::Mods.extra_folders).each do |dir|
+      mod_dirs.each do |dir|
         next unless File.directory?(dir)
         Dir.children(dir).sort.each do |c|
+          next if c.start_with?(".", "_") || KIF::Mods::SKIP_DIRS.include?(c) || KIF::Mods.disabled.include?(c)
           j = File.join(dir, c, "mod.json")
           next unless File.file?(j)
           id = ((KIF::Mods.read_json(j) || {})["id"] || c).to_s

@@ -176,7 +176,7 @@ module KIF
     def self.guest_ask(msg)
       s = session or return
       return s.post("co_no", "id" => msg["id"], "why" => "off") unless on?
-      return s.post("co_no", "id" => msg["id"], "why" => "busy") if @guest || @ask || $game_temp&.in_battle
+      return s.post("co_no", "id" => msg["id"], "why" => "busy") if @guest || @ask || @hosting || $game_temp&.in_battle
       @ask = msg
       @ask_at = KIF::Net.now
     end
@@ -258,7 +258,7 @@ module KIF
     def self.read_join(msg)
       party = msg["party"].first(6).map { |h| Mon.load(h, true) }
       return nil if party.empty? || party.any?(&:nil?) || party.none? { |p| p.able? }
-      type = Mon.sym(msg["type"], GameData::TrainerType) || ($Trainer.trainer_type rescue :YOUNGSTER)
+      type = Mon.partner_type(msg["type"])
       return { party: party, name: KIF::Net.shown_name(msg["name"]), type: type, tid: msg["tid"] }
     end
 
@@ -295,6 +295,14 @@ module KIF
         return nil unless v.is_a?(String) && v =~ /\A[A-Za-z0-9_]{1,40}\z/
         d = data.try_get(v.to_sym)
         return d ? d.id : nil
+      end
+
+      # the other player's trainer type for the battle screen: PIF draws a
+      # partner from Graphics/Trainers/<type> and fails without the file
+      def partner_type(v)
+        t = sym(v, GameData::TrainerType)
+        return t if t && GameData::TrainerType.front_sprite_filename(t)
+        return ($Trainer.trainer_type rescue nil) || GameData::TrainerType.keys.first
       end
 
       def int(v, lo, hi, default = nil)

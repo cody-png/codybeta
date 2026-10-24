@@ -128,6 +128,7 @@ module KIF
         return false if foes.empty? || host_party.include?(nil) || foes.include?(nil)
         wild = d["w"] == 1
         host = trainer_from(d["ht"]) or return false
+        host.trainer_type = Mon.partner_type(d["ht"]["ty"])
         host.party = host_party
         opp = nil
         unless wild
@@ -424,6 +425,12 @@ module KIF
         rescue StandardError => e
           KIF::Coop.log("battle screen failed (#{e.class}: #{e.message})")
           (@view.finish(0) rescue nil)
+          if !@plain && defined?(PokeBattle_SceneEBDX) && @view.scene.is_a?(PokeBattle_SceneEBDX)
+            @plain = true   # EBDX's screen failed: PIF's own
+            @view = SceneView.new(self, PokeBattle_Scene.new)
+            @mirror.instance_variable_set(:@scene, @view.scene)
+            retry
+          end
           @view = AutoView.new(self)
           @mirror&.instance_variable_set(:@scene, @view.scene)
           @s.post("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" })

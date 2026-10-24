@@ -293,6 +293,8 @@ module KIF
         if local
           l = local.files[path]
           same = l && l[0] == sha && File.file?(here)
+          # a sprite sheet PIF re-downloaded since (no longer as shipped) is newer art: kept
+          same = true if !same && l && under?(path, KEEP_THEIRS) && File.file?(here) && !good_file?(here, *l)
         elsif under?(path, KEEP_THEIRS)
           same = File.file?(here)           # no manifest: keep installed sprites
         else
@@ -538,7 +540,7 @@ module KIF
         end
         err = File.join(dir, "curl_errors.txt")
         cmd = "\"#{win_path(curl)}\" -K \"#{win_path(cfg)}\" --parallel --parallel-max 6 --create-dirs " \
-              "--fail --retry 3 --retry-delay 1 -L -s -S --stderr \"#{win_path(err)}\""
+              "--fail --retry 3 --retry-delay 1 --connect-timeout 15 -L -s -S --stderr \"#{win_path(err)}\""
         h, _pid = Win.spawn(cmd, Win::CREATE_NO_WINDOW, root)
         log("curl couldn't be started") unless h
         if h
@@ -594,7 +596,18 @@ module KIF
           mkdir_p(File.dirname(dest))
           File.open(dest, "wb") { |f| f.write(data) }
         end
-        failed << path unless good_file?(dest, sha, size)
+        if good_file?(dest, sha, size)
+          streak = 0
+        else
+          failed << path
+          streak = streak.to_i + 1
+          # the server is gone: don't spend an hour trying every file (what was fetched is kept)
+          if streak >= 20
+            failed.concat(bad[(i + 1)..-1].map(&:first))
+            log("one at a time: 20 failures in a row, stopped")
+            break
+          end
+        end
       end
       log("one at a time: #{bad.length - failed.length} of #{bad.length} fetched") unless bad.empty?
       return failed
@@ -924,8 +937,10 @@ module KIF
     # two installs can share the save folder.
     AUDIO_EXTS = %w[.wav .mp3 .ogg .mid .midi .wma]
 
+    def twins_key(dir = root); "twins:" + File.expand_path(dir).downcase; end
+
     def remove_format_twins(dir = root)
-      key = "twins:" + File.expand_path(dir).downcase
+      key = twins_key(dir)
       return 0 if stored_choices[key] == current_version || !KIF::Paths.game_writable?
       man = local_manifest
       return 0 unless man
@@ -972,13 +987,17 @@ module KIF
         if File.file?(File.join(dir, "done.txt"))
           rm_tree(dir)
           if v == current_version
+            # the update removed the old formats it shipped itself (and kept the player's own): no twin cleanup
+            store_choice(twins_key, v)
             log("updated to #{v}")
             cmd = pbMessage(_INTL("KIF was updated to {1}.", v), [_INTL("OK"), _INTL("What's new")], 1)
             show_notes(nil) if cmd == 1
           end
         # failed.txt: the move stopped partway (the scripts, and so the version, may already be new)
+        # apply.cmd without done.txt: the update window was closed partway, also after the new scripts were in
+        # (done.txt is written only once everything is moved, so finishing again is always safe; playtest 2026-10-24)
         elsif !newer?(current_version, v) &&
-              (File.file?(File.join(dir, "failed.txt")) || (File.file?(File.join(dir, "apply.cmd")) && v != current_version))
+              (File.file?(File.join(dir, "failed.txt")) || File.file?(File.join(dir, "apply.cmd")))
           # moved in by the game itself and cut off (closed partway): finished
           # without asking, half an update can't be safely discarded
           moving = (File.read(File.join(dir, "failed.txt")) rescue "") == KIF::UpdateFinish::MOVING
@@ -1015,7 +1034,7 @@ module KIF
     ensure
       # after the files are in: during a move the file list still names the old formats
       d = stage_root
-      pending = (File.directory?(d) && Dir.children(d).any? { |v| File.file?(File.join(d, v, "failed.txt")) }) rescue true
+      pending = (File.directory?(d) && Dir.children(d).any? { |v| File.file?(File.join(d, v, "failed.txt")) || File.file?(File.join(d, v, "apply.cmd")) }) rescue true
       remove_format_twins unless pending
     end
   end

@@ -273,14 +273,12 @@ module KIF
       pbMessage(fate == FAINTED_GRAVEYARD ? _INTL("{1} went to the Graveyard.", names) : _INTL("{1} was released.", names))
     end
 
-    # First living Pokémon in the PC, taken out of its box
-    def self.take_from_pc
+    # [box, index] of the first living Pokémon in the PC (it stays there)
+    def self.living_in_pc
       $PokemonStorage.maxBoxes.times do |b|
         $PokemonStorage.maxPokemon(b).times do |i|
           p = $PokemonStorage[b, i]
-          next unless able?(p) && !p.kif_nz_dead
-          $PokemonStorage[b, i] = nil
-          return p
+          return [b, i] if able?(p) && !p.kif_nz_dead
         end
       end
       return nil
@@ -333,14 +331,15 @@ module KIF
       when WHITEOUT_LOCK then return end_run(true)
       when WHITEOUT_KEEP then return end_run(false)
       end
-      living = take_from_pc
-      return end_run(false) unless living
+      box, idx = living_in_pc
+      return end_run(false) unless box
       move_dead_out
-      if $Trainer.party_full?
-        spare = $Trainer.party.find { |p| p.kif_nz_dead }
-        $Trainer.party.delete(spare)
-        $PokemonStorage.pbStoreCaught(spare)
-      end
+      living = $PokemonStorage[box, idx]
+      # a full party: one that can't fight (the dead first, else an egg) takes
+      # the living one's PC slot, so nobody is lost
+      spare = $Trainer.party_full? ? ($Trainer.party.find { |p| p.kif_nz_dead } || $Trainer.party.find { |p| !able?(p) }) : nil
+      $Trainer.party.delete_at($Trainer.party.index { |p| p.equal?(spare) }) if spare
+      $PokemonStorage[box, idx] = spare
       $Trainer.party.unshift(living)
       pbMessage(_INTL("{1} came from the PC to join you.", living.name))
       return nil

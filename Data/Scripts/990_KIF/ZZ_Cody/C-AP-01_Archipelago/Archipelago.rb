@@ -103,8 +103,8 @@ module KIF
 
     module_function
 
-    # TODO: a read-only game folder (phones) can't take this folder; use
-    # KIF::Paths.writable(FOLDER) once that is on this branch (kif-int has it)
+    # Always the game folder: the KIF Client (a PC program) looks there. A
+    # read-only game folder (phones) only fails to write (logged once).
     def dir; File.join(KIF::Paths.root, FOLDER); end
     def path(*parts); File.join(dir, *parts); end
 
@@ -463,9 +463,12 @@ module KIF
       File.open(tmp, "wb") { |f| f.write(serialize_json(body.merge(extra))) }
       File.rename(tmp, path("out", name))
       d[:dirty] = false
+      @write_failed = false
     rescue StandardError => e
       d[:dirty] = true if d   # retried at the next poll
-      KIF.log("Archipelago: couldn't write a check (#{e.class}: #{e.message})")
+      # logged once until a write works again (the retry comes every second)
+      KIF.log("Archipelago: couldn't write a check (#{e.class}: #{e.message})") unless @write_failed
+      @write_failed = true
     end
 
     #---------------------------------------------------------------------------
@@ -557,7 +560,9 @@ module KIF
       pbMessage(_INTL("{1}'s team fainted, so yours does too.", h["source"].to_s.empty? ? _INTL("Someone") : h["source"].to_s))
       @dying = true
       begin
-        $Trainer.party.each { |pk| pk.hp = 0 }
+        $Trainer.party.each { |pk| pk.hp = 0 unless pk.egg? }   # an egg at 0 HP would hatch fainted
+        # as after a lost battle: the fainted are dead before the whiteout
+        KIF::Nuzlocke.bury_fainted if defined?(KIF::Nuzlocke) && KIF::Nuzlocke.on?
         pbStartOver
       ensure
         @dying = false
@@ -673,7 +678,11 @@ def pbTrainerBattle(*args)
   waiting = $PokemonTemp && $PokemonTemp.waitingTrainer
   ev = (pbMapInterpreter.instance_variable_get(:@event_id) rescue nil)
   won = kif_ap_pbTrainerBattle(*args)
-  KIF::AP.trainer_won([ev, waiting && waiting[1]]) if won
+  # PIF drops the waiting trainer (a single battle) when it is this same
+  # trainer; it was fought only if PIF turned its self switch A on
+  partner = waiting && waiting[1]
+  partner = nil if partner && !$game_self_switches[[$game_map.map_id, partner, "A"]]
+  KIF::AP.trainer_won([ev, partner]) if won
   return won
 end
 

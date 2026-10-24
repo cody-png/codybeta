@@ -488,11 +488,11 @@ module KIF
           end
         end
         # a door nothing opens leads first, into a place that gives nothing
-        # (that place is lost behind it)
+        # or sets no flag (that place is lost behind it)
         closed.each_key do |id|
           next unless free_doors.include?(id) && !groups[id]
           pool = free_places.reject { |p| groups[p] }
-          quiet = pool.select { |p| byid[p][:gives].to_i == 0 && byid[p][:siblings].to_i == 0 }
+          quiet = pool.select { |p| byid[p][:gives].to_i == 0 && byid[p][:siblings].to_i == 0 && (byid[p][:flags] || []).empty? }
           pool = quiet unless quiet.empty?
           link_in.call(id, pool[rng.rand(pool.length)]) unless pool.empty?
         end

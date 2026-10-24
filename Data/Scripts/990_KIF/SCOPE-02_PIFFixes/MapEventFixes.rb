@@ -104,6 +104,8 @@ end
 #    in the choice list (a comma there splits the choice), "$15,000" in what
 #    they say and "15,000$" in the question. All now read "$15,000" like
 #    PIF's Poké Mart; a choice with a comma is quoted, which \ch[] reads.
+#    A line the loaded language translates (french.dat) is left alone: the
+#    English text is its translation key.
 KIF::MapPatches.add(407, "PIF fix: Cafe price format") do |map|
   map.events.each_value do |ev|
     ev.pages.each do |pg|
@@ -118,7 +120,7 @@ KIF::MapPatches.add(407, "PIF fix: Cafe price format") do |map|
           head = $1
           head + $2.split(",").map { |f| f =~ /\$\d+ \d{3}/ ? "\"#{f.sub(/\$(\d+) (\d{3})/, '$\1,\2')}\"" : f }.join(",") + "]"
         end
-        next if fixed == text
+        next if fixed == text || MessageTypes.getFromMapHash(407, text) != text
         cmd.parameters[0] = fixed
         lines[1..-1].each { |c| c.parameters[0] = "" }
       end

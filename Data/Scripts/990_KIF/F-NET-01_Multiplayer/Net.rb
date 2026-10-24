@@ -57,6 +57,12 @@ module KIF
       "bye"   => {},
       "wave"  => {},
       "no"    => { "why" => [String, 16] },
+      # Soul Link (F-BATTLE-05 SoulLink.rb): codes are checked again there
+      "sl_hello" => { "link" => [String, 16], "seen" => [Integer, 0, 1_000_000_000],
+                      "acked" => [Integer, 0, 1_000_000_000], "code" => [String, 600] },
+      "sl_link"  => { "code" => [String, 600] },
+      "sl_up"    => { "code" => [String, 60_000] },
+      "sl_party" => { "ids" => [String, 120] },
     }
     NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined }
 

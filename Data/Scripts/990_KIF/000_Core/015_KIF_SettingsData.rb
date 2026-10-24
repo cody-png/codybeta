@@ -52,7 +52,8 @@ module KIF
       [:challenges, "Challenges", [160, 80, 180], [
         ["Rules", ["Level caps", "No reviving", "No heals (battles)", "No heals (overworld)"]],
         ["KIF challenges", ["Metronome Madness", "Letdown", "Letdown Player Only", "Berserker"]],
-        ["Nuzlocke", ["Nuzlocke", "Fainted Pokémon", "Nuzlocke whiteout", "Dupes clause", "Shiny clause", "Gift Pokémon", "Kuray Shop", "Safari Zone", "Nuzlocke Graveyard"]]]],
+        ["Nuzlocke", ["Nuzlocke", "Fainted Pokémon", "Nuzlocke whiteout", "Dupes clause", "Shiny clause", "Gift Pokémon", "Kuray Shop", "Safari Zone", "Nuzlocke Graveyard"]],
+        ["Soul Link", ["Soul Link", "Link mode", "Soul Link type rule", "Soul Link party rule"]]]],
       [:game, "Game", [70, 160, 170], [
         ["Difficulty", ["Difficulty"]],
         ["Movement", ["Default Movement", "Quick HMs"]],

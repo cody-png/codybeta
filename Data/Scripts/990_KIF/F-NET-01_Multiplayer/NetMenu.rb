@@ -130,9 +130,19 @@ module KIF
           log("#{ev[1]} asks to join")
         when :connected
           log("connected to #{ev[1]} (#{s.via})")
+          KIF::SoulLink.on_connect(s) if defined?(KIF::SoulLink)
         when :message
-          @notes << _INTL("{1} says hello!", s.partner) if ev[1] == "wave"
+          if ev[1] == "wave"
+            @notes << _INTL("{1} says hello!", s.partner)
+          elsif ev[1].start_with?("sl_") && defined?(KIF::SoulLink)
+            begin
+              KIF::SoulLink.receive(ev[1], ev[2])
+            rescue => e
+              log("Soul Link message failed (#{e.class}: #{e.message})")
+            end
+          end
         when :disconnected
+          KIF::SoulLink.on_disconnect if defined?(KIF::SoulLink)
           @notes << (ev[1] == :bye ? _INTL("Your friend disconnected.") : _INTL("Lost the connection to your friend."))
           log("disconnected (#{ev[1]})")
         when :failed
@@ -574,9 +584,16 @@ module KIF
           help = Net.notes.shift ||
                  (relay ? _INTL("Connected through relay.\nPlay works the same, just a bit slower.")
                         : _INTL("Connected to {1} (direct).\nYour games talk to each other directly.", s.partner))
-          case pick(lines.join("\n"), [_INTL("Send hello"), _INTL("Disconnect")], help,
-                    proc { [Net.session&.connected?, Net.notes.length] })
-          when nil then next
+          sl = defined?(KIF::SoulLink) && KIF::SoulLink.on?
+          cmds = [_INTL("Send hello"), _INTL("Disconnect")]
+          cmds.unshift(_INTL("Soul Link")) if sl
+          r = pick(lines.join("\n"), cmds, help, proc { [Net.session&.connected?, Net.notes.length] })
+          next if r.nil?
+          return if r < 0
+          r -= 1 if sl
+          case r
+          when -1
+            KIF::SoulLink::Menu.open(@scr) if sl
           when 0
             s.post("wave")
             Net.notes.unshift(_INTL("Sent hello to {1}.", s.partner))

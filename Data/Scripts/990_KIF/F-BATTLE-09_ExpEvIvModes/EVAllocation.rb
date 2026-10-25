@@ -57,42 +57,47 @@ module KIF
       return n
     end
 
-    # +STEP (or what's left) into a stat; returns how many moved. Vitamins
-    # and Wings don't count the points, so the 510 total is checked here too.
+    # +STEP (or what's left) into a stat; returns how many moved (nil:
+    # refused, see restat). Vitamins and Wings don't count the points, so the
+    # 510 total is checked here too.
     def self.give(pkmn, stat)
       n = [STEP, pkmn.kif_ev_pool, Pokemon::EV_STAT_LIMIT - pkmn.ev[stat], Pokemon::EV_LIMIT - ev_total(pkmn)].min
       return 0 if n <= 0
-      pkmn.ev[stat] += n
-      pkmn.kif_ev_pool -= n
-      restat(pkmn)
-      return n
+      return restat(pkmn) { pkmn.ev[stat] += n; pkmn.kif_ev_pool -= n } ? n : nil
     end
 
     def self.take(pkmn, stat)
       n = [STEP, pkmn.ev[stat]].min
       return 0 if n <= 0
-      pkmn.ev[stat] -= n
-      pkmn.kif_ev_pool += n
-      restat(pkmn)
-      return n
+      return restat(pkmn) { pkmn.ev[stat] -= n; pkmn.kif_ev_pool += n } ? n : nil
     end
 
     # Every EV back into points
     def self.reset(pkmn)
       total = ev_total(pkmn)
-      STATS.each { |s| pkmn.ev[s] = 0 }
-      pkmn.kif_ev_pool += total
-      restat(pkmn)
-      return total
+      return restat(pkmn) { STATS.each { |s| pkmn.ev[s] = 0 }; pkmn.kif_ev_pool += total } ? total : nil
     end
 
-    # PIF's calc_stats keeps the HP lost, so HP EVs would faint a hurt
-    # Pokémon or revive a fainted one; spending never does either (@hp:
-    # hp= won't touch a fainted Pokémon under No reviving)
+    # Changes the EVs (the block), then the stats. PIF's calc_stats keeps the
+    # HP lost, so fewer HP EVs could faint a hurt Pokémon: that change is
+    # undone and false returned (a 1-HP floor gave HP back once the EVs were
+    # given again, past No healing). More HP EVs never revive a fainted one
+    # (@hp: hp= won't touch a fainted Pokémon under No reviving).
     def self.restat(pkmn)
-      alive = pkmn.hp > 0
+      hp = pkmn.hp
+      ev = pkmn.ev.clone
+      pool = pkmn.kif_ev_pool
+      yield
       pkmn.calc_stats
-      pkmn.instance_variable_set(:@hp, alive ? [pkmn.hp, 1].max : 0)
+      if hp > 0 && pkmn.hp <= 0
+        STATS.each { |s| pkmn.ev[s] = ev[s] }
+        pkmn.kif_ev_pool = pool
+        pkmn.calc_stats
+        pkmn.instance_variable_set(:@hp, hp)
+        return false
+      end
+      pkmn.instance_variable_set(:@hp, 0) if hp <= 0
+      return true
     end
 
     # The Skills page offers spending when points wait or the option is on
@@ -111,8 +116,7 @@ class PokeBattle_Battle
 
   def pbGainEVsOne(idxParty, defeatedBattler)
     pkmn = pbParty(0)[idxParty]
-    # KIF 1.2.0-1.2.2 could spend points past 510; PIF's clamp raises on those
-    return if pkmn && KIF::EVAlloc.ev_total(pkmn) > Pokemon::EV_LIMIT
+    # (a Pokémon already past 510: SCOPE-02_PIFFixes/EVsPast510.rb)
     return kif_eva_pbGainEVsOne(idxParty, defeatedBattler) unless pkmn && KIF::EVAlloc.on?
     before = pkmn.ev.clone
     ret = kif_eva_pbGainEVsOne(idxParty, defeatedBattler)
@@ -237,8 +241,7 @@ class PokemonSummary_Scene
           # given/taken here: at 60+ fps the Frame rate's repeat? doesn't see a pressed key
           if row
             st = KIF::EVAlloc::STATS[cursor]
-            n = m.x >= 368 ? KIF::EVAlloc.give(@pokemon, st) : KIF::EVAlloc.take(@pokemon, st)
-            n > 0 ? pbPlayCursorSE : pbPlayBuzzerSE
+            kif_eva_sound(m.x >= 368 ? KIF::EVAlloc.give(@pokemon, st) : KIF::EVAlloc.take(@pokemon, st))
             redraw.call
           end
           next
@@ -257,18 +260,28 @@ class PokemonSummary_Scene
         pbPlayCursorSE
         redraw.call
       elsif Input.repeat?(Input::RIGHT)
-        KIF::EVAlloc.give(@pokemon, stat) > 0 ? pbPlayCursorSE : pbPlayBuzzerSE
+        kif_eva_sound(KIF::EVAlloc.give(@pokemon, stat))
         redraw.call
       elsif Input.repeat?(Input::LEFT)
-        KIF::EVAlloc.take(@pokemon, stat) > 0 ? pbPlayCursorSE : pbPlayBuzzerSE
+        kif_eva_sound(KIF::EVAlloc.take(@pokemon, stat))
         redraw.call
       elsif Input.trigger?(Input::ACTION)
         if KIF::EVAlloc.ev_total(@pokemon) > 0 && pbConfirmMessage(_INTL("Put all of {1}'s EVs back into points?", @pokemon.name))
-          KIF::EVAlloc.reset(@pokemon)
+          kif_eva_sound(nil) unless KIF::EVAlloc.reset(@pokemon)
         end
         redraw.call
       end
     end
     drawPage(@page)
+  end
+
+  # n EVs moved; nil: refused, as the Pokémon would faint
+  def kif_eva_sound(n)
+    if n.nil?
+      pbPlayBuzzerSE
+      pbMessage(_INTL("{1} would faint without those HP EVs.", @pokemon.name))
+    else
+      n > 0 ? pbPlayCursorSE : pbPlayBuzzerSE
+    end
   end
 end

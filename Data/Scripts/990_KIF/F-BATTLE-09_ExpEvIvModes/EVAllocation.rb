@@ -12,7 +12,6 @@
 #   spend points on (they still pile up, for when it's turned off).
 #   EVs Train Mode: foes yield 0 EVs (ExpEvIvModes.rb), so the only points
 #   banked are a held Power item's +4 (doubled by Pokérus).
-#   Mockups: Claude Docs/Base KIF/mockups/EV mockups.
 #===============================================================================
 KIF::Options.define(:ev_alloc, 0, :save)
 

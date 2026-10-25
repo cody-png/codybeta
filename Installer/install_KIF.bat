@@ -45,7 +45,7 @@ if exist "%TARGET%\InfiniteFusion.exe" (
 
 echo  Which version?
 echo    [S] Stable - the newest released version, keeps itself updated (recommended)
-echo    [B] Beta   - test builds: newest features, may have bugs
+echo    [B] Beta   - the newest version, before it reaches Stable
 if defined PIN echo    [V] KIF %PIN% only - stays on this version, no updates
 echo.
 if defined PIN (

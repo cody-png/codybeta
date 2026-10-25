@@ -372,7 +372,7 @@ module KIF
       by_folder = {}
       files.each do |path, info|
         top, rest = path.split("/", 2)
-        next if rest.nil? || top.start_with?(".") || SKIP.include?(top)
+        next if rest.nil? || top.start_with?(".") || SKIP.include?(top) || rest.split("/").any? { |s| s.start_with?(".") }
         (by_folder[top] ||= {})[rest] = info
       end
       out = []

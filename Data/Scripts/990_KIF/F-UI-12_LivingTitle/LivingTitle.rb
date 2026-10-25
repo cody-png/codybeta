@@ -4,8 +4,8 @@
 #
 # The title screen shows a world that scrolls slowly sideways: a grassy field
 # (Route 1), a beach (Treasure Beach) and a forest (Viridian Forest), drawn
-# from the game's own maps into Graphics/Titles/KIF/pano_N.png by
-# Claude Docs/_Tools/map_mockup/titlestrips.py (with pano_walk.png: where the
+# from the game's own maps into Graphics/Titles/KIF/pano_N.png
+# (with pano_walk.png: where the
 # Pokémon may walk or swim). Follower sprites wander with their 4-frame walk
 # cycle, Diglett dig in and out of the sand, flyers cross the sky, and every
 # so often two Pokémon walk in and fuse: a flash, then the head walks on in

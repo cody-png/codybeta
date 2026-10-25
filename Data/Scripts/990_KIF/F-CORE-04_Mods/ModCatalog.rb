@@ -477,7 +477,7 @@ module KIF
       return File.join(d, item.folder) if d
       c = installed_index[item.id]
       return File.join((@installed_in || {})[item.id] || mods_dir, c) if c
-      return File.join(mods_dir, item.folder)
+      return File.join(mod_dirs.first, item.folder)   # a new install: the save folder's Mods when the game folder is read-only
     end
 
     # mod id => folder of the mods that load, read once (cleared on load and

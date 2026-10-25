@@ -58,6 +58,7 @@
 #   nothing here is Kanto-only (badge_events names every shuffled badge).
 #   Goal all_gym_leaders: every badge location of the slot checked (each
 #   leader of the regions in play beaten). Traps ("TRAP_<kind>"): Traps.rb.
+#   Dexsanity (apworld 0.7.0): Dexsanity.rb (slot "dex_milestones", "game_mode").
 #===============================================================================
 class PokemonGlobalMetadata
   attr_accessor :kif_ap
@@ -171,7 +172,11 @@ module KIF
         n = int_or_nil(v)
         options[k.to_s] = n if n && OPTION_DEFAULTS.key?(k.to_s)
       end
+      milestones = (slot["dex_milestones"].is_a?(Array) ? slot["dex_milestones"] : []).map { |e|
+        e.is_a?(Array) && e.length == 2 ? e.map { |x| int_or_nil(x) } : nil
+      }.select { |e| e && !e.include?(nil) }
       return {
+        dex_milestones: milestones, game_mode: %w[classic remix].include?(slot["game_mode"].to_s) ? slot["game_mode"].to_s : nil,
         seed: slot["seed"].to_s, slot: slot["slot"].to_s, player: int_or_nil(slot["player"]) || 0,
         locations: slot["locations"].map { |x| int_or_nil(x) }.compact, death_link: slot["death_link"] ? true : false,
         aliases: aliases, badge_events: events, league_badges: (int_or_nil(slot["league_badges"]) || 8).clamp(0, 8),
@@ -189,6 +194,7 @@ module KIF
     # turns off, or nil when applying failed (the save is left as it was).
     # turned_on gets what the slot gives the save (shown after linking)
     def link!(slot, turned_on = [])
+      @link_error = nil
       turned_off = rand_turned_off
       old = $PokemonGlobal.kif_ap
       saved = KIF::Rand.capture
@@ -198,6 +204,8 @@ module KIF
         $PokemonGlobal.kif_ap = clean_slot(slot)
         reset_cache
         apply_settings(slot)   # linked already, so the forced settings hold while it runs
+        why = Dex.refuse_reason($PokemonGlobal.kif_ap)
+        raise(@link_error = why) if why
       rescue StandardError => e
         $PokemonGlobal.kif_ap = old
         KIF::Rand.restore(saved)
@@ -213,7 +221,10 @@ module KIF
       $Trainer.money = money if money >= 0
       town = free_fly_town
       turned_on << _INTL("Fly to {1}", pbGetMapNameFromId(town)) if town
-      KIF.log("Archipelago: save linked to #{slot['slot']} (seed #{slot['seed']}, #{slot['locations'].length} locations)")
+      n = Dex.scan
+      turned_on << (n == 1 ? _INTL("1 Pokedex check for a Pokemon the save already has") :
+                             _INTL("{1} Pokedex checks for Pokemon the save already has", n)) if n > 0
+      KIF.log("Archipelago: save linked to #{slot['slot']} (seed #{slot['seed']}, #{slot['locations'].length} locations, the save plays #{Dex.save_mode})")
       return turned_off
     end
 
@@ -562,6 +573,7 @@ module KIF
         end
         @queue.shift
       end
+      Dex.tell
       Traps.tell_normal
       Traps.tell_curse_lifted
       Traps.release_locks
@@ -616,6 +628,7 @@ module KIF
         @timer = POLL_FRAMES   # just loaded: look at once
         d = data
         d[:dirty] = true if !d[:checked].empty? || d[:goal]   # send them again (see the header)
+        Dex.scan   # Pokemon registered while unlinked or offline
       end
       @timer += 1
       return if @timer < POLL_FRAMES
@@ -661,10 +674,11 @@ module KIF
       on = []
       off = link!(slot, on)
       unless off
-        pbMessage(_INTL("The Archipelago settings couldn't be applied, so the save was not linked. Details are in the log."))
+        pbMessage(@link_error || _INTL("The Archipelago settings couldn't be applied, so the save was not linked. Details are in the log."))
         return
       end
       pbMessage(_INTL("Linked. Keep the KIF Client running to send checks and get items."))
+      pbMessage(_INTL("This save plays {1}; the Pokedex checks follow its wild Pokemon.", Dex.mode_name(Dex.save_mode))) if Dex.slot?
       pbMessage(_INTL("Archipelago needs the normal doors and places the items itself, so these are off for this save: {1}.", off.join(", "))) unless off.empty?
       pbMessage(_INTL("This Archipelago game also gives you: {1}.", on.join(", "))) unless on.empty?
     end

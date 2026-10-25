@@ -357,7 +357,7 @@ end
 # Command menu (KIF 005_PokeBattle_SceneMenus.rb:122-156)
 #-------------------------------------------------------------------------------
 class CommandMenuDisplay
-  alias kif_bui_initialize initialize unless method_defined?(:kif_bui_initialize)
+  alias kif_bui_initialize initialize unless method_defined?(:kif_bui_initialize) || private_method_defined?(:kif_bui_initialize)
 
   def initialize(*args)
     kif_bui_initialize(*args)

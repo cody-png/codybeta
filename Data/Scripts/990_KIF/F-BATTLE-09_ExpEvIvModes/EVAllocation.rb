@@ -57,13 +57,14 @@ module KIF
       return n
     end
 
-    # +STEP (or what's left) into a stat; returns how many moved
+    # +STEP (or what's left) into a stat; returns how many moved. Vitamins
+    # and Wings don't count the points, so the 510 total is checked here too.
     def self.give(pkmn, stat)
-      n = [STEP, pkmn.kif_ev_pool, Pokemon::EV_STAT_LIMIT - pkmn.ev[stat]].min
+      n = [STEP, pkmn.kif_ev_pool, Pokemon::EV_STAT_LIMIT - pkmn.ev[stat], Pokemon::EV_LIMIT - ev_total(pkmn)].min
       return 0 if n <= 0
       pkmn.ev[stat] += n
       pkmn.kif_ev_pool -= n
-      pkmn.calc_stats
+      restat(pkmn)
       return n
     end
 
@@ -72,7 +73,7 @@ module KIF
       return 0 if n <= 0
       pkmn.ev[stat] -= n
       pkmn.kif_ev_pool += n
-      pkmn.calc_stats
+      restat(pkmn)
       return n
     end
 
@@ -81,13 +82,24 @@ module KIF
       total = ev_total(pkmn)
       STATS.each { |s| pkmn.ev[s] = 0 }
       pkmn.kif_ev_pool += total
-      pkmn.calc_stats
+      restat(pkmn)
       return total
     end
 
+    # PIF's calc_stats keeps the HP lost, so HP EVs would faint a hurt
+    # Pokémon or revive a fainted one; spending never does either (@hp:
+    # hp= won't touch a fainted Pokémon under No reviving)
+    def self.restat(pkmn)
+      alive = pkmn.hp > 0
+      pkmn.calc_stats
+      pkmn.instance_variable_set(:@hp, alive ? [pkmn.hp, 1].max : 0)
+    end
+
     # The Skills page offers spending when points wait or the option is on
+    # (not with Battles & Challenges Off: USE there is PIF's item menu)
     def self.available?(pkmn)
       return false if !pkmn || pkmn.egg?
+      return false if defined?(KIF::Modules) && !KIF::Modules.active?("F-BATTLE-09_ExpEvIvModes")
       return on? || pkmn.kif_ev_pool > 0
     end
   end
@@ -98,9 +110,10 @@ class PokeBattle_Battle
   alias kif_eva_pbGainEVsOne pbGainEVsOne unless method_defined?(:kif_eva_pbGainEVsOne)
 
   def pbGainEVsOne(idxParty, defeatedBattler)
-    return kif_eva_pbGainEVsOne(idxParty, defeatedBattler) unless KIF::EVAlloc.on?
     pkmn = pbParty(0)[idxParty]
-    return kif_eva_pbGainEVsOne(idxParty, defeatedBattler) unless pkmn
+    # KIF 1.2.0-1.2.2 could spend points past 510; PIF's clamp raises on those
+    return if pkmn && KIF::EVAlloc.ev_total(pkmn) > Pokemon::EV_LIMIT
+    return kif_eva_pbGainEVsOne(idxParty, defeatedBattler) unless pkmn && KIF::EVAlloc.on?
     before = pkmn.ev.clone
     ret = kif_eva_pbGainEVsOne(idxParty, defeatedBattler)
     gained = KIF::EVAlloc::STATS.sum { |s| pkmn.ev[s].to_i - before[s].to_i }
@@ -117,16 +130,10 @@ class PokeBattle_Battle
   # after PIF's "You defeated ..." and the trainer's last words; anything
   # else before PIF's end-of-battle lines, while the battle is still shown.
   alias kif_eva_pbEndOfBattle pbEndOfBattle unless method_defined?(:kif_eva_pbEndOfBattle)
-  alias kif_eva_pbGainMoney pbGainMoney unless method_defined?(:kif_eva_pbGainMoney)
 
   def pbEndOfBattle
     kif_eva_show_points unless @decision == 1 || @decision == 4
     return kif_eva_pbEndOfBattle
-  end
-
-  def pbGainMoney(*args)
-    kif_eva_show_points
-    return kif_eva_pbGainMoney(*args)
   end
 
   def kif_eva_show_points
@@ -137,6 +144,16 @@ class PokeBattle_Battle
     @kif_eva_gained = nil
   end
 end
+
+# Prepended, not aliased: a mod that redefines pbGainMoney with a plain def
+# (the catalog's "pbGainMoney Base") would drop the win/catch line
+module KIF::EVAlloc::MoneyLine
+  def pbGainMoney(*args)
+    kif_eva_show_points
+    return super
+  end
+end
+PokeBattle_Battle.prepend(KIF::EVAlloc::MoneyLine) unless PokeBattle_Battle.ancestors.include?(KIF::EVAlloc::MoneyLine)
 
 #-------------------------------------------------------------------------------
 # Summary, Skills page: the points line, and spending them
@@ -151,7 +168,13 @@ class PokemonSummary_Scene
 
   # also called by the IV/EV Skills page (F-UI-04), which draws without this hook
   def kif_eva_page_three_points
-    kif_eva_draw_points if @is_player && KIF::EVAlloc.available?(@pokemon) && !@contestpage
+    kif_eva_draw_points if kif_eva_here?
+  end
+
+  # USE spends points here: not in battle (PIF ignores USE there) or on the
+  # contest condition page
+  def kif_eva_here?
+    return @is_player && !@inbattle && !@contestpage && KIF::EVAlloc.available?(@pokemon)
   end
 
   KIF_EVA_YS = [70, 114, 146, 178, 210, 242]
@@ -185,7 +208,7 @@ class PokemonSummary_Scene
   alias kif_eva_pbOptions pbOptions unless method_defined?(:kif_eva_pbOptions)
 
   def pbOptions
-    if @page == 3 && @is_player && !@inbattle && KIF::EVAlloc.available?(@pokemon)
+    if @page == 3 && kif_eva_here?
       kif_eva_allocate
       return true
     end

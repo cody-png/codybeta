@@ -202,6 +202,10 @@ module KIF
       @left  = inside && Input.kif_mouse_trigger?(Input::MOUSELEFT)
       @right = inside && Input.kif_mouse_trigger?(Input::MOUSERIGHT)
       @held  = inside && Input.kif_mouse_press?(Input::MOUSELEFT)
+      # any release ends a hold-walk, also one seen inside an event (text only)
+      # that ran in one update: its closing click comes after a release. A
+      # ledge jump or slide keeps polling with the button still down.
+      @drag = false unless @held
       # phones: a tap shorter than a frame arrives as a pointer jump with no
       # press (JoiPlay; its on-screen buttons never move the pointer)
       @left = true if moved && !@left && !@held && phone?
@@ -416,10 +420,6 @@ module KIF
     # Start of every Scene_Map#update
     def self.map_step
       @on_map = true
-      # Input.update ran with no map frame between: an event (text only) or a
-      # menu ran inside one update, unseen below; it ends the hold too
-      @drag = false if @polls.to_i > @step_poll.to_i + 1
-      @step_poll = @polls
       return stop if @path && !(@on && walk?)
       return unless @on && walk?
       pl = $game_player

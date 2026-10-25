@@ -616,11 +616,19 @@ module KIF
       return [seed, get(:wild_bst), get(:wild_legend), get(:wild_custom), get(:fuse_all), bans_code, species].join("|")
     end
 
+    # A read-only game folder (phones) can't hold the table (see EncounterRandom
+    # below): it is this save's while the table made is still the one in use,
+    # so routes are made again from the seed once a session
     def self.file_route_signature
+      unless KIF::Paths.game_writable?
+        sig, table = @route_mem
+        return table.equal?(GameData::EncounterRandom::DATA) ? sig : nil
+      end
       return File.exist?(ROUTE_SIG_FILE) ? File.read(ROUTE_SIG_FILE).strip : nil
     end
 
     def self.mark_routes
+      @route_mem = [route_signature, GameData::EncounterRandom::DATA]
       File.open(ROUTE_SIG_FILE, "wb") { |f| f.write(route_signature) } rescue nil
       data[:route_sig] = route_signature
     end
@@ -666,5 +674,23 @@ module KIF
       @progress_vp.dispose if @progress_vp && !@progress_vp.disposed?
       @progress = @progress_vp = nil
     end
+  end
+end
+
+# PIF's route randomizer writes its table to Data/encounters_randomized.dat and
+# reads it back. With a read-only game folder (phones) the write would crash
+# Randomize now and the intro: the table stays in memory instead.
+class << GameData::EncounterRandom
+  alias kif_rand_save save unless method_defined?(:kif_rand_save)
+  alias kif_rand_load load unless method_defined?(:kif_rand_load)
+
+  def save
+    return kif_rand_save if KIF::Paths.game_writable?
+    @kif_unsaved = true
+  end
+
+  def load
+    return kif_rand_load unless @kif_unsaved
+    @kif_unsaved = false   # right after a save kept in memory: the file is older
   end
 end

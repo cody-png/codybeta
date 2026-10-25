@@ -24,7 +24,7 @@ module KIF
         ["Mechanics", ["Battle AI", "Damage Variance", "Modern Hail", "Frostbite", "Drowsy",
                        "Bug Type Buffs", "Ice Type Buffs"]],
         ["Gyms", ["Gym Leader teams", "Your Pokémon in gyms"]],
-        ["Screens", ["Battle Info", "Move Effectiveness", "Show Lv. in BSM"]],
+        ["Screens", ["Battle Info", "Foe Info", "Move Effectiveness", "Show Lv. in BSM"]],
         ["EBDX", ["EBDX Battles", "EBDX Camera Zoom", "EBDX Stat Stage Icons", "EBDX Own Trainer Animation"]]]],
       [:pokemon, "Pokémon", [90, 170, 100], [
         ["Levels and EXP", ["Level Cap", "Cap Behavior", "Trainer Exp. Boost", "ExpAll Redistribution"]],

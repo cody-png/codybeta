@@ -101,13 +101,33 @@ module KIF
     #---------------------------------------------------------------------------
     # What the battle has shown about a foe
     #---------------------------------------------------------------------------
-    # Foe Info: All (the default)
+    # Foe Info: All (the default); As seen inside as_seen_if_disguised
     def show_all?
+      return false if @as_seen
       return !$PokemonSystem.respond_to?(:cody_bi_foe_info) || $PokemonSystem.cody_bi_foe_info.to_i == 0
     end
 
+    # A foe's Illusion disguise holds: listing its real abilities and moves
+    # (or hinting them in the Fight menu) would give it away
+    def disguised?(battler)
+      i = const(:Illusion)
+      return !!(i && battler && !own?(battler) && battler.effects[i])
+    end
+
+    # The block sees Foe Info: As seen while the battler is disguised (mods
+    # such as KIF-ER read show_all? too)
+    def as_seen_if_disguised(battler)
+      return yield if @as_seen || !disguised?(battler)
+      @as_seen = true
+      begin
+        return yield
+      ensure
+        @as_seen = false
+      end
+    end
+
     def ability_known?(battle, battler)
-      return true if own?(battler) || show_all?
+      return true if own?(battler) || (show_all? && !disguised?(battler))
       known = battle.instance_variable_get(:@cody_known_abilities) || {}
       return true if known[battler.pokemon.object_id] == battler.ability_id
       shown = battle.instance_variable_get(:@kif_bi_abilities) || {}
@@ -317,6 +337,10 @@ module KIF
 
     # [{label:, name:, desc:, known:, worked:}] – the main ability first
     def self.ability_entries(battle, battler)
+      return as_seen_if_disguised(battler) { ability_entries_now(battle, battler) }
+    end
+
+    def self.ability_entries_now(battle, battler)
       known = ability_known?(battle, battler)
       out = [{ :label => _INTL("ABILITY"), :name => known ? battler.abilityName.to_s : "???",
                :desc => known ? ability_description(battler.ability_id) : _INTL("Shown once the battle reveals it."),
@@ -334,7 +358,8 @@ module KIF
             out << { :label => (e[:label] || _INTL("ABILITY")).to_s.upcase,
                      :name => k ? name.to_s : "???",
                      :desc => k ? desc.to_s : _INTL("Shown once it activates."),
-                     :known => k, :revealed => seen, :worked => k && e[:worked] }
+                     # REVEALED mark with As seen only (KIF-ER calls every innate known with All)
+                     :known => k, :revealed => seen && !all, :worked => k && e[:worked] }
           end
         rescue StandardError => ex
           KIF.log("Battle Info: ability list from #{id} failed (#{ex.class}: #{ex.message})") if defined?(KIF.log)
@@ -365,7 +390,7 @@ module KIF
     # [{name:, type:, cat:, power:, acc:, pp:}] or nil for an unseen foe move
     def self.move_entries(battle, battler)
       own = own?(battler)
-      all = show_all?
+      all = show_all? && !disguised?(battler)
       battler.moves.compact.first(4).map do |m|
         used = times_used(battle, battler, m.id)
         next nil if !own && used == 0 && !all

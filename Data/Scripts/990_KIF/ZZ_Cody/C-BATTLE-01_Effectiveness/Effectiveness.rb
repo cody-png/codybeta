@@ -12,8 +12,9 @@
 # With several foes the marker shows the best result among them.
 # Uses the battle's own type calculation (in-battle types, KIF type buffs,
 # Scrappy, Ring Target, grounded Flying types, ...). Status moves show nothing.
-# Abilities stay hidden until the battle reveals them: once
-# a foe's ability has been shown (ability pop-up / message), its immunity
+# A foe's ability counts from the start with Battle Info's Foe Info: All
+# (default; not while an Illusion disguise holds), with As seen once
+# the battle has shown it (ability pop-up / message): its immunity
 # counts – Levitate (Ground), Flash Fire, Volt/Water Absorb, Lightning Rod,
 # Motor Drive, Sap Sipper, Storm Drain, Dry Skin, Soundproof, Bulletproof,
 # Wonder Guard – unless the user has Mold Breaker / Teravolt / Turboblaze or
@@ -61,7 +62,9 @@ module KIF
       type = move.pbCalcType(user)
       move.instance_variable_set(:@powerBoost, boost)
       val = move.pbCalcTypeMod(type, user, target)
-      val = ::Effectiveness::INEFFECTIVE if val && known_immunity?(move, type, user, target, val)
+      # a disguised foe (Illusion) counts as Foe Info: As seen, mods' checks too
+      immune = val && KIF::BattleInfo.as_seen_if_disguised(target) { known_immunity?(move, type, user, target, val) }
+      val = ::Effectiveness::INEFFECTIVE if immune
       return val
     rescue => e
       KIF.log("Effectiveness check failed: #{e.message}")
@@ -73,8 +76,16 @@ module KIF
                     :VOLTABSORB => :ELECTRIC, :SAPSIPPER => :GRASS, :STORMDRAIN => :WATER,
                     :WATERABSORB => :WATER, :DRYSKIN => :WATER }
 
-    # Has the battle shown this battler's current ability?
+    # Does the player know this battler's current ability? With Battle Info's
+    # Foe Info: All (KIF::BattleInfo.show_all?) always, as Battle Info lists
+    # it; with As seen once the battle has shown it. The main ability: mods
+    # (KIF-ER's innates) add theirs by wrapping this. hasActiveAbility? last:
+    # KIF-ER notes the innate it matches for the next pop-up
     def self.revealed?(battle, target, ability)
+      bi = KIF::BattleInfo
+      if bi.show_all? && !bi.disguised?(target)
+        return target.ability_id == ability && target.hasActiveAbility?(ability)
+      end
       known = battle.instance_variable_get(:@cody_known_abilities)
       return false unless known && target.pokemon
       return known[target.pokemon.object_id] == ability && target.hasActiveAbility?(ability)

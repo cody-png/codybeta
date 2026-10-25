@@ -97,7 +97,7 @@ module KIF
       out = {}
       add = proc { |p| lines(p).each { |l| out[l] = true } if p && !p.egg? }
       $Trainer.party.each(&add)
-      $PokemonStorage.maxBoxes.times { |b| $PokemonStorage.maxPokemon(b).times { |i| add.call($PokemonStorage[b, i]) } }
+      $PokemonStorage.maxBoxes.times { |b| next if $PokemonStorage[b].is_a?(StorageTransferBox); $PokemonStorage.maxPokemon(b).times { |i| add.call($PokemonStorage[b, i]) } }
       (state[:graveyard] || []).each { |g| add.call(g[:pokemon]) }
       return out
     end
@@ -273,9 +273,11 @@ module KIF
       pbMessage(fate == FAINTED_GRAVEYARD ? _INTL("{1} went to the Graveyard.", names) : _INTL("{1} was released.", names))
     end
 
-    # [box, index] of the first living Pokémon in the PC (it stays there)
+    # [box, index] of the first living Pokémon in the PC (it stays there).
+    # Not PIF's Transfer Box: it is shared by every save, and writing to it saves the game
     def self.living_in_pc
       $PokemonStorage.maxBoxes.times do |b|
+        next if $PokemonStorage[b].is_a?(StorageTransferBox)
         $PokemonStorage.maxPokemon(b).times do |i|
           p = $PokemonStorage[b, i]
           return [b, i] if able?(p) && !p.kif_nz_dead
@@ -292,10 +294,11 @@ module KIF
       grave = (state[:graveyard] ||= [])
       $Trainer.party.each do |p|
         next unless p && p.kif_nz_dead
-        next if grave.any? { |e| e[:pokemon].equal?(p) || e[:source_id] == p.object_id }
+        # (object_ids start over each session, so a saved one could match another Pokémon)
+        next if grave.any? { |e| e[:pokemon].equal?(p) }
         entry = (@to_bury || []).find { |e| e[:pokemon].equal?(p) } ||
                 { :name => p.name, :species => p.species, :level => p.level, :place => place_name($game_map.map_id) }
-        grave << entry.merge(:pokemon => Marshal.load(Marshal.dump(p)), :source_id => p.object_id)
+        grave << entry.merge(:pokemon => Marshal.load(Marshal.dump(p)))
       end
       @to_bury = []
     end

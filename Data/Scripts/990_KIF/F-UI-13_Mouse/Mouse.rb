@@ -27,6 +27,8 @@
 # them and goes on). Holding searches again only when the pointer reaches
 # another tile or the walk ended. The
 # walk drives Input.dir4, so the player's own movement code does each step.
+# A click past the edge onto a connected map (route <-> town) walks to the
+# edge and steps over. Clicks follow the Journey Camera mod's zoom and tilt.
 #
 # Engine: mkxp-z's Input.mouse_x/mouse_y/mouse_in_window?, MOUSELEFT/RIGHT,
 # scroll_v and Graphics.show_cursor; every call checks the engine has it.
@@ -150,8 +152,20 @@ module KIF
     # landed 25% too far right and down. The PC engine already converts.
     START_SIZE = [(Graphics.width rescue 0), (Graphics.height rescue 0)]
 
+    # the engine is a phone's: KIF.mobile? without PIF's Device: Mobile
+    # option, which a save brought over from a phone keeps on a PC (there the
+    # pointer moves without taps and the engine already converts)
+    def self.phone?
+      ps = $PokemonSystem
+      dev = ps && (ps.on_mobile rescue false)
+      ps.on_mobile = false if dev
+      return KIF.mobile?
+    ensure
+      ps.on_mobile = dev if dev
+    end
+
     def self.game_xy(x, y)
-      return [x, y] unless KIF.mobile?
+      return [x, y] unless phone?
       sw, sh = START_SIZE
       return [x, y] if sw <= 0 || sh <= 0 || (sw == Graphics.width && sh == Graphics.height)
       return [x * Graphics.width / sw, y * Graphics.height / sh]
@@ -174,6 +188,7 @@ module KIF
       @on = on?
       unless @on
         @moved = @left = @right = @held = @any = false
+        @x = @y = nil   # switched on again: the pointer's move since isn't a tap
         @wheel = 0
         stop if @path
         cursor(true) if @cursor_set
@@ -187,9 +202,13 @@ module KIF
       @left  = inside && Input.kif_mouse_trigger?(Input::MOUSELEFT)
       @right = inside && Input.kif_mouse_trigger?(Input::MOUSERIGHT)
       @held  = inside && Input.kif_mouse_press?(Input::MOUSELEFT)
+      # any release ends a hold-walk, also one seen inside an event (text only)
+      # that ran in one update: its closing click comes after a release. A
+      # ledge jump or slide keeps polling with the button still down.
+      @drag = false unless @held
       # phones: a tap shorter than a frame arrives as a pointer jump with no
       # press (JoiPlay; its on-screen buttons never move the pointer)
-      @left = true if moved && !@left && !@held && KIF.mobile?
+      @left = true if moved && !@left && !@held && phone?
       if @phone_test
         log_phone_test(nx, ny, moved)
         # keys the engine itself sends (JoiPlay may turn a tap into a key too)
@@ -413,13 +432,18 @@ module KIF
                 $game_map.events.each_value.any? { |e| @trans[e.id] && e.starting }
       if waiting || map_busy?(pl)
         @pending = nil
-        return unless @path
+        # the event ends the hold too: the click that closes its last
+        # message, still down, mustn't walk toward the pointer
+        return @drag = false unless @path
         if waiting
           @hold = true
         elsif pbMapInterpreterRunning?
           @hold = (@trans && @trans[pbMapInterpreter.instance_variable_get(:@event_id)]) ? true : false
         end   # else (its move route still going): as it was
-        return stop unless @hold
+        unless @hold
+          @drag = false
+          return stop
+        end
         @dir = 0
         return show_marker
       end
@@ -449,7 +473,7 @@ module KIF
         # under a still pointer)
         @drag_moved = false
         tx, ty = mouse_tile
-        if (tx != @drag_x || ty != @drag_y) && $game_map.valid?(tx, ty) && (tx != pl.x || ty != pl.y)
+        if (tx != @drag_x || ty != @drag_y) && (tx != pl.x || ty != pl.y)
           @drag_x = tx
           @drag_y = ty
           walk_to(pl, tx, ty, nil)
@@ -458,15 +482,37 @@ module KIF
       follow(pl) if @path
     end
 
-    # the map tile under the pointer; past the map's edge (small maps, the
-    # black border) the nearest tile of the map
+    # the Journey Camera & Perspective mod (overworld_zoom_redux) draws the
+    # map scaled, maybe tilted: its scale, nil while it draws 1:1
+    def self.zoom
+      return nil unless defined?(::OverworldZoom) && OverworldZoom.respond_to?(:active?) && OverworldZoom.active?
+      return OverworldZoom.current_scale
+    end
+
+    # the map tile under the pointer; past the map's edge the nearest tile of
+    # the map (small maps, the black border), or the tile just past it when a
+    # connected map is drawn there that the player can step onto from it
     def self.mouse_tile
       px = [[@x, 0].max, Graphics.width - 1].min
       py = [[@y, 0].max, Graphics.height - 1].min
-      tx = (($game_map.display_x + px * Game_Map::X_SUBPIXELS) / Game_Map::REAL_RES_X.to_f).floor
-      ty = (($game_map.display_y + py * Game_Map::Y_SUBPIXELS) / Game_Map::REAL_RES_Y.to_f).floor
-      tx = [[tx, 0].max, $game_map.width - 1].min
-      ty = [[ty, 0].max, $game_map.height - 1].min
+      # back to the map's own pixels, as the mod projects them (from the
+      # pixel's middle: the mod rounds where each tile starts)
+      s = zoom
+      py = OverworldZoom.inverse_transform_ground_y(py + 0.5, s) if s
+      ry = (($game_map.display_y + py * Game_Map::Y_SUBPIXELS) / Game_Map::REAL_RES_Y.to_f).floor
+      if s   # x with the factor the mod draws that tile row with: at its bottom plus one tile
+        st = OverworldZoom.projection_state(s)
+        b = (ry * Game_Map::REAL_RES_Y - $game_map.display_y) / Game_Map::Y_SUBPIXELS.to_f + 2 * Game_Map::TILE_HEIGHT
+        px = st[:raw_center_x] + (px + 0.5 - st[:screen_center_x]) / (OverworldZoom.tile_x_factor_for_priority(0, b, s) * s)
+      end
+      rx = (($game_map.display_x + px * Game_Map::X_SUBPIXELS) / Game_Map::REAL_RES_X.to_f).floor
+      tx = [[rx, 0].max, $game_map.width - 1].min
+      ty = [[ry, 0].max, $game_map.height - 1].min
+      d = if ry != ty then (rx == tx ? (ry > ty ? 2 : 8) : 0)   # 0: past a corner
+          elsif rx != tx then (rx > tx ? 6 : 4)
+          else 0
+          end
+      return [tx + DXA[d], ty + DYA[d]] if d > 0 && $game_player && $game_player.passable?(tx, ty, d)
       return [tx, ty]
     end
 
@@ -503,7 +549,7 @@ module KIF
     end
 
     def self.click_tile(pl, tx, ty)
-      return unless $game_map.valid?(tx, ty)
+      return unless $game_map.validLax?(tx, ty)
       dx = tx - pl.x
       dy = ty - pl.y
       return if dx == 0 && dy == 0
@@ -521,8 +567,13 @@ module KIF
     end
 
     def self.walk_to(pl, tx, ty, ev)
+      # just past the edge (mouse_tile: a connected map): to the edge tile,
+      # then the step off it; the walk ends when the map changes
+      ex = [[tx, 0].max, $game_map.width - 1].min
+      ey = [[ty, 0].max, $game_map.height - 1].min
       # a tile that can't be reached: as close to it as the way goes
-      path = find_path(pl.x, pl.y, tx, ty, !ev.nil?, closest: ev.nil?)
+      path = find_path(pl.x, pl.y, ex, ey, !ev.nil?, closest: ev.nil?)
+      path += [tx, ty] if path && (ex != tx || ey != ty) && (path.empty? ? [pl.x, pl.y] : path[-2, 2]) == [ex, ey]
       return false unless path && (!path.empty? || ev)
       @path = path
       @trans = @found_trans
@@ -538,6 +589,7 @@ module KIF
     def self.stop
       log_phone_test(@x.to_i, @y.to_i, false, "walk stopped at line #{caller_locations(1, 1)[0].lineno}") if @phone_test && @path
       @path = nil
+      @gx = @gy = nil   # no marker on a later key step
       @trans = nil
       @hold = false
       @dir = 0
@@ -565,7 +617,9 @@ module KIF
       if d == 0
         return stop if @repaths >= REPATHS
         @repaths += 1
-        return stop unless walk_to(pl, @gx, @gy, @face_event ? true : nil) && (d = next_dir(pl)) > 0
+        return stop unless walk_to(pl, @gx, @gy, @face_event ? true : nil)
+        return arrive(pl) if @path.empty?   # already next to the clicked event (a slide on ice)
+        return stop unless (d = next_dir(pl)) > 0
       end
       @dir = d
       show_marker
@@ -629,8 +683,20 @@ module KIF
         marker_rects.each { |x, y, w, h| b.fill_rect(x, y, w, h, light) }
         @marker.bitmap = b
       end
-      @marker.x = ((@gx * Game_Map::REAL_RES_X - $game_map.display_x) / Game_Map::X_SUBPIXELS).round
-      @marker.y = ((@gy * Game_Map::REAL_RES_Y - $game_map.display_y) / Game_Map::Y_SUBPIXELS).round
+      x = ((@gx * Game_Map::REAL_RES_X - $game_map.display_x) / Game_Map::X_SUBPIXELS).round
+      y = ((@gy * Game_Map::REAL_RES_Y - $game_map.display_y) / Game_Map::Y_SUBPIXELS).round
+      zx = zy = 1.0
+      if (s = zoom)   # placed and sized the way the mod draws a ground tile
+        b = y + Game_Map::TILE_HEIGHT
+        x = OverworldZoom.project_tile_x(0, x, b + Game_Map::TILE_HEIGHT, s)
+        y = OverworldZoom.transform_ground_y(y, s)
+        zx = OverworldZoom.ground_x_factor(b, s) * s
+        zy = OverworldZoom.ground_row_scale(b, s)
+      end
+      @marker.x = x
+      @marker.y = y
+      @marker.zoom_x = zx
+      @marker.zoom_y = zy
       @marker.visible = true
     end
 

@@ -7,7 +7,7 @@
 #                      League, DeathLink (written when the client connects)
 #     scouts.json      client -> game: what each location holds (item, player)
 #     in/items.json    client -> game: every item received so far, with index
-#     in/death.json    client -> game: last DeathLink received (time, source)
+#     in/death.json    client -> game: last DeathLink received (seed, time, source)
 #     out/<n>.json     game -> client: seed, all checked location ids, goal,
 #                      death (the client sends them and deletes the file)
 #   Both sides write a temp file and rename it.
@@ -118,8 +118,21 @@ module KIF
       return d.is_a?(Hash) && !d[:seed].to_s.empty?
     end
 
+    # KIF's MiniJSON indexes characters, and each index into a non-ASCII string
+    # costs its length: one accented Poke Ball made a big items.json take seconds to
+    # read after every received item. As \uXXXX the text is ASCII and parses
+    # to the same strings (a character past U+FFFF stays as it is).
+    def read_json(f)
+      text = File.read(f, encoding: "UTF-8").delete_prefix("\uFEFF")
+      text = text.gsub(/[^\x00-\x7F]/) { |c| c.ord > 0xFFFF ? c : format("\\u%04x", c.ord) }
+      h = KIF::Mods::MiniJSON.parse(text)
+      return h.is_a?(Hash) ? h : nil
+    rescue StandardError
+      return nil
+    end
+
     def read_slot
-      h = KIF::Mods.read_json(path("slot.json"))
+      h = read_json(path("slot.json"))
       return nil unless h && !h["seed"].to_s.empty? && h["locations"].is_a?(Array)
       return h
     rescue StandardError
@@ -291,9 +304,10 @@ module KIF
       return id
     end
 
-    # ... of the event running now
+    # ... of the event running now (the interpreter keeps the last event's id
+    # after it ends: fishing, unfusing or a bag item would take its check)
     def location_here
-      return nil unless on? && $game_map
+      return nil unless on? && $game_map && pbMapInterpreterRunning?
       ev = (pbMapInterpreter.instance_variable_get(:@event_id) rescue 0).to_i
       return location_of($game_map.map_id, ev)
     end
@@ -314,7 +328,7 @@ module KIF
       mt = (File.mtime(f) rescue nil)
       if mt && mt != @scouts_mtime
         @scouts_mtime = mt
-        h = KIF::Mods.read_json(f)
+        h = read_json(f)
         @scouts = (h && h["seed"].to_s == data[:seed] && h["locations"].is_a?(Hash)) ? h["locations"] : nil
       end
       s = @scouts && @scouts[id.to_s]
@@ -360,7 +374,7 @@ module KIF
     # Giftsanity: a Pokemon or egg handed out at a gift location (the player
     # keeps it; only the first one the event gives counts)
     def gift_received
-      return unless on? && $game_map
+      return unless on? && $game_map && pbMapInterpreterRunning?   # as location_here
       ev = (pbMapInterpreter.instance_variable_get(:@event_id) rescue 0)
       id = location_of($game_map.map_id, ev, GIFT_BASE)
       return unless id
@@ -383,7 +397,7 @@ module KIF
     # The KIF Client's last status.json: :connected, :disconnected (running,
     # no server) or :gone (not running, or another seed's client)
     def client_status
-      h = KIF::Mods.read_json(path("in", "status.json"))
+      h = read_json(path("in", "status.json"))
       return [:gone, ""] unless h.is_a?(Hash) && h["seed"].to_s == data[:seed]
       return [:gone, ""] if (Time.now.to_f - h["time"].to_f).abs > STATUS_STALE
       return [h["connected"] == true ? :connected : :disconnected, h["server"].to_s]
@@ -484,7 +498,7 @@ module KIF
       mt = (File.mtime(f) rescue nil)
       return if mt.nil? || mt == @mtime
       @mtime = mt
-      h = KIF::Mods.read_json(f)
+      h = read_json(f)
       return unless h
       if h["seed"].to_s != d[:seed]
         KIF.log("Archipelago: items.json is for seed #{h['seed']}, this save is linked to #{d[:seed]}; ignored")
@@ -501,8 +515,10 @@ module KIF
       mt = (File.mtime(f) rescue nil)
       return if mt.nil? || mt == @death_mtime
       @death_mtime = mt
-      h = KIF::Mods.read_json(f)
-      @death = h if h && h["time"].to_f > d[:death_time].to_f
+      h = read_json(f)
+      # a death from another seed's game is not this save's (a file without a
+      # seed comes from an older KIF Client)
+      @death = h if h && (h["seed"].nil? || h["seed"].to_s == d[:seed]) && h["time"].to_f > d[:death_time].to_f
     end
 
     def received_text(name, who, d)
@@ -573,6 +589,7 @@ module KIF
     def busy_reason
       return "not on the map" unless $scene.is_a?(Scene_Map)
       return "a message or menu is open" if $game_temp.message_window_showing || $game_temp.in_menu
+      return "a battle is starting or ending" if $game_temp.in_battle
       return "an event is running (map #{$game_map.map_id}, event #{pbMapInterpreter.get_self.id rescue '?'})" if pbMapInterpreterRunning?
       return "the player is moving"
     rescue StandardError
@@ -582,6 +599,8 @@ module KIF
     def quiet?
       return false unless $scene.is_a?(Scene_Map)
       return false if $game_temp.message_window_showing || $game_temp.in_menu
+      # a wild battle's intro and fade-out update the map (Battle trap inside a battle)
+      return false if $game_temp.in_battle
       return false if pbMapInterpreterRunning?
       return false if $game_player.moving? || $game_player.move_route_forcing
       return true

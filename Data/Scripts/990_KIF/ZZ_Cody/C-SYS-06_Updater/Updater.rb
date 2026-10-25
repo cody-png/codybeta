@@ -17,6 +17,8 @@
 #   * files the new build no longer has are removed - only shipped files
 #     under Data/, Graphics/, Audio/ and Fonts/, never saves, Mods, Logs,
 #     Import Sprites or anything the player added;
+#   * at every start, editor and repo-script files older builds left
+#     (DEV_LEFTOVERS, never in a file list) are removed, but not in a git checkout;
 #   * the game closes; a small "KIF update" window waits for it, moves the
 #     new files in (robocopy) and starts the game again; the next start says
 #     "KIF was updated to X". If moving fails (a file in use), the next
@@ -34,7 +36,7 @@
 #
 # Where builds come from (github.com/cody-png/codybeta):
 #   Stable - the "release" branch (moves only when a release is published)
-#   Beta   - the "beta-testing" branch (test builds)
+#   Beta   - the "beta-testing" branch (new versions before they reach Stable)
 # Options > KIF Settings > General settings > "Updates": Stable / Beta / Off (default: the channel of
 # the build that is installed) and "Check for Updates" (any time).
 # Sprite sheets the player installed (Graphics/CustomBattlers, Battlers) are
@@ -58,6 +60,8 @@ module KIF
     KEEP_THEIRS = %w[Graphics/CustomBattlers/ Graphics/Battlers/]   # player-installed sprites
     NEVER      = %w[Mods/ Logs/ Import\ Sprites/ KIF\ Update/ Graphics/CustomBattlers/local_sprites/ Cache/ ExportedPokemons/]
     RETIRED    = %w[BETA_TESTING.md]   # outside REMOVABLE, once shipped to Stable by mistake: removed when the new list drops them
+    # never in any file list (PIF's own Data/.idea, zips before 2026-10-09), so plan() can't remove them
+    DEV_LEFTOVERS = %w[.idea Data/.idea Data/.DS_Store build_release.cmd push_branches.cmd push_stable.cmd publish_release.cmd]
 
     Manifest = Struct.new(:version, :channel, :files)   # files: path => [sha, size]
 
@@ -864,7 +868,7 @@ module KIF
         log("no version found at #{base}")
         return false unless manual
         if no_stable_yet?(ch, base)
-          pbMessage(_INTL("No stable release has been published yet. Set Updates to Beta (Options > System) to get test builds."))
+          pbMessage(_INTL("No stable release has been published yet. Set Updates to Beta (Options > System) to get the newest version."))
         else
           pbMessage(_INTL("Couldn't reach the update server. Try again later."))
         end
@@ -979,6 +983,17 @@ module KIF
       return 0
     end
 
+    def remove_dev_leftovers(dir = root)
+      return [] if File.exist?(File.join(dir, ".git")) || !KIF::Paths.game_writable?   # a git checkout is Cody's
+      gone = DEV_LEFTOVERS.select { |p| File.exist?(File.join(dir, p)) }
+      gone.each { |p| rm_tree(File.join(dir, p)) }
+      log("removed files an older build left: #{gone.join(', ')}") unless gone.empty?
+      return gone
+    rescue StandardError => e
+      log("leftover check failed (#{e.class}: #{e.message})")   # runs in an ensure: must never raise at the load screen
+      return []
+    end
+
     # An update that was moved in (or wasn't) since the last start
     def after_update
       dir0 = stage_root
@@ -1042,6 +1057,7 @@ module KIF
       d = stage_root
       pending = (File.directory?(d) && Dir.children(d).any? { |v| File.file?(File.join(d, v, "failed.txt")) || File.file?(File.join(d, v, "apply.cmd")) }) rescue true
       remove_format_twins unless pending
+      remove_dev_leftovers
     end
   end
 end
@@ -1054,7 +1070,7 @@ KIF::Options.add(:others, :global) {
                  proc { KIF::Updater.channel },
                  proc { |value| $PokemonSystem.kif_updates = value; KIF::Updater.store_choice("channel", value) },
                  [_INTL("At start-up, KIF checks for new releases and offers to update"),
-                  _INTL("Also offers test builds (may have bugs)"),
+                  _INTL("Also offers new versions before they reach Stable"),
                   _INTL("KIF never checks for updates by itself")])
 }
 KIF::Options.add(:others, :global) {

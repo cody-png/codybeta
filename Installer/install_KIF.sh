@@ -82,7 +82,7 @@ done
 if [ -z "$BRANCH" ]; then
   say "  Which version?"
   say "    [S] Stable - the newest released version, keeps itself updated (recommended)"
-  say "    [B] Beta   - test builds: newest features, may have bugs"
+  say "    [B] Beta   - the newest version, before it reaches Stable"
   [ -n "$PIN" ] && say "    [V] KIF $PIN only - stays on this version, no updates"
   case "$(ask 'Choose S, B or V :' S)" in
     b|B) BRANCH="beta-testing" ;;

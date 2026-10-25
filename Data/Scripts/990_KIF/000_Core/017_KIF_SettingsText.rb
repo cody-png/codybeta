@@ -121,6 +121,9 @@ module KIF
         "No battle info screen.",
         "In battle, INFO (or {ACTION}) shows stats, abilities, moves, the field and the speed order.",
         "Battle info opens with {ACTION} only; no INFO button on screen."],
+      "Foe Info" => [
+        "Battle Info lists a foe's abilities and moves from the start of the battle.",
+        "Battle Info shows a foe's abilities and moves only once the battle has shown them."],
       "Move Effectiveness" => [
         "The Fight menu doesn't show how effective moves are.",
         "The Fight menu marks how effective each move is against the foe."],

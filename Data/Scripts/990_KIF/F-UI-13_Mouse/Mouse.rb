@@ -416,6 +416,10 @@ module KIF
     # Start of every Scene_Map#update
     def self.map_step
       @on_map = true
+      # Input.update ran with no map frame between: an event (text only) or a
+      # menu ran inside one update, unseen below; it ends the hold too
+      @drag = false if @polls.to_i > @step_poll.to_i + 1
+      @step_poll = @polls
       return stop if @path && !(@on && walk?)
       return unless @on && walk?
       pl = $game_player
@@ -491,13 +495,17 @@ module KIF
     def self.mouse_tile
       px = [[@x, 0].max, Graphics.width - 1].min
       py = [[@y, 0].max, Graphics.height - 1].min
-      if (s = zoom)   # back to the map's own pixels, as the mod projects them
+      # back to the map's own pixels, as the mod projects them (from the
+      # pixel's middle: the mod rounds where each tile starts)
+      s = zoom
+      py = OverworldZoom.inverse_transform_ground_y(py + 0.5, s) if s
+      ry = (($game_map.display_y + py * Game_Map::Y_SUBPIXELS) / Game_Map::REAL_RES_Y.to_f).floor
+      if s   # x with the factor the mod draws that tile row with: at its bottom plus one tile
         st = OverworldZoom.projection_state(s)
-        py = OverworldZoom.inverse_transform_ground_y(py, s)
-        px = st[:raw_center_x] + (px - st[:screen_center_x]) / (OverworldZoom.ground_x_factor(py, s) * s)
+        b = (ry * Game_Map::REAL_RES_Y - $game_map.display_y) / Game_Map::Y_SUBPIXELS.to_f + 2 * Game_Map::TILE_HEIGHT
+        px = st[:raw_center_x] + (px + 0.5 - st[:screen_center_x]) / (OverworldZoom.tile_x_factor_for_priority(0, b, s) * s)
       end
       rx = (($game_map.display_x + px * Game_Map::X_SUBPIXELS) / Game_Map::REAL_RES_X.to_f).floor
-      ry = (($game_map.display_y + py * Game_Map::Y_SUBPIXELS) / Game_Map::REAL_RES_Y.to_f).floor
       tx = [[rx, 0].max, $game_map.width - 1].min
       ty = [[ry, 0].max, $game_map.height - 1].min
       d = if ry != ty then (rx == tx ? (ry > ty ? 2 : 8) : 0)   # 0: past a corner
@@ -680,7 +688,7 @@ module KIF
       zx = zy = 1.0
       if (s = zoom)   # placed and sized the way the mod draws a ground tile
         b = y + Game_Map::TILE_HEIGHT
-        x = OverworldZoom.project_ground_x(x, b, s)
+        x = OverworldZoom.project_tile_x(0, x, b + Game_Map::TILE_HEIGHT, s)
         y = OverworldZoom.transform_ground_y(y, s)
         zx = OverworldZoom.ground_x_factor(b, s) * s
         zy = OverworldZoom.ground_row_scale(b, s)

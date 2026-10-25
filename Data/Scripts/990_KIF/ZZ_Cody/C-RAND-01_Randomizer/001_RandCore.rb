@@ -646,6 +646,7 @@ module KIF
         return
       end
       return if file == data[:route_sig]
+      apply_data   # this runs inside Game.load, before the save's Pokémon data is put on: route picks read base stats
       Kernel.randomizeWildPokemonByRoute
     end
 

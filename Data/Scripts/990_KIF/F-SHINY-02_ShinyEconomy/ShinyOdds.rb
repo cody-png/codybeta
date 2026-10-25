@@ -91,7 +91,7 @@ class Pokemon
   # stays nil, as in PIF), so with the current setting instead, raising the
   # odds later turned caught Pokémon shiny (bug found 2026-10-04 for old
   # saves, 2026-10-10 for Pokémon caught under KIF).
-  alias kif_odds_initialize initialize unless method_defined?(:kif_odds_initialize)
+  alias kif_odds_initialize initialize unless method_defined?(:kif_odds_initialize) || private_method_defined?(:kif_odds_initialize)
 
   def initialize(*args)
     kif_odds_initialize(*args)

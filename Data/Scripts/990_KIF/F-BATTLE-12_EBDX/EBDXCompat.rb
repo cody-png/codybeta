@@ -47,7 +47,7 @@ if KIF::EBDX.installed?
   # (660_EBDX/001, unchanged) sets it On for every new player, so a new
   # player's setting is put back to Off here. Saved settings keep their value.
   class ::PokemonSystem
-    alias kif_ebdx_off_initialize initialize unless method_defined?(:kif_ebdx_off_initialize)
+    alias kif_ebdx_off_initialize initialize unless method_defined?(:kif_ebdx_off_initialize) || private_method_defined?(:kif_ebdx_off_initialize)
     def initialize
       kif_ebdx_off_initialize
       @mp_ebdx_enabled = 0

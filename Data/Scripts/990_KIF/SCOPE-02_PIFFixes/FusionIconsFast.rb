@@ -139,7 +139,7 @@ class PokemonStorageScene
 end
 
 class PokemonBoxSprite
-  alias kif_bf_initialize initialize unless method_defined?(:kif_bf_initialize)
+  alias kif_bf_initialize initialize unless method_defined?(:kif_bf_initialize) || private_method_defined?(:kif_bf_initialize)
   alias kif_bf_refreshAllBoxSprites refreshAllBoxSprites unless method_defined?(:kif_bf_refreshAllBoxSprites)
   alias kif_bf_update update unless method_defined?(:kif_bf_update)
 

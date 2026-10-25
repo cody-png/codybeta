@@ -1,4 +1,9 @@
-KIF 1.2.2
-- Prices: every price in shops, hotels, gates, tutors and gifts now reads like the Poke Mart's ($1,000).
-- Entrance Randomizer: Pokemon whose level is scaled now know the moves of their new level.
-- Mods: mod settings stay visible after F12 on phones, Linux and macOS.
+KIF 1.2.3
+- Battle Info: a foe's abilities and all its moves show from the start of the battle. Options > Battles > Screens > Foe Info: As seen keeps the old way.
+- Archipelago (apworld 0.6.3): spots where only one of a group can ever give an item are one check, so every seed can be finished. Received items no longer freeze the game, and a DeathLink from another seed no longer wipes your team.
+- Archipelago traps: items and traps wait until a battle's intro is over; Warp waits during scenes and resets a gym's type; Party Lock and Battle Trap fixes.
+- EV Allocation: the 510 limit holds with vitamins and Wings, and moving HP EVs can't faint or revive a Pokemon.
+- Mouse and touch: clicks cross into the next map and work with the Journey Camera mod; clicks in the EBDX fight menu and the Summary tabs pick the right thing.
+- Randomizer: Route mode works with a read-only game folder (phones), and Return home is blocked on Pinkan Island. Nuzlocke: a Blackout no longer touches PIF's shared Transfer Box.
+- Mods: emoji in mod.json, folders with [ ] in their name, and mod zips and catalog installs with a read-only game folder all work.
+- Updates remove old editor and script files (.idea and the like) that older downloads left in the game folder.

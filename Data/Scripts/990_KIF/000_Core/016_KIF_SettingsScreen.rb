@@ -1105,6 +1105,7 @@ class KifSettingsScreen
     list = rows
     if list.empty?
       msg = if @query then _INTL("Nothing matches \"{1}\".", @query)
+            elsif section_id == :mods && !KIF::Modules.visible?(:mod_settings) then _INTL("Set Modules > Mod Settings to On.")
             elsif section_id == :mods then _INTL("No mods yet. Put them in the Mods folder.")
             elsif !KIF.in_game? then _INTL("Load a save to change these settings.")
             else _INTL("Nothing here right now.")

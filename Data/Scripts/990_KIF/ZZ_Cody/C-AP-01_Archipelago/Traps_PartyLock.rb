@@ -67,6 +67,8 @@ module KIF
       # a locked party Pokemon sits out while another one can battle
       def sitting_out?(pk)
         return false unless pk && locked?(pk)
+        # only the player's own: a Self-Battle foe copies a locked PC Pokemon
+        return false unless $Trainer.party.any? { |o| o.equal?(pk) }
         return $Trainer.party.any? { |o| o && !o.equal?(pk) && free?(o) }
       rescue StandardError
         return false

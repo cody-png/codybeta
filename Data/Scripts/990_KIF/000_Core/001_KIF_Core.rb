@@ -70,7 +70,7 @@ module KIF
     KIF::SessionLog.write(msg) if defined?(KIF::SessionLog)
   end
 
-  # Verbose logging, for Cody and testers: on in debug mode, or when a file
+  # Verbose logging, for bug reports: on in debug mode, or when a file
   # named verbose.txt is in the Logs folder (or the save folder). Players get
   # the short log. Looked up once a session.
   VERBOSE_MARKER = "verbose.txt"

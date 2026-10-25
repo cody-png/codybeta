@@ -6,8 +6,10 @@
 #   * stat changes (+1 ... +6 / -1 ... -6) with their multiplier, and the
 #     resulting stats of your own Pokémon;
 #   * types (as changed in battle), HP, status;
-#   * ability and held item: always for yours, for foes only once the battle
-#     has shown them (ability pop-up or a message naming them);
+#   * ability and held item: always for yours; a foe's held item only once
+#     the battle has shown it (a message naming it). A foe's abilities (mods'
+#     too) and moves: from the start with "Foe Info: All" (default since
+#     2026-10-25, as in Elite Redux), or once shown with "As seen";
 #   * effects with turns left (Taunt, Encore, Leech Seed, Substitute...);
 #   * weather, terrain, rooms and Gravity, screens and hazards per side,
 #     Future Sight and Wish.
@@ -28,6 +30,18 @@ KIF::Options.add(:others, :global) {
                  [_INTL("No battle info screen"),
                   _INTL("In battle, INFO (or {1}) shows stat changes, effects and the field", KIF::Keys.name(Input::ACTION)),
                   _INTL("Battle info with {1} only, no INFO button on screen", KIF::Keys.name(Input::ACTION))])
+}
+
+# 0 All: a foe's abilities and moves listed from the start; 1 As seen. A new
+# key, so existing settings files read the default (no older choice to keep).
+KIF::Options.define(:cody_bi_foe_info, 0, :global)
+
+KIF::Options.add(:others, :global) {
+  EnumOption.new(_INTL("Foe Info"), [_INTL("All"), _INTL("As seen")],
+                 proc { $PokemonSystem.cody_bi_foe_info },
+                 proc { |value| $PokemonSystem.cody_bi_foe_info = value },
+                 [_INTL("Battle Info lists a foe's abilities and moves from the start"),
+                  _INTL("Battle Info shows a foe's abilities and moves once the battle shows them")])
 }
 
 module KIF
@@ -87,8 +101,33 @@ module KIF
     #---------------------------------------------------------------------------
     # What the battle has shown about a foe
     #---------------------------------------------------------------------------
+    # Foe Info: All (the default); As seen inside as_seen_if_disguised
+    def show_all?
+      return false if @as_seen
+      return !$PokemonSystem.respond_to?(:cody_bi_foe_info) || $PokemonSystem.cody_bi_foe_info.to_i == 0
+    end
+
+    # A foe's Illusion disguise holds: listing its real abilities and moves
+    # (or hinting them in the Fight menu) would give it away
+    def disguised?(battler)
+      i = const(:Illusion)
+      return !!(i && battler && !own?(battler) && battler.effects[i])
+    end
+
+    # The block sees Foe Info: As seen while the battler is disguised (mods
+    # such as KIF-ER read show_all? too)
+    def as_seen_if_disguised(battler)
+      return yield if @as_seen || !disguised?(battler)
+      @as_seen = true
+      begin
+        return yield
+      ensure
+        @as_seen = false
+      end
+    end
+
     def ability_known?(battle, battler)
-      return true if own?(battler)
+      return true if own?(battler) || (show_all? && !disguised?(battler))
       known = battle.instance_variable_get(:@cody_known_abilities) || {}
       return true if known[battler.pokemon.object_id] == battler.ability_id
       shown = battle.instance_variable_get(:@kif_bi_abilities) || {}
@@ -267,7 +306,7 @@ end
 #   KIF::BattleInfo.register_abilities(:my_mod) do |battle, battler|
 #     [{ :label  => "INNATE",        # small label above the name
 #        :ability => :EFFECTSPORE,   # name and description come from the game
-#        :known  => true,            # false: shown as ??? (a foe's, not revealed)
+#        :known  => true,            # false: ??? with Foe Info: As seen (a foe's, not revealed)
 #        :worked => false }]         # true: "WORKED THIS BATTLE"
 #   end
 #
@@ -298,22 +337,29 @@ module KIF
 
     # [{label:, name:, desc:, known:, worked:}] – the main ability first
     def self.ability_entries(battle, battler)
+      return as_seen_if_disguised(battler) { ability_entries_now(battle, battler) }
+    end
+
+    def self.ability_entries_now(battle, battler)
       known = ability_known?(battle, battler)
       out = [{ :label => _INTL("ABILITY"), :name => known ? battler.abilityName.to_s : "???",
                :desc => known ? ability_description(battler.ability_id) : _INTL("Shown once the battle reveals it."),
                :known => known, :worked => ability_worked?(battle, battler, battler.ability_id),
                :main => true }]
+      all = show_all?
       @ability_providers.each do |id, prov|
         begin
           list = prov.call(battle, battler) || []
           list.each do |e|
-            k = e[:known] != false
+            seen = e[:known] != false
+            k = seen || all   # Foe Info: All shows a row the mod still calls unknown
             name = e[:name] || (e[:ability] && (GameData::Ability.get(e[:ability]).name rescue e[:ability].to_s))
             desc = e[:description] || (e[:ability] && ability_description(e[:ability])) || ""
             out << { :label => (e[:label] || _INTL("ABILITY")).to_s.upcase,
                      :name => k ? name.to_s : "???",
                      :desc => k ? desc.to_s : _INTL("Shown once it activates."),
-                     :known => k, :worked => k && e[:worked] }
+                     # REVEALED mark with As seen only (KIF-ER calls every innate known with All)
+                     :known => k, :revealed => seen && !all, :worked => k && e[:worked] }
           end
         rescue StandardError => ex
           KIF.log("Battle Info: ability list from #{id} failed (#{ex.class}: #{ex.message})") if defined?(KIF.log)
@@ -323,7 +369,8 @@ module KIF
     end
 
     #---------------------------------------------------------------------------
-    # Moves: yours in full; a foe's only once it has used them
+    # Moves: yours in full; a foe's all with Foe Info: All, else only once
+    # it has used them
     #---------------------------------------------------------------------------
     def self.note_move(battler, move_id)
       return unless battler && battler.pokemon && move_id
@@ -343,9 +390,10 @@ module KIF
     # [{name:, type:, cat:, power:, acc:, pp:}] or nil for an unseen foe move
     def self.move_entries(battle, battler)
       own = own?(battler)
+      all = show_all? && !disguised?(battler)
       battler.moves.compact.first(4).map do |m|
         used = times_used(battle, battler, m.id)
-        next nil if !own && used == 0
+        next nil if !own && used == 0 && !all
         cat = case m.category
               when 0 then _INTL("Phys")
               when 1 then _INTL("Spec")
@@ -354,7 +402,7 @@ module KIF
         { :name => m.name.to_s, :type => m.type, :cat => cat,
           :power => (m.baseDamage.to_i > 1 ? m.baseDamage.to_s : "-"),
           :acc => (m.accuracy.to_i > 0 ? m.accuracy.to_s : "-"),
-          :pp => own ? "#{m.pp}/#{m.total_pp}" : (used == 1 ? _INTL("used 1x") : _INTL("used {1}x", used)) }
+          :pp => own ? "#{m.pp}/#{m.total_pp}" : (used == 0 ? "-" : used == 1 ? _INTL("used 1x") : _INTL("used {1}x", used)) }
       end
     end
 
@@ -595,7 +643,7 @@ class KifBattleInfoScreen
       text(b, 22, y + 3, 200, 13, e[:label], e[:main] ? ACC : INNATE, PF::TINY)
       if e[:worked]
         pill(b, W - 22, y + 5, _INTL("WORKED THIS BATTLE"), Color.new(70, 120, 90), true)
-      elsif e[:known] && !KIF::BattleInfo.own?(bt) && !e[:main]
+      elsif e[:revealed] && !KIF::BattleInfo.own?(bt) && !e[:main]
         pill(b, W - 22, y + 5, _INTL("REVEALED"), Color.new(70, 120, 90), true)
       end
       text(b, 22, y + 13, 400, 26, e[:name], e[:known] ? TXT : DIM, PF::ROW)

@@ -96,6 +96,8 @@ module KIF
         # too); never during the intro
         return false unless $game_map && $Trainer && !$Trainer.party.empty? && !$game_switches[SWITCH_DURING_INTRO]
         return false if KIF::PauseMenu.restricted?
+        # Pinkan Island: PIF gives the party and bag back only at the quest's end or abandon
+        return false if KIF::Rand.pinkan?
         # the Safari Zone and the Bug-Catching Contest end through their own gates
         return false if (pbInSafari? rescue false) || (pbInBugContest? rescue false)
         t = return_target

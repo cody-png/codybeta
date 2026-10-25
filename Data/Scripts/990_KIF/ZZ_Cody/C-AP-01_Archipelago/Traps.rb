@@ -126,7 +126,13 @@ module KIF
         species = wild_species
         level = party_level
         pbMessage(_INTL("A Battle Trap from {1}! A wild Pokémon attacks!", who))
-        pbWildBattle(species, level)
+        # a wild encounter, as pbEncounter's: "Static encounters" would swap it again
+        KIF::Rand.in_encounter += 1
+        begin
+          pbWildBattle(species, level)
+        ensure
+          KIF::Rand.in_encounter -= 1
+        end
       end
 
       def run_confusion(who)

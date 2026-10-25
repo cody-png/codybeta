@@ -34,7 +34,7 @@ game: Kuray Infinite Fusion
 requires:
   version: 0.6.2 # Version of Archipelago required for this yaml to work as expected.
   game:
-    Kuray Infinite Fusion: 0.6.2 # Version of the world required for this yaml to work as expected.
+    Kuray Infinite Fusion: 0.6.3 # Version of the world required for this yaml to work as expected.
 
 Kuray Infinite Fusion:
   ################
@@ -129,7 +129,7 @@ Kuray Infinite Fusion:
 
   giftsanity:
     # NPCs of your regions who give you a Pokemon or an egg (the Fighting Dojo's Hitmon, Lapras in Silph Co.,
-    # the Day Care's egg...) also send a check; you still get the Pokemon. kanto 26, kanto_sevii 35, kanto_johto 35, all 44; each adds a filler item.
+    # the Day Care's egg...) also send a check; you still get the Pokemon. kanto 24, kanto_sevii 33, kanto_johto 33, all 42; each adds a filler item.
     'false': 50
     'true': 0
 

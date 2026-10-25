@@ -532,7 +532,7 @@ class KifLivingTitle
       # the row they walk in on is open ground (no trees, ledges or water)
       next unless (sx - 20..Graphics.width + 120).step(16).all? { |x| ground?(@cam + x, y) }
       head, body = (SPECIES[biome_at(@cam + sx)] || {})[:walk].to_a.shuffle.first(2)
-      next unless body && pbResolveBitmap("Graphics/Characters/Followers/#{head}") && pbResolveBitmap("Graphics/Characters/Followers/#{body}")
+      next unless body && follower(head) && follower(body)   # both sheets load (draw_fusion reads the head's)
       a, b = free.first(2)
       [[a, head], [b, body]].each_with_index do |(w, sp), i|
         dress(w, sp, :walk)
@@ -877,7 +877,8 @@ class Scene_Intro
     when :options
       kif_lt_away { PokemonOptionScreen.new(PokemonGameOption_Scene.new).pbStartScreen(true) }
     when :mods
-      kif_lt_away { KifSettingsScreen.new(true, :mods).main }
+      # Mod Settings Off or Hidden empties the Mods list: open Modules, where it is turned On
+      kif_lt_away { KifSettingsScreen.new(true, KIF::Modules.visible?(:mod_settings) ? :mods : :modules).main }
     when :quit
       pbPlayCloseMenuSE
       pbBGMStop(1.0)

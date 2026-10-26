@@ -309,6 +309,7 @@ if defined?(::FightWindowEBDX)
 
     EFF_MARK_X  = 170   # marker's left edge in each 198 px half (the name sits at 99)
     EFF_MARK_CY = 19    # the name's centre line in both halves
+    EFF_BACK    = Color.new(0, 0, 0, 150)   # 660/007's fight bar colour
 
     def generateButtons
       cody_eff_ebdx_generateButtons
@@ -371,6 +372,10 @@ if defined?(::FightWindowEBDX)
         bmp.clear
         pbSetSmallFont(bmp)
         lines.each_with_index do |(text, colour), i|
+          # on EBDX's translucent black (its fight bar's), so the lines stay
+          # readable over the battle boxes they can reach in doubles
+          w = [bmp.text_size(text).width + 10, 192].min
+          bmp.fill_rect((192 - w) / 2, 24 * i + 4, w, 18, EFF_BACK)
           pbDrawOutlineText(bmp, 0, 24 * i + 5, 192, 24, text, colour, KIF::MoveEffect::OUTLINE, 1)
         end
         n = [lines.length, 1].max

@@ -27,6 +27,8 @@
 module KIF
   module TMSearch
     FILTERS = ["All", "Seen", "Caught"]
+    HEAD_H = 96   # two lines: the TM, then the counts (one line cut off long move names)
+    FOOT_H = 96
     @cache = {}
 
     module_function
@@ -71,7 +73,8 @@ module KIF
       return list.select { |s| filter == 1 ? dex.seen?(s) : dex.owned?(s) }
     end
 
-    # Every TM / HM / TR in the game, by move name (TM00 is PIF's unused dummy)
+    # Every TM / HM / TR in the game, by move name. Not TM00, PIF's Counterfeit
+    # TM (sold as a scam): its move FAKEMOVE does nothing and no Pokémon learns it
     def machines
       ret = []
       GameData::Item.each { |i| ret << i if i.is_machine? && i.move && i.move != :FAKEMOVE && GameData::Move.exists?(i.move) }
@@ -94,15 +97,15 @@ module KIF
     end
 
     def head_text(item, filter, all, list)
-      t = _INTL("{1}: {2} Pokémon can learn it.", title(item), all.length)
-      t = _INTL("{1}: {2} can learn it, {3} seen.", title(item), all.length, list.length) if filter == 1
-      t = _INTL("{1}: {2} can learn it, {3} caught.", title(item), all.length, list.length) if filter == 2
-      return t
+      t = _INTL("{1} Pokémon can learn it.", all.length)
+      t = _INTL("{1} can learn it, {2} seen.", all.length, list.length) if filter == 1
+      t = _INTL("{1} can learn it, {2} caught.", all.length, list.length) if filter == 2
+      return title(item) + "\n" + t
     end
 
     def foot_text(item)
-      used = item.is_TR? ? _INTL("A TR is used up when it is taught.") : _INTL("TMs are not used up: you can teach them again.")
-      return used + "\n" + _INTL("A fusion can learn it if its head or body can.")
+      used = item.is_TR? ? _INTL("A TR is used up when it is taught.") : _INTL("TMs are not used up: teach them again.")
+      return used + "\n" + _INTL("A fusion learns it if head or body can.")
     end
 
     # The load screen's background, so the Bag doesn't show through the windows
@@ -121,9 +124,9 @@ module KIF
       vp = Viewport.new(0, 0, Graphics.width, Graphics.height)
       vp.z = z
       bg = backdrop(vp)
-      foot = Window_UnformattedTextPokemon.newWithSize(foot_text(item), 0, Graphics.height - 96, Graphics.width, 96, vp)
-      head = Window_UnformattedTextPokemon.newWithSize("", 0, 0, Graphics.width, 64, vp)
-      win = Window_CommandPokemon.newWithSize([""], 0, 64, Graphics.width, Graphics.height - 160, vp)
+      foot = Window_UnformattedTextPokemon.newWithSize(foot_text(item), 0, Graphics.height - FOOT_H, Graphics.width, FOOT_H, vp)
+      head = Window_UnformattedTextPokemon.newWithSize("", 0, 0, Graphics.width, HEAD_H, vp)
+      win = Window_CommandPokemon.newWithSize([""], 0, HEAD_H, Graphics.width, Graphics.height - HEAD_H - FOOT_H, vp)
       win.setAllowArrowsJump(true)   # Left / Right: a page
       refresh = proc do
         list = shown(all, filter)

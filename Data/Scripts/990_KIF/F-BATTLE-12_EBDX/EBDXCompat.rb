@@ -151,6 +151,47 @@ if KIF::EBDX.installed?
     PokemonEvolutionSceneEBDX.prepend(KIF::EBDX::EvolutionSprites)
   end
 
+  # EBDX's party lineups (balls showing each side's team) never appeared:
+  # 660/010's pbShowPartyLineup only set their toggle, so PartyLineupEBDX
+  # was never refreshed (never loaded, never drawn), and its send-outs never
+  # hid them. Now as in PIF's scene: both sides at a trainer battle's start,
+  # one side when a Pokémon is switched in, each hidden at its send-out.
+  if defined?(::PokeBattle_SceneEBDX) && defined?(::PartyLineupEBDX)
+    class ::PokeBattle_SceneEBDX
+      def pbShowPartyLineup(side, fullAnim = false)
+        lineup = (side % 2 == 0) ? @playerLineUp : @opponentLineUp
+        return if !lineup || lineup.disposed?
+        lineup.refresh
+        # this scene shows the player's battle box during the intro: the lineup
+        # goes above it (EBDX's own spot when a follower is out), not across it
+        lineup.y = @viewport.height * 0.5 if side % 2 == 0
+        # battle start: the intro messages run while it slides in (PIF's fullAnim)
+        return if fullAnim || !@introdone
+        self.wait(1, true) while lineup.animating?
+      end
+
+      # the send-out animations wait without animateScene, which left a hiding
+      # lineup half faded on screen until the next command menu
+      alias kif_lineup_wait wait unless method_defined?(:kif_lineup_wait) || private_method_defined?(:kif_lineup_wait)
+      def wait(frames = 1, align = false)
+        return kif_lineup_wait(frames, align) if align   # animateScene moves them
+        frames.times do
+          [@playerLineUp, @opponentLineUp].each { |l| l.update if l && !l.disposed? }
+          kif_lineup_wait(1, false)
+        end
+      end
+
+      alias kif_lineup_pbSendOutBattlers pbSendOutBattlers unless method_defined?(:kif_lineup_pbSendOutBattlers) || private_method_defined?(:kif_lineup_pbSendOutBattlers)
+      def pbSendOutBattlers(sendOuts, startBattle = false)
+        sendOuts.each do |pair|
+          lineup = @battle.opposes?(pair[0]) ? @opponentLineUp : @playerLineUp
+          lineup.toggle = false if lineup
+        end
+        kif_lineup_pbSendOutBattlers(sendOuts, startBattle)
+      end
+    end
+  end
+
   # 661/003's Type Display for EBDX boxes loads KIF 0.20.7's icon sheets from
   # Graphics/Pictures/TypeIcons_*.png; KIF keeps them in
   # Graphics/Pictures/KIF/TypeIcons (F-BATTLE-07), and "Txt" (5) has no sheet

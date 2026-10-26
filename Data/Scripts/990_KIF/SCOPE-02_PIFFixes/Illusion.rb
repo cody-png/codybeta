@@ -33,3 +33,15 @@ class PokeBattle_Scene
     pbRefreshOne(idx) if respond_to?(:pbRefreshOne)
   end
 end
+
+# EBDX's scene has its own pbChangePokemon (660/010) that never reaches PIF's
+if defined?(PokeBattle_SceneEBDX)
+  class PokeBattle_SceneEBDX
+    alias kif_ill_ebdx_pbChangePokemon pbChangePokemon unless method_defined?(:kif_ill_ebdx_pbChangePokemon) || private_method_defined?(:kif_ill_ebdx_pbChangePokemon)
+    def pbChangePokemon(idxBattler, pkmn)
+      kif_ill_ebdx_pbChangePokemon(idxBattler, pkmn)
+      idx = idxBattler.respond_to?(:index) ? idxBattler.index : idxBattler
+      pbRefreshOne(idx)
+    end
+  end
+end

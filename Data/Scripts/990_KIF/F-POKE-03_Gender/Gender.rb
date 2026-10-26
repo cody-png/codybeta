@@ -27,13 +27,20 @@ module KIF
   module Gender
     @icon_bitmaps = {}
 
-    def self.blt_icon(bitmap, path, x, y)
+    # the icon's bitmap, loaded once (nil if the file is missing)
+    def self.icon_bitmap(path)
       icon = @icon_bitmaps[path]
       if !icon || icon.disposed?
         file = pbResolveBitmap(path)
-        return unless file
+        return nil unless file
         icon = @icon_bitmaps[path] = Bitmap.new(file)
       end
+      return icon
+    end
+
+    def self.blt_icon(bitmap, path, x, y)
+      icon = icon_bitmap(path)
+      return unless icon
       bitmap.blt(x, y, icon, Rect.new(0, 0, icon.width, icon.height))
     rescue => e
       KIF.log("Gender icon failed: #{e.message}")

@@ -293,5 +293,109 @@ class FightMenuDisplay
   end
 end
 
+#-------------------------------------------------------------------------------
+# EBDX's fight menu (FightWindowEBDX: its own move buttons and no info box;
+# PirateLady 2026-10-25: nothing showed). The same markers at the right end of
+# each button's name (both its halves: highlighted and not), and the text in
+# EBDX's own hint strip above the highlighted button (EBDX's type hint, off in
+# KIF): "Super eff." etc. with one foe, one "Name xN" line per foe with
+# several, stacked upwards. Same results as PIF's scene (in-battle types,
+# abilities, Illusion).
+#-------------------------------------------------------------------------------
+if defined?(::FightWindowEBDX)
+  class ::FightWindowEBDX
+    alias cody_eff_ebdx_generateButtons generateButtons unless method_defined?(:cody_eff_ebdx_generateButtons) || private_method_defined?(:cody_eff_ebdx_generateButtons)
+    alias cody_eff_ebdx_update update unless method_defined?(:cody_eff_ebdx_update) || private_method_defined?(:cody_eff_ebdx_update)
+
+    EFF_MARK_X  = 170   # marker's left edge in each 198 px half (the name sits at 99)
+    EFF_MARK_CY = 19    # the name's centre line in both halves
+    EFF_BACK    = Color.new(0, 0, 0, 150)   # 660/007's fight bar colour
+
+    def generateButtons
+      cody_eff_ebdx_generateButtons
+      @cody_eff_key = nil
+      return unless KIF::MoveEffect.on? && @battler
+      @showTypeAdvantage = false   # KIF's hint replaces EBDX's (singles only, move.type)
+      cody_eff_ebdx_markers
+    end
+
+    def cody_eff_ebdx_markers
+      foes = KIF::MoveEffect.foes(@battler)
+      return if foes.empty? || !@button
+      @nummoves.times do |i|
+        btn = @button["#{i}"]
+        move = @battler.moves[i]
+        next unless btn && btn.bitmap && move
+        results = foes.map { |f| KIF::MoveEffect.result(KIF::MoveEffect.value(move, @battler, f)) }.compact
+        best = results.max_by { |r| KIF::MoveEffect::RANK[r] }
+        next if best.nil? || best == :normal
+        y = EFF_MARK_CY - KIF::MoveEffect::STYLE[best][0].length   # rows are 2 px
+        [0, 198].each { |x0| KIF::MoveEffect.draw_marker(btn.bitmap, x0 + EFF_MARK_X, y, best) }
+      end
+    rescue => e
+      KIF.log("Effectiveness markers (EBDX) failed: #{e.message}")
+    end
+
+    # [[text, colour], ...] for the highlighted move, as PIF's info box words it
+    def cody_eff_ebdx_lines(move)
+      return [] if !move || move.statusMove?
+      foes = KIF::MoveEffect.foes(@battler)
+      return [] if foes.empty?
+      if foes.length == 1
+        st = KIF::MoveEffect::STYLE[KIF::MoveEffect.result(KIF::MoveEffect.value(move, @battler, foes[0]))]
+        return st ? [[_INTL(st[2]), st[1]]] : []
+      end
+      lines = []
+      foes.each do |f|
+        val = KIF::MoveEffect.value(move, @battler, f)
+        text = "#{f.name} #{KIF::MoveEffect.multiplier_text(val || ::Effectiveness::NORMAL_EFFECTIVE)}"
+        next if lines.any? { |l| l[0] == text }   # the same foe twice shares a line
+        st = KIF::MoveEffect::STYLE[KIF::MoveEffect.result(val)]
+        lines << [text, st ? st[1] : Color.white]
+      end
+      return lines.first(3)
+    end
+
+    def update
+      cody_eff_ebdx_update
+      cody_eff_ebdx_hint
+    end
+
+    def cody_eff_ebdx_hint
+      return unless KIF::MoveEffect.on? && @battler && @typeInd && !@typeInd.disposed?
+      btn = @button && @button["#{@index}"]
+      return unless btn
+      if @cody_eff_key != @index
+        @cody_eff_key = @index
+        lines = cody_eff_ebdx_lines(@battler.moves[@index])
+        bmp = @typeInd.bitmap
+        bmp.clear
+        pbSetSmallFont(bmp)
+        lines.each_with_index do |(text, colour), i|
+          # on EBDX's translucent black (its fight bar's), so the lines stay
+          # readable over the battle boxes they can reach in doubles
+          w = [bmp.text_size(text).width + 10, 192].min
+          bmp.fill_rect((192 - w) / 2, 24 * i + 4, w, 18, EFF_BACK)
+          pbDrawOutlineText(bmp, 0, 24 * i + 5, 192, 24, text, colour, KIF::MoveEffect::OUTLINE, 1)
+        end
+        n = [lines.length, 1].max
+        @typeInd.src_rect.set(0, 0, 192, 24 * n)
+        @typeInd.oy = 16 + 24 * (n - 1)   # the last line where EBDX's own hint sits
+        @cody_eff_count = lines.length
+      end
+      @typeInd.visible = @cody_eff_count.to_i > 0
+      @typeInd.x = btn.x
+      # a lower-row move: above its column's top button (EBDX's spot, the
+      # raised button's top edge, would cover that button's name)
+      top = @y && @y[@index % 2]
+      @typeInd.y = top ? [btn.y, top].min : btn.y
+    rescue => e
+      KIF.log("Effectiveness hint (EBDX) failed: #{e.message}")
+      @cody_eff_key = @index
+      @cody_eff_count = 0
+    end
+  end
+end
+
 # (the record of abilities the battle has revealed lives in C-BATTLE-03
 # Battle Info, which has no module, so it works with Graphical Changes Off)

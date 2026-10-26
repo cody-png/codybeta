@@ -435,7 +435,9 @@ class PokeBattle_Scene
       # KIF: lighter text with dark mode on
       dark = defined?(KIF::BattleUI) ? KIF::BattleUI.dark? : false
       bmp.font.color = dark ? Color.new(225, 225, 225) : Color.new(40, 40, 44)
-      bmp.draw_text(bmp.rect, text, 1)
+      # 5-argument form: 001_MKXP_Compatibility's draw_text takes no Rect
+      # (the Rect form raised, the rescue hid it: the line never showed)
+      bmp.draw_text(0, 0, bmp.width, bmp.height, text, 1)
     elsif @kif_win_display
       @kif_win_display.bitmap.dispose if @kif_win_display.bitmap
       @kif_win_display.dispose

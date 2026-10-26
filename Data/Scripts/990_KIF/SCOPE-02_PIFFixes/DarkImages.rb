@@ -7,7 +7,7 @@
 # setting needs it whatever the modules say. (Moved from F-UI-11, 2026-10-11.)
 #===============================================================================
 class AnimatedBitmap
-  alias kif_dm_initialize initialize unless method_defined?(:kif_dm_initialize)
+  alias kif_dm_initialize initialize unless method_defined?(:kif_dm_initialize) || private_method_defined?(:kif_dm_initialize)
 
   def initialize(file, *args)
     if file.is_a?(String) && file.end_with?("_dark") && !pbResolveBitmap(file)

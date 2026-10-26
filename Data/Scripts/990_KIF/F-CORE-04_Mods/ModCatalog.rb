@@ -41,6 +41,9 @@ module KIF
     RECORD     = ".kif_installed"
     ASSETS     = ".installed_assets"
     SKIP       = %w[modpacks]
+    # authors' git/editor files inside a mod folder; a mod's own dotfile
+    # (pokedex_voice_over's vendor/.project-root) still installs
+    JUNK       = %w[.git .gitignore .gitattributes .gitkeep .keep .idea .vscode .claude .DS_Store Thumbs.db desktop.ini]
     CACHE_TIME = 600   # seconds a fetched list is reused
     # GitHub trees (by head commit) and mod.json texts (by blob sha) kept
     # between sessions in the save folder, so an unchanged catalog costs one
@@ -372,7 +375,7 @@ module KIF
       by_folder = {}
       files.each do |path, info|
         top, rest = path.split("/", 2)
-        next if rest.nil? || top.start_with?(".") || SKIP.include?(top)
+        next if rest.nil? || top.start_with?(".") || SKIP.include?(top) || rest.split("/").any? { |s| JUNK.include?(s) }
         (by_folder[top] ||= {})[rest] = info
       end
       out = []
@@ -477,7 +480,7 @@ module KIF
       return File.join(d, item.folder) if d
       c = installed_index[item.id]
       return File.join((@installed_in || {})[item.id] || mods_dir, c) if c
-      return File.join(mods_dir, item.folder)
+      return File.join(mod_dirs.first, item.folder)   # a new install: the save folder's Mods when the game folder is read-only
     end
 
     # mod id => folder of the mods that load, read once (cleared on load and

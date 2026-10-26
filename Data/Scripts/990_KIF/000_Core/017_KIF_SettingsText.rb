@@ -121,6 +121,9 @@ module KIF
         "No battle info screen.",
         "In battle, INFO (or {ACTION}) shows stats, abilities, moves, the field and the speed order.",
         "Battle info opens with {ACTION} only; no INFO button on screen."],
+      "Foe Info" => [
+        "Battle Info lists a foe's abilities and moves from the start of the battle.",
+        "Battle Info shows a foe's abilities and moves only once the battle has shown them."],
       "Move Effectiveness" => [
         "The Fight menu doesn't show how effective moves are.",
         "The Fight menu marks how effective each move is against the foe."],
@@ -236,8 +239,8 @@ module KIF
         "The foe's types as text next to its battle box."],
       "Swap BattleGUI" => [
         "PIF's battle boxes and bars.",
-        "Mirasein's battle boxes and bars, version 1.",
-        "Mirasein's battle boxes and bars, version 2."],
+        "Mirasein's battle boxes and bars, version 1. No effect with EBDX Battles.",
+        "Mirasein's battle boxes and bars, version 2. No effect with EBDX Battles."],
       "Fusion Screen" => [
         "The DNA Splicers show PIF's preview.",
         "The DNA Splicers show names, types, real stats, and let you preview evolved forms."],
@@ -253,7 +256,7 @@ module KIF
         "The Skills page also shows IVs, EVs and base stats."],
       "Dark Mode" => [
         "Light Pokédex, Summary and PokéNav screens.",
-        "Dark Pokédex, Summary and PokéNav screens, and dark battle menus."],
+        "Dark Pokédex, Summary and PokéNav screens, and dark battle menus (no effect with EBDX Battles)."],
       "Improved Pokedex" => [
         "Catching a fusion registers only the fusion.",
         "Catching, hatching or evolving a fusion also registers its head and body."],

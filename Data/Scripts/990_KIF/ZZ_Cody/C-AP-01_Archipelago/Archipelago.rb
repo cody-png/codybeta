@@ -7,7 +7,7 @@
 #                      League, DeathLink (written when the client connects)
 #     scouts.json      client -> game: what each location holds (item, player)
 #     in/items.json    client -> game: every item received so far, with index
-#     in/death.json    client -> game: last DeathLink received (time, source)
+#     in/death.json    client -> game: last DeathLink received (seed, time, source)
 #     out/<n>.json     game -> client: seed, all checked location ids, goal,
 #                      death (the client sends them and deletes the file)
 #   Both sides write a temp file and rename it.
@@ -58,6 +58,7 @@
 #   nothing here is Kanto-only (badge_events names every shuffled badge).
 #   Goal all_gym_leaders: every badge location of the slot checked (each
 #   leader of the regions in play beaten). Traps ("TRAP_<kind>"): Traps.rb.
+#   Dexsanity (apworld 0.7.0): Dexsanity.rb (slot "dex_milestones", "game_mode").
 #===============================================================================
 class PokemonGlobalMetadata
   attr_accessor :kif_ap
@@ -118,8 +119,21 @@ module KIF
       return d.is_a?(Hash) && !d[:seed].to_s.empty?
     end
 
+    # KIF's MiniJSON indexes characters, and each index into a non-ASCII string
+    # costs its length: one accented Poke Ball made a big items.json take seconds to
+    # read after every received item. As \uXXXX the text is ASCII and parses
+    # to the same strings (a character past U+FFFF stays as it is).
+    def read_json(f)
+      text = File.read(f, encoding: "UTF-8").delete_prefix("\uFEFF")
+      text = text.gsub(/[^\x00-\x7F]/) { |c| c.ord > 0xFFFF ? c : format("\\u%04x", c.ord) }
+      h = KIF::Mods::MiniJSON.parse(text)
+      return h.is_a?(Hash) ? h : nil
+    rescue StandardError
+      return nil
+    end
+
     def read_slot
-      h = KIF::Mods.read_json(path("slot.json"))
+      h = read_json(path("slot.json"))
       return nil unless h && !h["seed"].to_s.empty? && h["locations"].is_a?(Array)
       return h
     rescue StandardError
@@ -158,7 +172,11 @@ module KIF
         n = int_or_nil(v)
         options[k.to_s] = n if n && OPTION_DEFAULTS.key?(k.to_s)
       end
+      milestones = (slot["dex_milestones"].is_a?(Array) ? slot["dex_milestones"] : []).map { |e|
+        e.is_a?(Array) && e.length == 2 ? e.map { |x| int_or_nil(x) } : nil
+      }.select { |e| e && !e.include?(nil) }
       return {
+        dex_milestones: milestones, game_mode: %w[classic remix].include?(slot["game_mode"].to_s) ? slot["game_mode"].to_s : nil,
         seed: slot["seed"].to_s, slot: slot["slot"].to_s, player: int_or_nil(slot["player"]) || 0,
         locations: slot["locations"].map { |x| int_or_nil(x) }.compact, death_link: slot["death_link"] ? true : false,
         aliases: aliases, badge_events: events, league_badges: (int_or_nil(slot["league_badges"]) || 8).clamp(0, 8),
@@ -176,6 +194,12 @@ module KIF
     # turns off, or nil when applying failed (the save is left as it was).
     # turned_on gets what the slot gives the save (shown after linking)
     def link!(slot, turned_on = [])
+      # refused before anything changes (applying the slot re-randomizes the save, which restore can't undo)
+      @link_error = Dex.refuse_reason(clean_slot(slot), slot["randomizer"])
+      if @link_error
+        KIF.log("Archipelago: link refused, save left as it was (#{@link_error})")
+        return nil
+      end
       turned_off = rand_turned_off
       old = $PokemonGlobal.kif_ap
       saved = KIF::Rand.capture
@@ -200,7 +224,10 @@ module KIF
       $Trainer.money = money if money >= 0
       town = free_fly_town
       turned_on << _INTL("Fly to {1}", pbGetMapNameFromId(town)) if town
-      KIF.log("Archipelago: save linked to #{slot['slot']} (seed #{slot['seed']}, #{slot['locations'].length} locations)")
+      n = Dex.scan
+      turned_on << (n == 1 ? _INTL("1 Pokedex check for a Pokemon the save already has") :
+                             _INTL("{1} Pokedex checks for Pokemon the save already has", n)) if n > 0
+      KIF.log("Archipelago: save linked to #{slot['slot']} (seed #{slot['seed']}, #{slot['locations'].length} locations, the save plays #{Dex.save_mode})")
       return turned_off
     end
 
@@ -291,9 +318,10 @@ module KIF
       return id
     end
 
-    # ... of the event running now
+    # ... of the event running now (the interpreter keeps the last event's id
+    # after it ends: fishing, unfusing or a bag item would take its check)
     def location_here
-      return nil unless on? && $game_map
+      return nil unless on? && $game_map && pbMapInterpreterRunning?
       ev = (pbMapInterpreter.instance_variable_get(:@event_id) rescue 0).to_i
       return location_of($game_map.map_id, ev)
     end
@@ -314,7 +342,7 @@ module KIF
       mt = (File.mtime(f) rescue nil)
       if mt && mt != @scouts_mtime
         @scouts_mtime = mt
-        h = KIF::Mods.read_json(f)
+        h = read_json(f)
         @scouts = (h && h["seed"].to_s == data[:seed] && h["locations"].is_a?(Hash)) ? h["locations"] : nil
       end
       s = @scouts && @scouts[id.to_s]
@@ -360,7 +388,7 @@ module KIF
     # Giftsanity: a Pokemon or egg handed out at a gift location (the player
     # keeps it; only the first one the event gives counts)
     def gift_received
-      return unless on? && $game_map
+      return unless on? && $game_map && pbMapInterpreterRunning?   # as location_here
       ev = (pbMapInterpreter.instance_variable_get(:@event_id) rescue 0)
       id = location_of($game_map.map_id, ev, GIFT_BASE)
       return unless id
@@ -383,7 +411,7 @@ module KIF
     # The KIF Client's last status.json: :connected, :disconnected (running,
     # no server) or :gone (not running, or another seed's client)
     def client_status
-      h = KIF::Mods.read_json(path("in", "status.json"))
+      h = read_json(path("in", "status.json"))
       return [:gone, ""] unless h.is_a?(Hash) && h["seed"].to_s == data[:seed]
       return [:gone, ""] if (Time.now.to_f - h["time"].to_f).abs > STATUS_STALE
       return [h["connected"] == true ? :connected : :disconnected, h["server"].to_s]
@@ -484,7 +512,7 @@ module KIF
       mt = (File.mtime(f) rescue nil)
       return if mt.nil? || mt == @mtime
       @mtime = mt
-      h = KIF::Mods.read_json(f)
+      h = read_json(f)
       return unless h
       if h["seed"].to_s != d[:seed]
         KIF.log("Archipelago: items.json is for seed #{h['seed']}, this save is linked to #{d[:seed]}; ignored")
@@ -501,8 +529,10 @@ module KIF
       mt = (File.mtime(f) rescue nil)
       return if mt.nil? || mt == @death_mtime
       @death_mtime = mt
-      h = KIF::Mods.read_json(f)
-      @death = h if h && h["time"].to_f > d[:death_time].to_f
+      h = read_json(f)
+      # a death from another seed's game is not this save's (a file without a
+      # seed comes from an older KIF Client)
+      @death = h if h && (h["seed"].nil? || h["seed"].to_s == d[:seed]) && h["time"].to_f > d[:death_time].to_f
     end
 
     def received_text(name, who, d)
@@ -546,6 +576,7 @@ module KIF
         end
         @queue.shift
       end
+      Dex.tell
       Traps.tell_normal
       Traps.tell_curse_lifted
       Traps.release_locks
@@ -573,6 +604,7 @@ module KIF
     def busy_reason
       return "not on the map" unless $scene.is_a?(Scene_Map)
       return "a message or menu is open" if $game_temp.message_window_showing || $game_temp.in_menu
+      return "a battle is starting or ending" if $game_temp.in_battle
       return "an event is running (map #{$game_map.map_id}, event #{pbMapInterpreter.get_self.id rescue '?'})" if pbMapInterpreterRunning?
       return "the player is moving"
     rescue StandardError
@@ -582,6 +614,8 @@ module KIF
     def quiet?
       return false unless $scene.is_a?(Scene_Map)
       return false if $game_temp.message_window_showing || $game_temp.in_menu
+      # a wild battle's intro and fade-out update the map (Battle trap inside a battle)
+      return false if $game_temp.in_battle
       return false if pbMapInterpreterRunning?
       return false if $game_player.moving? || $game_player.move_route_forcing
       return true
@@ -597,6 +631,7 @@ module KIF
         @timer = POLL_FRAMES   # just loaded: look at once
         d = data
         d[:dirty] = true if !d[:checked].empty? || d[:goal]   # send them again (see the header)
+        Dex.scan   # Pokemon registered while unlinked or offline
       end
       @timer += 1
       return if @timer < POLL_FRAMES
@@ -642,10 +677,11 @@ module KIF
       on = []
       off = link!(slot, on)
       unless off
-        pbMessage(_INTL("The Archipelago settings couldn't be applied, so the save was not linked. Details are in the log."))
+        pbMessage(@link_error || _INTL("The Archipelago settings couldn't be applied, so the save was not linked. Details are in the log."))
         return
       end
       pbMessage(_INTL("Linked. Keep the KIF Client running to send checks and get items."))
+      pbMessage(_INTL("This save plays {1}; the Pokedex checks follow its wild Pokemon.", Dex.mode_name(Dex.save_mode))) if Dex.slot?
       pbMessage(_INTL("Archipelago needs the normal doors and places the items itself, so these are off for this save: {1}.", off.join(", "))) unless off.empty?
       pbMessage(_INTL("This Archipelago game also gives you: {1}.", on.join(", "))) unless on.empty?
     end

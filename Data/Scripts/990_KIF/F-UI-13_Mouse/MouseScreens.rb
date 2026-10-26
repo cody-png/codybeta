@@ -152,7 +152,8 @@ class PokemonStorageScene
     elsif m.over_rect?(box.x, box.y, 324, 30, box.viewport)
       px, _py = m.view_xy(box.viewport)
       slot = -1
-      if m.left && @kif_mouse_sel == -1 && (px < box.x + 81 || px >= box.x + 243)
+      # PIF puts the cursor back on the name after a box switch without pbSetArrow (still -4/-5)
+      if m.left && [-1, -4, -5].include?(@kif_mouse_sel) && (px < box.x + 81 || px >= box.x + 243)
         m.swallow!   # the ends of the box name: previous / next box
         return m.steer(px < box.x + 81 ? -4 : -5)
       end
@@ -241,17 +242,25 @@ class PokemonSummary_Scene
   def pbUpdate
     kif_mouse_summary_update
     m = KIF::Mouse
-    return unless m.clicked? && m.over_rect?(KIF_MOUSE_TABS_X, 4, KIF_MOUSE_TAB_W * 5, 52)
+    # KIF-ER (Innates On) draws 6 tabs, 44 px wide from x=222, and keeps its own page
+    er = respond_to?(:kifer_tab?) && kifer_tab? && defined?(KIFER::Gfx::NEW_X)
+    x0, w, n = er ? [KIFER::Gfx::NEW_X[0], 48, 6] : [KIF_MOUSE_TABS_X, KIF_MOUSE_TAB_W, 5]
+    return unless m.clicked? && m.over_rect?(x0, 4, w * n, 52)
     # only the page view itself (not its move list, markings or menus)
     return unless caller_locations(1, 1)[0].label.to_s.end_with?("pbScene")
     m.swallow!
     return if @pokemon.egg?
-    page = (m.x - KIF_MOUSE_TABS_X) / KIF_MOUSE_TAB_W + 1
-    return if page == @page || page < 1 || page > 5
-    return pbPlayBuzzerSE if page == 5 && (!$Trainer.has_pokedex || !@is_player)
-    @page = page
+    page = (m.x - x0) / w + 1
+    return if page == (er ? @kifer_vpage : @page) || page < 1 || page > n
+    return pbPlayBuzzerSE if page == n && (!$Trainer.has_pokedex || !@is_player)
     @ribbonOffset = 0
     pbPlayCursorSE
+    if er
+      @kifer_vpage = page
+      return kifer_show_vpage
+    end
+    @page = page
+    disposeContestStats if respond_to?(:disposeContestStats)   # as PIF's page keys do (contest condition bars)
     drawPage(@page)
   end
 end
@@ -326,15 +335,17 @@ if defined?(FightWindowEBDX)
 
     def update
       kif_mouse_ebdx_update
-      return unless KIF::Mouse.active? && @button.is_a?(Hash) && @nummoves
-      @nummoves.times do |i|
-        s = @button["#{i}"]
-        next unless s && KIF::Mouse.over_sprite?(s)
-        if i != @index
-          @index = i
-          pbSEPlay("EBDX/SE_Select1", 80)
-        end
-        break
+      m = KIF::Mouse
+      return unless m.active? && @button.is_a?(Hash) && @nummoves
+      hit = (0...@nummoves).find { |i| (s = @button["#{i}"]) && m.over_sprite?(s) }
+      if hit.nil?
+        return unless m.left
+        # the Mega button: the Mega key; anywhere else: the click uses no move
+        return m.press!(Input::ACTION) if @showMega && m.over_sprite?(@megaButton)
+        m.swallow!
+      elsif hit != @index
+        @index = hit
+        pbSEPlay("EBDX/SE_Select1", 80)
       end
     end
   end
@@ -403,7 +414,8 @@ class PokemonLoad_Scene
         next unless m.over_sprite?(@sprites[k])
         return m.press!(k == "leftarrow" ? Input::LEFT : Input::RIGHT)
       end
-      if @show_language_option && @kif_mouse_continue && m.over_sprite?(lang)
+      # no save (continue -1): the keys can't reach the globe either, and -1 would load an empty save
+      if @show_language_option && (@kif_mouse_continue || -1) >= 0 && m.over_sprite?(lang)
         kif_mouse_select(cw, @kif_mouse_continue) if cw.index != @kif_mouse_continue
         return m.press!(Input::UP)   # MultiSaves: UP on Continue picks the globe
       end
@@ -515,11 +527,15 @@ class KifSettingsScreen
     m = KIF::Mouse
     o = r.opt
     mode = value_mode(r)
-    return if mode == :button || r.action   # USE opens it
-    m.swallow!
-    return locked_buzz(r) if locked_by(o)
+    return if mode == :button   # USE opens it
     vy = (mode == :below) ? y + ROW_H + 1 : y + 2
     on_value_line = m.y >= vy && m.y < vy + 22
+    segs = KIF::SettingsScreen.choices?(o) && mode != :arrows
+    widths = segs ? o.values.map { |v| PF.width(PF::TEXT, PF.utf8(v.to_s)) + 12 } : []
+    on_segs = segs && on_value_line && m.x >= VAL_X1 - widths.sum && m.x < VAL_X1
+    return if r.action && !on_segs   # an installed mod: its Off/On switches it, the rest is USE (its menu)
+    m.swallow!
+    return locked_buzz(r) if locked_by(o)
     if KIF::SettingsScreen.slider?(o)
       x0 = VAL_X1 - 170
       x1 = VAL_X1 - 60
@@ -532,11 +548,9 @@ class KifSettingsScreen
       pbPlayCursorSE
       return after_change
     end
-    if KIF::SettingsScreen.choices?(o) && mode != :arrows
-      vals = o.values.map { |v| PF.utf8(v.to_s) }
-      widths = vals.map { |v| PF.width(PF::TEXT, v) + 12 }
+    if segs
       x = VAL_X1 - widths.sum
-      if on_value_line && m.x >= x && m.x < VAL_X1
+      if on_segs
         k = 0
         while k < widths.length - 1 && m.x >= x + widths[k]
           x += widths[k]

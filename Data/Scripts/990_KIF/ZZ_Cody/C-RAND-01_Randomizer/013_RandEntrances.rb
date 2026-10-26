@@ -1155,10 +1155,11 @@ module KIF
         lv = (old * f).round.clamp(1, GameData::GrowthRate.max_level)
         lv = [lv, cap].min if cap
         return if lv == old
-        natural = keep_moves ? nil : (pkmn.getMoveList.select { |m| m[0] <= old }.map { |m| m[1] }.last(4) rescue nil)
+        # the set PIF's reset_moves gives at the old level: latest copy of each move, then the last four
+        natural = keep_moves ? nil : (pkmn.getMoveList.select { |m| m[0] <= old }.map { |m| m[1] }.reverse.uniq.reverse.last(Pokemon::MAX_MOVES) rescue nil)
         pkmn.level = lv
         pkmn.calc_stats
-        pkmn.reset_moves if natural && pkmn.moves.map(&:id).sort == natural.uniq.sort
+        pkmn.reset_moves if natural && pkmn.moves.map(&:id).sort == natural.sort
       end
 
       def self.scale_wild(pkmn, map_id = nil)

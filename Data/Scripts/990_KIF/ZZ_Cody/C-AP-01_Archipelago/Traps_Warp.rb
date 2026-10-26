@@ -11,8 +11,10 @@
 #   Waits (stays in the save) while: in the Safari Zone or the Bug-Catching
 #   Contest (they end through their own gates), in the Pokemon League (the
 #   lobby, Elite Four, Champion, Hall of Fame), someone walks with the player
-#   (an escort), during the intro, or with no Pokemon; never on Pinkan Island
-#   (Traps.run_one) and never to a Center there (home instead).
+#   (an escort), during the intro, while a scene holds the player (movement
+#   lock switch or the player hidden: Moonlit Forest's dream), or with no
+#   Pokemon; never on Pinkan Island (Traps.run_one) and never to a Center
+#   there (home instead). Out of a gym the gym's type is reset (pbStartOver).
 #   Party Lock and Confusion don't matter here: the trip doesn't touch the
 #   party, and Confusion only turns the buttons while walking.
 #===============================================================================
@@ -39,6 +41,8 @@ module KIF
         return false if LEAGUE_MAPS.include?($game_map.map_id)
         return false if $game_switches[SWITCH_DURING_INTRO] || $Trainer.party.empty?
         return false if $game_player.pbHasDependentEvents?
+        # a scene that holds the player (Moonlit Forest's dream): only its own events let go
+        return false if $game_switches[SWITCH_LOCK_PLAYER_MOVEMENT] || $game_player.transparent
         return !warp_target.nil?
       rescue StandardError
         return false
@@ -49,6 +53,8 @@ module KIF
         pbMessage(t[4] == :center ? _INTL("A Warp Trap from {1}! You were sent back to the last Pokémon Center.", who) :
                                     _INTL("A Warp Trap from {1}! You were sent back home.", who))
         KIF.log("Archipelago: Warp trap from map #{$game_map.map_id} to #{t[0]} (#{t[4]})")
+        # out of a gym without its exit tiles: as pbStartOver, or trainers everywhere keep its type
+        $game_variables[VAR_CURRENT_GYM_TYPE] = -1
         KIF::Rand::ER.do_return(t)
       end
     end

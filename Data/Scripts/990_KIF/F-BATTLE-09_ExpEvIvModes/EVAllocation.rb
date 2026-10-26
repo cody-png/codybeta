@@ -12,7 +12,6 @@
 #   spend points on (they still pile up, for when it's turned off).
 #   EVs Train Mode: foes yield 0 EVs (ExpEvIvModes.rb), so the only points
 #   banked are a held Power item's +4 (doubled by Pokérus).
-#   Mockups: Claude Docs/Base KIF/mockups/EV mockups.
 #===============================================================================
 KIF::Options.define(:ev_alloc, 0, :save)
 
@@ -57,37 +56,54 @@ module KIF
       return n
     end
 
-    # +STEP (or what's left) into a stat; returns how many moved
+    # +STEP (or what's left) into a stat; returns how many moved (nil:
+    # refused, see restat). Vitamins and Wings don't count the points, so the
+    # 510 total is checked here too.
     def self.give(pkmn, stat)
-      n = [STEP, pkmn.kif_ev_pool, Pokemon::EV_STAT_LIMIT - pkmn.ev[stat]].min
+      n = [STEP, pkmn.kif_ev_pool, Pokemon::EV_STAT_LIMIT - pkmn.ev[stat], Pokemon::EV_LIMIT - ev_total(pkmn)].min
       return 0 if n <= 0
-      pkmn.ev[stat] += n
-      pkmn.kif_ev_pool -= n
-      pkmn.calc_stats
-      return n
+      return restat(pkmn) { pkmn.ev[stat] += n; pkmn.kif_ev_pool -= n } ? n : nil
     end
 
     def self.take(pkmn, stat)
       n = [STEP, pkmn.ev[stat]].min
       return 0 if n <= 0
-      pkmn.ev[stat] -= n
-      pkmn.kif_ev_pool += n
-      pkmn.calc_stats
-      return n
+      return restat(pkmn) { pkmn.ev[stat] -= n; pkmn.kif_ev_pool += n } ? n : nil
     end
 
     # Every EV back into points
     def self.reset(pkmn)
       total = ev_total(pkmn)
-      STATS.each { |s| pkmn.ev[s] = 0 }
-      pkmn.kif_ev_pool += total
+      return restat(pkmn) { STATS.each { |s| pkmn.ev[s] = 0 }; pkmn.kif_ev_pool += total } ? total : nil
+    end
+
+    # Changes the EVs (the block), then the stats. PIF's calc_stats keeps the
+    # HP lost, so fewer HP EVs could faint a hurt Pokémon: that change is
+    # undone and false returned (a 1-HP floor gave HP back once the EVs were
+    # given again, past No healing). More HP EVs never revive a fainted one
+    # (@hp: hp= won't touch a fainted Pokémon under No reviving).
+    def self.restat(pkmn)
+      hp = pkmn.hp
+      ev = pkmn.ev.clone
+      pool = pkmn.kif_ev_pool
+      yield
       pkmn.calc_stats
-      return total
+      if hp > 0 && pkmn.hp <= 0
+        STATS.each { |s| pkmn.ev[s] = ev[s] }
+        pkmn.kif_ev_pool = pool
+        pkmn.calc_stats
+        pkmn.instance_variable_set(:@hp, hp)
+        return false
+      end
+      pkmn.instance_variable_set(:@hp, 0) if hp <= 0
+      return true
     end
 
     # The Skills page offers spending when points wait or the option is on
+    # (not with Battles & Challenges Off: USE there is PIF's item menu)
     def self.available?(pkmn)
       return false if !pkmn || pkmn.egg?
+      return false if defined?(KIF::Modules) && !KIF::Modules.active?("F-BATTLE-09_ExpEvIvModes")
       return on? || pkmn.kif_ev_pool > 0
     end
   end
@@ -98,9 +114,9 @@ class PokeBattle_Battle
   alias kif_eva_pbGainEVsOne pbGainEVsOne unless method_defined?(:kif_eva_pbGainEVsOne)
 
   def pbGainEVsOne(idxParty, defeatedBattler)
-    return kif_eva_pbGainEVsOne(idxParty, defeatedBattler) unless KIF::EVAlloc.on?
     pkmn = pbParty(0)[idxParty]
-    return kif_eva_pbGainEVsOne(idxParty, defeatedBattler) unless pkmn
+    # (a Pokémon already past 510: SCOPE-02_PIFFixes/EVsPast510.rb)
+    return kif_eva_pbGainEVsOne(idxParty, defeatedBattler) unless pkmn && KIF::EVAlloc.on?
     before = pkmn.ev.clone
     ret = kif_eva_pbGainEVsOne(idxParty, defeatedBattler)
     gained = KIF::EVAlloc::STATS.sum { |s| pkmn.ev[s].to_i - before[s].to_i }
@@ -117,16 +133,10 @@ class PokeBattle_Battle
   # after PIF's "You defeated ..." and the trainer's last words; anything
   # else before PIF's end-of-battle lines, while the battle is still shown.
   alias kif_eva_pbEndOfBattle pbEndOfBattle unless method_defined?(:kif_eva_pbEndOfBattle)
-  alias kif_eva_pbGainMoney pbGainMoney unless method_defined?(:kif_eva_pbGainMoney)
 
   def pbEndOfBattle
     kif_eva_show_points unless @decision == 1 || @decision == 4
     return kif_eva_pbEndOfBattle
-  end
-
-  def pbGainMoney(*args)
-    kif_eva_show_points
-    return kif_eva_pbGainMoney(*args)
   end
 
   def kif_eva_show_points
@@ -137,6 +147,16 @@ class PokeBattle_Battle
     @kif_eva_gained = nil
   end
 end
+
+# Prepended, not aliased: a mod that redefines pbGainMoney with a plain def
+# (the catalog's "pbGainMoney Base") would drop the win/catch line
+module KIF::EVAlloc::MoneyLine
+  def pbGainMoney(*args)
+    kif_eva_show_points
+    return super
+  end
+end
+PokeBattle_Battle.prepend(KIF::EVAlloc::MoneyLine) unless PokeBattle_Battle.ancestors.include?(KIF::EVAlloc::MoneyLine)
 
 #-------------------------------------------------------------------------------
 # Summary, Skills page: the points line, and spending them
@@ -151,7 +171,13 @@ class PokemonSummary_Scene
 
   # also called by the IV/EV Skills page (F-UI-04), which draws without this hook
   def kif_eva_page_three_points
-    kif_eva_draw_points if @is_player && KIF::EVAlloc.available?(@pokemon) && !@contestpage
+    kif_eva_draw_points if kif_eva_here?
+  end
+
+  # USE spends points here: not in battle (PIF ignores USE there) or on the
+  # contest condition page
+  def kif_eva_here?
+    return @is_player && !@inbattle && !@contestpage && KIF::EVAlloc.available?(@pokemon)
   end
 
   KIF_EVA_YS = [70, 114, 146, 178, 210, 242]
@@ -185,7 +211,7 @@ class PokemonSummary_Scene
   alias kif_eva_pbOptions pbOptions unless method_defined?(:kif_eva_pbOptions)
 
   def pbOptions
-    if @page == 3 && @is_player && !@inbattle && KIF::EVAlloc.available?(@pokemon)
+    if @page == 3 && kif_eva_here?
       kif_eva_allocate
       return true
     end
@@ -214,8 +240,7 @@ class PokemonSummary_Scene
           # given/taken here: at 60+ fps the Frame rate's repeat? doesn't see a pressed key
           if row
             st = KIF::EVAlloc::STATS[cursor]
-            n = m.x >= 368 ? KIF::EVAlloc.give(@pokemon, st) : KIF::EVAlloc.take(@pokemon, st)
-            n > 0 ? pbPlayCursorSE : pbPlayBuzzerSE
+            kif_eva_sound(m.x >= 368 ? KIF::EVAlloc.give(@pokemon, st) : KIF::EVAlloc.take(@pokemon, st))
             redraw.call
           end
           next
@@ -234,18 +259,28 @@ class PokemonSummary_Scene
         pbPlayCursorSE
         redraw.call
       elsif Input.repeat?(Input::RIGHT)
-        KIF::EVAlloc.give(@pokemon, stat) > 0 ? pbPlayCursorSE : pbPlayBuzzerSE
+        kif_eva_sound(KIF::EVAlloc.give(@pokemon, stat))
         redraw.call
       elsif Input.repeat?(Input::LEFT)
-        KIF::EVAlloc.take(@pokemon, stat) > 0 ? pbPlayCursorSE : pbPlayBuzzerSE
+        kif_eva_sound(KIF::EVAlloc.take(@pokemon, stat))
         redraw.call
       elsif Input.trigger?(Input::ACTION)
         if KIF::EVAlloc.ev_total(@pokemon) > 0 && pbConfirmMessage(_INTL("Put all of {1}'s EVs back into points?", @pokemon.name))
-          KIF::EVAlloc.reset(@pokemon)
+          kif_eva_sound(nil) unless KIF::EVAlloc.reset(@pokemon)
         end
         redraw.call
       end
     end
     drawPage(@page)
+  end
+
+  # n EVs moved; nil: refused, as the Pokémon would faint
+  def kif_eva_sound(n)
+    if n.nil?
+      pbPlayBuzzerSE
+      pbMessage(_INTL("{1} would faint without those HP EVs.", @pokemon.name))
+    else
+      n > 0 ? pbPlayCursorSE : pbPlayBuzzerSE
+    end
   end
 end

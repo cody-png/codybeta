@@ -1,9 +1,7 @@
-KIF 1.2.1
-- Fixes: the Bug-Catching Contest no longer crashes when the Randomizer module is Off.
-- Modules: Battles & Challenges Off now also turns off KIF's critical captures and Challenge Modifiers, and Pokemon & Fusion Off turns off Head Legendary Breeding.
-- Updates: the updater gives up after many failed downloads in a row, warns about unsaved progress when you update from inside the game, and finishes under Wine or Proton (Steam Deck) even when a file is in use.
-- Saves: an unreadable save no longer crashes the save menu, and when no save can be read the load screen opens its newest backup. Saving writes a temporary file first, so a failed save keeps the old one.
-- Mods: catalog updates go to the copy of a mod that actually loads, and a mod you update by hand in the save folder's Mods folder wins over the game's older copy.
-- Gate, reward and Celadon Cafe prices read like the Poke Mart's ($200,000).
-- New Game+: Pokemon of unknown species are set aside instead of turning into Pichu.
-- Save menu and load screen messages use the normal text box.
+KIF 1.2.5
+- EBDX: move effectiveness shows in the Fight menu; battle boxes appear as each Pokemon is sent out, so the foe's lead stays hidden; foe type icons, KIF's shiny star, gender icons and level-up stat windows now show there too.
+- Battle Info has a Log page: every message and ability pop-up of the battle so far, by turn (green dot: about your Pokemon, red: about the foe's).
+- From the next update on, the game closes and restarts by itself a few seconds after the download (this one may still take about 20 seconds).
+- Self-Battle's Stat Tracker line shows again in PIF's battle screen.
+- Swap BattleGUI and Dark Mode's battle menus say they have no effect with EBDX Battles.
+- In PIF's battle screen, the lower Pokemon's status tag in doubles is no longer cut off by the menu.

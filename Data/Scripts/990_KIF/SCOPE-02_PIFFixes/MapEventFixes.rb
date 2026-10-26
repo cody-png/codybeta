@@ -100,21 +100,19 @@ def pbDexDataOffset(dexdata, species, offset)
   dexdata.seek_species(species, offset) if dexdata.respond_to?(:seek_species)
 end
 
-# 8. Prices in event texts: PIF wrote some "$200 000" (a comma would split a
-#    \ch[] choice), and the same event then also wrote "$50000" or "15,000$"
-#    (the Celadon Café sellers: "$15 000" in the choice list, "15,000$" in the
-#    question, "$15,000" in the rest). Every price in an event that has a
-#    "$200 000" one now reads like PIF's Poké Mart ("$200,000"); a \ch[]
+# 8. Prices in event texts: PIF wrote them "$200 000" (a comma would split a
+#    \ch[] choice), "$50000", "15,000$" or "50$", sometimes three ways in one
+#    event (the Celadon Café sellers). Every price written in an event's text
+#    or choices now reads like PIF's Poké Mart ("$200,000", "$50"); a \ch[]
 #    choice with a comma is quoted, which \ch[] reads. Only the text changes:
-#    what is charged is the event's own money commands. A line or choice the
-#    loaded language translates (french.dat) is left alone: the English text
-#    is its translation key. The maps (and common event 77) are the ones
-#    whose events have such a price.
+#    what is charged is the event's own money commands. A price shown from a
+#    game variable ("$\v[15]") is formatted when the message shows (below).
+#    A line or choice the loaded language translates (french.dat) is left
+#    alone: the English text is its translation key. Maps are done as they
+#    load, common events once the language is loaded (Cody, 2026-10-24: all
+#    of them).
 module KIF
   module EventPrices
-    MAPS = [15, 18, 22, 65, 66, 122, 405, 407, 415, 463, 501]
-    SPACED = /\$\d{1,3}(?: \d{3})+(?!\d)/
-
     def self.money(digits)
       return "$" + digits.delete(" ,").to_i.to_s_formatted
     end
@@ -122,7 +120,17 @@ module KIF
     # "$200 000", "$50000", "15,000$", "50$" -> "$200,000", "$50,000", "$15,000", "$50"
     def self.prices(text)
       t = text.gsub(/(?<![\d$,])(\d{1,3}(?:,\d{3})+|\d+)\$/) { money($1) }
-      return t.gsub(/\$(\d{1,3}(?:[ ,]\d{3})+|\d+)(?![\d,])/) { money($1) }
+      return t.gsub(/\$(\d{1,3}(?:[ ,]\d{3})+|\d+)(?!\d|,\d)/) { money($1) }
+    end
+
+    # "$\v[15]" with an Integer in variable 15 -> "$5,000" (a String or nil
+    # is left for PIF to print)
+    def self.variable_prices(text)
+      return text.gsub(/\$\\v\[(\d+)\]/i) do
+        whole = $&
+        v = $game_variables ? $game_variables[$1.to_i] : nil
+        v.is_a?(Integer) ? money(v.to_s) : whole
+      end
     end
 
     def self.fix_text(text)
@@ -140,24 +148,15 @@ module KIF
       return s.to_s.dup.force_encoding("UTF-8")
     end
 
-    # The shown texts of one command: a Show Text line or a choice list
-    def self.texts(cmd)
-      return [utf8(cmd.parameters[0])] if [101, 401].include?(cmd.code)
-      return cmd.parameters[0].map { |s| utf8(s) } if cmd.code == 102 && cmd.parameters[0].is_a?(Array)
-      return []
+    def self.fix_map(map, map_id)
+      map.events.each_value { |ev| ev.pages.each { |pg| fix_list(pg.list, map_id) if pg.list } }
     end
 
-    # pages: an event's pages (or a common event); true when it was one to fix
-    def self.fix_event(pages, map_id)
-      lists = pages.map { |pg| pg.list || [] }
-      return false unless lists.flatten.any? { |c| texts(c).any? { |t| t =~ SPACED } }
-      lists.each { |list| fix_list(list, map_id) }
-      return true
-    end
-
+    # list: an event page's commands (or a common event's)
     def self.fix_list(list, map_id)
       list.each_with_index do |cmd, i|
         if cmd.code == 102 && cmd.parameters[0].is_a?(Array)
+          next unless cmd.parameters[0].any? { |s| s.to_s.include?("$") }
           cmd.parameters[0] = cmd.parameters[0].map do |s|
             u = utf8(s)
             f = prices(u)
@@ -168,6 +167,7 @@ module KIF
         next unless cmd.code == 101
         lines = [cmd]
         lines << list[i + lines.length] while list[i + lines.length] && list[i + lines.length].code == 401
+        next unless lines.any? { |c| c.parameters[0].to_s.include?("$") }
         # joined the way Interpreter#command_101 joins them
         text = lines.map { |c| utf8(c.parameters[0]) }.inject { |a, t| (t != "" && !a.end_with?(" ")) ? "#{a} #{t}" : a + t }
         fixed = fix_text(text)
@@ -179,26 +179,46 @@ module KIF
   end
 end
 
-KIF::EventPrices::MAPS.each do |map_id|
-  KIF::MapPatches.add(map_id, "PIF fix: price format") do |map|
-    map.events.each_value { |ev| KIF::EventPrices.fix_event(ev.pages, map_id) }
-  end
-end
+# Every map as it loads (after KIF::MapPatches)
+alias kif_mef_load_data load_data unless defined?(kif_mef_load_data)
 
-# Common events (the Saffron gate guard, 77) once the language is loaded:
-# they are read at start-up, before Game.set_up_system loads it
-module Game
-  class << self
-    alias kif_mef_set_up_system set_up_system unless method_defined?(:kif_mef_set_up_system)
-
-    def set_up_system(*args)
-      ret = kif_mef_set_up_system(*args)
-      begin
-        ($data_common_events || []).each { |ce| KIF::EventPrices.fix_event([ce], 0) if ce }
-      rescue => e
-        KIF.log("Common event prices not changed: #{e.class}: #{e.message}")
-      end
-      return ret
+def load_data(filename, *args)
+  ret = kif_mef_load_data(filename, *args)
+  if filename.is_a?(String) && filename =~ /Map(\d+)\.rxdata\z/ && ret.respond_to?(:events) && ret.events
+    begin
+      KIF::EventPrices.fix_map(ret, $1.to_i)
+    rescue => e
+      KIF.log("Map prices not changed (#{filename}): #{e.class}: #{e.message}")
     end
   end
+  return ret
+end
+
+# Common events each time a language is loaded (start-up, and the load
+# screen's flag, which never reloads them): read again from the file, so a
+# line the new language translates keeps PIF's text, its translation key
+alias kif_mef_pbLoadMessages pbLoadMessages unless defined?(kif_mef_pbLoadMessages)
+
+def pbLoadMessages(file)
+  ret = kif_mef_pbLoadMessages(file)
+  if $data_common_events
+    begin
+      ces = load_data("Data/CommonEvents.rxdata")
+      ces.each { |ce| KIF::EventPrices.fix_list(ce.list, 0) if ce && ce.list }
+      $data_common_events = ces
+    rescue => e
+      KIF.log("Common event prices not changed: #{e.class}: #{e.message}")
+    end
+  end
+  return ret
+end
+
+# A price from a game variable ("$\v[15]", "\C[5]$\V[329]": tutors, gamblers'
+# bets, debts) prints like the Poké Mart, before pbMessageDisplay fills \v[]
+# in (011_Messages.rb:678-682). Choices don't fill \v[] in, so only messages.
+alias kif_mef_pbMessageDisplay pbMessageDisplay unless defined?(kif_mef_pbMessageDisplay)
+
+def pbMessageDisplay(msgwindow, message, *args, &block)
+  message = KIF::EventPrices.variable_prices(message) if message.is_a?(String) && message.include?("$")
+  return kif_mef_pbMessageDisplay(msgwindow, message, *args, &block)
 end

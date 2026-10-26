@@ -7,14 +7,18 @@
 # engine calls dispose on unrelated helpers). GenOneStyle gets that dispose
 # as its own; on anything else the stray one does nothing (before, it could
 # only crash on another object's missing @sprites/@viewport).
+# F12 on phones, Linux and macOS runs IntroScreen.rb again in the same game,
+# which puts its dispose back on Object: so the test is whether Object's
+# dispose is still the do-nothing one made here, not who owns GenOneStyle's.
 #===============================================================================
-if defined?(GenOneStyle) && GenOneStyle.instance_method(:dispose).owner == Object
+if defined?(GenOneStyle) && (kif_td = Object.instance_method(:dispose)).owner == Object && kif_td != $kif_td_noop
   kif_td_private = Object.private_method_defined?(:dispose)
-  GenOneStyle.send(:define_method, :dispose, Object.instance_method(:dispose))
+  GenOneStyle.send(:define_method, :dispose, kif_td)
   GenOneStyle.send(:public, :dispose)
 
   class Object
     def dispose; end
   end
   Object.send(:private, :dispose) if kif_td_private
+  $kif_td_noop = Object.instance_method(:dispose)
 end

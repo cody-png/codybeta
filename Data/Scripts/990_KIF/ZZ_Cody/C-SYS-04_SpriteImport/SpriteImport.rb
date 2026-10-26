@@ -308,9 +308,10 @@ module KIF
     #   second copy  -> left (the first one of a name wins)
     #---------------------------------------------------------------------------
     def reset_tally
-      @tally = { moved: 0, same: 0, eggs: 0, skipped: 0, errors: 0, odd: 0, conflicts: {}, placed: {} }
+      @tally = { moved: 0, same: 0, eggs: 0, skipped: 0, errors: 0, odd: 0, game_only: 0, conflicts: {}, placed: {} }
       @dirs_made = {}
       @names_dir = nil
+      @lists = nil
     end
 
     # An installed file against a zip entry: a different size is different;
@@ -417,10 +418,15 @@ module KIF
     # question doesn't come back every start (a changed file asks again)
     KEPT_LIST = "KIF_import_kept.txt"
 
+    # each list is read once per run (reset_tally), not once per sprite
     def in_list?(name, key)
       return false if KIF::Paths.game_writable? || key.nil?
-      list = File.join(KIF.save_dir, name)
-      return File.file?(list) && File.read(list).split(/\r?\n/).include?(key)
+      @lists ||= {}
+      @lists[name] ||= begin
+        list = File.join(KIF.save_dir, name)
+        File.file?(list) ? File.read(list).split(/\r?\n/).to_h { |k| [k, true] } : {}
+      end
+      return @lists[name].key?(key)
     rescue SystemCallError, IOError
       return false
     end
@@ -428,6 +434,7 @@ module KIF
     def add_to_list(name, key)
       return if KIF::Paths.game_writable? || key.nil?
       File.open(File.join(KIF.save_dir, name), "ab") { |f| f.write(key + "\n") }
+      @lists[name][key] = true if @lists && @lists[name]
     rescue SystemCallError, IOError
       nil
     end
@@ -575,6 +582,7 @@ module KIF
             errors = tally[:errors]
             before = sprites_so_far
             t = tally
+            game_only = t[:game_only]
             was = [t[:moved], t[:same] + t[:eggs], t[:conflicts].length, t[:odd]]
             size = (File.size(path) rescue 0)
             t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -583,10 +591,16 @@ module KIF
             if ok && tally[:errors] == errors && (info[:from].to_i > 0 || brought_sprites?(before, work, root))
               finish_archive(path)   # unpacked: deleted (or kept, if the player asked)
               remember_archive(path)   # still there: a read-only game folder
+            elsif ok && tally[:errors] == errors && t[:game_only] > game_only
+              # only sheets / triple fusions / eggs, which PIF reads from the
+              # read-only game folder alone: kept, not opened again
+              remember_archive(path)
+              KIF.log("Sprite import: #{File.basename(path)} holds only sprite sheets, triple fusions or eggs, which can't be installed while the game folder is read-only") if defined?(KIF.log)
             else
               failed << path
             end
-            delete_file(path + Zip::PROGRESS) if File.exist?(path + Zip::PROGRESS)
+            prog = Zip.progress_path(path)
+            delete_file(prog) if File.exist?(prog)
             secs = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
             w, s, r, o = [t[:moved], t[:same] + t[:eggs], t[:conflicts].length, t[:odd]].zip(was).map { |a, b| a - b }
             n = info[:entries].to_i - info[:from].to_i
@@ -601,6 +615,9 @@ module KIF
         end
         status("Moving sprites into place...", 0) if Dir.exist?(File.join(root, WORK_DIR))
         hold_root = File.join(hold_base(root), HOLD_DIR)
+        # a read-only game folder keeps its loose sprites: the ones dealt with
+        # (installed, or the player kept theirs) are remembered, not read again
+        kept = root == import_dir && !KIF::Paths.game_writable?
         each_file(root, false) do |path|
           next if path.include?("/#{DONE_DIR}/")
           next delete_file(path) if path.end_with?(".kiftmp", Zip::PROGRESS)   # cut-short writes, a removed pack's progress
@@ -609,10 +626,14 @@ module KIF
             tally[:skipped] += 1 unless ARCHIVES.include?(File.extname(path).downcase) || path =~ /\.txt\z/i || File.basename(path).start_with?(".")
             next
           end
+          key = kept ? kept_key(path) : nil
+          next if key && in_list?(KEPT_LIST, key)
           # held outside the work folder (deleted below) until the player answers
           held = path.start_with?(hold_root + "/") ? path :
                  File.join(hold_root, path.sub(root, "").sub(%r{\A/+}, "").sub(%r{\A#{WORK_DIR}/}, ""))
+          n = tally[:moved] + tally[:same] + tally[:eggs]
           place(dest, held, from: path)
+          add_to_list(KEPT_LIST, key) if key && tally[:moved] + tally[:same] + tally[:eggs] > n
           tick
         end
         # what an archive left (icons, outfits, credits, assets) is not kept:
@@ -903,19 +924,27 @@ module KIF
         nil
       end
 
+      # a read-only game folder: in the save folder (next to the zip it can't be written)
+      def progress_path(archive)
+        return archive + PROGRESS if KIF::Paths.game_writable?
+        return File.join(KIF.save_dir, File.basename(archive) + PROGRESS)
+      end
+
       # true: done; false: nothing written yet, tar may try the archive;
       # nil: failed after sprites were written (no tar: it would redo them)
       def extract(archive, into, direct: nil)
         require "zlib"
         si = KIF::SpriteImport
         mobile = KIF.respond_to?(:mobile?) && KIF.mobile?
-        progress = archive + PROGRESS
+        progress = progress_path(archive)
         st = File.stat(archive)
         stamp = "#{st.size} #{st.mtime.to_i}"
         from = 0
+        matched = false
         if direct && File.file?(progress)
           n, s = File.read(progress).split(" ", 2)
-          from = n.to_i if s.to_s.strip == stamp   # the same zip, not a new one of the same name
+          matched = s.to_s.strip == stamp   # the same zip, not a new one of the same name
+          from = n.to_i if matched
           KIF.log("Sprite import: previous import of #{File.basename(archive)} was interrupted at entry #{from}") if from > 0 && defined?(KIF.log)
         end
         si.info[:from] = from
@@ -923,7 +952,9 @@ module KIF
         # (the work folder may now be "<name> (2)"): no second copy to ask about
         hold_name = from > 0 ? File.basename(archive, ".*") : File.basename(into)
         # files the cut-short run wrote are newer than its last saved progress
-        since = (from > 0 && mobile) ? (File.mtime(progress) rescue nil) : nil
+        # (also a run cut before its first save: phones save one at the start)
+        since = (matched && mobile) ? (File.mtime(progress) rescue nil) : nil
+        save_progress(progress, from, stamp) if direct && mobile
         started = from > 0
         errors = si.tally[:errors]
         File.open(archive, "rb") do |f|
@@ -950,6 +981,7 @@ module KIF
             dest = nested ? nil : KIF::SpriteImport.destination(rel)
             unless nested || dest
               KIF::SpriteImport.not_written += 1
+              si.tally[:game_only] += 1 if si.game_destination(rel)   # a read-only game folder's sheet / triple / egg
               next
             end
             # an entry this reader can't take: one file this big (read whole

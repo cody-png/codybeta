@@ -379,7 +379,7 @@ module GameData
     class << self
       if method_defined?(:sprite_bitmap_from_pokemon) &&
          instance_method(:sprite_bitmap_from_pokemon).arity.between?(-4, -2)
-        alias kif_compat_sprite_bitmap_from_pokemon sprite_bitmap_from_pokemon
+        alias kif_compat_sprite_bitmap_from_pokemon sprite_bitmap_from_pokemon unless method_defined?(:kif_compat_sprite_bitmap_from_pokemon)
 
         def sprite_bitmap_from_pokemon(pkmn, back = false, species = nil, makeShiny = true, *_more)
           if !makeShiny && pkmn && defined?(KIF::Shiny) && KIF::Shiny.respond_to?(:without_shiny)

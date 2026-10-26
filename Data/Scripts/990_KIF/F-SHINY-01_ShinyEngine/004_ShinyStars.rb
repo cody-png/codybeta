@@ -113,3 +113,72 @@ def pbDrawImagePositions(bitmap, textpos)
     srcbitmap.dispose
   end
 end
+#-------------------------------------------------------------------------------
+# EBDX battle boxes (660/007 DataBoxEBDX) show a shiny only by a gold name.
+# KIF's star (its colour = the shiny type) goes left of the name as on PIF's
+# box (the second star of a double-shiny fusion further left), with the dark
+# edge EBDX gives its box text; the gold name stays. A box sprite, so it
+# moves, hides and fades with the box.
+#-------------------------------------------------------------------------------
+if defined?(::DataBoxEBDX)
+  class ::DataBoxEBDX
+    alias kif_star_setUp setUp unless method_defined?(:kif_star_setUp) || private_method_defined?(:kif_star_setUp)
+    alias kif_star_refresh refresh unless method_defined?(:kif_star_refresh) || private_method_defined?(:kif_star_refresh)
+
+    STAR_W = 33   # two 14 px stars 1 px apart, plus a 2 px edge each side
+
+    def setUp
+      kif_star_setUp
+      s = Sprite.new(@viewport)
+      s.z = getMetric("name", :z)
+      s.ex = getMetric("name", :x) - STAR_W   # set again by each refresh (long names)
+      s.ey = getMetric("name", :y) + 4        # the star level with the name's letters
+      @sprites["kif_star"] = s
+    end
+
+    def refresh
+      kif_star_refresh
+      kif_draw_star
+    end
+
+    def kif_draw_star
+      spr = @sprites && @sprites["kif_star"]
+      return unless spr && !spr.disposed? && @pokemon && @battler
+      spr.bitmap.dispose if spr.bitmap && !spr.bitmap.disposed?
+      spr.bitmap = nil
+      return unless @pokemon.shiny?
+      pos = []
+      addShinyStarsToGraphicsArray(pos, 15, 0, @pokemon.bodyShiny?, @pokemon.headShiny?, @pokemon.debugShiny?, @pokemon.radarShiny?)
+      star = Bitmap.new(STAR_W - 4, 16)
+      pbDrawImagePositions(star, pos)
+      spr.bitmap = kif_star_edge(star)
+      # EBDX's refresh moves a long name line left by o (same sum as there);
+      # the name's letters start at name x + 2 - o, the star ends 2 px before
+      line = @sprites["textName"].bitmap
+      sym = (@pokemon.gender == 0 && !@hidden) ? "♂" : (@pokemon.gender == 1 && !@hidden) ? "♀" : ""
+      w = line.text_size("#{@battler.name}#{sym}Lv.#{@pokemon.level}").width
+      o = (w > @hpBarWidth + 4) ? ((w - (@hpBarWidth + 4)) / 2.0).ceil : 0
+      spr.ex = getMetric("name", :x) - o - STAR_W
+      base = @sprites["base"]
+      spr.x = base.x + spr.ex
+      spr.y = base.y + spr.ey
+    rescue => e
+      KIF.log("EBDX shiny star failed: #{e.message}")
+    end
+
+    # the star on EBDX's text edge: its shape in black at 125 alpha, drawn at
+    # the 8 offsets of 2 px as pbDrawOutlineText draws the name's (consumes star)
+    def kif_star_edge(star)
+      shade = Bitmap.new(star.width, star.height)
+      dark = Color.new(0, 0, 0, 125)
+      star.height.times { |y| star.width.times { |x| shade.set_pixel(x, y, dark) if star.get_pixel(x, y).alpha > 0 } }
+      out = Bitmap.new(star.width + 4, star.height + 4)
+      [0, 2, 4].each { |y| [0, 2, 4].each { |x| out.blt(x, y, shade, shade.rect) unless x == 2 && y == 2 } }
+      out.blt(2, 2, star, star.rect)
+      return out
+    ensure
+      shade.dispose if shade
+      star.dispose
+    end
+  end
+end

@@ -232,7 +232,7 @@ module KIF
               @i += 1
               e = @s[@i]
               out << ({ "n" => "\n", "t" => "\t", "r" => "\r", "b" => "\b", "f" => "\f" }[e] ||
-                      (e == "u" ? [@s[@i + 1, 4].hex].pack("U").tap { @i += 4 } : e))
+                      (e == "u" ? uchar : e))
             else
               out << @s[@i]
             end
@@ -250,6 +250,19 @@ module KIF
           return lit.include?(".") || lit =~ /e/i ? lit.to_f : lit.to_i
         end
       end
+
+      # \uXXXX at @i; a surrogate pair (how JSON writers escape an emoji) is one
+      # character, a lone half is U+FFFD (packed alone it is invalid UTF-8)
+      def uchar
+        cp = @s[@i + 1, 4].hex
+        @i += 4
+        if cp.between?(0xD800, 0xDBFF) && @s[@i + 1, 2] == "\\u" && (lo = @s[@i + 3, 4].hex).between?(0xDC00, 0xDFFF)
+          cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00)
+          @i += 6
+        end
+        cp = 0xFFFD if cp.between?(0xD800, 0xDFFF)
+        return [cp].pack("U")
+      end
     end
 
     def self.read_json(path)
@@ -265,19 +278,32 @@ module KIF
     #---------------------------------------------------------------------------
     def self.mkdir_p(dir); KIF.mkdir_p(dir); end
 
-    def self.unpack_zips(dir)
+    # zips a read-only Mods folder keeps (phones): unpacked into `to` (the
+    # save folder's Mods) once, remembered by name, size and time - the zip
+    # can't move to Imported, and an uninstalled mod stays uninstalled
+    ZIPS_DONE = "KIF_unpacked_mod_zips.txt"
+
+    def self.unpack_zips(dir, to = dir)
+      done_list = File.join(KIF.save_dir, ZIPS_DONE) if to != dir
       Dir.children(dir).sort.each do |c|
         next unless c =~ /\.zip\z/i
         zip = File.join(dir, c)
         next unless File.file?(zip)
         name = File.basename(c, ".*")
-        into = File.join(dir, name)
+        into = File.join(to, name)
+        key = "#{c}|#{File.size(zip)}|#{File.mtime(zip).to_i}" if done_list
+        next if done_list && File.file?(done_list) && File.read(done_list).split(/\r?\n/).include?(key)
         if File.exist?(into)
           KIF.log("Mod zip #{c}: Mods/#{name} already exists - the zip is left alone (delete one of them)")
           next
         end
         begin
           n = unzip(zip, into)
+          if done_list
+            File.open(done_list, "ab") { |f| f.write(key + "\n") }
+            KIF.log("Mod zip #{c}: #{n} files unpacked into #{into} (its Mods folder can't be written)")
+            next
+          end
           done = File.join(dir, DONE_DIR)
           mkdir_p(done)
           dest = File.join(done, c); k = 2
@@ -377,7 +403,7 @@ module KIF
                                 :path => path, :source => self)
             else
               # a folder with only pictures / sounds is a mod too (KIF::ModAssets)
-              next if Dir[File.join(path, "**", "*.rb")].empty? &&
+              next if Dir.glob(File.join("**", "*.rb"), base: path).empty? &&   # base: a [ ] { } in the name isn't a pattern
                       KIF::ModAssets::DIRS.none? { |d| File.directory?(File.join(path, d)) }
               list << Entry.new(:id => c, :name => c, :kind => :folder, :path => path, :source => self)
             end
@@ -499,7 +525,8 @@ module KIF
       native = NativeSource.new(dir, extra)
       add_source(native)
       add_source(ModManagerSource.new)
-      native.dirs.each { |d| unpack_zips(d) if File.directory?(d) }
+      # a read-only game folder's zips unpack into the save folder's Mods
+      native.dirs.each { |d| unpack_zips(d, (d == dir && !extra.empty? && !KIF::Paths.game_writable?) ? extra.first : d) if File.directory?(d) }
       off = []
       on = mods_on(native)
       # loose .rb files first, in name order (as KIF 0.20.7)

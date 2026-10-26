@@ -1,3 +1,10 @@
+KIF 1.2.6
+- New: Update history (Options > System). Read the notes of every KIF version: a short overview or the full notes.
+- What's new shows the notes of every version since the one you had, so a skipped version's notes are no longer missed. After an update, All updates opens the Update history.
+- Bag: TMs have a 'Who can learn' list.
+- Illusion: a disguised foe's battle box shows the types of the Pokemon it copies until the disguise breaks.
+- Battle Info's Log page shows your name where a line names you, and no longer shows text codes.
+
 KIF 1.2.5
 - EBDX: move effectiveness shows in the Fight menu; battle boxes appear as each Pokemon is sent out, so the foe's lead stays hidden; foe type icons, KIF's shiny star, gender icons and level-up stat windows now show there too.
 - Battle Info has a Log page: every message and ability pop-up of the battle so far, by turn (green dot: about your Pokemon, red: about the foe's).
@@ -43,7 +50,7 @@ KIF 1.2.0
 - A much smaller game: about 920 MB instead of 1.68 GB (this update is about 680 MB). Pictures look the same; music and sounds are now Ogg.
 - Faster start-up, and menus check the disk far less.
 - New: Mouse and touch controls (Options > System > Controls, Off by default). Click or tap to choose, click or tap the map to walk there.
-- New: EV Allocation (Options > Battles, Off by default). EVs from battles become points you spend on the Summary's Skills page.
+- New: EV Allocation (Options > Pokémon, Off by default). EVs from battles become points you spend on the Summary's Skills page.
 - New: Living title screen (Options > System > Title screen).
 - New: Archipelago (beta). Play KIF in a multiworld: Kanto, Sevii and Johto, Trainersanity, Giftsanity and 10 kinds of traps. Use apworld 0.6.2.
 - Nuzlocke: options for gift Pokemon and the Safari Zone. Pinkan Island now plays as in PIF with the Randomizer, Nuzlocke and Archipelago.

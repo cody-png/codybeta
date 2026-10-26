@@ -67,7 +67,7 @@ module KIF
         ["Screen", ["Screen Size", "Device"]],
         ["Text", ["Text Speed", "Text Entry"]],
         ["Controls", ["Mouse", "Click to move", "Touch controls", "Tap to move"]],
-        ["Updates and downloads", ["Updates", "Check for Updates", "Download data"]],
+        ["Updates and downloads", ["Updates", "Check for Updates", "Update history", "Download data"]],
         ["Test builds", ["Test Code"]],
         ["Speed", ["Frame rate", "Sprite File Cache"]],
         ["Start-up", ["Skip intro", "Title screen"]],

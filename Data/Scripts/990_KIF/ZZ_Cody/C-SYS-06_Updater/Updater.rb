@@ -1201,8 +1201,9 @@ module KIF
             # the update removed the old formats it shipped itself (and kept the player's own): no twin cleanup
             store_choice(twins_key, v)
             log("updated to #{v}")
-            cmd = pbMessage(_INTL("KIF was updated to {1}.", v), [_INTL("OK"), _INTL("What's new")], 1)
+            cmd = pbMessage(_INTL("KIF was updated to {1}.", v), [_INTL("OK"), _INTL("What's new"), _INTL("All updates")], 1)
             show_notes(nil, from) if cmd == 1
+            history if cmd == 2   # Update history (Updater_History.rb)
           end
         # failed.txt: the move stopped partway (the scripts, and so the version, may already be new)
         # apply.cmd without done.txt: the update window was closed partway, also after the new scripts were in

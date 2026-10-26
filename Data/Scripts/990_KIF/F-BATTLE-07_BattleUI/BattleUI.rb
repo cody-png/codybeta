@@ -199,7 +199,7 @@ class PokemonDataBox
     # The base method already set the box's z and hid it before this sprite
     # existed: give it the box's layer, visibility and place now (it was left
     # at z 0 - behind the HP/Exp bars - and visible during the intro, 2026-10-14)
-    @kif_statusIcon.z = self.z + 2
+    @kif_statusIcon.z = kif_status_z(self.z)
     @kif_statusIcon.visible = self.visible
     @kif_statusIcon.x = self.x + @spriteBaseX + 24
     @kif_statusIcon.y = self.y + (@battler.opposes?(0) ? 49 : 52)
@@ -235,7 +235,14 @@ class PokemonDataBox
 
   def z=(value)
     self.kif_bui_z = value
-    @kif_statusIcon.z = value + 2 if @kif_statusIcon
+    @kif_statusIcon.z = kif_status_z(value) if @kif_statusIcon
+  end
+
+  # the lower player-side box sits on the command box, which covered its tag's
+  # bottom 4 px: that tag is drawn over the menu's edge (Cody picked B, 2026-10-26)
+  def kif_status_z(box_z)
+    return box_z + 2 if @battler.opposes?(0) || @battler.index < 2
+    return [box_z + 2, 300].max
   end
 
   # PIF's own type icons give way to the Type Display

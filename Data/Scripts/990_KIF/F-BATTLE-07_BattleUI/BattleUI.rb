@@ -112,6 +112,13 @@ module KIF
       return defined?(KIF::DarkMode) ? KIF::DarkMode.on? : !!(defined?(isDarkMode) && isDarkMode)
     end
 
+    # PIF's boxes leave the level out in Base Stats Mode (6.8.2's No-Levels
+    # switch); "Show Lv. in BSM" puts it back (EBDX's boxes ask this)
+    def self.show_level?
+      return true unless $game_switches && $game_switches[SWITCH_NO_LEVELS_MODE]
+      return $PokemonSystem.showlevel_nolevelmode.to_i == 1
+    end
+
     def self.path(sub)
       p = DIR + sub
       return pbResolveBitmap(p) ? p : nil
@@ -325,6 +332,95 @@ class PokemonDataBox
     f = @showExp ? exp_fraction : 0
     return kif_bui_refreshExp unless f.is_a?(Float) && (f.nan? || f.infinite?)
     @expBar.src_rect.width = 0
+  end
+end
+
+#-------------------------------------------------------------------------------
+# EBDX battle boxes (DataBoxEBDX, F-BATTLE-12): the foe's types as in PIF's
+# box. 661/003 drew only the Type Display, from the Pokémon's own types, on a
+# screen-sized sprite redrawn every frame, its second icon over the foe's
+# status tag ("PS"). Here: PIF's own small type icons too ("Type icons" On,
+# Type Display Off), the in-battle types (Soak, Transform...), the two icons
+# side by side where 661's first one sat (the box's right end, above the
+# status tag), on a box sprite (it moves, hides and fades with the box),
+# redrawn only when the types change.
+#-------------------------------------------------------------------------------
+if defined?(::DataBoxEBDX)
+  class ::DataBoxEBDX
+    alias kif_bui_setUp setUp unless method_defined?(:kif_bui_setUp) || private_method_defined?(:kif_bui_setUp)
+    alias kif_bui_refresh refresh unless method_defined?(:kif_bui_refresh) || private_method_defined?(:kif_bui_refresh)
+    alias kif_bui_update update unless method_defined?(:kif_bui_update) || private_method_defined?(:kif_bui_update)
+
+    def setUp
+      kif_bui_setUp
+      # 661/003's own Type Display sprite and sheet: this one replaces them
+      @typeDisplaySprite.dispose if @typeDisplaySprite && !@typeDisplaySprite.disposed?
+      @typeDisplaySprite = nil
+      @typeDisplayBitmap.dispose if @typeDisplayBitmap && !@typeDisplayBitmap.disposed?
+      @typeDisplayBitmap = nil
+      @kif_types_key = nil
+      return if @playerpoke
+      s = Sprite.new(@viewport)
+      s.z = getMetric("name", :z)
+      s.ex = @sprites["base"].bitmap.width
+      s.ey = -14
+      @sprites["kif_types"] = s
+    end
+
+    def refresh
+      kif_bui_refresh
+      kif_draw_types
+    end
+
+    def update
+      kif_bui_update
+      kif_draw_types
+    end
+
+    # [sheet, icon w, icon h, drawn w, drawn h] for the foe's types, or nil
+    def kif_types_sheet
+      mode = KIF::BattleUI.type_display
+      if mode == 0
+        return nil unless $PokemonSystem && $PokemonSystem.type_icons
+        return [KIF::BattleUI::PIF_TYPES, 19, 19, 19, 19]   # PIF's typesSmall
+      end
+      sheet = KIF::BattleUI::TYPE_SHEETS[mode]
+      return nil unless sheet
+      return [sheet, 64, 28, (64 * 0.65).to_i, (28 * 0.65 * 1.2).to_i] if mode == 5   # 661's Txt size
+      return [sheet, 24, 20, 24, 20]
+    end
+
+    def kif_draw_types
+      spr = @sprites["kif_types"]
+      return unless spr && !spr.disposed? && @battler && @battler.pokemon
+      geo = kif_types_sheet
+      geo = nil if @battler.fainted? || (defined?(PokeBattle_FakeBattler) && @battler.is_a?(PokeBattle_FakeBattler))
+      types = geo ? [@battler.type1, @battler.type2].uniq : []
+      key = [geo && geo[0]] + types
+      return if key == @kif_types_key
+      @kif_types_key = key
+      spr.bitmap.dispose if spr.bitmap && !spr.bitmap.disposed?
+      spr.bitmap = nil
+      return unless geo && pbResolveBitmap(geo[0])
+      path, w, h, dw, dh = geo
+      sheet = AnimatedBitmap.new(path)
+      begin
+        spr.bitmap = Bitmap.new(dw * 2 + 2, dh)
+        types.each_with_index do |t, i|
+          n = GameData::Type.get(t).id_number
+          next if (n + 1) * h > sheet.height   # the icon sheets lack the triple-fusion types
+          spr.bitmap.stretch_blt(Rect.new(i * (dw + 2), 0, dw, dh), sheet.bitmap, Rect.new(0, n * h, w, h))
+        end
+      ensure
+        sheet.dispose
+      end
+      base = @sprites["base"]
+      spr.x = base.x + spr.ex
+      spr.y = base.y + spr.ey
+    rescue => e
+      KIF.log("EBDX type icons failed: #{e.message}")
+      @kif_types_key = key
+    end
   end
 end
 

@@ -579,24 +579,19 @@ module KIF
         @role = :host
         @secret = secret
         @via = :direct
-        tries.times do |i|
+        # all taken, or reserved: Windows with Hyper-V/WSL2/Docker keeps blocks of
+        # 49152-65535 for itself (seen: 52344-52443). Then the same ports 10000
+        # lower (outside that range, so a port opened by hand stays right), then
+        # one Windows picks: the join code and the router mapping carry it.
+        cands = (0...tries).map { |i| port + i }
+        cands += cands.map { |x| x - 10_000 } if port > 11_024
+        (cands << 0).each do |pt|
           begin
-            @servers = [TCPServer.new(bind, port + i)]
-            @port = port + i
+            @servers = [TCPServer.new(bind, pt)]
+            @port = @servers[0].addr[1]
             break
           rescue SystemCallError
             next
-          end
-        end
-        # all taken, or reserved: Windows with Hyper-V/WSL2/Docker keeps blocks of
-        # 49152-65535 for itself (seen: 52344-52443). A port Windows picks works
-        # the same: the join code and the router mapping carry it.
-        unless @port
-          begin
-            @servers = [TCPServer.new(bind, 0)]
-            @port = @servers[0].addr[1]
-          rescue SystemCallError
-            nil
           end
         end
         return nil unless @port
@@ -710,8 +705,11 @@ module KIF
         addr = (sock.remote_address.ip_address rescue "?")
         f = @fails[addr]
         @hs_log.reject! { |t| Net.now - t > 10 }
+        # the same address again while its handshake hasn't finished: a retry (its
+        # first try gave up while this game wasn't polling, e.g. in a battle)
+        again = @conn && @state == :handshake && @conn.addr == addr
         why = if (f && f[0] >= MAX_BAD && Net.now < f[1]) || @hs_log.length >= @hs_limit then "wait"
-              elsif @conn then "busy"
+              elsif @conn && !again then "busy"
               end
         if why
           (sock.write(Wire.frame(Wire.json({ "t" => "no", "why" => why }))) rescue nil)
@@ -719,6 +717,7 @@ module KIF
         end
         @fails.delete(addr) if f && Net.now >= f[1]
         @hs_log << Net.now
+        drop_line if again
         start(sock)
         @hs_state = :wait_hi
       end

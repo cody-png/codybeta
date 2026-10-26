@@ -15,13 +15,17 @@ KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (01
   next nil if KIF.mobile?
   EnumOption.new(_INTL("Multiplayer"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.kif_multiplayer },
-                 proc { |value| $PokemonSystem.kif_multiplayer = value },
+                 proc { |value|
+                   $PokemonSystem.kif_multiplayer = value
+                   KIF::Net.stop if value == 0   # Off takes the pause entry away: hosting or a connection ends with it
+                 },
                  [_INTL("No Multiplayer entry in the pause menu."),
                   _INTL("Multiplayer in the pause menu: play with a friend over the internet or your network.")])
 }
 
 module KIF
   module Net
+    stop if respond_to?(:stop)   # the scripts run again (F12 off Windows): end the old line, its threads keep going
     @session = nil
     @pm = nil
     @pm_thread = nil
@@ -137,7 +141,8 @@ module KIF
           KIF::NetSprite.on_connect(s) if defined?(KIF::NetSprite)
         when :message
           if ev[1] == "wave"
-            @notes << _INTL("{1} says hello!", s.partner)
+            t = _INTL("{1} says hello!", s.partner)
+            @notes << t unless @notes.include?(t)   # shown on the map too: one at a time, however many come
           elsif ev[1].start_with?("sl_") && defined?(KIF::SoulLink)
             begin
               KIF::SoulLink.receive(ev[1], ev[2])
@@ -176,6 +181,9 @@ module KIF
 
     def self.take_failure; f = @failed; @failed = nil; f; end
 
+    # hosting or connected (a joiner's ended session can still be held)
+    def self.live?; s = @session; s && (s.connected? || s.hosting?) ? true : false; end
+
     # "Let <name> join?" for a player who knew the code; called from the
     # screens below and on the map when nothing else is going on
     def self.ask_join
@@ -202,6 +210,14 @@ module KIF
       return false
     end
 
+    # every frame on the map
+    def self.map_update
+      return unless @session
+      update
+      ask_join if @session&.asking? && quiet?
+      pbMessage(@notes.shift) if !@notes.empty? && quiet?   # "<name> says hello!", a disconnect
+    end
+
     def self.lan_code
       return nil unless @session && @session.via == :direct && @local && PortMap.ip_kind(@local) != :invalid
       return JoinCode.make(:v4, ip: @local, port: @session.port, secret: @session.secret)
@@ -220,7 +236,7 @@ module KIF
       return JoinCode.make(:relay, room: s.room, secret: s.secret) if s.via == :relay
       return nil unless @pm
       ext = @pm[:external_ip]
-      if @pm[:status] == :open
+      if @pm[:status] == :open && PortMap.ip_kind(ext) != :invalid
         return JoinCode.make(:v4, ip: ext, port: @pm[:external_port], secret: s.secret)
       elsif @pm[:status] == :closed && PortMap.ip_kind(ext) == :public
         return JoinCode.make(:v4, ip: ext, port: s.port, secret: s.secret)
@@ -315,7 +331,7 @@ module KIF
           if s&.connected? then connected
           elsif s&.hosting? then hosting
           end
-          main
+          main unless Net.live?   # B leaves a game that goes on: Host or Join from main would end it
         ensure
           @scr.dispose
           @scr = nil
@@ -346,6 +362,7 @@ module KIF
           when 3 then find_lan
           else return
           end
+          return if Net.live?
         end
       end
 
@@ -413,7 +430,11 @@ module KIF
               add.call(_INTL("Show code bigger"), :big)
             end
           elsif pm[:status] == :shared
-            help = _INTL("Your internet provider shares one address between many homes, so nobody can reach this PC. Joining still works.")
+            help = if PortMap.ip_kind(pm[:external_ip]) == :private
+                     _INTL("Another router is in front of yours, so nobody can reach this PC. Joining still works.")
+                   else
+                     _INTL("Your internet provider shares one address between many homes, so nobody can reach this PC. Joining still works.")
+                   end
             add.call(_INTL("Ask your friend to host instead"), :swap)
             add.call(_INTL("Use a relay"), :relay)
             add.call(_INTL("Copy IPv6 code"), :v6) if Net.v6_code
@@ -460,7 +481,11 @@ module KIF
         gw = PortMap.gateway_guess(local) || "192.168.1.1"
         pbMessage(_INTL("1. Open your router's page in a browser (often {1}, on its sticker).\n2. Find \"Port forwarding\".", gw))
         pbMessage(_INTL("3. Add: port {1}, TCP, to this PC: {2}.\n4. Save, then host again.", port, local))
-        pbMessage(_INTL("Do this once. The game will find it open next time you host."))
+        if Net.lan_only?   # no router answered: nothing can see the port is open, or the public address
+          pbMessage(_INTL("Your router doesn't tell the game your public address, so your friend picks Join by address, types your public address (search \"what is my IP\" in a browser), then your code."))
+        else
+          pbMessage(_INTL("Do this once. Your code already holds your public address."))
+        end
       end
 
       #-------------------------------------------------------------------------
@@ -552,6 +577,7 @@ module KIF
             busy: _INTL("Someone else is joining or playing with them right now."),
             wait: _INTL("Too many wrong codes were tried from here. Try again in 10 minutes."),
             relay: _INTL("The relay didn't accept you. Check the address, or ask your friend to host on it again."),
+            timeout: _INTL("Their game didn't answer in time (in a battle or a menu?). Try again when they're on the map."),
             declined: _INTL("Your friend didn't let you in (they said no, or didn't answer in time).")
           }[why] || _INTL("Their router may be closed, or the code is old (codes change sometimes).")
           r = pick(_INTL("Join with a code\nYour friend's game: Can't reach it"),
@@ -572,7 +598,7 @@ module KIF
       def find_lan
         t = Net::LAN.find
         until t.join(0)
-          pick_once(_INTL("Find on this network\nLooking for games on this network..."), [_INTL("Cancel")], "")
+          return if pick_once(_INTL("Find on this network\nLooking for games on this network..."), [_INTL("Cancel")], "")   # Cancel or B: the search ends by itself
         end
         list = (t.value rescue []) || []
         if list.empty?
@@ -654,11 +680,6 @@ KIF::PauseMenu.add(:kif_multiplayer, "Multiplayer", icon: "menuIcons/PLAYER", or
     :stay
   })
 
-Events.onMapUpdate += proc { |_sender, _e|
-  if KIF::Net.session
-    KIF::Net.update
-    KIF::Net.ask_join if KIF::Net.session&.asking? && KIF::Net.quiet?
-  end
-}
+Events.onMapUpdate += proc { |_sender, _e| KIF::Net.map_update }
 
 at_exit { KIF::Net.shutdown rescue nil }

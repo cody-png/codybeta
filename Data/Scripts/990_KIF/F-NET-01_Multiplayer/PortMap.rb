@@ -37,8 +37,8 @@ module KIF
           gws << from
           services(location).each do |svc|
             ext = soap(svc, "GetExternalIPAddress")["NewExternalIPAddress"]
-            next unless ext
-            res[:external_ip] ||= ext if ip_kind(ext) != :invalid
+            next if ip_kind(ext) == :invalid   # none, "" or 0.0.0.0 (WAN down, IPv6-only): no address for a code
+            res[:external_ip] ||= ext
             return res.merge(status: :shared, external_ip: ext, via: :upnp) if shared?(ext)
             if add_upnp(svc, port, svc[:local] || local)
               return res.merge(status: :open, via: :upnp, external_ip: ext, gateway: from,
@@ -48,8 +48,9 @@ module KIF
         end
         gws += gateways || [gateway_guess(local)]
         gws.compact.uniq.each do |gw|
-          ext = natpmp_external(gw, natpmp_port) or next
-          res[:external_ip] ||= ext if ip_kind(ext) != :invalid
+          ext = natpmp_external(gw, natpmp_port)
+          next if ip_kind(ext) == :invalid
+          res[:external_ip] ||= ext
           return res.merge(status: :shared, external_ip: ext, via: :natpmp) if shared?(ext)
           eport = natpmp_map(gw, natpmp_port, port, port, LEASE) or next
           return res.merge(status: :open, via: :natpmp, external_ip: ext, external_port: eport, gateway: gw,

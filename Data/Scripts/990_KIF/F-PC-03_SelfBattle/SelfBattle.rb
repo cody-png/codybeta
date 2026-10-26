@@ -474,18 +474,27 @@ end
 if defined?(PokeBattle_SceneEBDX)
   class PokeBattle_SceneEBDX
     alias kif_sb_ebdx_pbUpdate pbUpdate unless method_defined?(:kif_sb_ebdx_pbUpdate) || private_method_defined?(:kif_sb_ebdx_pbUpdate)
-    alias kif_sb_ebdx_pbEndBattle pbEndBattle unless method_defined?(:kif_sb_ebdx_pbEndBattle) || private_method_defined?(:kif_sb_ebdx_pbEndBattle)
 
     def pbUpdate(*args)
       kif_sb_ebdx_pbUpdate(*args)
       kif_update_win_display
     end
+  end
 
-    def pbEndBattle(*args)
-      kif_sb_free_win_display
-      return kif_sb_ebdx_pbEndBattle(*args)
+  # 660/019 prepends EBDX's low-HP music reset to pbEndBattle: an alias of it
+  # would call itself forever (stack level too deep at every battle's end), so
+  # this is prepended too
+  module KIF
+    module SelfBattle
+      module EBDXEnd
+        def pbEndBattle(*args)
+          kif_sb_free_win_display
+          super
+        end
+      end
     end
   end
+  PokeBattle_SceneEBDX.prepend(KIF::SelfBattle::EBDXEnd)
 end
 
 #-------------------------------------------------------------------------------

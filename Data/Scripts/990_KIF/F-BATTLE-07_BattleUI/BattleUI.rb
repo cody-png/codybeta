@@ -245,10 +245,16 @@ class PokemonDataBox
     return [box_z + 2, 300].max
   end
 
-  # PIF's own type icons give way to the Type Display
+  # PIF's own type icons give way to the Type Display. A foe disguised by
+  # Illusion shows the types of the Pokémon it copies, as Battle Info and the
+  # Fight menu's hints do (the base reads @battler's types).
   def drawEnemyTypeIcons(imagePos)
     return if KIF::BattleUI.type_display != 0
+    real = @battler
+    @battler = KIF::BattleInfo.face(real) unless real.is_a?(PokeBattle_FakeBattler)
     kif_bui_drawEnemyTypeIcons(imagePos)
+  ensure
+    @battler = real if real
   end
 
   # The base refresh draws its image list through this; the status icon is
@@ -312,9 +318,10 @@ class PokemonDataBox
     end
     bmp = @kif_typeBitmap.bitmap
     # In-battle types like PIF's icons (KIF used the Pokémon's own
-    # types)
-    type1 = @battler.type1
-    type2 = @battler.type2
+    # types); a foe disguised by Illusion: the Pokémon it copies
+    shown = KIF::BattleInfo.face(@battler)
+    type1 = shown.type1
+    type2 = shown.type2
     text = (mode == 5)
     w, h = text ? [64, 28] : [24, 20]
     dw = text ? (w * 0.65).to_i : w
@@ -404,8 +411,17 @@ if defined?(::DataBoxEBDX)
       geo = nil if @battler.fainted? || (defined?(PokeBattle_FakeBattler) && @battler.is_a?(PokeBattle_FakeBattler))
       types = geo ? [@battler.type1, @battler.type2].uniq : []
       key = [geo && geo[0]] + types
+      # a foe disguised by Illusion: the types of the Pokémon it copies (as
+      # Battle Info); the disguise is in the key so face() runs only when it
+      # changes, not every frame
+      disguise = geo && KIF::BattleInfo.disguised?(@battler) && @battler.effects[PBEffects::Illusion]
+      key << disguise if disguise
       return if key == @kif_types_key
       @kif_types_key = key
+      if disguise
+        shown = KIF::BattleInfo.face(@battler)
+        types = [shown.type1, shown.type2].uniq
+      end
       spr.bitmap.dispose if spr.bitmap && !spr.bitmap.disposed?
       spr.bitmap = nil
       return unless geo && pbResolveBitmap(geo[0])

@@ -868,6 +868,7 @@ module KIF
       File.open(File.join(dir, STAGED_MANIFEST), "wb") { |f| f.write(body) }
       File.open(File.join(dir, "remove.txt"), "wb") { |f| f.write(plan[:removals].map { |p| win_path(p) }.join("\r\n")) }
       File.open(File.join(dir, "version.txt"), "wb") { |f| f.write(version) }
+      File.open(File.join(dir, "from.txt"), "wb") { |f| f.write(current_version) }   # What's new after the update
       log("#{version}: #{n} files (#{size_text(plan[:bytes])}) downloaded, #{plan[:removals].length} to remove")
       if update_window?
         exe = Win.exe_path || File.join(root, "InfiniteFusion.exe")
@@ -891,7 +892,12 @@ module KIF
     #---------------------------------------------------------------------------
     # Asking
     #---------------------------------------------------------------------------
-    def show_notes(base)
+    # The notes file keeps older versions' notes below the newest, each under
+    # its "KIF 1.2.4" line: shown is what is newer than since (the version
+    # the player has, or had before the update), else the newest version's.
+    NOTES_HEAD = /\AKIF (\d\S*)\z/
+
+    def show_notes(base, since = base && current_version)
       text = base ? fetch(url_for(base, NOTES)) : nil
       text = File.binread(File.join(root, NOTES)) if text.nil? && File.file?(File.join(root, NOTES))
       lines = text.to_s.force_encoding("UTF-8").split(/\r?\n/).map(&:strip).reject(&:empty?)
@@ -899,7 +905,10 @@ module KIF
         pbMessage(_INTL("No notes for this version."))
         return
       end
-      lines.each_slice(3) { |chunk| pbMessage(chunk.join("\n")) }
+      sections = lines.slice_before { |l| l =~ NOTES_HEAD }.to_a
+      shown = since ? sections.select { |s| !(v = s[0][NOTES_HEAD, 1]) || newer?(v, since) } : []
+      shown = sections.first(1) if shown.empty?
+      shown.each { |s| s.each_slice(3) { |chunk| pbMessage(chunk.join("\n")) } }
     end
 
     # Stable asked, nothing there, but the beta branch answers: the release
@@ -1047,6 +1056,11 @@ module KIF
       end
       store_choice("test_code", code)
       store_choice("channel", TEST)
+      unless test_code == code && channel == TEST   # KIF_updates.kro couldn't be written
+        log("test code #{mask(code)} works but couldn't be kept in #{CHOICES_FILE}")
+        pbMessage(_INTL("The code works, but it couldn't be kept: KIF can't write to its save folder. Try again later."))
+        return false
+      end
       # off the clipboard, where another Paste (Multiplayer's join code) would show it
       (Input.clipboard = "" if (Input.clipboard.to_s.strip rescue "") == code) rescue nil
       $PokemonSystem.kif_updates = TEST if $PokemonSystem
@@ -1181,13 +1195,15 @@ module KIF
         dir = File.join(dir0, v)
         next unless File.directory?(dir)
         if File.file?(File.join(dir, "done.txt"))
+          from = (File.read(File.join(dir, "from.txt")) rescue nil)   # nil: an older updater staged it
           rm_tree(dir)
           if v == current_version
             # the update removed the old formats it shipped itself (and kept the player's own): no twin cleanup
             store_choice(twins_key, v)
             log("updated to #{v}")
-            cmd = pbMessage(_INTL("KIF was updated to {1}.", v), [_INTL("OK"), _INTL("What's new")], 1)
-            show_notes(nil) if cmd == 1
+            cmd = pbMessage(_INTL("KIF was updated to {1}.", v), [_INTL("OK"), _INTL("What's new"), _INTL("All updates")], 1)
+            show_notes(nil, from) if cmd == 1
+            history if cmd == 2   # Update history (Updater_History.rb)
           end
         # failed.txt: the move stopped partway (the scripts, and so the version, may already be new)
         # apply.cmd without done.txt: the update window was closed partway, also after the new scripts were in

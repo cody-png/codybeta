@@ -59,6 +59,10 @@ module KIF
         rows << [_INTL("Entrances"), _INTL("Where this map's doors lead, level numbers here, found doors."), :entrances] if er_active?
         rows << [_INTL("Cheats ({1})", cheat_summary), _INTL("No wild encounters, trainers don't spot you, walk through walls."), :cheats]
         rows << [_INTL("Save now"), _INTL("Save the game right here."), :save]
+        if defined?(KIF::Difficulty)
+          rows << [_INTL("Extreme mode ({1})", KIF::Difficulty.extreme? ? _INTL("on") : _INTL("off")),
+                   _INTL("Extreme gym gimmicks (Hard plus one step). Turning it on also turns on Hard."), :extreme]
+        end
         if defined?(KIF::AICompare)
           rows << [_INTL("AI compare log ({1})", KIF::AICompare.on? ? _INTL("on") : _INTL("off")),
                    _INTL("Every AI decision also asks the other AI (PIF / DemICE) and writes both to KIF_ai_compare.txt."), :aicompare]
@@ -76,6 +80,14 @@ module KIF
                  when :cheats then cheats_menu
                  when :save then pbMessage(Game.save ? _INTL("Saved.") : _INTL("Saving failed.")); nil
                  when :sheets then fetch_base_sheets
+                 when :extreme
+                   on = !KIF::Difficulty.extreme?
+                   $PokemonSystem.kif_extreme = on ? 1 : 0
+                   if on
+                     $game_switches[SWITCH_GAME_DIFFICULTY_EASY] = false
+                     $game_switches[SWITCH_GAME_DIFFICULTY_HARD] = true
+                   end
+                   pbMessage(on ? _INTL("Extreme on (Hard is on too).") : _INTL("Extreme off (still Hard).")); nil
                  when :aicompare
                    KIF::AICompare.on = !KIF::AICompare.on?
                    pbMessage(KIF::AICompare.on? ? _INTL("AI compare log on: KIF_ai_compare.txt in the Logs folder.") : _INTL("AI compare log off.")); nil

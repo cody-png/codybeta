@@ -461,6 +461,11 @@ module KIF
         lv = GameData::GrowthRate.max_level
         base = p.baseStats
         f = (p.isSelfFusion? rescue false) && defined?(KIF::FusionRules) ? KIF::FusionRules.self_fusion_factor(base.values.sum) : 1
+        # a fusion: Fusion BaseStats sliders (custom_bst) can give up to the higher of head and body
+        sp = p.species_data
+        if sp.is_a?(GameData::FusedSpecies)
+          [sp.head_pokemon, sp.body_pokemon].each { |d| STATS.each { |s| base[s] = [base[s].to_i, d.base_stats[s].to_i].max } }
+        end
         iv, ev = Pokemon::IV_STAT_LIMIT, Pokemon::EV_STAT_LIMIT
         return STATS.map do |s|
           b = (base[s].to_i * f).round

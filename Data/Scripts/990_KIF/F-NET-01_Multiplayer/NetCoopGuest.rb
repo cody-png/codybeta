@@ -386,6 +386,7 @@ module KIF
         # no more than this player's balls, and only foes of this battle
         pks = list.first([@balls, 6].min).map { |h| Mon.load(h, true) }.compact.select { |pk| @foes.any? { |s, _| s == pk.species } }
         pks.each do |pk|
+          pk.reset_moves if pk.instance_variable_defined?(:@kif_coop_slots)   # a move this game lacks: its own level-up moves, not Struggle
           [:@kif_coop_slots, :@kif_coop_lost].each { |v| pk.remove_instance_variable(v) if pk.instance_variable_defined?(v) }
           pk.owner = Pokemon::Owner.new_from_trainer(@trainer)
           pk.obtain_map = $game_map.map_id if $game_map

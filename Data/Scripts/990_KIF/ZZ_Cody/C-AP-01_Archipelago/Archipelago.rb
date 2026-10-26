@@ -222,6 +222,7 @@ module KIF
       end
       # assumed decision: start with the DNA Splicers
       $PokemonBag.pbStoreItem(:DNASPLICERS, 1) if $PokemonBag && !$PokemonBag.pbHasItem?(:DNASPLICERS)
+      turned_on << _INTL("Infinite Splicers") if Dex.give_splicers
       money = opt("starting_money")
       $Trainer.money = money if money >= 0
       town = free_fly_town
@@ -634,6 +635,7 @@ module KIF
         d = data
         d[:dirty] = true if !d[:checked].empty? || d[:goal]   # send them again (see the header)
         Dex.scan   # Pokemon registered while unlinked or offline
+        Dex.give_splicers   # a save linked before the link gave them, or one that lost them
       end
       @timer += 1
       return if @timer < POLL_FRAMES

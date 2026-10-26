@@ -11,7 +11,7 @@
 #   Fusion milestones (apworld 0.8.0, slot "fusion_milestones": [[id, count]],
 #   ids FUSION_MILESTONE_BASE + count) send once that many different fusions
 #   (head/body pairs in PIF's @owned_fusion; triple fusions don't count) are
-#   registered.
+#   registered. Such a slot gives Infinite Splicers (give_splicers).
 #   set_owned runs mid-battle, mid-evolution and mid-trade, so the "found"
 #   messages wait for a quiet moment (KIF::AP.grant_pending). Linking and
 #   loading a save scan the Pokedex (owned species and owned fusions' parts)
@@ -138,6 +138,17 @@ module KIF
         return 0
       end
 
+      # Fusion milestones count only species in the apworld's logic, but DNA
+      # Splicers are used up (and only Silph Co. sells them, after Giovanni):
+      # a slot with them gives Infinite Splicers, at link and on load when the
+      # bag has neither kind (not INFINITESPLICERS2: PIF's unfuse deletes it).
+      # True when it gave them.
+      def give_splicers(d = KIF::AP.data)
+        return false if !$PokemonBag || (d[:fusion_milestones] || []).empty?
+        return false if $PokemonBag.pbHasItem?(:INFINITESPLICERS) || $PokemonBag.pbHasItem?(:INFINITESPLICERS2)
+        return $PokemonBag.pbStoreItem(:INFINITESPLICERS, 1)
+      end
+
       def note(n, tell)
         @have[n] = true
         id = DEX_BASE + n
@@ -201,6 +212,7 @@ module KIF
         until @queue.empty?
           id, n, kind = @queue.shift
           what = if n > 0 then _INTL("{1} was registered in the Pokedex.", GameData::Species.get(n).name)
+                 elsif kind == :fusion && n == -1 then _INTL("1 fusion registered in the Pokedex.")
                  elsif kind == :fusion then _INTL("{1} different fusions registered in the Pokedex.", -n)
                  else _INTL("{1} Pokemon registered in the Pokedex.", -n)
                  end

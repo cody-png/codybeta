@@ -1,4 +1,4 @@
-KIF-MANIFEST 1 version=1.1.1 channel=stable files=29587
+KIF-MANIFEST 1 version=1.1.1 channel=stable files=29566
 5d8b7ff7853a0c9ea25cef730252f32a2849ac94 3085627 Audio/BGM/Azalea Town.mp3
 c1bf8a69360590600d95f7b17970c9bbc1e317ef 2505405 Audio/BGM/BW2_Ghetsis Battle.mp3
 fc522881c06a4cb076d61a14911405c3da74338e 2722742 Audio/BGM/BW2_K_leader.mp3
@@ -3768,7 +3768,6 @@ bdf8dbceb7f9ee4b914bbeb896f9f49e534b98f8 64977 Data/Map409.rxdata
 8307642fe705ca595dd67adf28dedf87caebe89a 10985 Data/Map415.rxdata
 cc847f2fb6d004689735dd69df3a42bd6581fdc1 17982 Data/Map416.rxdata
 519599aaa72b23a6a0866934ec9ad6b14249f396 6059 Data/Map417.rxdata
-5fe93003c4b062bd01ae52bc5414b17292b1ad23 28379 Data/Map418 1.rxdata
 3c7957afda0fae4c707d7ecc9c57b9030ece1f4d 31842 Data/Map418.rxdata
 6d99efe32dba71c96aeb6f02baa9a8c98eb96950 6590 Data/Map419.rxdata
 d508d89f3a1d600b5ebb5452274cf9f7f6e644a3 6997 Data/Map420.rxdata
@@ -4988,11 +4987,9 @@ a1332c3e81c3c74904d3a46e5a794aad61394a0b 1788 Data/Scripts/998_Experimental/Remo
 bdab9c11b821c512bfe2482668aa8c17df66ed3e 6219 Data/Scripts/999_Main/999_Main.rb
 5ae782a21f9d9c0313794872677c86df56c5cfb4 3055 Data/Scripts/DownloadedSettings.rb
 a45219f5ef10c891f9d68fbf2dff723516dc2843 377 Data/Skills.rxdata
-dc0d2d806447623fafeea8d45f586fd0cdd5b7f0 4266418 Data/Sprite Credits.csv
 868d49e59b3053df55a503fbc96bbe533400b9ea 431 Data/States.rxdata
 64dd030190939deb6c8aa7a6027fc91a564c77b2 32107 Data/System.rxdata
 3b3389e09b90357c0655e74ffae380fc48b7e609 410184 Data/Tilesets.rxdata
-f9b31006c733aa226e60e209c722557464a6479e 364643 Data/TilesetsTemp.rxdata
 94c39352b0edb225fa90de0ca64fe19c8a5fdae3 345 Data/Troops.rxdata
 8cfbc905b39f65131ba18e561d236557fbdc52cc 5 Data/VERSION
 c7ea19a7a791e601e24bbc538d8611eb1e1025b0 245 Data/Weapons.rxdata
@@ -5001,18 +4998,14 @@ c7ea19a7a791e601e24bbc538d8611eb1e1025b0 245 Data/Weapons.rxdata
 6db551d2203ffcddbf4b6d82646a77b13e790887 11962 Data/berry_data.dat
 8d063378da1ad9e84d33ccdda559f1467740b5ab 11834 Data/berry_dexes.dat
 76d0313963dab2ca3775ab67c81bdc6c0bc88cb9 3190 Data/berry_plants.dat
-2dd735e35be379ee25155ea8c2313c832249dd7c 125866 Data/compiler.rb
 86bc3563becc478a6502e77900c1201e92f85e5f 1526 Data/connections.dat
-3cd86704178f5df496936e693865d0301afa8926 1945421 Data/dex.json
 7bf029cd560a34ad98b9240d5e2820d620e11252 16334041 Data/dexdata.rxdata
 51d5eb2d8bb132162b80dd5c2bacda091dd8d83e 4457440 Data/eggEmerald.dat
 b660f4ad1050506ec778c0a58ba1f73a10232c15 38738 Data/encounters.dat
 5ef62d9e01bc8b77263eb469120b7f517d023f77 55191 Data/encounters_randomized.dat
 25780a62597553af92abc79cdb1ccee5cd968418 47234 Data/encounters_remix.dat
 8d1e7915eb37b4d357dd78300a590389f23da5cc 3016646 Data/evolutions.dat
-59d376ff5c0296320e54fb98ad14363dedee2f8b 13114 Data/file_list.csv
 51596fb9711e85468a06d1a20335fff4403308f9 6369419 Data/french.dat
-c3cd2ee2488ffb271b39e7af9c71244ca2ef8297 648 Data/generated_entries.json
 96f04dc987f8a8a357d3f17abe860dd8f1f9f319 126859 Data/items.dat
 bdd2f05ce87c7ff87516e039b9722cb645584bd6 556 Data/keybindings.mkxp1
 99be79d2a540848569924d55cedb52a181331558 2391 Data/map_connections.dat
@@ -5022,7 +5015,6 @@ ee44d215dbf5ecb74a2e0d408549578b68bbc004 30150186 Data/messages_fr.dat
 bfe73c3acf7eff0364ac689add7fdfe4efe8fdde 1332 Data/metadata.dat
 982e9923666acc40b069a57d0d156aa797bf3d82 1061038 Data/metrics.dat
 dafa278886f3659dfd40e6a7b1342573b2ce8ca0 3885 Data/move2anim.dat
-014ef7b3e69feb313b3e9ab8217b1d3b71e03fe7 7966 Data/moves.backup.dat
 1b9eb61705f42df4f3523ce0179a3d64ec858a24 177088 Data/moves.dat
 aca1f19dbe2d19d9ccf6d2f27ec702c70e3b7427 72744 Data/outfits/clothes_data.json
 958e04bbb589db92625aa79a41910328eda1bcb2 60830 Data/outfits/hairstyles_data.json
@@ -5030,8 +5022,6 @@ aca1f19dbe2d19d9ccf6d2f27ec702c70e3b7427 72744 Data/outfits/clothes_data.json
 42ae6581f7270eab0182ea2b85e2e3f8ea1cb50c 1632 Data/phone.dat
 17417fcadfe1d69d91280a346ebf87e5ec4d8aa7 705789 Data/pokedex/all_entries.json
 0e1c0914c24208c2a0d45f322921017d0dab73b4 18509009 Data/pokedex/dex.json
-e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 0 Data/pokedex/rate_limit.log
-fbdaf0f6d4da7194d6a09ced7aa73f12757b2db9 15 Data/rate_limit_log.json
 e1f23b8dc0b2e36c0aecda0dd88b95c907fc483d 2724 Data/regional_dexes.dat
 730f538905bfbd74266310529b041c3abcdc6e89 353670 Data/regionals.dat
 73f9ead0fefed8aa84bc7a3a53c43711b619951c 8679 Data/ribbons.dat
@@ -5041,7 +5031,6 @@ e81a0ebda082ec9940ca5855b62e1c134f62a60c 478219 Data/species.dat
 5c09a0436156430e6f7de37fecbbfce1f8f285cc 85212 Data/sprites/BASE_SPRITES
 4fa20a9e966f531ddc2617713e8e9d68cf738501 2660337 Data/sprites/CUSTOM_SPRITES
 a4ed2812632f11952bfaf9da2f8faed895287cdf 6107180 Data/sprites/Sprite_Credits.csv
-67963ce0d3810460d7276717eeddecee45a665dc 32 Data/sprites/sprites_rate_limit.log
 f22fa7a8bbfe818cdc7e476ec342acdc5cbe4e92 1808 Data/sprites/updated_spritesheets_cache
 cb245a6e7f75d0639a52d41cd25e394c427bf28f 229241 Data/sprites/updated_spritesheets_cache_full
 f8faa146932f1728db7a7b298ee874b3361cc535 8696 Data/town_map.dat
@@ -14407,7 +14396,6 @@ afc5e280b57a882af289b766729c37b662ca591a 4845 Graphics/Characters/player/clothes
 ddb2b356a3bad883695f8d05b0b852f995f861ca 4068 Graphics/Characters/player/clothes/SnowCoatMale/clothes_surf_SnowCoatMale.png
 f76abb03183d8ef6fe2a91db5fd26b89c7fbb3e7 972 Graphics/Characters/player/clothes/SnowCoatMale/clothes_trainer_SnowCoatMale.png
 8ad86727695cee494a5d9719118861aaa21da2f2 4774 Graphics/Characters/player/clothes/SnowCoatMale/clothes_walk_SnowCoatMale.png
-61b111e86b84f70ab718155441864c25d5a8b900 79 Graphics/Characters/player/clothes/VeteranM/README.txt
 e95a9514da25548c9e1b2eab2216b1c2a7bdcbf0 2229 Graphics/Characters/player/clothes/VeteranM/clothes_bike_VeteranM.png
 55ab5c5365ccb150942a6200c62983c324f5d593 1905 Graphics/Characters/player/clothes/VeteranM/clothes_dive_VeteranM.png
 50231df7163c57b6315d63965c0f816b1becc54d 2409 Graphics/Characters/player/clothes/VeteranM/clothes_fish_VeteranM.png
@@ -14492,7 +14480,6 @@ c38ad3e2becc6a3e02f2d49e2cd8b0711c74571c 4964 Graphics/Characters/player/clothes
 6e72ab4e4cf17f1a1eea0025ecdf47ecb52581c1 3005 Graphics/Characters/player/clothes/adventurer_f/clothes_surf_adventurer_f.png
 08a1d9e5410732042d78a688227220623f52c8d0 1896 Graphics/Characters/player/clothes/adventurer_f/clothes_trainer_adventurer_f.png
 8cab8be10dcb6e246799e5206917b60c11505fde 4709 Graphics/Characters/player/clothes/adventurer_f/clothes_walk_adventurer_f.png
-c16f94fba8e0cfb5860eddafdd7f2de3af5fcc26 133 Graphics/Characters/player/clothes/adventurer_f/readme.txt
 8b810f8129ac5c130255aa1f2ae1cbd78364b01f 3762 Graphics/Characters/player/clothes/adventurer_m/clothes_bike_adventurer_m.png
 dc0c32cca2d03047877d8694da1977a30c05f80b 3386 Graphics/Characters/player/clothes/adventurer_m/clothes_dive_adventurer_m.png
 595b3acd0c9b2c8b6f72b27eab4a26dbb37d277d 3935 Graphics/Characters/player/clothes/adventurer_m/clothes_fish_adventurer_m.png
@@ -14500,7 +14487,6 @@ f6c282c49e6f59c17fe649e64e2f71c8da85d996 5068 Graphics/Characters/player/clothes
 23da0e52591257cc46994f67af77bfd430f0b340 2772 Graphics/Characters/player/clothes/adventurer_m/clothes_surf_adventurer_m.png
 4d4d09d2d834ac40899c8f42a1c5072bd354e799 1968 Graphics/Characters/player/clothes/adventurer_m/clothes_trainer_adventurer_m.png
 5e042c0d2d5722c5c69181b6cebd67bf355dd850 4860 Graphics/Characters/player/clothes/adventurer_m/clothes_walk_adventurer_m.png
-c16f94fba8e0cfb5860eddafdd7f2de3af5fcc26 133 Graphics/Characters/player/clothes/adventurer_m/readme.txt
 e371f5da6646084d05b9e5386d7909901a672faa 2965 Graphics/Characters/player/clothes/basicbug/clothes_bike_basicbug.png
 381c0c16a55a3869f2b92163ab09e72c7c60ee35 2737 Graphics/Characters/player/clothes/basicbug/clothes_dive_basicbug.png
 649f979f2a451f0250488bdab377308aaadee0ef 2937 Graphics/Characters/player/clothes/basicbug/clothes_fish_basicbug.png
@@ -14845,7 +14831,6 @@ bf5b1d11443973ed053aa892ff093d23c348fba1 2302 Graphics/Characters/player/clothes
 b96e06b8a779e2cde40abe622691686e4ae95869 1808 Graphics/Characters/player/clothes/ghostoutfit/clothes_surf_ghostoutfit.png
 3043f9f37bad26650bcec278839e4661786e033d 2325 Graphics/Characters/player/clothes/ghostoutfit/clothes_trainer_ghostoutfit.png
 83bb69214ddfbe2746d3257917120ee552c39e13 3648 Graphics/Characters/player/clothes/ghostoutfit/clothes_walk_ghostoutfit.png
-c991b3cae6043cfc0541a1a256cc8c9e36d6466b 286 Graphics/Characters/player/clothes/glitzerset/IMPORTANT_ADDITIONAL_NOTES.txt
 4b62fc6c12b51eb38aefc9db39de72d53efa5e86 3191 Graphics/Characters/player/clothes/glitzerset/clothes_bike_glitzerset.png
 490ee6f851ecfafb1d1ca106e97fc3d9b96ad2e7 2623 Graphics/Characters/player/clothes/glitzerset/clothes_dive_glitzerset.png
 c29a28753b974dd4dd69f24dd80402f7c57d0663 3475 Graphics/Characters/player/clothes/glitzerset/clothes_fish_glitzerset.png
@@ -14853,7 +14838,6 @@ f50141f3fef1548105a3da0358617089e11b817f 3914 Graphics/Characters/player/clothes
 a2ea79970922d8d062db587cea28e3e86a2eaf4c 2186 Graphics/Characters/player/clothes/glitzerset/clothes_surf_glitzerset.png
 119106be138256a1d873fb80b07504c854f93038 1939 Graphics/Characters/player/clothes/glitzerset/clothes_trainer_glitzerset.png
 4a8094aeeb8d12235c7cf50095cc1115121c4ef6 3756 Graphics/Characters/player/clothes/glitzerset/clothes_walk_glitzerset.png
-81d65347fced8487b4273b660ecbdc7d028a72ca 7482 Graphics/Characters/player/clothes/gothhoodie/CHANGES NEEDED.docx
 27bc1e772af55cbeb0230239650a9b29441a9404 6763 Graphics/Characters/player/clothes/gothhoodie/clothes_bike_gothhoodie.png
 4d8edf1ba67c5fcaaaa60cf2d5f27306eb899eb6 6184 Graphics/Characters/player/clothes/gothhoodie/clothes_dive_gothhoodie.png
 f66cf92c39eb6a8e4c378e1e89a7f7e90b2228f0 7042 Graphics/Characters/player/clothes/gothhoodie/clothes_fish_gothhoodie.png
@@ -24576,7 +24560,6 @@ d8cc259731c0802606d0e32852f1e494855ce0fb 157 Graphics/Panoramas/pB7wMme.png
 4c32c11906e0e0753fcadd872f9d95d5e5215e58 256 Graphics/Panoramas/safari.png
 7d3da59eade3aa1bd73c9a75573ece0f5f55e2ca 447 Graphics/Panoramas/skulls.png
 1f85ac1f5e5f0d3c860ffe567f0cb8767218c0c4 452 Graphics/Panoramas/sky_pan.png
-1577ff063e2f034a533f5764b4bb695caa873947 69800 Graphics/Panoramas/test.jpg
 75dee4345f724221eabcc7ef2462b1944da45061 18129 Graphics/Panoramas/violetgym.png
 39f03400919c9b577fe3e21a1b02037a3a50006d 28110 Graphics/Pictures/021-Normal01.png
 5f1bebfe1cccc8bcc0083c187b29b73e90afba34 644 Graphics/Pictures/031.png
@@ -24666,7 +24649,6 @@ e9efcdd137c09cfdb8d54e6cfa5cd630a687ac4b 5875 Graphics/Pictures/CatchPoke/bg.png
 aca7c79b0a1ed3832f3b70fae7bf1000535f78b5 809 Graphics/Pictures/CatchPoke/enemy.png
 8be753342c9549c0e1144041c44a858e5866ad74 865 Graphics/Pictures/CatchPoke/player.png
 0902c9977a3e2d5314b9f8f814c0ff2d6b18cab3 1047 Graphics/Pictures/CatchPoke/trback.png
-71db415c8e6f0f6d94f5fc5217497a35e2540f54 979493 Graphics/Pictures/Challenge Modes/Challenge Selection.psd
 3fbc5d1ca0a423bb77a14fcaa386e852d443e37c 137 Graphics/Pictures/Challenge Modes/bg.png
 8261e06a3eae5f9fe415bbef1e5f5f85b7251e37 35768 Graphics/Pictures/Challenge Modes/bg_top.png
 66ae5931765126d0dd93420b50800a65daa7dfc5 1013 Graphics/Pictures/Challenge Modes/button_op.png
@@ -26097,7 +26079,6 @@ bb1c9a852f1104456d809ba55afe1cfcf511ee9a 170 Graphics/Pictures/map/location_icon
 bf0c4817b69fb57ba054640803def248c89dba05 236 Graphics/Pictures/map/location_icon_female.png
 ca57fc8b3dc6e68dbdcc7fcf4ca7ef23830d789b 232 Graphics/Pictures/map/location_icon_male.png
 1cf245d2d175839aa2eb0565b89b97591858c29b 12022 Graphics/Pictures/map/map.png
-cc86d409d6d34a6a76be1e8aa1f787a0889a1826 378144 Graphics/Pictures/map/map.psd
 69f06e9c9828b5abcf8e23aeaa2623e7a3a70f16 197 Graphics/Pictures/map/mapFly.png
 2374d5cb8bddb214401bd93a636c5bf14b8dd28d 4428 Graphics/Pictures/map/mapFly_base.png
 05547e9a0fbb881d6adb4c703a9351f31c42a690 299130 Graphics/Pictures/map/mapRegion0.png
@@ -29483,7 +29464,6 @@ a2a81919aa70ef464e9e96751ad6e9ed91f8770c 208 Graphics/Weather/storm_4.png
 772ec4cfc26f180b8c42fcc5cf154020826f28fc 32588 Graphics/Weather/strong_winds.png
 9f317e95943378344c400f38a85ab75778a9969c 239 Graphics/Weather/wind.png
 80f56da02bb710f4767c243310b236e3bd76dc13 16333 Graphics/Weather/wind1.png
-08e3f7151b653a99f45f517c6a10e49a6bef78e8 72 Graphics/Weather/wind1.webp
 412fe64497592165da8cd9ee5b7eedf8fcd154c7 17249 Graphics/Weather/wind2.png
 454e2bba5b377caf0281b34da67542163e135fbd 16218 Graphics/Weather/wind3.png
 f1bc2c7b8f8d07c0bbad22fde97b03ae92c90d0a 7119 Graphics/Weather/windleaf1.png
@@ -29572,7 +29552,6 @@ f784873e5a23e3de6fe707858937139d956e13d5 267 Graphics/Windowskins/speech pl 8.pn
 9edeee77a1e28fa70e7e3b5564b04c06e866109b 197 Graphics/Windowskins/speech rs.png
 0e08dadeaf48ebdaebe215ba3e01360a4aa367b4 180 Graphics/Windowskins/speech ug 1.png
 c55bf5553d9a91adb1042bccaa4c225067ddf10e 196 Graphics/Windowskins/speech ug 2.png
-17d1fb5b3fb8b70ea83ed9bd292700bd8250d9f8 812 Graphics/paya_test.png
 c20ff2fa9e4ede1711c88337bfcc48680fe8b3bb 509 Import Sprites/READ ME - zip and rar files are deleted after importing.txt
 7ae541befe16783c989609bd57720ff448a9ef42 19278336 InfiniteFusion.exe
 efc611ae60983418b89b9ccc27bf03ed6db28ce0 868 KIF Savefiles.lnk

@@ -496,8 +496,8 @@ module KIF
         api("kernel32", "CloseHandle", %w[L], "i").call(h)
       end
 
-      # Ends this game at once. Kernel.exit! alone left the game open after
-      # an update (Cody, 0.21.56), so the update window waited for ever.
+      # Ends this game at once (~0.1 s in the real engine, as Kernel.exit! alone).
+      # In 0.21.56 the game "left open" was waiting at the message before it.
       def quit_now
         me = api("kernel32", "GetCurrentProcess", [], "L").call
         api("kernel32", "TerminateProcess", %w[L L], "i").call(me, 0)
@@ -699,14 +699,15 @@ module KIF
       lines << "chcp 65001 >nul"
       lines << "title KIF update"
       lines << "echo Finishing the KIF #{version} update. This window closes by itself."
-      # the game closes itself; one still open after 20 s is closed here
+      # the game closes itself (gone ~0.1 s after starting this): the first 10 tries
+      # look again at once, then once a second; one still open after ~20 s more is closed here
       lines << "set /a waited=0"
       lines << ":wait"
       lines << "tasklist /FI \"PID eq #{pid}\" 2>nul | find \"#{pid}\" >nul"
       lines << "if errorlevel 1 goto go"
       lines << "set /a waited+=1"
-      lines << "if %waited% GEQ 20 taskkill /PID #{pid} /F >nul 2>&1"
-      lines << "timeout /t 1 /nobreak >nul"
+      lines << "if %waited% GEQ 30 taskkill /PID #{pid} /F >nul 2>&1"
+      lines << "if %waited% GEQ 10 timeout /t 1 /nobreak >nul"
       lines << "goto wait"
       lines << ":go"
       lines << "robocopy \"#{s}\\files\" \"#{r}\" /E /MOVE /R:10 /W:1 /NFL /NDL /NJH /NJS /NP >nul"
@@ -780,7 +781,7 @@ module KIF
     def restart_after_apply(version)
       exe = windows? ? (Win.exe_path || File.join(root, "InfiniteFusion.exe")) : nil
       if exe
-        pbMessage(_INTL("KIF {1} is installed. The game restarts now.", version))
+        pbMessage(_INTL("KIF {1} is installed. The game restarts now.", version) + "\\wtnp[20]")   # no button: it says "now"
         h, _pid = Win.spawn("\"#{win_path(exe)}\"", 0, root)
         if h
           Win.close(h)
@@ -871,8 +872,11 @@ module KIF
       if update_window?
         exe = Win.exe_path || File.join(root, "InfiniteFusion.exe")
         File.open(File.join(dir, "apply.cmd"), "wb") { |f| f.write(apply_script(dir, version, Process.pid, exe)) }
+        # goes on by itself: it waited for a button, so the game sat there until the update
+        # window's backstop killed it, with no end line in the log (Cody, 2026-10-25). The
+        # window starts after it, so it can't cover the message or take its key presses.
+        pbMessage(_INTL("KIF {1} is ready. The game closes now and starts again in a moment.", version) + "\\wtnp[20]")
         if start_apply(dir)
-          pbMessage(_INTL("KIF {1} is ready. The game closes now and starts again in a moment.", version))
           (KIF::SessionLog.finish rescue nil) if defined?(KIF::SessionLog)
           Win.quit_now
           return true

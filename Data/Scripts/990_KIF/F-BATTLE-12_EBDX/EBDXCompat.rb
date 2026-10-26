@@ -162,8 +162,8 @@ if KIF::EBDX.installed?
         lineup = (side % 2 == 0) ? @playerLineUp : @opponentLineUp
         return if !lineup || lineup.disposed?
         lineup.refresh
-        # this scene shows the player's battle box during the intro: the lineup
-        # goes above it, not across it. Singles: between the foe trainer's feet
+        # the lineup goes above the player's battle box (shown again on a switch,
+        # and in doubles the other box stays), not across it. Singles: between the foe trainer's feet
         # and the box (0.55 touches neither); doubles have no such gap (the
         # first box reaches the feet), so EBDX's follower spot (0.5) keeps the
         # balls off the box's name
@@ -241,6 +241,104 @@ if KIF::EBDX.installed?
         (@kif_bitmaps || []).each { |b| b.dispose if !b.disposed? } if !@disposed
         @kif_bitmaps = nil
         kif_lineup_dispose
+      end
+    end
+  end
+
+  # Battle boxes at a battle's start: 660/010's loadWildBitmaps (run while the
+  # scene is built) drew and showed every box, so during "You are challenged
+  # by ..." the foe's lead (name, level, status, types) showed before it was
+  # sent out, and in doubles the foe's lineup lay across its second box. As in
+  # PIF's scene a box now appears with its Pokémon: each send-out draws its box
+  # again (render, then appear). A wild Pokémon's box still shows at the start
+  # (it is already out); the player's waits for "Go! ...!". EBDX's follower
+  # (a Pokémon already out) keeps its box.
+  if defined?(::PokeBattle_SceneEBDX) && ::PokeBattle_SceneEBDX.method_defined?(:loadWildBitmaps)
+    class ::PokeBattle_SceneEBDX
+      alias kif_intro_loadWildBitmaps loadWildBitmaps unless method_defined?(:kif_intro_loadWildBitmaps) || private_method_defined?(:kif_intro_loadWildBitmaps)
+      def loadWildBitmaps
+        kif_intro_loadWildBitmaps
+        return if defined?(::PokeBattle_SafariZone) && @battle.is_a?(::PokeBattle_SafariZone)   # no send-out
+        follower = (EliteBattle.follower(@battle) rescue nil)
+        @battle.battlers.each_with_index do |b, i|
+          next if !b || i == follower
+          next if @battle.wildBattle? && @battle.opposes?(i)
+          box = @sprites["dataBox_#{i}"]
+          box.visible = false if box && !box.disposed?
+        end
+      end
+    end
+  end
+
+  # Level up: 660/010's pbLevelUp only played a jingle, so PIF's two stat
+  # windows ("Max. HP +3" ..., then the new totals) never showed and
+  # Auto-Battle's "Level Up: Show stats / Continue" had nothing to act on.
+  # They now follow EBDX's jingle, as PIF's scene shows them (with KIF's
+  # wrappers of PIF's method).
+  if defined?(::PokeBattle_SceneEBDX)
+    class ::PokeBattle_SceneEBDX
+      alias kif_ebdx_pbLevelUp pbLevelUp unless method_defined?(:kif_ebdx_pbLevelUp) || private_method_defined?(:kif_ebdx_pbLevelUp)
+      def pbLevelUp(*args)
+        kif_ebdx_pbLevelUp(*args)
+        ::PokeBattle_Scene.instance_method(:pbLevelUp).bind(self).call(*args)
+      end
+    end
+  end
+
+  # The name line of EBDX's boxes: 660/007 DataBoxEBDX#refresh draws the name,
+  # the gender symbol and "Lv.N" with three pbDrawOutlineText calls. As in
+  # PIF's box with KIF:
+  #   * Base Stats Mode (6.8.2's No-Levels switch) leaves the level out unless
+  #     F-BATTLE-07's "Show Lv. in BSM" is On (EBDX always drew it);
+  #   * F-POKE-03 Gender: KIF's ♂/♀ colours, KIF's genderless icon (EBDX drew
+  #     nothing) and the pizza icon, at half size to match EBDX's small font.
+  if defined?(::DataBoxEBDX)
+    class ::DataBoxEBDX
+      def pbDrawOutlineText(bitmap, x, y, width, height, string, baseColor, shadowColor = nil, align = 0)
+        line = @sprites && @sprites["textName"]
+        return super unless @battler && line && bitmap.equal?(line.bitmap)
+        if string == "Lv.#{@battler.level}"
+          return if defined?(KIF::BattleUI) && !KIF::BattleUI.show_level?
+        elsif ["♂", "♀", ""].include?(string) && !@hidden && defined?(KIF::Gender) &&
+              KIF::Modules.active?("F-POKE-03_Gender")
+          icon = if @battler.respond_to?(:displayGenderPizza) && @battler.displayGenderPizza
+                   KIF::Gender::ICON_PIZZA
+                 elsif @battler.displayGender == 2
+                   KIF::Gender::ICON_GENDERLESS
+                 end
+          if icon
+            kif_half_icon(bitmap, icon, x, y + height / 2 - 2)
+            return
+          end
+          colour = (string == "♂") ? KIF::Gender::MALE[0] : KIF::Gender::FEMALE[0]
+          return super(bitmap, x, y, width, height, string, colour, shadowColor, align) if string != ""
+        end
+        super
+      end
+
+      # a KIF 2x icon at EBDX's 1x scale: its drawn part starts at x, centred on cy
+      def kif_half_icon(bitmap, path, x, cy)
+        icon = KIF::Gender.icon_bitmap(path)
+        return unless icon
+        bitmap.stretch_blt(Rect.new(x - 1, cy - icon.height / 4, icon.width / 2, icon.height / 2),
+                           icon, Rect.new(0, 0, icon.width, icon.height))
+      end
+    end
+  end
+
+  # A player-side box's status tag hangs 8 px below the box (660/007 status
+  # y 16). With more than one Pokémon on the player's side, the lower box
+  # (partner battles and doubles: the second, triples: the third) sits right
+  # above the message box, and its tag lay on the message box's top edge
+  # during every message and move. There the tags sit level with their box's
+  # bottom edge instead.
+  if defined?(::DataBoxEBDX)
+    class ::DataBoxEBDX
+      alias kif_layout_applyMetrics applyMetrics unless method_defined?(:kif_layout_applyMetrics) || private_method_defined?(:kif_layout_applyMetrics)
+      def applyMetrics
+        kif_layout_applyMetrics
+        return unless @playerpoke && @battle.pbMaxSize(0) > 1 && @data && @data["status"]
+        @data["status"][:y] = [@data["status"][:y], 8].min
       end
     end
   end

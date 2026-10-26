@@ -1,7 +1,7 @@
-KIF 1.2.4
-- Battle Info: on the Abilities and Moves pages, press C (or Enter) on a row to read its full description (for a move: type, category, power, accuracy and PP too).
-- Illusion: a disguised foe shows as the Pokemon it copies in Battle Info and the Fight menu's hints, and switches to the real one when the disguise breaks.
-- EBDX: both teams' Poke Ball lineups show again at the start of trainer battles and when a Pokemon switches in, with the right balls in partner and two-trainer battles.
-- Archipelago (apworld 0.7.0): new Dexsanity option. Each caught Pokemon is a check (a fusion counts both of its parts), with optional milestone checks.
-- Options > System > Test Code: for invited testers only; everyone else can ignore it.
-- Restarting the scripts with F12 (JoiPlay, Linux, macOS) no longer crashes with "stack level too deep".
+KIF 1.2.5
+- EBDX: move effectiveness shows in the Fight menu; battle boxes appear as each Pokemon is sent out, so the foe's lead stays hidden; foe type icons, KIF's shiny star, gender icons and level-up stat windows now show there too.
+- Battle Info has a Log page: every message and ability pop-up of the battle so far, by turn (green dot: about your Pokemon, red: about the foe's).
+- From the next update on, the game closes and restarts by itself a few seconds after the download (this one may still take about 20 seconds).
+- Self-Battle's Stat Tracker line shows again in PIF's battle screen.
+- Swap BattleGUI and Dark Mode's battle menus say they have no effect with EBDX Battles.
+- In PIF's battle screen, the lower Pokemon's status tag in doubles is no longer cut off by the menu.

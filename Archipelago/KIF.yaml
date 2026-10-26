@@ -138,14 +138,16 @@ Kuray Infinite Fusion:
     # from the ones you can get in your regions before the Hall of Fame). Catching, hatching, evolving, trading
     # and gifts all count. A fusion counts for both of its Pokemon; fusions have no checks of their own.
     # Needs Randomize Wild Pokemon: vanilla and Wild Fusions off. Each check adds a Poke Ball, Great Ball or
-    # Ultra Ball to the pool.
+    # Ultra Ball to the pool. Evolving by level is in logic once KIF's Hard level cap allows that level; an
+    # evolution stone is used up, so the logic counts on one stone per species (Celadon Dept. Store sells Fire,
+    # Water, Thunder, Leaf and Ice Stones unless shop items are randomized).
     'false': 50
     'true': 0
 
   dexsanity_count:
     # How many species are Dexsanity checks. A number above what your regions have means all of them
-    # (without legendaries: Kanto 260 Classic / 439 Remix, Kanto + Sevii 291 / 456, Kanto + Johto 302 / 446,
-    # all regions 318 / 461).
+    # (without legendaries: Kanto 255 Classic / 434 Remix, Kanto + Sevii 289 / 453, Kanto + Johto 296 / 443,
+    # all regions 315 / 459).
     #
     # You can define additional values between the minimum and maximum values.
     # Minimum value is 1

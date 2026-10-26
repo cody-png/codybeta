@@ -15,7 +15,10 @@
 #   The apworld's logic reads the game's own wild tables: linking a Dexsanity
 #   slot is refused while wild Pokemon are randomized (or Fuse everything is
 #   on), and when the save's mode (Classic / Remix, SWITCH_MODERN_MODE) isn't
-#   the slot's game_mode.
+#   the slot's game_mode (checked before the link changes anything). At quiet
+#   moments a linked save is warned once per load about what makes checks
+#   impossible: random wild Pokemon, the other mode (Legendary Mode's
+#   "Trainers" option flips it), Nuzlocke (one catch per place).
 #===============================================================================
 module KIF
   module AP
@@ -43,16 +46,20 @@ module KIF
         return mode == "remix" ? _INTL("Remix") : _INTL("Classic")
       end
 
-      def wild_randomized?
+      # settings: a slot's randomizer, which replaces the save's when linking (apply_settings)
+      def wild_randomized?(settings = nil)
+        if settings.is_a?(Hash) && !settings.empty?
+          return [:wild_mode, :fuse_all].any? { |k| (settings[k.to_s] || KIF::Rand::DATA_DEFAULTS[k] || 0).to_i > 0 }
+        end
         return KIF::Rand.get(:wild_mode) > 0 || KIF::Rand.get(:fuse_all) > 0
       rescue StandardError
         return false
       end
 
       # Why this save can't link to a Dexsanity slot (nil: it can)
-      def refuse_reason(d)
+      def refuse_reason(d, settings = nil)
         return nil unless slot?(d)
-        if wild_randomized?
+        if wild_randomized?(settings)
           return _INTL("This Archipelago game has Pokedex checks, which need the normal wild Pokemon, but this save randomizes them. Turn off random wild Pokemon and Fuse everything in the randomizer, then link again.")
         end
         mode = d[:game_mode]
@@ -140,12 +147,33 @@ module KIF
         KIF.log("Archipelago: Pokedex check failed for #{species.inspect} (#{e.class}: #{e.message})")
       end
 
+      # What makes some Pokedex checks impossible right now: [[key, message]]
+      def warnings
+        out = []
+        if wild_randomized?
+          out << [:wild, _INTL("Wild Pokemon are randomized in this save, so some Pokedex checks of this Archipelago game may be impossible. Turn off random wild Pokemon and Fuse everything in the randomizer.")]
+        end
+        mode = KIF::AP.data[:game_mode]
+        if mode && mode != save_mode
+          out << [:mode, _INTL("This save now plays {2}, but this Archipelago game's Pokedex checks were made for {1}, so some may be impossible. Set Options > Trainers back to {1}.",
+                               mode_name(mode), mode_name(save_mode))]
+        end
+        if defined?(KIF::Nuzlocke) && KIF::Nuzlocke.on?
+          out << [:nuzlocke, _INTL("Nuzlocke is on, so only the first wild Pokemon of each place can be caught and many Pokedex checks of this Archipelago game can't be done. Turn Nuzlocke off in Options > Challenges if you get stuck.")]
+        end
+        return out
+      end
+
       # At a quiet moment (KIF::AP.grant_pending)
       def tell
         return unless @global == $PokemonGlobal.object_id
-        if !@warned && slot? && wild_randomized?
-          @warned = true
-          pbMessage(_INTL("Wild Pokemon are randomized in this save, so some Pokedex checks of this Archipelago game may be impossible. Turn off random wild Pokemon and Fuse everything in the randomizer."))
+        if slot?
+          @warned ||= {}
+          warnings.each do |key, text|
+            next if @warned[key]
+            @warned[key] = true
+            pbMessage(text)
+          end
         end
         until @queue.empty?
           id, n = @queue.shift

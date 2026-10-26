@@ -194,7 +194,12 @@ module KIF
     # turns off, or nil when applying failed (the save is left as it was).
     # turned_on gets what the slot gives the save (shown after linking)
     def link!(slot, turned_on = [])
-      @link_error = nil
+      # refused before anything changes (applying the slot re-randomizes the save, which restore can't undo)
+      @link_error = Dex.refuse_reason(clean_slot(slot), slot["randomizer"])
+      if @link_error
+        KIF.log("Archipelago: link refused, save left as it was (#{@link_error})")
+        return nil
+      end
       turned_off = rand_turned_off
       old = $PokemonGlobal.kif_ap
       saved = KIF::Rand.capture
@@ -204,8 +209,6 @@ module KIF
         $PokemonGlobal.kif_ap = clean_slot(slot)
         reset_cache
         apply_settings(slot)   # linked already, so the forced settings hold while it runs
-        why = Dex.refuse_reason($PokemonGlobal.kif_ap)
-        raise(@link_error = why) if why
       rescue StandardError => e
         $PokemonGlobal.kif_ap = old
         KIF::Rand.restore(saved)

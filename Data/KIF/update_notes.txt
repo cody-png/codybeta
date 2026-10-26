@@ -1,9 +1,7 @@
-KIF 1.2.3
-- Battle Info: a foe's abilities and all its moves show from the start of the battle. Options > Battles > Screens > Foe Info: As seen keeps the old way.
-- Archipelago (apworld 0.6.3): spots where only one of a group can ever give an item are one check, so every seed can be finished. Received items no longer freeze the game, and a DeathLink from another seed no longer wipes your team.
-- Archipelago traps: items and traps wait until a battle's intro is over; Warp waits during scenes and resets a gym's type; Party Lock and Battle Trap fixes.
-- EV Allocation: the 510 limit holds with vitamins and Wings, and moving HP EVs can't faint or revive a Pokemon.
-- Mouse and touch: clicks cross into the next map and work with the Journey Camera mod; clicks in the EBDX fight menu and the Summary tabs pick the right thing.
-- Randomizer: Route mode works with a read-only game folder (phones), and Return home is blocked on Pinkan Island. Nuzlocke: a Blackout no longer touches PIF's shared Transfer Box.
-- Mods: emoji in mod.json, folders with [ ] in their name, and mod zips and catalog installs with a read-only game folder all work.
-- Updates remove old editor and script files (.idea and the like) that older downloads left in the game folder.
+KIF 1.2.4
+- Battle Info: on the Abilities and Moves pages, press C (or Enter) on a row to read its full description (for a move: type, category, power, accuracy and PP too).
+- Illusion: a disguised foe shows as the Pokemon it copies in Battle Info and the Fight menu's hints, and switches to the real one when the disguise breaks.
+- EBDX: both teams' Poke Ball lineups show again at the start of trainer battles and when a Pokemon switches in, with the right balls in partner and two-trainer battles.
+- Archipelago (apworld 0.7.0): new Dexsanity option. Each caught Pokemon is a check (a fusion counts both of its parts), with optional milestone checks.
+- Options > System > Test Code: for invited testers only; everyone else can ignore it.
+- Restarting the scripts with F12 (JoiPlay, Linux, macOS) no longer crashes with "stack level too deep".

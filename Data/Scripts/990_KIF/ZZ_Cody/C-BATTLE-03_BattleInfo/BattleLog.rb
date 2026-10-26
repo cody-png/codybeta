@@ -29,9 +29,9 @@ module KIF
 
     def add(battle, msg, battler = nil, popup = false)
       # message codes: \PN is the player's name; the rest (\n, \c[2], \wt[5]...)
-      # become a space, only the code's own letters (Essentials' codes)
+      # become a space, only the code's own letters (Essentials' and PIF's codes)
       text = KIF::PixelFont.utf8(msg).gsub(/\\pn/i) { $Trainer ? $Trainer.name.to_s : "" }
-                .gsub(/\\[a-z]+\[[^\]]*\]|\\(?:pm|cn|pt|wd|wm|wu|op|cl|[gnrb.|!^])|<[^>]*>|[\x00-\x1F]/i, " ").squeeze(" ").strip
+                .gsub(/\\[a-z]+\[[^\]]*\]|\\(?:pm|cn|pt|wd|wm|wu|op|cl|pog|pg|ft|qp|hs|[gnrb.|!^])|<[^>]*>|[\x00-\x1F]/i, " ").squeeze(" ").strip
       return if text.empty?
       battler ||= battle.battlers.map { |b| b && b.pokemon && [b, KIF::PixelFont.utf8(b.pbThis)] }.compact
                         .select { |_b, name| text.start_with?(name) }.max_by { |_b, name| name.length }&.first ||

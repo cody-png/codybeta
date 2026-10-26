@@ -133,6 +133,8 @@ module KIF
           KIF::SoulLink.on_connect(s) if defined?(KIF::SoulLink)
           KIF::Presence.on_connect if defined?(KIF::Presence)
           KIF::Coop.on_connect(s) if defined?(KIF::Coop)
+          ModShare.on_connect(s) if defined?(ModShare)
+          KIF::NetSprite.on_connect(s) if defined?(KIF::NetSprite)
         when :message
           if ev[1] == "wave"
             @notes << _INTL("{1} says hello!", s.partner)
@@ -144,6 +146,14 @@ module KIF
             end
           elsif ev[1].start_with?("pr_") && defined?(KIF::Presence)
             KIF::Presence.receive(ev[1], ev[2])
+          elsif ev[1].start_with?("mod_") && defined?(ModShare)
+            ModShare.receive(s, ev[1], ev[2])
+          elsif ev[1].start_with?("sp_") && defined?(KIF::NetSprite)
+            begin
+              KIF::NetSprite.receive(s, ev[1], ev[2])
+            rescue => e
+              log("sprite message failed (#{e.class}: #{e.message})")
+            end
           elsif ev[1].start_with?("co_") && defined?(KIF::Coop)
             begin
               KIF::Coop.receive(ev[1], ev[2])

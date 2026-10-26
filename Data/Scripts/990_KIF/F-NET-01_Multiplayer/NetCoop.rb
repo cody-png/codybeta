@@ -323,6 +323,7 @@ module KIF
         h = { "s" => p.species.to_s, "l" => p.level, "n" => p.name.to_s[0, 24], "g" => p.gender.to_i,
               "sh" => p.shiny? ? 1 : 0, "hp" => p.hp, "th" => p.totalhp, "st" => p.status.to_s,
               "f" => p.form.to_i, "eg" => p.egg? ? 1 : 0 }
+        KIF::NetSprite.dump_into(h, p) if defined?(KIF::NetSprite)   # sprite key, KIF shiny colours
         return h unless full
         h["x"]  = p.exp
         h["ab"] = p.ability_index
@@ -368,6 +369,7 @@ module KIF
         p.instance_variable_set(:@totalhp, th) if th && !full
         p.instance_variable_set(:@hp, int(h["hp"], 0, p.totalhp, p.totalhp))
         p.instance_variable_set(:@status, p.hp > 0 ? st : :NONE)
+        KIF::NetSprite.load_into(p, h) if defined?(KIF::NetSprite)
         return p
       rescue StandardError => e
         KIF::Coop.log("a Pokémon didn't fit (#{e.class}: #{e.message})")

@@ -368,6 +368,7 @@ module KIF
         pks.each do |pk|
           pk.owner = Pokemon::Owner.new_from_trainer(@trainer)
           pk.obtain_map = $game_map.map_id if $game_map
+          KIF::NetSprite.forget(pk) if defined?(KIF::NetSprite)
         end
         @caught = pks
         @mirror.instance_variable_get(:@caughtPokemon).concat(pks)

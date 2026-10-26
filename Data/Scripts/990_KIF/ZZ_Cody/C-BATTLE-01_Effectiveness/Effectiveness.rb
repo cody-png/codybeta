@@ -12,8 +12,10 @@
 # With several foes the marker shows the best result among them.
 # Uses the battle's own type calculation (in-battle types, KIF type buffs,
 # Scrappy, Ring Target, grounded Flying types, ...). Status moves show nothing.
+# A foe disguised by Illusion counts as the Pokémon it copies (its types and
+# ability), as Battle Info shows it, until the disguise breaks.
 # A foe's ability counts from the start with Battle Info's Foe Info: All
-# (default; not while an Illusion disguise holds), with As seen once
+# (default), with As seen once
 # the battle has shown it (ability pop-up / message): its immunity
 # counts – Levitate (Ground), Flash Fire, Volt/Water Absorb, Lightning Rod,
 # Motor Drive, Sap Sipper, Storm Drain, Dry Skin, Soundproof, Bulletproof,
@@ -58,12 +60,12 @@ module KIF
     # Type multiplier value (Effectiveness::NORMAL_EFFECTIVE = neutral), or nil
     def self.value(move, user, target)
       return nil if !move || !user || !target || move.statusMove?
+      target = KIF::BattleInfo.face(target)   # a disguised foe: the Pokémon it copies
       boost = move.instance_variable_get(:@powerBoost)
       type = move.pbCalcType(user)
       move.instance_variable_set(:@powerBoost, boost)
       val = move.pbCalcTypeMod(type, user, target)
-      # a disguised foe (Illusion) counts as Foe Info: As seen, mods' checks too
-      immune = val && KIF::BattleInfo.as_seen_if_disguised(target) { known_immunity?(move, type, user, target, val) }
+      immune = val && known_immunity?(move, type, user, target, val)
       val = ::Effectiveness::INEFFECTIVE if immune
       return val
     rescue => e
@@ -82,8 +84,7 @@ module KIF
     # (KIF-ER's innates) add theirs by wrapping this. hasActiveAbility? last:
     # KIF-ER notes the innate it matches for the next pop-up
     def self.revealed?(battle, target, ability)
-      bi = KIF::BattleInfo
-      if bi.show_all? && !bi.disguised?(target)
+      if KIF::BattleInfo.show_all?
         return target.ability_id == ability && target.hasActiveAbility?(ability)
       end
       known = battle.instance_variable_get(:@cody_known_abilities)

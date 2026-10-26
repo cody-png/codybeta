@@ -13,6 +13,8 @@
 #   * on the Abilities and Moves pages, USE picks a row and opens its full
 #     description (a move's type, category, power, accuracy and PP too);
 #     a hidden ("???") row doesn't open (2026-10-25);
+#   * a foe disguised by Illusion shows as the Pokémon it copies (its types,
+#     ability and moves) until the disguise breaks (2026-10-25);
 #   * effects with turns left (Taunt, Encore, Leech Seed, Substitute...);
 #   * weather, terrain, rooms and Gravity, screens and hazards per side,
 #     Future Sight and Wish.
@@ -104,33 +106,45 @@ module KIF
     #---------------------------------------------------------------------------
     # What the battle has shown about a foe
     #---------------------------------------------------------------------------
-    # Foe Info: All (the default); As seen inside as_seen_if_disguised
+    # Foe Info: All (the default)
     def show_all?
-      return false if @as_seen
       return !$PokemonSystem.respond_to?(:cody_bi_foe_info) || $PokemonSystem.cody_bi_foe_info.to_i == 0
     end
 
-    # A foe's Illusion disguise holds: listing its real abilities and moves
-    # (or hinting them in the Fight menu) would give it away
+    # A foe's Illusion disguise holds (a face below is the disguise itself)
     def disguised?(battler)
       i = const(:Illusion)
-      return !!(i && battler && !own?(battler) && battler.effects[i])
+      d = i && battler && !own?(battler) && battler.effects[i]
+      return !!(d && !battler.pokemon.equal?(d))
     end
 
-    # The block sees Foe Info: As seen while the battler is disguised (mods
-    # such as KIF-ER read show_all? too)
-    def as_seen_if_disguised(battler)
-      return yield if @as_seen || !disguised?(battler)
-      @as_seen = true
-      begin
-        return yield
-      ensure
-        @as_seen = false
-      end
+    # A disguised foe as the Pokémon it copies (Cody, 2026-10-25: "???" would
+    # tell players it is a disguise): a copy of the battler set up as that
+    # Pokémon (mods' set-up hooks give it that Pokémon's innates), keeping
+    # what the battle shows of the real one (HP, status, level, held item,
+    # effects, stat changes, types changed in battle). Read by Battle Info and
+    # the Fight menu's effectiveness hints; As seen keys on that Pokémon.
+    def face(battler)
+      return battler unless disguised?(battler)
+      pkmn = battler.effects[const(:Illusion)]
+      battle = battler.battle
+      copies = battle.instance_variable_get(:@kif_bi_copies) || battle.instance_variable_set(:@kif_bi_copies, {})
+      # set up from a copy kept for the battle: hooks may mark the Pokémon
+      # (Endgame's doubled PP) or pick for it (KIF-ER's fusion innates, kept)
+      f = battler.dup
+      f.pbInitPokemon(copies[pkmn.object_id] ||= pkmn.dup, battler.pokemonIndex)
+      f.instance_variable_set(:@pokemon, pkmn)
+      [:@hp, :@totalhp, :@status, :@statusCount, :@level, :@item_id].each { |v| f.instance_variable_set(v, battler.instance_variable_get(v)) }
+      f.type1, f.type2 = battler.type1, battler.type2 if [battler.type1, battler.type2] != [battler.pokemon.type1, battler.pokemon.type2]
+      return f
+    rescue StandardError => e
+      KIF.log("Battle Info: disguise failed (#{e.class}: #{e.message})") if defined?(KIF.log)
+      return battler
     end
 
     def ability_known?(battle, battler)
-      return true if own?(battler) || (show_all? && !disguised?(battler))
+      battler = face(battler)
+      return true if own?(battler) || show_all?
       known = battle.instance_variable_get(:@cody_known_abilities) || {}
       return true if known[battler.pokemon.object_id] == battler.ability_id
       shown = battle.instance_variable_get(:@kif_bi_abilities) || {}
@@ -340,7 +354,7 @@ module KIF
 
     # [{label:, name:, desc:, known:, worked:}] – the main ability first
     def self.ability_entries(battle, battler)
-      return as_seen_if_disguised(battler) { ability_entries_now(battle, battler) }
+      return ability_entries_now(battle, face(battler))
     end
 
     def self.ability_entries_now(battle, battler)
@@ -392,8 +406,9 @@ module KIF
 
     # [{name:, type:, cat:, power:, acc:, pp:}] or nil for an unseen foe move
     def self.move_entries(battle, battler)
+      battler = face(battler)
       own = own?(battler)
-      all = show_all? && !disguised?(battler)
+      all = show_all?
       battler.moves.compact.first(4).map do |m|
         used = times_used(battle, battler, m.id)
         next nil if !own && used == 0 && !all
@@ -541,7 +556,7 @@ class KifBattleInfoScreen
       if ok
         open_detail(entry)
       else
-        pbPlayBuzzerSE   # hidden (Foe Info: As seen, Illusion): nothing to read
+        pbPlayBuzzerSE   # hidden (Foe Info: As seen): nothing to read
         return true
       end
     elsif Input.trigger?(Input::BACK)
@@ -725,7 +740,8 @@ class KifBattleInfoScreen
     hp = own ? "#{bt.hp}/#{bt.totalhp}" : "#{(100.0 * bt.hp / [bt.totalhp, 1].max).ceil}%"
     st = bt.status && bt.status != :NONE ? (GameData::Status.get(bt.status).name rescue bt.status.to_s) : _INTL("OK")
     xr = W - 8
-    types = (bt.pbTypes(true) rescue [bt.type1, bt.type2]).compact.uniq
+    fb = KIF::BattleInfo.face(bt)   # a disguised foe: the types it copies
+    types = (fb.pbTypes(true) rescue [fb.type1, fb.type2]).compact.uniq
     types.reverse.each { |t| xr -= pill(b, xr, 41, type_name(t).upcase, type_color(t), true) + 4 }
     info = _INTL("Lv.{1}  {2}  {3}", bt.level, hp, st)
     info = PF.fit(PF::TEXT, info, xr - 4 - (x + 4))
@@ -747,7 +763,8 @@ class KifBattleInfoScreen
       y += 25
     end
     rbox(b, 256, 62, W - 6, H - 30, 6, PANEL)
-    ab = bi.ability_known?(@battle, bt) ? bt.abilityName : "???"
+    fb = bi.face(bt)
+    ab = bi.ability_known?(@battle, fb) ? fb.abilityName : "???"
     it = bi.item_text(@battle, bt) || "???"
     heading(b, 264, W - 14, 68, _INTL("Ability"))
     text(b, 266, 82, 236, 22, PF.fit(PF::TEXT, ab, 232), ab == "???" ? DIM : TXT)

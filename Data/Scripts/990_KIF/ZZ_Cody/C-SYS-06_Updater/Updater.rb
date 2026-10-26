@@ -216,9 +216,21 @@ module KIF
       return code_shape?(code) ? { "Authorization" => "token #{code}" } : nil
     end
 
-    # GitHub turned the test code down (not: the server couldn't be reached)
+    # GitHub turned the test code down (not: the server couldn't be reached, nor
+    # a file a newer test build dropped mid-download: Data/VERSION is read again)
     def code_refused?(base)
-      return base == TEST_BASE && CODE_REFUSED.include?(@last_status)
+      return false unless base == TEST_BASE && CODE_REFUSED.include?(@last_status)
+      return remote_version(base).nil? && CODE_REFUSED.include?(@last_status)
+    end
+
+    # curl's list of test-repo files with the code's header (Windows): removed
+    # after each download, and at start-up and on leaving in case a download was cut off
+    def auth_cfg_path
+      return File.join(File.expand_path(KIF.save_dir), "KIF_download.cfg")
+    end
+
+    def remove_auth_cfg
+      (File.delete(auth_cfg_path) if File.file?(auth_cfg_path)) rescue nil
     end
 
     def skipped_version
@@ -279,6 +291,7 @@ module KIF
       return nil unless defined?(HTTPLite)
       t = Time.now
       auth = auth_headers(url)
+      # mkxp-z's HTTPLite.get follows no redirect unless a third argument asks: the code stays on TEST_BASE
       res = auth ? HTTPLite.get(url, auth) : HTTPLite.get(url)
       @last_status = res[:status].to_i if res.is_a?(Hash)
       secs = Time.now - t
@@ -583,7 +596,7 @@ module KIF
       if curl
         # the test code: in a config file in the save folder (removed below), never on the command line, which other programs can read
         auth = auth_headers(url_for(base, VERSION_FILE))
-        auth_cfg = auth ? File.join(File.expand_path(KIF.save_dir), "KIF_download.cfg") : nil
+        auth_cfg = auth ? auth_cfg_path : nil
         cfg = auth_cfg || File.join(dir, "download.cfg")
         mkdir_p(dir)   # a mod install's staging folder doesn't exist yet (1.0.1: every Windows mod install failed here)
         File.open(cfg, "wb") do |f|
@@ -594,8 +607,10 @@ module KIF
           end
         end
         err = File.join(dir, "curl_errors.txt")
-        cmd = "\"#{win_path(curl)}\" -K \"#{win_path(cfg)}\" --parallel --parallel-max 6 --create-dirs " \
-              "--fail --retry 3 --retry-delay 1 --connect-timeout 15 -L -s -S --stderr \"#{win_path(err)}\""
+        # -q first: the player's own .curlrc is never read (its "verbose" wrote the code into curl_errors.txt);
+        # no -L with the code: an old Windows curl (7.55) sends the header along to any host a redirect names
+        cmd = "\"#{win_path(curl)}\" -q -K \"#{win_path(cfg)}\" --parallel --parallel-max 6 --create-dirs " \
+              "--fail --retry 3 --retry-delay 1 --connect-timeout 15#{auth ? '' : ' -L'} -s -S --stderr \"#{win_path(err)}\""
         h, _pid = Win.spawn(cmd, Win::CREATE_NO_WINDOW, root)
         log("curl couldn't be started") unless h
         if h
@@ -796,7 +811,7 @@ module KIF
     def update(base, version, in_game = false)
       unless KIF::Paths.game_writable? && writable?(stage_root)
         pbMessage(_INTL("The game folder can't be written to, so KIF can't update itself here (a folder like Program Files?)."))
-        pbMessage(_INTL("Get KIF {1} from {2}", version, PAGE))
+        pbMessage(_INTL("Get KIF {1} from {2}", version, PAGE)) unless base == TEST_BASE   # the release page has no test builds
         return false
       end
       status(_INTL("Updating to KIF {1}", version), _INTL("Reading the file list..."))
@@ -994,7 +1009,7 @@ module KIF
         case pbMessage(_INTL("Test code: {1}\n{2}", shown, help),
                        [_INTL("Paste"), _INTL("Type the code"), _INTL("Use this code"), _INTL("Back")], 4)
         when 0 then text = (Input.clipboard.to_s rescue "").strip
-        when 1 then text = (pbMessageFreeText(_INTL("Test code:"), "", false, 255) || text).strip
+        when 1 then text = (pbMessageFreeText(_INTL("Test code:"), "", true, 255) || text).strip   # a password box
         when 2
           next pbMessage(help) unless code_shape?(text)
           return use_test_code(text)
@@ -1005,6 +1020,12 @@ module KIF
 
     # checked by reading the test build's Data/VERSION with it
     def use_test_code(code)
+      # an engine without a save folder keeps saves (and KIF_updates.kro) in the game folder, which people copy and share
+      if File.expand_path(KIF.save_dir) == File.expand_path(root)
+        log("test code not kept: the save folder is the game folder")
+        pbMessage(_INTL("Test codes can't be used in this copy of the game: it keeps its saves in the game folder, which gets copied and shared."))
+        return false
+      end
       status(_INTL("Test builds"), _INTL("Checking the code..."))
       begin
         @trying_code = code
@@ -1022,6 +1043,8 @@ module KIF
       end
       store_choice("test_code", code)
       store_choice("channel", TEST)
+      # off the clipboard, where another Paste (Multiplayer's join code) would show it
+      (Input.clipboard = "" if (Input.clipboard.to_s.strip rescue "") == code) rescue nil
       $PokemonSystem.kif_updates = TEST if $PokemonSystem
       log("test code #{mask(code)} accepted: Updates set to Test (newest test build #{v})")
       pbMessage(_INTL("The code works. Updates is now set to Test."))
@@ -1032,6 +1055,12 @@ module KIF
     def leave_test
       store_choice("test_code", nil)
       store_choice("channel", 1)
+      remove_auth_cfg
+      if test_code   # KIF_updates.kro couldn't be written
+        log("left Test builds: the code couldn't be removed from #{CHOICES_FILE}")
+        pbMessage(_INTL("Your test code couldn't be removed: KIF can't write to its save folder. Try again later."))
+        return false
+      end
       $PokemonSystem.kif_updates = 1 if $PokemonSystem
       log("left Test builds: code removed, Updates set to Beta")
       pbMessage(_INTL("Updates is set to Beta and your test code is removed. You get the next Beta that is newer than this version."))
@@ -1062,6 +1091,10 @@ module KIF
         cmd = pbMessage(_INTL("KIF {1} is out (you have {2}).", v, current_version), [_INTL("What's new"), _INTL("OK")], 2)
         break unless cmd == 0
         show_notes(base)
+      end
+      if base == TEST_BASE   # the release page has no test builds
+        pbMessage(_INTL("Test builds can't be installed on this phone: KIF can't write to its game folder here."))
+        return false
       end
       copied = begin
                  Input.clipboard = RELEASE_PAGE
@@ -1200,6 +1233,7 @@ module KIF
       pending = (File.directory?(d) && Dir.children(d).any? { |v| File.file?(File.join(d, v, "failed.txt")) || File.file?(File.join(d, v, "apply.cmd")) }) rescue true
       remove_format_twins unless pending
       remove_dev_leftovers
+      remove_auth_cfg   # a test download cut off (game killed) left the code there
     end
   end
 end

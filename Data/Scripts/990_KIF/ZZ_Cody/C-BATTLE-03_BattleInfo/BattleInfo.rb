@@ -17,7 +17,9 @@
 #     ability and moves) until the disguise breaks (2026-10-25);
 #   * effects with turns left (Taunt, Encore, Leech Seed, Substitute...);
 #   * weather, terrain, rooms and Gravity, screens and hazards per side,
-#     Future Sight and Wish.
+#     Future Sight and Wish;
+#   * Log: every message and ability pop-up of the battle so far, by turn
+#     (BattleLog.rb, 2026-10-25).
 # Works the same in PIF's battle screen and EBDX's. A base feature (no
 # module);
 # "Battle Info" setting, On by default (Off for Classic KIF).
@@ -462,7 +464,13 @@ class PokeBattle_Battler
   # second, Outrage) aren't new uses.
   def pbUseMove(choice, specialUsage = false)
     multi = usingMultiTurnAttack?
-    ret = kif_bi_pbUseMove(choice, specialUsage)
+    actor = @battle&.instance_variable_get(:@kif_log_actor)
+    @battle&.instance_variable_set(:@kif_log_actor, self)   # the Log's side for "It's super effective!"
+    begin
+      ret = kif_bi_pbUseMove(choice, specialUsage)
+    ensure
+      @battle&.instance_variable_set(:@kif_log_actor, actor)
+    end
     KIF::BattleInfo.note_move(self, @lastRegularMoveUsed) if @lastRegularMoveUsed && !specialUsage && !multi
     return ret
   end
@@ -491,7 +499,7 @@ class KifBattleInfoScreen
 
   def initialize(battle)
     @battle = battle
-    @entries = KIF::BattleInfo.battlers(battle) + [:field, :speed]
+    @entries = KIF::BattleInfo.battlers(battle) + [:field, :speed, :log]
     @index = 0
     @page = 0
   end
@@ -516,6 +524,8 @@ class KifBattleInfoScreen
         @row = nil
         pbPlayCursorSE
         refresh
+      elsif current == :log && (Input.repeat?(Input::UP) || Input.repeat?(Input::DOWN))
+        log_scroll(Input.repeat?(Input::DOWN) ? 1 : -1)
       elsif (Input.trigger?(Input::UP) || Input.trigger?(Input::DOWN)) && battler?
         @page = (@page + (Input.trigger?(Input::DOWN) ? 1 : -1)) % PAGES.length
         pbPlayCursorSE
@@ -667,6 +677,7 @@ class KifBattleInfoScreen
     case current
     when :field then draw_field(b)
     when :speed then draw_speed(b)
+    when :log then draw_log(b)
     else
       draw_battler_head(b, current)
       case PAGES[@page]
@@ -687,13 +698,14 @@ class KifBattleInfoScreen
     else
       hints = [[:lr, _INTL("Pokémon")]]
       hints << [:ud, _INTL("Page")] if battler?
+      hints << [:ud, _INTL("Scroll")] if current == :log && log_rows.length > log_room
       hints << [use, _INTL("Details")] if list_page? && !@rows.empty?
       hints << [back, _INTL("Close")]
     end
     footer(b, hints)
   end
 
-  # chips: every Pokémon (green dot yours, red foes), then Field and Speed
+  # chips: every Pokémon (green dot yours, red foes), then Field, Speed and Log
   def draw_top(b)
     b.fill_rect(0, 0, W, 32, PANEL2)
     b.fill_rect(0, 31, W, 1, LINE)
@@ -701,6 +713,7 @@ class KifBattleInfoScreen
       case e
       when :field then [_INTL("Field"), nil]
       when :speed then [_INTL("Speed"), nil]
+      when :log then [_INTL("Log"), nil]
       else [e.name.to_s, KIF::BattleInfo.own?(e) ? OWN : FOE]
       end
     end
@@ -1043,16 +1056,19 @@ class PokeBattle_Battle
 
   def pbDisplay(msg, &block)
     KIF::BattleInfo.note_message(self, msg)
+    KIF::BattleLog.add(self, msg)
     return kif_bi_pbDisplay(msg, &block)
   end
 
   def pbDisplayBrief(msg)
     KIF::BattleInfo.note_message(self, msg)
+    KIF::BattleLog.add(self, msg)
     return kif_bi_pbDisplayBrief(msg)
   end
 
   def pbDisplayPaused(msg, &block)
     KIF::BattleInfo.note_message(self, msg)
+    KIF::BattleLog.add(self, msg)
     return kif_bi_pbDisplayPaused(msg, &block)
   end
 end
@@ -1076,6 +1092,7 @@ class PokeBattle_Battle
       end
     rescue
     end
+    KIF::BattleLog.popup(self, battler, args[2])
     return cody_eff_pbShowAbilitySplash(battler, *args)
   end
 end

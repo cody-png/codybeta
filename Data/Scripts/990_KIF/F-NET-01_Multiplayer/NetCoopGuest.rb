@@ -275,6 +275,7 @@ module KIF
         return unless d.is_a?(Hash)
         mi = bat_checked(d["b"])
         b = mi && @mirror ? @mirror.battlers[mi] : nil
+        @mirror.instance_variable_set(:@kif_log_turn, int(d["t"], 0, 9999, 0)) if @mirror   # Battle Log: lines from here on are this turn's
         a = nil
         if b && mi.even? && own_pk?(b.pokemon)
           sync_party(d)
@@ -546,8 +547,10 @@ module KIF
         g = @g
         g.apply_snap(snap)
         case type
-        when "m"  then call(:pbDisplayMessage, mine(args[0]), args[1] == 1)
-        when "mp" then call(:pbDisplayPausedMessage, mine(args[0]))
+        when "m", "mp"
+          t = mine(args[0])
+          KIF::BattleLog.add(g.mirror, t) if defined?(KIF::BattleLog) && g.mirror   # this player's Battle Info Log page
+          type == "m" ? call(:pbDisplayMessage, t, args[1] == 1) : call(:pbDisplayPausedMessage, t)
         when "so"
           list = (args[0].is_a?(Array) ? args[0] : []).map { |e| g.send_in(e) }.compact
           call(:pbSendOutBattlers, list, args[1] == 1) unless list.empty?
@@ -569,7 +572,11 @@ module KIF
         when "ca"
           name = args[0].is_a?(String) && args[0] =~ /\A[A-Za-z0-9]{1,32}\z/ ? args[0] : nil
           call(:pbCommonAnimation, name, g.battler(args[1]), g.battler(args[2])) if name
-        when "ab"  then (b = g.battler(args[0])) && ability(b, args[1] == 1, Mon.name(args[2]))
+        when "ab"
+          if (b = g.battler(args[0]))
+            KIF::BattleLog.popup(g.mirror, b, Mon.name(args[2])) if defined?(KIF::BattleLog)
+            ability(b, args[1] == 1, Mon.name(args[2]))
+          end
         when "abh" then (b = g.battler(args[0])) && call(:pbHideAbilitySplash, b)
         when "ch"  then (b = g.battler(args[0])) && (pk = Mon.load(args[1])) && call(:pbChangePokemon, b.index, pk)
         when "rf"  then call(:pbRefresh)

@@ -12,7 +12,7 @@ The game shows the same notes in Options > System > Update history.
 - Bag: a TM's menu has 'Who can learn' (every Pokemon that can learn its move) and 'Search TMs' (every TM, by move name).
 - Illusion: a disguised foe's battle box shows the types of the Pokemon it copies until the disguise breaks.
 - Battle Info's Log page shows your name where a line names you, and no longer shows text codes.
-- Silph Co. 7F: a hidden tile in the west wall could undo beating Giovanni there; it's gone, and saves it affected are repaired on load.
+- Silph Co. 7F: a hidden tile in the west wall could undo beating Giovanni in Silph Co.; it's gone, and saves it affected are repaired on load.
 
 <details><summary>Full notes</summary>
 
@@ -24,7 +24,7 @@ The game shows the same notes in Options > System > Update history.
 - Illusion: while a foe is disguised, its battle box shows the types of the Pokemon it copies (PIF's type icons, KIF's Type Display and EBDX's box), as Battle Info and the Fight menu's hints already did. The real types show once the disguise breaks.
 - Battle Info Log: a line that names the player shows your name, a line break in a message becomes a space, and the text codes in PIF's own messages no longer show as letters in the log.
 - Test Code: a code that works but can't be kept (KIF can't write to its save folder) now says so, instead of saying Updates is set to Test.
-- Silph Co. 7F: a hidden tile in the west wall could undo beating Giovanni there; it's gone, and saves it affected are repaired on load.
+- Silph Co. 7F: a hidden tile in the west wall could undo beating Giovanni in Silph Co.; it's gone, and saves it affected are repaired on load.
 
 </details>
 

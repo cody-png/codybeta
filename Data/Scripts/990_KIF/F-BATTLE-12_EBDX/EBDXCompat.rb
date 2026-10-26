@@ -223,6 +223,13 @@ if KIF::EBDX.installed?
       def refresh
         old = @kif_bitmaps || []
         kif_lineup_refresh
+        # the bar is a clone of the cached sheet and inherits its ref count and
+        # never_dispose, so its dispose would never free it (BitmapWrapper#copy)
+        bar = @sprites["partyLine_#{@side}"] && @sprites["partyLine_#{@side}"].bitmap
+        if bar && !bar.equal?(@partyBar) && bar.respond_to?(:resetRef)
+          bar.resetRef
+          bar.never_dispose = false
+        end
         ids = ["partyLine_#{@side}"] + (0...@num).map { |k| "partyLine_#{@side}_#{k}" }
         @kif_bitmaps = ids.map { |id| @sprites[id] && @sprites[id].bitmap }.compact - [@partyBar, @partyBalls]
         (old - @kif_bitmaps).each { |b| b.dispose if !b.disposed? }

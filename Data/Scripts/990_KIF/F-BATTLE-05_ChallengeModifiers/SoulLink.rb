@@ -69,7 +69,19 @@ module KIF
     end
 
     def self.on?
-      return $PokemonSystem && $PokemonSystem.ch_soullink == 1 && KIF::Nuzlocke.on? && $PokemonGlobal ? true : false
+      return $PokemonSystem && $PokemonSystem.ch_soullink == 1 && KIF::Nuzlocke.on? && $PokemonGlobal && digest? ? true : false
+    end
+
+    # SHA-256 for codes and keys. A build without the digest library (JoiPlay's
+    # isn't checked yet) keeps Soul Link off: LoadError gets past `rescue => e`.
+    def self.digest?
+      return @digest unless @digest.nil?
+      @digest = begin
+        require "digest/sha2" unless defined?(Digest::SHA256)
+        defined?(Digest::SHA256) ? true : false
+      rescue LoadError, StandardError
+        false
+      end
     end
 
     def self.state; $PokemonGlobal ? $PokemonGlobal.kif_soullink : {}; end
@@ -80,7 +92,7 @@ module KIF
     # Small pieces: hashes, codes
     #---------------------------------------------------------------------------
     def self.crypto
-      require "digest/sha2" unless defined?(Digest::SHA256)
+      raise "no SHA-256 in this copy of the game" unless digest?   # a StandardError: the callers' rescue takes it
       return KIF::Net::Crypto
     end
 
@@ -745,6 +757,7 @@ end
 # Options (Challenges > Soul Link)
 #-------------------------------------------------------------------------------
 KIF::Options.add(:challenges, :save) {
+  next nil unless KIF::SoulLink.digest?
   EnumOption.new(_INTL("Soul Link"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.ch_soullink },
                  proc { |value| $PokemonSystem.ch_soullink = value },

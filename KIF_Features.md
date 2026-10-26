@@ -410,6 +410,7 @@ These features have no option of their own.
   - **Devolution Spray:** devolves a Pokémon, choosing head or body for a fusion.
   - **Rocket Balls.**
   - **Perfect Ball:** always maxes two different IVs.
+- **Bag > a TM or HM > Who can learn:** lists every Pokémon that can learn the TM's move, in Pokédex order, with your party and PC Pokémon that can learn it at the top. The first row switches **Show: All / Seen / Caught** (your Pokédex). A fusion can learn a move if its head or its body can. TMs are not used up: you can teach them again. **Search TMs** (same menu) lists every TM and HM in the game by move name, also ones you don't have yet; choose one to see who can learn it. Up / Down scroll, Left / Right turn a page; the mouse and touch work too.
 - **K-Eggs** (Kuray Shop): Random, Sparkling (40x shiny odds), one per type, Fusion, Base (never a fusion), Legendary, and tier eggs.
   - Every egg gives 10x your Wild Shiny Odds.
   - The tier eggs are Starter, 1-8 Badges and Elite 4, each with a base-stat range for that point in the game.

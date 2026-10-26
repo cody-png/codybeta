@@ -380,7 +380,10 @@ if defined?(::FightWindowEBDX)
       end
       @typeInd.visible = @cody_eff_count.to_i > 0
       @typeInd.x = btn.x
-      @typeInd.y = btn.y
+      # a lower-row move: above its column's top button (EBDX's spot, the
+      # raised button's top edge, would cover that button's name)
+      top = @y && @y[@index % 2]
+      @typeInd.y = top ? [btn.y, top].min : btn.y
     rescue => e
       KIF.log("Effectiveness hint (EBDX) failed: #{e.message}")
       @cody_eff_key = @index

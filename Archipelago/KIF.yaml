@@ -182,6 +182,26 @@ Kuray Infinite Fusion:
     # (up to Dexsanity Count; larger numbers are ignored).
     []
 
+  dexsanity_fusion_milestone_step:
+    # With Dexsanity: a check every this many different fusions registered (10: at 10, 20, 30... up to the
+    # number of species the logic can get). A fusion counts once per head/body pair (Bulbasaur/Pikachu and
+    # Pikachu/Bulbasaur are two); triple fusions don't count. 0 = none. In logic, k fusions need n species with
+    # n x (n - 1) / 2 at least k (10 fusions: 5 species).
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 0
+    # Maximum value is 100
+    0: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-0-100: 0 # random value between 0 and 100
+
+  dexsanity_fusion_milestones:
+    # With Dexsanity: extra fusion milestone checks at these numbers of different fusions registered, e.g.
+    # [1, 5, 50] (up to the number of species the logic can get; larger numbers are ignored).
+    []
+
   game_mode:
     # The game mode of the save you will link: Classic or Remix (Remix has other wild Pokemon). Dexsanity's
     # logic follows it. When you link, the game reads the save's mode and refuses a Dexsanity slot made for the

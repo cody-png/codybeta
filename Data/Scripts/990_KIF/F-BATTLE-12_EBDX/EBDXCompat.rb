@@ -47,7 +47,7 @@ if KIF::EBDX.installed?
   # (660_EBDX/001, unchanged) sets it On for every new player, so a new
   # player's setting is put back to Off here. Saved settings keep their value.
   class ::PokemonSystem
-    alias kif_ebdx_off_initialize initialize unless method_defined?(:kif_ebdx_off_initialize)
+    alias kif_ebdx_off_initialize initialize unless method_defined?(:kif_ebdx_off_initialize) || private_method_defined?(:kif_ebdx_off_initialize)
     def initialize
       kif_ebdx_off_initialize
       @mp_ebdx_enabled = 0
@@ -149,6 +149,100 @@ if KIF::EBDX.installed?
       end
     end
     PokemonEvolutionSceneEBDX.prepend(KIF::EBDX::EvolutionSprites)
+  end
+
+  # EBDX's party lineups (balls showing each side's team) never appeared:
+  # 660/010's pbShowPartyLineup only set their toggle, so PartyLineupEBDX
+  # was never refreshed (never loaded, never drawn), and its send-outs never
+  # hid them. Now as in PIF's scene: both sides at a trainer battle's start,
+  # one side when a Pokémon is switched in, each hidden at its send-out.
+  if defined?(::PokeBattle_SceneEBDX) && defined?(::PartyLineupEBDX)
+    class ::PokeBattle_SceneEBDX
+      def pbShowPartyLineup(side, fullAnim = false)
+        lineup = (side % 2 == 0) ? @playerLineUp : @opponentLineUp
+        return if !lineup || lineup.disposed?
+        lineup.refresh
+        # this scene shows the player's battle box during the intro: the lineup
+        # goes above it, not across it. Singles: between the foe trainer's feet
+        # and the box (0.55 touches neither); doubles have no such gap (the
+        # first box reaches the feet), so EBDX's follower spot (0.5) keeps the
+        # balls off the box's name
+        lineup.y = @viewport.height * (@battle.pbSideSize(0) == 1 ? 0.55 : 0.5) if side % 2 == 0
+        # battle start: the intro messages run while it slides in (PIF's fullAnim)
+        return if fullAnim || !@introdone
+        kif_lineup_settle
+      end
+
+      # PIF lets the lineups finish sliding in before a send-out fades them
+      # (inPartyAnimation?); skipping the intro message fast faded them
+      # mid-slide. Bounded so a lineup that never arrives can't hang the battle.
+      def kif_lineup_settle
+        120.times do
+          break unless [@playerLineUp, @opponentLineUp].any? { |l| l && !l.disposed? && l.toggle && l.animating? }
+          self.wait(1, true)
+        end
+      end
+
+      # the send-out animations wait without animateScene, which left a hiding
+      # lineup half faded on screen until the next command menu
+      alias kif_lineup_wait wait unless method_defined?(:kif_lineup_wait) || private_method_defined?(:kif_lineup_wait)
+      def wait(frames = 1, align = false)
+        return kif_lineup_wait(frames, align) if align   # animateScene moves them
+        frames.times do
+          [@playerLineUp, @opponentLineUp].each { |l| l.update if l && !l.disposed? }
+          kif_lineup_wait(1, false)
+        end
+      end
+
+      alias kif_lineup_pbSendOutBattlers pbSendOutBattlers unless method_defined?(:kif_lineup_pbSendOutBattlers) || private_method_defined?(:kif_lineup_pbSendOutBattlers)
+      def pbSendOutBattlers(sendOuts, startBattle = false)
+        kif_lineup_settle
+        sendOuts.each do |pair|
+          lineup = @battle.opposes?(pair[0]) ? @opponentLineUp : @playerLineUp
+          lineup.toggle = false if lineup
+        end
+        kif_lineup_pbSendOutBattlers(sendOuts, startBattle)
+      end
+    end
+
+    class ::PartyLineupEBDX
+      # EBDX's own drew the whole side: a partner's team in the player's balls,
+      # only the last of two foe trainers. PIF's classic mapping instead: the
+      # player's own team, each foe trainer's in its share of the 6 balls.
+      def party
+        pty = @battle.pbParty(@side)
+        map = ::LineupAppearAnimation.allocate
+        map.instance_variable_set(:@side, @side % 2)
+        map.instance_variable_set(:@partyStarts, @battle.respond_to?(:pbPartyStarts) ? @battle.pbPartyStarts(@side) : [0])
+        (0...@num).map { |k| i = map.getPartyIndexFromBallIndex(k); i >= 0 ? pty[i] : nil }
+      end
+
+      # refresh gives the bar a clone and each ball a new bitmap without
+      # disposing the ones they replace; free those (never the shared sheets)
+      alias kif_lineup_refresh refresh unless method_defined?(:kif_lineup_refresh) || private_method_defined?(:kif_lineup_refresh)
+      def refresh
+        old = @kif_bitmaps || []
+        kif_lineup_refresh
+        # the bar is a clone of the cached sheet and inherits its ref count and
+        # never_dispose, so its dispose would never free it (BitmapWrapper#copy)
+        bar = @sprites["partyLine_#{@side}"] && @sprites["partyLine_#{@side}"].bitmap
+        if bar && !bar.equal?(@partyBar) && bar.respond_to?(:resetRef)
+          bar.resetRef
+          bar.never_dispose = false
+        end
+        ids = ["partyLine_#{@side}"] + (0...@num).map { |k| "partyLine_#{@side}_#{k}" }
+        @kif_bitmaps = ids.map { |id| @sprites[id] && @sprites[id].bitmap }.compact - [@partyBar, @partyBalls]
+        (old - @kif_bitmaps).each { |b| b.dispose if !b.disposed? }
+      end
+
+      # the scene disposes the sprites first (pbDisposeSprites), then this
+      alias kif_lineup_dispose dispose unless method_defined?(:kif_lineup_dispose) || private_method_defined?(:kif_lineup_dispose)
+      def dispose
+        (@kif_bitmaps || []).each { |b| b.dispose if !b.disposed? } if !@disposed
+        @kif_bitmaps = nil
+        kif_lineup_dispose
+      end
+    end
   end
 
   # 661/003's Type Display for EBDX boxes loads KIF 0.20.7's icon sheets from

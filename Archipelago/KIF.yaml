@@ -34,7 +34,7 @@ game: Kuray Infinite Fusion
 requires:
   version: 0.6.2 # Version of Archipelago required for this yaml to work as expected.
   game:
-    Kuray Infinite Fusion: 0.6.3 # Version of the world required for this yaml to work as expected.
+    Kuray Infinite Fusion: 0.7.0 # Version of the world required for this yaml to work as expected.
 
 Kuray Infinite Fusion:
   ################
@@ -132,6 +132,62 @@ Kuray Infinite Fusion:
     # the Day Care's egg...) also send a check; you still get the Pokemon. kanto 24, kanto_sevii 33, kanto_johto 33, all 42; each adds a filler item.
     'false': 50
     'true': 0
+
+  dexsanity:
+    # Registering a Pokemon as caught in the Pokedex sends a check (Dexsanity Count species, picked at random
+    # from the ones you can get in your regions before the Hall of Fame). Catching, hatching, evolving, trading
+    # and gifts all count. A fusion counts for both of its Pokemon; fusions have no checks of their own.
+    # Needs Randomize Wild Pokemon: vanilla and Wild Fusions off. Each check adds a Poke Ball, Great Ball or
+    # Ultra Ball to the pool. Evolving by level is in logic once KIF's Hard level cap allows that level; an
+    # evolution stone is used up, so the logic counts on one stone per species (Celadon Dept. Store sells Fire,
+    # Water, Thunder, Leaf and Ice Stones unless shop items are randomized).
+    'false': 50
+    'true': 0
+
+  dexsanity_count:
+    # How many species are Dexsanity checks. A number above what your regions have means all of them
+    # (without legendaries: Kanto 255 Classic / 434 Remix, Kanto + Sevii 289 / 453, Kanto + Johto 296 / 443,
+    # all regions 315 / 459).
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 1
+    # Maximum value is 576
+    100: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-1-576: 0 # random value between 1 and 576
+    all: 0 # equivalent to 576
+
+  dexsanity_legendaries:
+    # Legendary Pokemon can be Dexsanity checks too (off: never).
+    'false': 50
+    'true': 0
+
+  dexsanity_milestone_step:
+    # With Dexsanity: a check every this many Pokemon registered (10: at 10, 20, 30... up to Dexsanity
+    # Count). 0 = none. Every Pokemon registered counts, check or not.
+    #
+    # You can define additional values between the minimum and maximum values.
+    # Minimum value is 0
+    # Maximum value is 100
+    10: 50
+    random: 0
+    random-low: 0 # random value weighted towards lower values
+    random-high: 0 # random value weighted towards higher values
+    random-range-0-100: 0 # random value between 0 and 100
+
+  dexsanity_milestones:
+    # With Dexsanity: extra milestone checks at these numbers of Pokemon registered, e.g. [5, 25, 75]
+    # (up to Dexsanity Count; larger numbers are ignored).
+    []
+
+  game_mode:
+    # The game mode of the save you will link: Classic or Remix (Remix has other wild Pokemon). Dexsanity's
+    # logic follows it. When you link, the game reads the save's mode and refuses a Dexsanity slot made for the
+    # other one.
+    classic: 50
+    remix: 0
 
   game_difficulty:
     # KIF's difficulty, set when you link a save. Keep: whatever the save already uses.

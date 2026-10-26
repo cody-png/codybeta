@@ -328,7 +328,7 @@ end
 # keeps its own), and Exp saved while fused goes to both parts on unfusing
 # (PIF gives both parts everything gained while fused).
 class PokemonFusionScene
-  alias kif_cap_pbFusionScreen pbFusionScreen unless method_defined?(:kif_cap_pbFusionScreen)
+  alias kif_cap_pbFusionScreen pbFusionScreen unless method_defined?(:kif_cap_pbFusionScreen) || private_method_defined?(:kif_cap_pbFusionScreen)
   def pbFusionScreen(*args)
     ret = kif_cap_pbFusionScreen(*args)
     fused = @pokemon1

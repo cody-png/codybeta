@@ -155,7 +155,7 @@ module KIF
 end
 
 class FusionPreviewScreen
-  alias cody_fs_initialize initialize unless method_defined?(:cody_fs_initialize)
+  alias cody_fs_initialize initialize unless method_defined?(:cody_fs_initialize) || private_method_defined?(:cody_fs_initialize)
 
   def initialize(poke1, poke2, usingSuperSplicers = false)
     if KIF::FusionScreen.on?

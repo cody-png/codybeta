@@ -88,7 +88,15 @@ module KIF
     def self.on_connect(_s = nil)
       @want = @their = @ask_pact = false
       @their_map = @sent_map = @ask = nil
+      @told = {}
       @host_box.clear
+    end
+
+    # a note shown once a connection (on the map, KIF::Net.notes)
+    def self.tell(key, text)
+      return if (@told ||= {})[key]
+      @told[key] = true
+      KIF::Net.notes << text
     end
 
     def self.on_disconnect
@@ -248,6 +256,7 @@ module KIF
       join = read_join(reply[1])
       unless join
         log("#{partner}'s party didn't fit; fighting alone")
+        tell(:party, _INTL("{1}'s team has a Pokémon this game doesn't have (a mod's, or another KIF's), so you fight alone.", partner))
         session&.post("co_end", "id" => id, "d" => { "x" => "party" })
         return nil
       end
@@ -258,6 +267,9 @@ module KIF
     def self.read_join(msg)
       party = msg["party"].first(6).map { |h| Mon.load(h, true) }
       return nil if party.empty? || party.any?(&:nil?) || party.none? { |p| p.able? }
+      if party.any? { |p| p.instance_variable_get(:@kif_coop_lost) }
+        tell(:lost, _INTL("Some of {1}'s Pokémon have moves, Abilities or items this game doesn't have (a mod's, or another KIF's). Here they fight without them.", partner))
+      end
       type = Mon.partner_type(msg["type"])
       return { party: party, name: KIF::Net.shown_name(msg["name"]), type: type, tid: msg["tid"] }
     end
@@ -386,26 +398,38 @@ module KIF
         p.instance_variable_set(:@ability_index, ab) if ab
         ai = sym(h["ai"], GameData::Ability)
         p.instance_variable_set(:@ability, ai) if ai
+        lost = !ai && h["ai"].is_a?(String) && !h["ai"].empty?
         na = sym(h["na"], GameData::Nature)
         p.instance_variable_set(:@nature, na) if na
         it = sym(h["it"], GameData::Item)
         p.instance_variable_set(:@item, it)
+        lost ||= !it && h["it"].is_a?(String) && !h["it"].empty?   # a mod's item (a Megas stone): held nothing here
         p.statusCount = int(h["sc"], 0, 255, 0)
         iv, ev = h["iv"], h["ev"]
         STATS.each_with_index do |s, i|
           p.iv[s] = int(iv.is_a?(Array) ? iv[i] : nil, 0, Pokemon::IV_STAT_LIMIT, 0)
           p.ev[s] = int(ev.is_a?(Array) ? ev[i] : nil, 0, Pokemon::EV_STAT_LIMIT, 0)
         end
-        moves = (h["m"].is_a?(Array) ? h["m"] : []).first(4).map do |m|
-          next nil unless m.is_a?(Array)
+        sent = (h["m"].is_a?(Array) ? h["m"] : []).first(4)
+        return false if sent.empty? || !sent.all? { |m| m.is_a?(Array) }
+        # a move this game doesn't have (a mod's, another KIF's) is left out, not the
+        # whole Pokémon; kept: the sent slot of each move left (Host#finish sends PP back by slot)
+        slots = []
+        moves = sent.each_with_index.map do |m, k|
           id = sym(m[0], GameData::Move) or next nil
+          slots << k
           mv = Pokemon::Move.new(id)
           mv.ppup = int(m[2], 0, 3, 0)
           mv.pp = int(m[1], 0, mv.total_pp, mv.total_pp)
           mv
-        end
-        return false if moves.empty? || moves.include?(nil)
+        end.compact
+        moves = [Pokemon::Move.new(:STRUGGLE)] if moves.empty?
         p.moves = moves
+        if slots.length < sent.length
+          p.instance_variable_set(:@kif_coop_slots, slots)
+          lost = true
+        end
+        p.instance_variable_set(:@kif_coop_lost, true) if lost
         p.happiness = int(h["ha"], 0, 255, 70)
         p.poke_ball = sym(h["pb"], GameData::Item) || :POKEBALL
         p.personalID = int(h["pid"], 0, 0xffffffff, p.personalID)
@@ -419,14 +443,39 @@ module KIF
         p.instance_variable_set(:@type2kuray, t2) if t2
         p.instance_variable_set(:@typeoverwrite, true) if h["to"] == 1 && (t1 || t2)
         p.calc_stats
-        # the stats its own game worked out (IV and EV modes differ per save)
+        # the stats its own game worked out (IV and EV modes differ per save), up to
+        # what the most generous modes could give
         ss = h["ss"]
         th = int(h["th"], 1, 99_999)
         if th && ss.is_a?(Array) && ss.length == 5 && ss.all? { |x| x.is_a?(Integer) && x.between?(1, 99_999) }
-          p.instance_variable_set(:@totalhp, th)
-          [:@attack, :@defense, :@spatk, :@spdef, :@speed].each_with_index { |v, i| p.instance_variable_set(v, ss[i]) }
+          cap = stat_caps(p)
+          p.instance_variable_set(:@totalhp, [th, cap[0]].min)
+          [:@attack, :@defense, :@spatk, :@spdef, :@speed].each_with_index { |v, i| p.instance_variable_set(v, [ss[i], cap[i + 1]].min) }
         end
         return true
+      end
+
+      # the highest each stat (HP first) can be: max level (No Levels mode), IVs and
+      # EVs at their limits, a nature for it, the self-fusion boost
+      def stat_caps(p)
+        lv = GameData::GrowthRate.max_level
+        base = p.baseStats
+        f = (p.isSelfFusion? rescue false) && defined?(KIF::FusionRules) ? KIF::FusionRules.self_fusion_factor(base.values.sum) : 1
+        iv, ev = Pokemon::IV_STAT_LIMIT, Pokemon::EV_STAT_LIMIT
+        return STATS.map do |s|
+          b = (base[s].to_i * f).round
+          s == :HP ? p.send(:calcHP, b, lv, iv, ev) : p.send(:calcStat, b, lv, iv, ev, 110)
+        end
+      end
+
+      # PP of a partner's Pokémon by the slots its own game sent (nil: a move left
+      # out here, its PP stays as it is there)
+      def pp_list(p)
+        pp = p.moves.map { |m| m.pp.to_i }
+        slots = p.instance_variable_get(:@kif_coop_slots) or return pp
+        out = []
+        slots.each_with_index { |k, i| out[k] = pp[i] }
+        return out
       end
     end
   end

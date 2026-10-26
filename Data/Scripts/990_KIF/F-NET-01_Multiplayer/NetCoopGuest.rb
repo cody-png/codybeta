@@ -31,6 +31,11 @@ module KIF
         @box = []
         @done = @begun = @started = @lost = false
         @caught = []
+        # what this player picked: the end takes only these off its Bag and only
+        # this many catches; Exp only for foes of this battle (finish)
+        @picked = Hash.new(0)
+        @balls = 0
+        @foes = []
       end
 
       def feed(type, msg); @box << [type, msg] if msg.is_a?(Hash) && msg["id"] == @id; end
@@ -126,6 +131,10 @@ module KIF
         host_party = d["hp"].map { |h| Mon.load(h) }
         foes = d["fp"].is_a?(Array) && d["fp"].length.between?(1, 18) ? d["fp"].map { |h| Mon.load(h) } : []
         return false if foes.empty? || host_party.include?(nil) || foes.include?(nil)
+        @foes = foes.map { |f| [f.species, f.level] }
+        if d["lo"] == 1
+          KIF::Coop.tell(:lost, _INTL("{1}'s game doesn't have some of your Pokémon's moves, Abilities or items (a mod's, or another KIF's), so there they fight without them.", @host_name))
+        end
         wild = d["w"] == 1
         host = trainer_from(d["ht"]) or return false
         host.trainer_type = Mon.partner_type(d["ht"]["ty"])
@@ -272,6 +281,10 @@ module KIF
           sync_moves(b, d["mv"])
           a = @view.command(mi, d) unless KIF::Coop.auto_battle?
         end
+        if a && a["a"] == "item"
+          @picked[a["i"]] += 1
+          @balls += 1 if (GameData::Item.get(a["i"].to_sym).is_poke_ball? rescue false)
+        end
         a ||= { "a" => "auto" }
         @s.post("co_act", "id" => @id, "d" => a.merge("b" => d["b"], "t" => d["t"]))
         @view.waiting
@@ -300,6 +313,9 @@ module KIF
         if d["x"] || !@begun
           @aborted = true
           @decision = 0
+          if d["x"] == "party"
+            KIF::Coop.tell(:party, _INTL("{1}'s game doesn't have one of your Pokémon (a mod's, or another KIF's), so you didn't join the battle.", @host_name))
+          end
           return
         end
         apply_final(d["pt"])
@@ -327,10 +343,13 @@ module KIF
       def award_exp(kills)
         return unless kills.is_a?(Array)
         keep = @mirror.battlers
-        kills.first(60).each do |k|
+        left = @foes.dup   # each foe of this battle once
+        kills.first(left.length).each do |k|
           next unless k.is_a?(Hash)
           sp = Mon.sym(k["s"], GameData::Species) or next
           lv = int(k["l"], 1, GameData::GrowthRate.max_level) or next
+          i = left.index([sp, lv]) or next
+          left.delete_at(i)
           parts = (k["p"].is_a?(Array) ? k["p"] : []).map { |pi| party_index(pi, 0) }.compact.uniq
           next if parts.empty?
           foe = Pokemon.new(sp, lv, nil, false, false)
@@ -364,8 +383,10 @@ module KIF
 
       def store_catches(list)
         return unless list.is_a?(Array) && !list.empty?
-        pks = list.first(6).map { |h| Mon.load(h, true) }.compact
+        # no more than this player's balls, and only foes of this battle
+        pks = list.first([@balls, 6].min).map { |h| Mon.load(h, true) }.compact.select { |pk| @foes.any? { |s, _| s == pk.species } }
         pks.each do |pk|
+          [:@kif_coop_slots, :@kif_coop_lost].each { |v| pk.remove_instance_variable(v) if pk.instance_variable_defined?(v) }
           pk.owner = Pokemon::Owner.new_from_trainer(@trainer)
           pk.obtain_map = $game_map.map_id if $game_map
           KIF::NetSprite.forget(pk) if defined?(KIF::NetSprite)
@@ -382,8 +403,8 @@ module KIF
         list.first(20).each do |x|
           next unless x.is_a?(Array) && x.length == 2
           it = Mon.sym(x[0], GameData::Item) or next
-          n = int(x[1], 1, 99) or next
-          @bag.pbDeleteItem(it, n)
+          n = [int(x[1], 1, 99) || 0, @picked[it.to_s]].min   # never more than this player picked
+          @bag.pbDeleteItem(it, n) if n > 0
         end
       end
 

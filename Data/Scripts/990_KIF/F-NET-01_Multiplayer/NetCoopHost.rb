@@ -30,6 +30,12 @@ module KIF
 
     def self.hosting?; @hosting; end
 
+    # this co-op battle: the partner's ball caught and this player's didn't
+    def self.partner_caught_alone?
+      h = @battle_host
+      return h && !h.caught.empty? && !h.own_catch ? true : false
+    end
+
     # a battle starting here may ask the partner
     def self.may_host?
       return false unless on? && !@hosting && !@guest
@@ -71,12 +77,13 @@ module KIF
       end
       $PokemonGlobal.partner = [join[:type], join[:name], join[:tid], join[:party]]
       @pending_host = host
+      @battle_host = host
       log("battle #{join[:id]} with #{join[:name]} (#{kind})")
       begin
         return yield
       ensure
         $PokemonGlobal.partner = old
-        @pending_host = nil
+        @pending_host = @battle_host = nil
         @hosting = false
         (host.finish(0, "abort") rescue nil)
       end
@@ -99,7 +106,7 @@ module KIF
     #---------------------------------------------------------------------------
     class Host
       attr_reader :id, :name, :battle, :lost, :kills, :caught, :items
-      attr_accessor :mine_size
+      attr_accessor :mine_size, :own_catch
 
       def initialize(session, join)
         @s = session
@@ -208,6 +215,7 @@ module KIF
               "fs" => b.pbPartyStarts(1),
               "bt" => b.battlers.each_with_index.map { |x, i| x ? [i, x.pokemonIndex] : nil }.compact,
               "cl" => b.canLose ? 1 : 0, "cr" => b.canRun ? 1 : 0, "mg" => b.moneyGain ? 1 : 0, "eg" => b.expGain ? 1 : 0 }
+        d["lo"] = 1 if guest_party.any? { |p| p&.instance_variable_get(:@kif_coop_lost) }   # the partner is told why
         post("co_begin", "d" => d)
       end
 
@@ -445,7 +453,7 @@ module KIF
         d = { "dc" => decision.to_i }
         if @battle && !why
           d["cl"] = @battle.canLose ? 1 : 0
-          d["pt"] = guest_party.map { |p| p ? [p.hp, p.status.to_s, p.statusCount.to_i, p.moves.map { |m| m.pp.to_i }] : nil }
+          d["pt"] = guest_party.map { |p| p ? [p.hp, p.status.to_s, p.statusCount.to_i, KIF::Coop::Mon.pp_list(p)] : nil }
           d["k"] = @kills
           d["c"] = @caught.first(6).map { |p| KIF::Coop::Mon.dump(p, true) }
           d["it"] = @items.select { |_k, v| v > 0 }.map { |k, v| [k.to_s, v] }
@@ -658,6 +666,9 @@ end
 # PIF heals both teams after a partner battle; a co-op battle doesn't
 def pbAfterBattle(decision, canLose)
   return kif_coop_pbAfterBattle(decision, canLose) unless KIF::Coop.hosting?
+  # only the partner caught: the encounter was theirs (their Nuzlocke place, their
+  # Soul Link catch); this player's place stays open, as theirs does when this player catches
+  KIF::Nuzlocke.pending = nil if defined?(KIF::Nuzlocke) && KIF::Coop.partner_caught_alone?
   old = $PokemonGlobal.partner
   $PokemonGlobal.partner = nil
   begin
@@ -730,6 +741,7 @@ class PokeBattle_Battle
   end
 
   def pbEndOfBattle(*args)
+    @kif_coop.own_catch = !@caughtPokemon.empty? if @kif_coop   # the partner's catches were taken out already
     ret = kif_coop_pbEndOfBattle(*args)
     (@kif_coop.finish(@decision) rescue KIF::Coop.log("result not sent (#{$!.class}: #{$!.message})")) if @kif_coop
     return ret

@@ -4,8 +4,8 @@
 # speed-up on they are gone before they can be read. Every message the battle
 # shows and every ability pop-up (mods' too, e.g. KIF-ER's innates) is kept,
 # by turn, and Battle Info gets a Log page after Speed: newest at the bottom,
-# Up / Down scroll, a green dot for your side's lines and a red one for the
-# foe's (the Pokémon whose move it is, else the one the line starts with).
+# Up / Down scroll, a green dot for lines about your Pokémon and a red one for
+# the foe's (the Pokémon the line starts with, else the one whose move it is).
 # Recorded where the battle hands its text to the screen (PokeBattle_Battle's
 # pbDisplay family, hooked in BattleInfo.rb), so PIF's battle scene and EBDX's
 # work the same, and Turn Skipper's faster or hidden round-end messages are
@@ -30,9 +30,9 @@ module KIF
     def add(battle, msg, battler = nil, popup = false)
       text = KIF::PixelFont.utf8(msg).gsub(/\\[A-Za-z]+(\[[^\]]*\])?|<[^>]*>|[\x00-\x1F]/, " ").squeeze(" ").strip
       return if text.empty?
-      battler ||= battle.instance_variable_get(:@kif_log_actor) ||
-                  battle.battlers.map { |b| b && b.pokemon && [b, KIF::PixelFont.utf8(b.pbThis)] }.compact
-                        .select { |_b, name| text.start_with?(name) }.max_by { |_b, name| name.length }&.first
+      battler ||= battle.battlers.map { |b| b && b.pokemon && [b, KIF::PixelFont.utf8(b.pbThis)] }.compact
+                        .select { |_b, name| text.start_with?(name) }.max_by { |_b, name| name.length }&.first ||
+                  battle.instance_variable_get(:@kif_log_actor)
       side = battler ? (KIF::BattleInfo.own?(battler) ? :own : :foe) : nil
       log = battle.instance_variable_get(:@kif_log) || battle.instance_variable_set(:@kif_log, [])
       log << [battle.instance_variable_get(:@kif_log_turn).to_i, side, text, popup]

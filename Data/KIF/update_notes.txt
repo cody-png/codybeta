@@ -1,9 +1,10 @@
 KIF 1.2.6
 - New: Update history (Options > System). Read the notes of every KIF version: a short overview or the full notes.
 - What's new shows the notes of every version since the one you had, so a skipped version's notes are no longer missed. After an update, All updates opens the Update history.
-- Bag: TMs have a 'Who can learn' list.
+- Bag: a TM's menu has 'Who can learn' (every Pokemon that can learn its move) and 'Search TMs' (every TM, by move name).
 - Illusion: a disguised foe's battle box shows the types of the Pokemon it copies until the disguise breaks.
 - Battle Info's Log page shows your name where a line names you, and no longer shows text codes.
+- Silph Co. 7F: a hidden tile in the west wall could undo beating Giovanni there; it's gone, and saves it affected are repaired on load.
 
 KIF 1.2.5
 - EBDX: move effectiveness shows in the Fight menu; battle boxes appear as each Pokemon is sent out, so the foe's lead stays hidden; foe type icons, KIF's shiny star, gender icons and level-up stat windows now show there too.

@@ -9,9 +9,10 @@ The game shows the same notes in Options > System > Update history.
 
 - New: Update history (Options > System). Read the notes of every KIF version: a short overview or the full notes.
 - What's new shows the notes of every version since the one you had, so a skipped version's notes are no longer missed. After an update, All updates opens the Update history.
-- Bag: TMs have a 'Who can learn' list.
+- Bag: a TM's menu has 'Who can learn' (every Pokemon that can learn its move) and 'Search TMs' (every TM, by move name).
 - Illusion: a disguised foe's battle box shows the types of the Pokemon it copies until the disguise breaks.
 - Battle Info's Log page shows your name where a line names you, and no longer shows text codes.
+- Silph Co. 7F: a hidden tile in the west wall could undo beating Giovanni there; it's gone, and saves it affected are repaired on load.
 
 <details><summary>Full notes</summary>
 
@@ -19,10 +20,11 @@ The game shows the same notes in Options > System > Update history.
 - The same notes are on the GitHub page, in CHANGELOG.md.
 - After an update, "KIF was updated" offers OK, What's new and All updates (the Update history).
 - What's new, before and after an update, shows the notes of every version newer than the one you have (or had before the update), so a version you skipped is no longer left out.
-- Bag: TMs have a 'Who can learn' list.
+- Bag: a TM's or HM's menu has 'Who can learn': every Pokemon that can learn its move, the ones in your party and PC first, with a top row that switches between All, Seen and Caught. 'Search TMs' in the same menu lists every TM and HM by move name, also ones you don't have. The list also says that TMs are not used up and that a fusion learns a move if its head or body can.
 - Illusion: while a foe is disguised, its battle box shows the types of the Pokemon it copies (PIF's type icons, KIF's Type Display and EBDX's box), as Battle Info and the Fight menu's hints already did. The real types show once the disguise breaks.
 - Battle Info Log: a line that names the player shows your name, a line break in a message becomes a space, and the text codes in PIF's own messages no longer show as letters in the log.
 - Test Code: a code that works but can't be kept (KIF can't write to its save folder) now says so, instead of saying Updates is set to Test.
+- Silph Co. 7F: a hidden tile in the west wall could undo beating Giovanni there; it's gone, and saves it affected are repaired on load.
 
 </details>
 
@@ -521,7 +523,7 @@ The game shows the same notes in Options > System > Update history.
 - Modules (Options > Modules): turn any part of KIF On, Hidden or Off. The first start asks: Classic KIF, PIF only or Let me choose.
 - One Options screen for KIF's and PIF's settings, with search and Settings Presets.
 - A new Randomizer screen with seeds and settings codes, and the Entrance Randomizer (beta), which shuffles where doors lead.
-- New: Battle Info, the Fusion Screen, Move Effectiveness and EBDX battles (Off by default).
+- New: Battle Info, the Fusion Screen, Move Effectiveness and EBDX battles (EBDX is Off by default).
 - Mods: a built-in Mod Manager (Options > Mods) finds, installs, updates and removes mods.
 - KIF updates itself and downloads only what changed. Sprite packs go in the Import Sprites folder.
 
@@ -532,7 +534,7 @@ The game shows the same notes in Options > System > Update history.
 - Install with install_KIF.bat (Windows) or install_KIF.sh (Linux, Steam Deck). The game is started with InfiniteFusion.exe.
 - Coming from KIF 0.20.7: the first start offers to copy your old saves (old KIF keeps its own). Party, boxes, Bag, money, badges, position, KIF settings and shiny colours carry over. Pokemon whose species PIF 6.8.2 doesn't have are set aside, never emptying your party, and come back once the game has their species. Import Old Saves on the load menu does it any time; nothing is overwritten.
 - KIF keeps its saves in %APPDATA%\KIF (the KIF Savefiles shortcut); old KIF's stay in %APPDATA%\kurayinfinitefusion.
-- The first start asks how you want to play: Classic KIF (KIF as it was: every module On, but EBDX battles, Move Effectiveness and the Fusion Screen Off), PIF only (everything Off) or Let me choose.
+- The first start asks how you want to play: Classic KIF (KIF as it was: every module On, but EBDX battles, Battle Info, Move Effectiveness and the Fusion Screen Off), PIF only (everything Off) or Let me choose.
 
 **Modules and Options**
 

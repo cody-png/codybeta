@@ -24,7 +24,7 @@ module KIF
         ["Mechanics", ["Battle AI", "Damage Variance", "Modern Hail", "Weather Setter Immunity", "Frostbite", "Drowsy", "Pre-Status",
                        "Bug Type Buffs", "Ice Type Buffs"]],
         ["Gyms", ["Gym Leader teams", "Your Pokémon in gyms"]],
-        ["Screens", ["Battle Info", "Foe Info", "Move Effectiveness", "Show Lv. in BSM"]],
+        ["Screens", ["Battle Info", "Foe Info", "Move Effectiveness", "Show Lv. in BSM", "Level Up Stats"]],
         ["EBDX", ["EBDX Battles", "EBDX Camera Zoom", "EBDX Stat Stage Icons", "EBDX Own Trainer Animation"]]]],
       [:pokemon, "Pokémon", [90, 170, 100], [
         ["Levels and EXP", ["Level Cap", "Cap Behavior", "Trainer Exp. Boost", "ExpAll Redistribution"]],
@@ -38,11 +38,12 @@ module KIF
         ["K-Eggs", ["K-Eggs Usage", "K-Eggs Rarity", "K-Eggs Fusion Odds", "K-Eggs Fusion Pool",
                     "K-Eggs Rewards"]]]],
       [:graphics, "Graphics", [110, 120, 220], [
-        ["Battle", ["Battle Animations", "Battle Movement", "Battle Type Icons", "Type Display", "Swap BattleGUI"]],
+        ["Battle", ["Battle Animations", "Battle Movement", "Battle Camera", "Battle Type Icons", "Type Display", "Swap BattleGUI"]],
         ["Sprites", ["Random Sprites", "Joke Sprites", "Custom Eggs", "Fusion Icons"]],
         ["Screens", ["Fusion Screen", "Fusion Preview", "Big Pokémon Icons", "Summary IVs/EVs", "Dark Mode"]],
         ["Pokédex", ["Autogen dex entries", "Improved Pokedex", "Dex Evolutions", "Dex Sprite Select"]],
-        ["Text", ["Game's Font", "Speech Frame"]]]],
+        ["Text", ["Game's Font", "Speech Frame"]],
+        ["Overworld", ["Map Zoom"]]]],
       [:selfbattle, "Self-Battle", [200, 120, 60], [
         ["Self-Battle", ["Battle Size", "Player Size", "Level", "Team Select", "Limitless Select",
                          "Randomize Team", "Randomize Share", "Players Folder", "Battle Loop", "Stat Tracker"]],

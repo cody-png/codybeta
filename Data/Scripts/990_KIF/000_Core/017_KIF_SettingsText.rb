@@ -105,7 +105,7 @@ module KIF
         "Sleep becomes Drowsy: the Pokémon acts about half the time and deals half damage."],
       "Pre-Status" => [
         "Pokémon start battles with the status they already have.",
-        "Kuray Actions (PC or party) > Start Battles makes a Pokémon start every battle burned or poisoned, if it can be."],
+        "Kuray Actions (PC or party) > Start Battles makes a Pokémon start every battle burned (once you have a Flame Orb) or poisoned (once you have a Toxic Orb)."],
       "Bug Type Buffs" => [
         "Bug types as in PIF.",
         "Bug types resist Fairy, Psychic and Dark.",
@@ -136,6 +136,13 @@ module KIF
       "Show Lv. in BSM" => [
         "Base Stats Mode hides levels in battle.",
         "Base Stats Mode shows levels in battle (the level doesn't change the stats there)."],
+      "Level Up Stats" => [
+        "After a level up, two windows show the stat gains and the new stats.",
+        "After a level up, the stat windows are skipped in every battle. The level up message still shows."],
+      "Battle Camera" => [
+        "Double and triple battles look as in PIF.",
+        "Double and triple battles: your Pokémon a bit smaller and every Pokémon spaced out, so each one is fully visible. Singles look as in PIF.",
+        "Double and triple battles: every Pokémon smaller and spaced out, for the most room. Singles look as in PIF."],
       "EBDX Battles" => [
         "Battles look like PIF's own.",
         "Battles use Elite Battle DX's look and animations."],
@@ -260,6 +267,10 @@ module KIF
         "Pokémon use their small icons.",
         "Party and other screens use the full battle sprite as the icon (PC boxes keep small icons).",
         "Every icon, PC boxes included, uses the full battle sprite."],
+      "Map Zoom" => [
+        "The overworld at its normal size.",
+        "Zooms the overworld out (map pixels at 1.5x): you see more of the map around you. Menus and text keep their size.",
+        "Zooms the overworld out further (map pixels at 1x): about four times as much map. Menus and text keep their size."],
       "Summary IVs/EVs" => [
         "The Skills page shows stats only.",
         "The Skills page also shows IVs, EVs and base stats."],

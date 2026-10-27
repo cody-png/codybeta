@@ -68,6 +68,30 @@ class PokemonPokedexInfo_Scene
     return kif_ls_set_displayed_to_current_alt(alts)
   end
 
+  alias kif_ls_pbChooseAlt pbChooseAlt unless method_defined?(:kif_ls_pbChooseAlt) || private_method_defined?(:kif_ls_pbChooseAlt)
+
+  # Blacklist mode (Down on the Sprites page) sets which sprites the species
+  # gets at random, by letter: it lists PIF's own sprites only (Up from there
+  # picks from those too, until the page is opened again)
+  def pbChooseAlt(*args)
+    full = @available
+    mates = (@selecting_blacklist && @pokemon && full) ? KIF::LineSprites.others(@pokemon) : []
+    own = full.reject { |s| mates.include?(s.species) } unless mates.empty?
+    return kif_ls_pbChooseAlt(*args) if own.nil? || own.empty? || own.length == full.length
+    sel = full[@selected_index]
+    begin
+      @available = own
+      @selected_index = own.index { |s| s.equal?(sel) } || 0
+      update_displayed
+      return kif_ls_pbChooseAlt(*args)
+    ensure
+      sel = @available[@selected_index]
+      @available = full
+      @selected_index = full.index { |s| s.equal?(sel) } || 0
+      update_displayed
+    end
+  end
+
   alias kif_ls_swap_main_sprite swap_main_sprite unless method_defined?(:kif_ls_swap_main_sprite) || private_method_defined?(:kif_ls_swap_main_sprite)
 
   def swap_main_sprite(*args)

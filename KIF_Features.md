@@ -118,7 +118,7 @@ All options in this menu are per-save.
 - **Rocket Mode** - Off / On / All Balls *(Off)*. Lets Rocket Balls (sold in the Kuray Shop) steal trainers' Pokémon. All Balls lets any ball do it. Stolen Pokémon follow the Level Cap like your own (one stolen above it is held at the cap; its extra Exp is saved for later).
 - **Recover Consumables** - Off / On *(Off)*. Berries, gems and other items your Pokémon use up in battle come back afterwards.
 - **Skip Caught Prompt** - Off / On *(Off)*. With a full party, a caught Pokémon goes straight to the PC with no question asked.
-- **Items to Bag** - Off / On *(Off)*. A Pokémon that already holds an item can still steal with Thief or Covet in wild battles, and still finds items with Pickup after a battle. The new item goes to the Bag and it keeps its own. Trainer battles stay as before (their items come back after the battle).
+- **Items to Bag** - Off / On *(Off)*. A Pokémon that already holds an item can still steal with Thief or Covet in wild battles, and still finds items with Pickup after a battle. The new item goes to the Bag and it keeps its own. Trainer battles stay as before (their items come back after the battle), and only the wild Pokémon's own item can be taken (not one you gave it with Trick).
 - **Critical Captures** - Off / On *(On)*. Critical captures can happen with any ball, and get more likely the more Pokémon you own. Off keeps only PIF's own last-ball critical capture.
 
 ### Fusion
@@ -166,7 +166,7 @@ K-Eggs are sold in the Kuray Shop (see "Others > Kuray QoL").
   - All: also the PC boxes.
   - The party screen adjusts its layout for them: the level sits by the HP, and status badges (PSN, FNT...) sit on the sprite.
 - **Game's Font** - Default / FR/LG / D/P / R/B *(Default)*. Changes the game's font.
-- **Evolution line sprites** (no setting; Information module, with the Pokédex's Dex Sprite Select). In a Pokémon's Summary > Pokédex > Sprites, the list also has the sprites of the rest of its evolution line (for a fusion, every head and body pair of its two lines), so a Charizard can keep Charmeleon's sprite. The pick is for that one Pokémon only. Needs Random Sprites On; evolving picks a new sprite as before.
+- **Evolution line sprites** (no setting; Information module, with the Pokédex's Dex Sprite Select). In a Pokémon's Summary > Pokédex > Sprites, the list also has the sprites of the rest of its evolution line (for a fusion, every head and body pair of its two lines), so a Charizard can keep Charmeleon's sprite. The pick is for that one Pokémon only. Needs Random Sprites On; evolving picks a new sprite as before. Choosing which sprites can appear at random (Down on that page) still lists only its own species.
 
 ### Per-save
 

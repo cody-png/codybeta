@@ -11,11 +11,19 @@ module KIF
   module ModReadme
     MAX     = 64 * 1024    # bytes shown; the rest is cut
     MAX_GET = 256 * 1024   # a bigger README in a catalog isn't downloaded
-    # characters the game's fonts may not have
-    FOLD = { "–" => "-", "—" => "-", "‘" => "'", "’" => "'", "“" => '"',
-             "”" => '"', "…" => "...", "×" => "x", " " => " ", "→" => "->",
-             "•" => "-", "\t" => "  " }
-    ENTITIES = { "&amp;" => "&", "&lt;" => "<", "&gt;" => ">", "&quot;" => '"', "&#39;" => "'", "&nbsp;" => " " }
+    LINE    = 2048         # a longer line gets only the cheap cleanup (its Markdown regexes could take seconds)
+    # the game's fonts (Fonts/*.ttf) have ASCII, Latin-1 and the gender
+    # signs; these become ASCII, anything else they lack (emoji, CJK,
+    # zero-width spaces, the soft hyphen) is dropped, not drawn as a box
+    FOLD = { "–" => "-", "—" => "-", "‐" => "-", "‑" => "-", "−" => "-", "‘" => "'", "’" => "'", "‚" => "'",
+             "“" => '"', "”" => '"', "„" => '"', "…" => "...", "×" => "x", " " => " ", "→" => "->", "←" => "<-",
+             "•" => "-", "\t" => "  ", "✓" => "OK", "✔" => "OK", "✅" => "OK", "☑" => "OK", "✗" => "x", "✘" => "x",
+             "❌" => "x", "⚠" => "!", "€" => "EUR", "©" => "(c)", "®" => "(R)", "™" => "(TM)", "★" => "*" }
+    FOLD_RE = Regexp.union(FOLD.keys)
+    UNDRAWN = / ?[^\n\x20-\x7E¡-¬®-ÿ♀♂]+/   # with a space before it: no double space is left
+    ENTITIES = { "amp" => "&", "lt" => "<", "gt" => ">", "quot" => '"', "apos" => "'", "nbsp" => " ", "copy" => "©",
+                 "reg" => "®", "trade" => "™", "mdash" => "—", "ndash" => "–", "hellip" => "…", "laquo" => "«",
+                 "raquo" => "»" }
 
     module_function
 
@@ -34,7 +42,8 @@ module KIF
     end
 
     # [name, text] of a catalog mod's README, nil when it has none, :offline
-    # when the catalog didn't answer
+    # when the catalog didn't answer, :failed when it answered without it (a
+    # 404: the README moved since Browse read the catalog's file list)
     def catalog_text(item)
       cat = KIF::ModCatalog
       n = pick(item.files.keys.reject { |k| k.include?("/") })
@@ -52,7 +61,8 @@ module KIF
         cat.end_stats("description of #{item.folder}")
         KIF::Updater.hide_status
       end
-      return text ? [n, text] : :offline
+      return [n, text] if text
+      return KIF::Updater.instance_variable_get(:@last_status).to_i > 0 ? :failed : :offline
     end
 
     # what the reader shows
@@ -60,13 +70,23 @@ module KIF
       desc = fold(desc.to_s).gsub(/\s+/, " ").strip
       desc = _INTL("This mod has no description.") if desc.empty?
       return [_INTL("Couldn't reach the mod catalog to read the full description. Check the internet connection and try again."), "", desc] if found == :offline
-      return [desc] unless found
+      return [_INTL("This mod's description couldn't be loaded."), "", desc] if found == :failed
+      return [desc] if !found || binary?(found[1])
       lines = plain(found[1], found[0] !~ /\.txt\z/i)
       return lines.empty? ? [desc] : lines
     end
 
     def show(title, found, desc)
-      KIF::Updater.show_text(KIF::PixelFont.utf8(title.to_s), lines_for(found, desc), false)
+      KIF::Updater.show_text(fold(title), lines_for(found, desc), false)
+    end
+
+    # a README that is really a picture or an archive: NUL bytes, or more
+    # than a tenth of it control bytes or broken UTF-8
+    def binary?(text)
+      t = text.to_s.b
+      return true if t.include?("\0")
+      bad = t.count("\x01-\x08\x0B\x0E-\x1F\x7F") + t.bytesize - t.dup.force_encoding("UTF-8").scrub("").bytesize
+      return bad * 10 > t.bytesize
     end
 
     # an installed mod (KIF::Mods::Entry); a loose .rb has no folder
@@ -85,9 +105,17 @@ module KIF
     # Text
     #---------------------------------------------------------------------------
     def fold(s)
-      s = KIF::PixelFont.utf8(s.to_s)
-      return s.gsub(/[–—‘’“”…× →•\t]/) { |c| FOLD[c] }
-              .gsub(/[\x00-\x08\x0B-\x1F\x7F]/, "")
+      return KIF::PixelFont.utf8(s.to_s).gsub(FOLD_RE, FOLD).gsub(UNDRAWN, "")
+    end
+
+    # &copy; &#169; &#xA9; as what they stand for, folded; one pass, so
+    # &amp;lt; is "&lt;"
+    def entities(s)
+      return s.gsub(/&(#\d{1,7}|#[xX]\h{1,6}|[A-Za-z]+);/) do
+        e = $1
+        c = ENTITIES[e] || (e.start_with?("#") ? ((e =~ /x/i ? e[2..-1].hex : e[1..-1].to_i).chr(Encoding::UTF_8) rescue "") : nil)
+        c ? fold(c) : $&
+      end
     end
 
     # the reader's lines: Markdown (md) as plain text, a .txt as it is;
@@ -96,7 +124,7 @@ module KIF
       t = text.to_s.b
       cut = t.bytesize > MAX
       t = t.byteslice(0, MAX) if cut
-      t = fold(t.force_encoding("UTF-8").scrub("").sub(/\A﻿/, "").gsub(/\r\n?/, "\n"))
+      t = fold(t.force_encoding("UTF-8").scrub("").gsub(/\r\n?/, "\n"))
       lines = md ? markdown(t) : t.split("\n").map(&:rstrip)
       lines += ["", "(cut)"] if cut
       out = []
@@ -110,7 +138,10 @@ module KIF
       para = nil
       fence = nil
       flush = proc { out << para if para; para = nil }
-      text.gsub(/<!--.*?-->/m, "").split("\n").each do |l|
+      # html: no comments, scripts or styles (unclosed: to the end, as a
+      # browser does); a tag over several lines is put on one, then dropped
+      text = text.gsub(/<!--.*?(?:-->|\z)/m, "").gsub(/<(script|style)\b.*?(?:<\/\1\s*>|\z)/mi, "")
+      text.gsub(/<\/?[A-Za-z][^<>]*>/) { |tag| tag.tr("\n", " ") }.split("\n").each do |l|
         if fence   # code: its text, indented
           if l.strip.start_with?(fence)
             fence = nil
@@ -150,11 +181,11 @@ module KIF
           mark = item[1] =~ /\d/ ? item[1].sub(")", ".") : "-"
           out << "  " * [item[0], 3].min + "#{mark} " + inline(item[2])
         elsif !para && l =~ /\A\s+\S/ && out.last.to_s =~ /\A *(- |\d+\. )/   # a list line's next line
-          out[-1] += " " + inline(s)
+          out[-1] << " " << inline(s)   # << not +=: a long paragraph isn't copied for each line
         else
           t = inline(s)
           next if t.empty?   # an html line (<p align="center">)
-          para = para ? "#{para} #{t}" : t
+          para = para ? para << " " << t : t
         end
       end
       flush.call
@@ -164,16 +195,17 @@ module KIF
     # one line's text: pictures as [picture], links as their text, no
     # emphasis, code or html marks
     def inline(s)
+      # shortcut: a line over LINE keeps its Markdown marks (hostile or generated files only)
+      return entities(s.gsub(/<\/?[A-Za-z][^<>]*>/, "")).strip if s.length > LINE
       keep = proc { |t| t.gsub(/[!-\/:-@\[-`{-~]/) { |c| (0xE000 + c.ord).chr(Encoding::UTF_8) } }
       s = s.gsub(/\\([!-\/:-@\[-`{-~])/) { keep.call($1) }   # \* stays a *
       s = s.gsub(/(`+)(.+?)\1/) { keep.call($2.strip) }     # code: its text, as it is
       s = s.gsub(/<img\b[^>]*>/i, "[picture]").gsub(/!\[[^\]]*\](\([^)]*\)|\[[^\]]*\])/, "[picture]")
       s = s.gsub(/\[((?:[^\[\]]|\[[^\]]*\])*)\](\([^)]*\)|\[[^\]]*\])/, '\1')
       s = s.gsub(/<((?:https?|mailto):[^>\s]+)>/, '\1').gsub(/<\/?[A-Za-z][^>]*>/, "")
-      s = s.gsub(/(\*\*|__)(?=\S)(.+?)(?<=\S)\1/, '\2').gsub(/~~(.+?)~~/, '\1')
+      s = s.gsub(/(\*\*|__)(?=\S)((?:(?!\1).)+?)(?<=\S)\1/, '\2').gsub(/~~(.+?)~~/, '\1')   # bold not past the next **: linear time
       s = s.gsub(/(?<![\w*])\*(?=\S)(.+?)(?<=\S)\*(?![\w*])/, '\1').gsub(/(?<!\w)_(?=\S)(.+?)(?<=\S)_(?!\w)/, '\1')
-      s = s.gsub(/&(amp|lt|gt|quot|#39|nbsp);/) { |e| ENTITIES[e] }
-      return s.gsub(/[\u{E021}-\u{E07E}]/) { |c| (c.ord - 0xE000).chr }.strip
+      return entities(s).gsub(/[\u{E021}-\u{E07E}]/) { |c| (c.ord - 0xE000).chr }.strip
     end
   end
 end

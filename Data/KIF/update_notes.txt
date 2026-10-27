@@ -1,3 +1,6 @@
+KIF 1.2.9
+- Fixed: on some PCs the screen stayed black for minutes after Play. The check for saves to import from old KIF now runs only when that folder changes, and never for more than 3 seconds.
+
 KIF 1.2.8
 - Faster start with a full sprite pack and Download data Off: the check before the load screen no longer goes through every sprite file.
 - The log now says which step was slow when the load screen takes a while to appear (send the Logs folder if the screen stays black after Play).

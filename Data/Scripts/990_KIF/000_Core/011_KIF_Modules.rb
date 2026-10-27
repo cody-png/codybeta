@@ -40,7 +40,7 @@ module KIF
                         %w[F-SHINY-01 F-SHINY-02 F-ITEM-04]],
       :graphics     => ["Graphical Changes",
                         "EBDX, battle box, effectiveness colours, icons, font, dark mode, title screen.",
-                        %w[F-BATTLE-12 F-BATTLE-07 C-BATTLE-01 F-UI-02 F-UI-03 F-UI-11 F-UI-12]],
+                        %w[F-BATTLE-12 F-BATTLE-07 C-BATTLE-01 F-UI-02 F-UI-03 F-UI-11 F-UI-12 F-UI-14]],
       :information  => ["Information",
                         "Fusion preview and screen, Pokédex evolutions, IVs and EVs.",
                         %w[F-FUSION-03 C-FUSION-02 F-POKE-06 F-UI-04]],   # Battle Info: base feature

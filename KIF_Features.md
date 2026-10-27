@@ -165,6 +165,7 @@ K-Eggs are sold in the Kuray Shop (see "Others > Kuray QoL").
   - All: also the PC boxes.
   - The party screen adjusts its layout for them: the level sits by the HP, and status badges (PSN, FNT...) sit on the sprite.
 - **Game's Font** - Default / FR/LG / D/P / R/B *(Default)*. Changes the game's font.
+- **Evolution line sprites** (no setting; Graphical Changes module). In a Pokémon's Summary > Pokédex > Sprites, the list also has the sprites of the rest of its evolution line (for a fusion, every head and body pair of its two lines), so a Charizard can keep Charmeleon's sprite. The pick is for that one Pokémon only. Needs Random Sprites On; evolving picks a new sprite as before.
 
 ### Per-save
 

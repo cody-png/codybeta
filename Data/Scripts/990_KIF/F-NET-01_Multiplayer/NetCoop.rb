@@ -50,6 +50,17 @@ KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (01
                   _INTL("Fighting together: when one of you throws a ball at a wild Pokémon, the other's attack on it waits that turn. The host's setting counts.")])
 }
 
+KIF::Options.define(:kif_coop_second_ball, 1, :global)   # 0 Next Pokémon, 1 Back to Bag
+
+KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (015_KIF_SettingsData)
+  next nil if KIF.mobile?
+  EnumOption.new(_INTL("Co-op: second ball"), [_INTL("Next Pokémon"), _INTL("Back to Bag")],
+                 proc { $PokemonSystem.kif_coop_second_ball },
+                 proc { |value| $PokemonSystem.kif_coop_second_ball = value },
+                 [_INTL("Fighting together: when both of you throw at one wild Pokémon and the first ball catches it, the second goes at the other wild Pokémon."),
+                  _INTL("Fighting together: when both of you throw at one wild Pokémon and the first ball catches it, the second ball goes back to the Bag. The host's setting counts.")])
+}
+
 module KIF
   module Coop
     {
@@ -78,7 +89,7 @@ module KIF
     GUEST_TYPES = %w[co_begin co_ev co_cmd co_sw co_skip co_end co_lock]
 
     # the Multiplayer host's gameplay settings: $PokemonSystem field => [min, max]
-    RULES = { "shinyodds" => [1, 65_536], "shiny_trainer_pkmn" => [0, 3], "kif_coop_hold" => [0, 1],
+    RULES = { "shinyodds" => [1, 65_536], "shiny_trainer_pkmn" => [0, 3], "kif_coop_hold" => [0, 1], "kif_coop_second_ball" => [0, 1],
               "damage_variance" => [0, 9], "powerfulai" => [0, 9], "modernhail" => [0, 9], "frostbite" => [0, 9],
               "drowsy" => [0, 9], "bugbuff" => [0, 9], "icebuff" => [0, 9], "critical_captures" => [0, 9],
               "rocketballsteal" => [0, 9], "custom_bst_npc" => [0, 9], "cody_leader_teams" => [0, 9] }
@@ -389,6 +400,7 @@ module KIF
     # the battle's team size limit here: a gym's pick (PokemonSelection) left this
     # many in the party; 0 none. The partner brings no more (the host's rule)
     def self.team_limit
+      return @pick_max if @pick_max   # the pick's own limit (a party already that small changed nothing)
       return 0 unless $PokemonGlobal && $PokemonGlobal.pokemonSelectionOriginalParty && $Trainer
       return $Trainer.party.length.clamp(1, 6)
     rescue StandardError
@@ -396,6 +408,9 @@ module KIF
     end
 
     # the Pokémon a player brings: the party, or its first `max` that can fight
+    # a team pick (PokemonSelection) is on until it is restored
+    def self.picked(max); @pick_max = max.is_a?(Integer) && max.between?(1, 5) ? max : nil; end
+
     def self.join_party(trainer, max = 0)
       return trainer.party.first(6) unless max.to_i > 0
       return trainer.party.select { |p| p && p.able? }.first(max)
@@ -436,7 +451,28 @@ module KIF
       max = team_limit
       s.post("co_ask", "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => kind.to_s, "max" => max)
       reply = nil
-      wait_map(@ask_wait) { reply = take_host(id, %w[co_join co_no]) }
+      crossed = nil
+      wait_map(@ask_wait) do
+        reply = take_host(id, %w[co_join co_no])
+        # both started a battle at once (crossed invites): the Multiplayer
+        # host's battle is the shared one; the other game joins it first
+        if !reply && @ask
+          if rules_host?
+            s.post("co_no", "id" => @ask["id"], "why" => "busy")
+            @ask = nil
+          else
+            crossed = @ask
+            @ask = nil
+          end
+        end
+        reply || crossed
+      end
+      if crossed
+        log("crossed invites: joining #{partner}'s battle #{crossed['id']} first")
+        s.post("co_end", "id" => id, "d" => { "x" => "late" })
+        join_battle(s, crossed)
+        return nil
+      end
       unless reply && reply[0] == "co_join"
         log("#{partner} didn't join (#{reply ? reply[1]['why'] : 'no answer'})")
         s.post("co_end", "id" => id, "d" => { "x" => "late" }) if !reply && session
@@ -809,3 +845,22 @@ Events.onMapUpdate += proc { |_sender, _e|
     end
   end
 }
+
+# a gym's team pick: its limit counts for the partner too, until it is restored
+module PokemonSelection
+  class << self
+    alias kif_coop_choose choose unless method_defined?(:kif_coop_choose) || private_method_defined?(:kif_coop_choose)
+    alias kif_coop_restore restore unless method_defined?(:kif_coop_restore) || private_method_defined?(:kif_coop_restore)
+
+    def choose(min = 1, max = 6, *rest, &blk)
+      ret = kif_coop_choose(min, max, *rest, &blk)
+      KIF::Coop.picked(ret ? max : nil)
+      return ret
+    end
+
+    def restore(*args)
+      KIF::Coop.picked(nil)
+      return kif_coop_restore(*args)
+    end
+  end
+end

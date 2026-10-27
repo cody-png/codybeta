@@ -2,22 +2,20 @@
 # F-UI-14 – Evolution line sprites (new in KIF, player request, 2026-10-26)
 # Not in KIF 0.20.7 or PIF 6.8.2.
 #
-# Summary > Pokédex > Sprites lists the Pokémon's own sprites only. Here it
-# also lists the sprites of the rest of its evolution line, so one Charizard
-# can wear Charmeleon's sprite (a fusion: every head x body pair of its two
-# lines, e.g. B6H9 also gets B4H7, B5H8...). Picking one sets only that
-# Pokémon's pif_sprite: PIF's swap would also set the whole species' sprite
-# (alt_sprite_substitutions) to the other species' sprite, so that entry is
-# put back. PIF already draws a pif_sprite of another species everywhere
+# Summary > Pokédex > Sprites lists the Pokémon's own sprites only. Here a
+# fusion also lists the sprites of every head x body pair of its two
+# evolution lines, in both orders (B6H9 also gets B9H6, B4H7, B7H4...).
+# An unfused Pokémon keeps its own sprites only (Cody, 2026-10-27). Picking
+# one sets only that Pokémon's pif_sprite: PIF's swap would also set the whole
+# species' sprite (alt_sprite_substitutions) to the other species' sprite, so
+# that entry is put back. PIF already draws a pif_sprite of another species everywhere
 # (it does so for its shared-sprite species).
 #   Only with Random Sprites On (PIF ignores per-Pokémon sprites when Off).
 #   The main Pokédex and the catch prompt (a species is passed) are unchanged.
 #   Evolving still picks a new sprite of the new species (PIF).
-# A fusion also gets the swapped order (player request, 2026-10-27): head and
-# body swapped for itself and every line pair, and the unfused sprites of both
-# lines. A label over the sprites names the group (This fusion, Swapped,
-# Evolution line, Unfused). Only the look changes. When the species changes
-# (unfuse, reverse, fuse) a pick that isn't one of the new species' is dropped.
+# A label over the sprites names the group (This fusion, Swapped, Evolution
+# line). Only the look changes. When the species changes (unfuse, reverse,
+# fuse) a pick that isn't one of the new species' is dropped.
 #===============================================================================
 module KIF
   module LineSprites
@@ -40,28 +38,24 @@ module KIF
     end
 
     # the other species whose sprites this Pokémon (or species) may use, in
-    # list order: swapped, the line's fusions (both orders), unfused
+    # list order: swapped, then the lines' fusions (both orders); none unfused
     def self.others(pkmn)
       sp = pkmn.is_a?(Pokemon) ? pkmn.species : GameData::Species.get(pkmn).species
       dex = GameData::Species.get(sp).id_number
-      return [] if isTripleFusion?(dex)
-      return line(sp) - [sp] unless isFusion(dex)
+      return [] unless isFusion(dex)   # an unfused or triple Pokémon: its own sprites only
       body = getBodyID(sp)
       head = getHeadID(sp, body)
       pairs = nums(body).product(nums(head))
       ret = ([[head, body]] + pairs + pairs.map(&:reverse)).map { |b, h| getFusedPokemonIdFromDexNum(b, h) }
-      ret += (nums(head) + nums(body)).map { |n| GameData::Species.get(n).species }
       return ret.uniq - [sp]
     end
 
-    # the label of a listed sprite's group
+    # the label of a listed sprite's group (only fusions list other species)
     def self.group(pkmn, sp)
       own = pkmn.species
-      fusion = isSpeciesFusion(own)
-      return _INTL("Unfused") if fusion && !isSpeciesFusion(sp)
-      return _INTL("Swapped") if fusion && sp != own && sp == GameData::Species.get(reverseFusionSpecies(own)).species
+      return _INTL("Swapped") if sp != own && sp == GameData::Species.get(reverseFusionSpecies(own)).species
       return _INTL("Evolution line") if sp != own && others(pkmn).include?(sp)
-      return fusion ? _INTL("This fusion") : _INTL("This Pokémon")
+      return _INTL("This fusion")
     end
   end
 end

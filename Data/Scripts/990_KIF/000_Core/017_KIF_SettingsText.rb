@@ -94,6 +94,9 @@ module KIF
         "Hail as in PIF.",
         "In hail, Ice types take less damage from physical moves.",
         "Hail becomes Snow: no damage each turn, and Ice types take less damage from physical moves."],
+      "Weather Setter Immunity" => [
+        "Sand Stream and Snow Warning users take sandstorm and hail damage as in PIF.",
+        "A Pokémon with Sand Stream takes no sandstorm damage, and one with Snow Warning no hail damage, whatever its types."],
       "Frostbite" => [
         "Freezing works as in PIF.",
         "Freezing becomes Frostbite: the Pokémon can still act, loses a little HP each turn and deals half special damage."],

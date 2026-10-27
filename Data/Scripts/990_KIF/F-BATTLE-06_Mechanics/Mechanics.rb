@@ -27,6 +27,8 @@
 #   Battles > "Bug Type Buffs" Off / Defensive / + Offensive: Bug resists
 #     Psychic, Dark and Fairy; + Offensive also makes Bug hit Fairy x2.
 #   Battles > "Ice Type Buffs": Ice resists Water and Flying.
+#   Battles > "Weather Setter Immunity" (new in KIF, 2026-10-26): Sand Stream
+#     users take no sandstorm damage, Snow Warning users no hail damage.
 #   Others > "Overworld Poison" Off / On / On+Healing: On – Poison Heal and
 #     Magic Guard also take no poison damage while walking (Immunity already
 #     doesn't); On+Healing – Poison Heal heals 1 HP instead.
@@ -65,6 +67,7 @@ KIF::Options.define(:drowsy, 0, :save)
 KIF::Options.define(:bugbuff, 0, :save)
 KIF::Options.define(:icebuff, 0, :save)
 KIF::Options.define(:walkingpoison, 0, :save)
+KIF::Options.define(:weathersetter, 0, :save)   # 2026-10-26, player request (not in KIF 0.20.7)
 
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Modern Hail"), [_INTL("Off"), _INTL("Hail"), _INTL("Snow")],
@@ -73,6 +76,15 @@ KIF::Options.add(:battles, :save) {
                  [_INTL("Vanilla hail."),
                   _INTL("Ice types receive a defensive boost during hail."),
                   _INTL("Hail becomes Snow, behaves like Gen 9+.")])
+}
+# A Sand Stream / Snow Warning fusion that isn't Rock/Ground/Steel or Ice
+# (Tyranitar x Crobat: Poison/Dark) is hurt by its own weather in PIF.
+KIF::Options.add(:battles, :save) {
+  EnumOption.new(_INTL("Weather Setter Immunity"), [_INTL("Off"), _INTL("On")],
+                 proc { $PokemonSystem.weathersetter },
+                 proc { |value| $PokemonSystem.weathersetter = value },
+                 [_INTL("Sand Stream and Snow Warning users take sandstorm and hail damage as in PIF."),
+                  _INTL("Sand Stream users take no sandstorm damage, Snow Warning users no hail damage.")])
 }
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Frostbite"), [_INTL("Off"), _INTL("On")],
@@ -126,6 +138,7 @@ module KIF
     def self.bugbuff;       opt(:bugbuff);       end
     def self.icebuff?;      opt(:icebuff) != 0;  end
     def self.walkingpoison; opt(:walkingpoison); end
+    def self.setter?;       opt(:weathersetter) != 0; end
 
     # base text => [option test, KIF text]
     TEXTS = {
@@ -240,6 +253,7 @@ class PokeBattle_Battler
   alias kif_mech_pbTryUseMove pbTryUseMove unless method_defined?(:kif_mech_pbTryUseMove)
   alias kif_mech_pbContinueStatus pbContinueStatus unless method_defined?(:kif_mech_pbContinueStatus)
   alias kif_mech_takesHailDamage? takesHailDamage? unless method_defined?(:kif_mech_takesHailDamage?)
+  alias kif_mech_takesSandstormDamage? takesSandstormDamage? unless method_defined?(:kif_mech_takesSandstormDamage?) || private_method_defined?(:kif_mech_takesSandstormDamage?)
   alias kif_mech_status= status= unless method_defined?(:kif_mech_status=)
 
   def pbTryUseMove(choice, move, specialUsage, skipAccuracyCheck)
@@ -274,7 +288,14 @@ class PokeBattle_Battler
 
   def takesHailDamage?
     return false if KIF::Mechanics.snow?
+    return false if KIF::Mechanics.setter? && hasActiveAbility?(:SNOWWARNING)
     return kif_mech_takesHailDamage?
+  end
+
+  # Weather Setter Immunity: by ability (like Sand Veil), whoever set the weather
+  def takesSandstormDamage?
+    return false if KIF::Mechanics.setter? && hasActiveAbility?(:SANDSTREAM)
+    return kif_mech_takesSandstormDamage?
   end
 
   # Drowsy: waking up doesn't reset Truant (KIF 001_PokeBattle_Battler.rb:116)

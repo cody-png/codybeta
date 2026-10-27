@@ -91,6 +91,7 @@ All options in this menu are per-save.
 ### Battle mechanics (by Bluewuppo)
 
 - **Modern Hail** - Off / Hail / Snow *(Off)*. Hail: Ice types get a defence boost during hail. Snow: hail becomes Gen 9 Snow.
+- **Weather Setter Immunity** - Off / On *(Off)*. A Pokémon with Sand Stream takes no sandstorm damage and one with Snow Warning no hail damage, whatever its types (for example a Crobat/Tyranitar fusion that is Poison/Dark). It works like Sand Veil: any sandstorm, not only its own. Foes get it too.
 - **Frostbite** - Off / On *(Off)*. Replaces Freeze with Gen 9-style Frostbite: the Pokémon can still act, but takes damage each turn.
 - **Drowsy** - Off / On *(Off)*. Replaces Sleep with Drowsy: the Pokémon isn't fully disabled.
 - **Pre-Status** - Off / On *(Off)*. Adds *Start Battles* to Kuray Actions (PC or party menu): Normal / Burned / Poisoned. A Pokémon set to Burned or Poisoned gets that status each time it is sent out without one, for Guts, Poison Heal, Quick Feet or Marvel Scale without a Flame Orb or Toxic Orb. It only happens if it could be burned or poisoned (not a Fire type for burns, not a Poison or Steel type for poison, not with Water Veil or Immunity...).

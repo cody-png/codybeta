@@ -278,8 +278,14 @@ module KIF
       end
 
       def let_game_choose?
+        sc = @battle.scene
+        # EBDX draws the No/Yes box under its data boxes: they step aside while it's up
+        hide = sc.respond_to?(:pbHideAllDataboxes) && !sc.instance_variable_get(:@dataBoxesHidden)
+        sc.pbHideAllDataboxes if hide
         q = _INTL("Let the game choose for {1} this turn?", @name)
-        return (quietly { @battle.scene.pbShowCommands(q, [_INTL("No"), _INTL("Yes")], 0) } rescue 0) == 1
+        return (quietly { sc.pbShowCommands(q, [_INTL("No"), _INTL("Yes")], 0) } rescue 0) == 1
+      ensure
+        (sc.pbShowAllDataboxes rescue nil) if hide
       end
 
       # the button a controller player presses, else the bound key

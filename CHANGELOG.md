@@ -3,7 +3,27 @@
 Every KIF version, newest first: a short overview, then the full notes (click Full notes to open them).
 The game shows the same notes in Options > System > Update history.
 
-[1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+[1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+
+## KIF 1.2.10
+
+- New: Battle Camera (Options > Graphics). Doubles and triples in PIF's battle screen are zoomed out so every Pokemon is easy to see: Wide (default), Wider, or PIF.
+- New: Map Zoom (Options > Graphics > Overworld). See more of the map: Normal, Far or Farthest.
+- New: Level Up Stats (Options > Battles). Skip leaves out the stat windows after a level up, in every battle.
+- Battle Info: Foe Info now starts on As seen, so a foe's ability and moves stay hidden until the battle shows them (the Fight menu's hints too). Pick All in Options > Battles to see everything.
+- Pre-Status: Burned unlocks once you have a Flame Orb, Poisoned once you have a Toxic Orb.
+- Evolution line sprites are for fusions: a fusion can use the swapped fusion's sprites and those of its two evolution lines.
+
+<details><summary>Full notes</summary>
+
+- Battle Camera (Options > Graphics > Battle; Graphical Changes module): Wide (default) draws your side at 2.5x instead of PIF's 3x in doubles, Wider at 2x; in triples both sides are 2x and spread out. Singles look as before. Move animations still hit the right Pokemon. EBDX battles are not changed. Classic KIF keeps PIF's layout.
+- Map Zoom (Options > Graphics > Overworld): Normal, Far or Farthest. Your hair, hat and bike shrink with you, the light circle in dark caves shows the same area as at Normal, the camera stops at map edges with no map beyond them, and small maps sit in the middle of the screen. Menus, text, weather and battles are not changed. If the Journey Camera mod's zoom is on, KIF's Map Zoom waits.
+- Level Up Stats (Options > Battles > Screens): Show (default) or Skip. Skip leaves out both stat windows after a level up in PIF's battle screen and in EBDX; the level up message still shows. Auto-Battle's own Level Up setting works as before.
+- Foe Info (Options > Battles > Screens) defaults to As seen: a foe's abilities and moves show in Battle Info once the battle has shown them, and the Fight menu's "no effect" hint only counts an ability you have seen. Saves from 1.2.3 to 1.2.9 are switched to As seen once; All can be picked again.
+- Pre-Status: Burned unlocks for the save once you have a Flame Orb (in the Bag, or held by a Pokemon in your party or PC), Poisoned once you have a Toxic Orb. Until then the choice shows what it needs. A Pokemon already set to one keeps it.
+- Evolution line sprites (Summary > Pokedex > Sprites, Random Sprites On) are for fusions only: This fusion, Swapped (head and body the other way round) and every head and body pair of its two evolution lines, both ways. An unfused Pokemon lists its own sprites, as before 1.2.7.
+
+</details>
 
 ## KIF 1.2.9
 
@@ -12,6 +32,7 @@ The game shows the same notes in Options > System > Update history.
 <details><summary>Full notes</summary>
 
 - Each time the load screen opened, KIF compared every save in the old KIF save folder (kurayinfinitefusion) with your saves, to know whether to show Import Old Saves. On a player's PC that took 158 seconds on every start. The answer is now remembered until the old folder changes, the check stops after 3 seconds (then Import Old Saves shows, and the import still skips saves you already have), and a check over a second is written to the log.
+- The check now also logs how many old saves it looked at, so a slow start can be traced from the Logs folder.
 
 </details>
 

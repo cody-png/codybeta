@@ -94,10 +94,11 @@ All options in this menu are per-save.
 - **Weather Setter Immunity** - Off / On *(Off)*. A Pokémon with Sand Stream takes no sandstorm damage and one with Snow Warning no hail damage, whatever its types (for example a Crobat/Tyranitar fusion that is Poison/Dark). It works like Sand Veil: any sandstorm, not only its own. Foes get it too.
 - **Frostbite** - Off / On *(Off)*. Replaces Freeze with Gen 9-style Frostbite: the Pokémon can still act, but takes damage each turn.
 - **Drowsy** - Off / On *(Off)*. Replaces Sleep with Drowsy: the Pokémon isn't fully disabled.
-- **Pre-Status** - Off / On *(Off)*. Adds *Start Battles* to Kuray Actions (PC or party menu): Normal / Burned / Poisoned. A Pokémon set to Burned or Poisoned gets that status each time it is sent out without one, for Guts, Poison Heal, Quick Feet or Marvel Scale without a Flame Orb or Toxic Orb. It only happens if it could be burned or poisoned (not a Fire type for burns, not a Poison or Steel type for poison, not with Water Veil or Immunity...).
+- **Pre-Status** - Off / On *(Off)*. Adds *Start Battles* to Kuray Actions (PC or party menu): Normal / Burned / Poisoned. A Pokémon set to Burned or Poisoned gets that status each time it is sent out without one, for Guts, Poison Heal, Quick Feet or Marvel Scale without a Flame Orb or Toxic Orb. It only happens if it could be burned or poisoned (not a Fire type for burns, not a Poison or Steel type for poison, not with Water Veil or Immunity...). Burned unlocks for the save once you have a Flame Orb (in the Bag, or held by a Pokémon in your party or PC), Poisoned once you have a Toxic Orb; until then the choice shows "(needs Flame Orb)" and can't be picked. A Pokémon already set to one keeps it.
 - **Bug Type Buffs** - Off / Defensive / + Offensive *(Off)*. Defensive: Bug resists Fairy, Psychic and Dark. + Offensive: also makes Fairy weak to Bug moves.
 - **Ice Type Buffs** - Off / On *(Off)*. Ice resists Water and Flying.
 - **Show Lv. in BSM** - Off / On *(Off)*. In PIF's Base Stats Mode, still shows Pokémon levels in battle. The level doesn't reflect their stats there.
+- **Level Up Stats** - Show / Skip *(Show)*. Skip leaves out the two stat windows after a level up (the gains, then the new stats) in every battle, PIF's or EBDX's. The level up message still shows. Auto-Battle Level Up still works as before.
 
 ### Levels and experience
 

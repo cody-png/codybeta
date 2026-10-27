@@ -423,6 +423,7 @@ These features have no option of their own.
   - The Elite Four, Blue, the Fighting Arena leaders, Gold and Cynthia use level 100 fusion teams scaled to your strongest Pokémon.
   - Challenge rules: singles only, no items in trainer battles, Set style, and foes have doubled PP.
   - Beating Blue earns emblems; the Silver Emblem opens the Mt. Silver vortex to Cynthia.
+- **Triple fusion starters:** PIF's Custom starter menu (new game, when a save file already exists: *Use regular starters? No > Custom*) has a third choice, **Triple fusion**, next to Not fused and Fused. It lists PIF's 26 triple fusions (the legendary trios, the starter trios, Regitrio...). Debug mode also gets *Pokémon > Add triple fusion*. (Pokémon & Fusion module.)
 - **Mystery Gift:** KIF's gift "Fire Misbok!" appears in "Search for public gifts". It's a shiny Ghost/Fire Misdreavus/Arbok fusion: it shows that a Pokémon's types aren't always locked to its species.
 - **Speed keys:** with speed-up in Toggle mode, L goes to the next speed and R goes back to 1x.
 - **Skip the intro:** put an empty file named `NoIntro.krs` in your save folder to go straight to the load screen.

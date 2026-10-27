@@ -33,7 +33,7 @@ module KIF
                       "Recover Consumables", "Items to Bag"]],
         ["Fusion", ["Fusion BaseStats", "NPC Fusion BaseStats", "Self-Fusion Stat Boost",
                     "Dominant Fusion Types", "Unfuse Traded"]],
-        ["Breeding and moves", ["Legendary Breeding", "Head Legendary Breeding", "Event Moves",
+        ["Breeding and moves", ["Head Legendary Breeding", "Legendary Breeding", "Event Moves",
                                 "Egg Moves", "Enable EvoLock"]],
         ["K-Eggs", ["K-Eggs Usage", "K-Eggs Rarity", "K-Eggs Fusion Odds", "K-Eggs Fusion Pool",
                     "K-Eggs Rewards"]]]],
@@ -57,7 +57,7 @@ module KIF
       [:game, "Game", [70, 160, 170], [
         ["Difficulty", ["Difficulty"]],
         ["Movement", ["Default Movement", "Quick HMs"]],
-        ["Speed-up", ["Speed-up type", "Speed-up (Overworld)", "Speed-up (Battles)", "Speed-up Limit (Toggle)"]],
+        ["Speed-up", ["Speed-up type", "Speed-up (Overworld)", "Speed-up (Battles)"]],
         ["Randomizer", ["Randomizer"]],
         ["Kuray Shop", ["Streamer's Dream", "Kuray QoL"]],
         ["World", ["Overworld Poison", "Tutor.net"]],
@@ -105,10 +105,40 @@ module KIF
       "Import Without Deletion" => "Keep the File", "Import Sprite on Import" => "Sprite",
       "Delete on Export" => "Delete After", "Export Sprite on Export" => "Sprite",
       "Letdown Player Only" => "Letdown: You Only",
-      "Speed-up Limit (Toggle)" => "Toggle Limit", "Speed-up type" => "Type",
+      "Speed-up type" => "Type", "Type Display" => "Type Icons",
       "Speed-up (Overworld)" => "Overworld", "Speed-up (Battles)" => "Battles",
-      "Battle Animations" => "Animations", "Battle Movement" => "Movement", "Battle Type Icons" => "Type Icons",
+      "Battle Animations" => "Animations", "Battle Movement" => "Movement",
       "Autogen dex entries" => "Autogen Entries",
     }
+
+    # Rows shown only while another setting allows them (name => proc, true = hide).
+    # A row that is On never hides, so it can always be turned Off.
+    HIDE_IF = {
+      # Type Display took over PIF's Battle Type Icons (its "PIF" choice)
+      "Battle Type Icons"  => proc { true },
+      "EV Allocation"      => proc { $PokemonSystem.noevsmode.to_i == 1 && $PokemonSystem.ev_alloc.to_i == 0 },
+      "EVs Train Mode"     => proc { $PokemonSystem.noevsmode.to_i == 1 && $PokemonSystem.evstrain.to_i == 0 },
+      "Legendary Breeding" => proc { $PokemonSystem.legendarybreed.to_i == 0 && $PokemonSystem.cody_legendarybreed.to_i == 0 },
+      # KIF's Level Cap and Nuzlocke replace PIF's two rules
+      "Level caps"         => proc { $PokemonSystem.level_caps.to_i == 0 },
+      "No reviving"        => proc { !$PokemonSystem.no_reviving },
+    }
+
+    # Rows that can't be changed while another setting is On
+    # (name => proc returning the reason shown in the description, or nil)
+    GREY_IF = {
+      "EVs Train Mode" => proc { "Turn EV Allocation Off first: it already decides where EVs go." if $PokemonSystem.ev_alloc.to_i == 1 && $PokemonSystem.evstrain.to_i == 0 },
+      "EV Allocation"  => proc { "Turn EV Training Off first: with it, battles give no EVs to spend." if $PokemonSystem.evstrain.to_i == 1 && $PokemonSystem.ev_alloc.to_i == 0 },
+    }
+
+    def self.hidden_row?(name)
+      rule = HIDE_IF[name]
+      return rule ? !!(rule.call rescue false) : false
+    end
+
+    def self.grey_reason(opt)
+      rule = opt.respond_to?(:name) ? GREY_IF[opt.name.to_s.strip] : nil
+      return rule ? (rule.call rescue nil) : nil
+    end
   end
 end

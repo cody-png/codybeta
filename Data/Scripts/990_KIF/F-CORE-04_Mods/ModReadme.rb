@@ -41,8 +41,10 @@ module KIF
              "yYyYyYyLlVvYy"].map(&:chars).transpose.to_h
     LATIN_RE = /[#{LATIN.keys.join}]/   # a gsub, not tr: tr builds its 500-letter table on every call (every entity)
     # the space before it goes too only when a space, a line end or a mark
-    # follows ("Party 🎉 time", "Done ✨."), not when a word does ("## 🚀Setup")
-    UNDRAWN = / ?[^\n\x20-\x7E¡-¬®-ÿ♀♂]+(?=[ \n.,;:!?)\]]|\z)|[^\n\x20-\x7E¡-¬®-ÿ♀♂]+/
+    # follows, after any closing *_~"' ("Party 🎉 time", "Done ✨.", "**Fast
+    # 🚀**"), not when a word does ("## 🚀Setup", "a ✨**New**"); right after
+    # an opening mark the space after it goes ("**🚀 Fast**")
+    UNDRAWN = /((?:^|\s)[*_~"']+)(?:[^\n\x20-\x7E¡-¬®-ÿ♀♂]+ )+| ?[^\n\x20-\x7E¡-¬®-ÿ♀♂]+(?=[*_~"']*(?:[ \n.,;:!?)\]]|\z))|[^\n\x20-\x7E¡-¬®-ÿ♀♂]+/
     ENTITIES = { "amp" => "&", "lt" => "<", "gt" => ">", "quot" => '"', "apos" => "'", "nbsp" => " ", "copy" => "©",
                  "reg" => "®", "trade" => "™", "mdash" => "—", "ndash" => "–", "hellip" => "…", "laquo" => "«",
                  "raquo" => "»" }
@@ -127,7 +129,7 @@ module KIF
     # Text
     #---------------------------------------------------------------------------
     def fold(s)
-      return KIF::PixelFont.utf8(s.to_s).gsub(FOLD_RE, FOLD).gsub(LATIN_RE, LATIN).gsub(UNDRAWN, "")
+      return KIF::PixelFont.utf8(s.to_s).gsub(FOLD_RE, FOLD).gsub(LATIN_RE, LATIN).gsub(UNDRAWN, '\1')
     end
 
     # &copy; &#169; &#xA9; as what they stand for, folded; one pass, so
@@ -164,10 +166,10 @@ module KIF
       # keep), so the html cleanup below can't touch "`<!--`" or "a <b"
       text = text.split("\n", -1).map do |l|
         if fence
-          fence = nil if l.strip.start_with?(fence)
+          fence = nil if unquote(l).start_with?(fence)
           next fence ? keep(l) : l
         end
-        fence = $1 if l.strip.sub(/\A(>\s?)+/, "").strip =~ /\A(```|~~~)/
+        fence = $1 if unquote(l) =~ /\A(```|~~~)/
         fence || l.length > LINE ? l : literal(l)
       end.join("\n")
       fence = nil
@@ -176,7 +178,7 @@ module KIF
       text = text.gsub(/<!--.*?(?:-->|\z)/m, "").gsub(/<(script|style)\b.*?(?:<\/\1\s*>|\z)/mi, "")
       text.gsub(/<\/?[A-Za-z][^<>]*>/) { |tag| tag.tr("\n", " ") }.split("\n").each do |l|
         if fence   # code: its text, indented
-          if l.strip.start_with?(fence)
+          if unquote(l).start_with?(fence)   # "> ```" closes a quote's fence
             fence = nil
             out << ""
           else
@@ -184,7 +186,7 @@ module KIF
           end
           next
         end
-        s = l.strip.sub(/\A(>\s?)+/, "").strip   # a quote: its text
+        s = unquote(l)
         item = l =~ /\A(\s*)([-*+]|\d{1,9}[.)])\s+(.*)\z/ ? [$1.length / 2, $2, $3] : nil
         if (m = s.match(/\A(```|~~~)/))
           flush.call
@@ -193,9 +195,9 @@ module KIF
         elsif s.empty?
           flush.call
           out << ""
-        elsif s =~ /\A\#{1,6}\s+(.+?)(?:\s+#+)?\z/   # # heading
+        elsif s.length <= LINE && s =~ /\A\#{1,6}\s+(.+)\z/   # # heading (not (.+?)(\s+#+)?: quadratic on a run of spaces)
           flush.call
-          out << "" << inline($1)
+          out << "" << inline($1.sub(/\s#+\z/, ""))
         elsif para && s =~ /\A(=+|-+)\z/                # heading underlined
           out << "" << para
           para = nil
@@ -223,6 +225,11 @@ module KIF
       end
       flush.call
       return out
+    end
+
+    # a quote's text ("> > a": "a")
+    def unquote(l)
+      return l.strip.sub(/\A(>\s?)+/, "").strip
     end
 
     # ASCII marks as private-use characters, which no Markdown or html step

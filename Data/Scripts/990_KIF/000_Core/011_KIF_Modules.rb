@@ -43,7 +43,7 @@ module KIF
                         %w[F-BATTLE-12 F-BATTLE-07 C-BATTLE-01 F-UI-02 F-UI-03 F-UI-11 F-UI-12]],
       :information  => ["Information",
                         "Fusion preview and screen, Pokédex evolutions, IVs and EVs.",
-                        %w[F-FUSION-03 C-FUSION-02 F-POKE-06 F-UI-04]],   # Battle Info: base feature
+                        %w[F-FUSION-03 C-FUSION-02 F-POKE-06 F-UI-04 F-UI-14]],   # Battle Info: base feature
       :battles      => ["Battles & Challenges",
                         "Battle format, AI, challenges, level caps, EXP modes, gym teams.",
                         %w[F-BATTLE-01 F-BATTLE-03 F-BATTLE-04 F-BATTLE-05 F-BATTLE-06 F-BATTLE-08 F-BATTLE-09 F-BATTLE-10 F-BATTLE-11 C-GYM-01 C-BATTLE-02]],

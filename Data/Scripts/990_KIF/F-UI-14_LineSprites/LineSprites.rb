@@ -10,7 +10,12 @@
 # species' sprite (alt_sprite_substitutions) to the other species' sprite, so
 # that entry is put back. PIF already draws a pif_sprite of another species everywhere
 # (it does so for its shared-sprite species).
-#   Only with Random Sprites On (PIF ignores per-Pokémon sprites when Off).
+#   Random Sprites Off: PIF draws one sprite per species and ignores
+#   pif_sprite. A pick made here marks the Pokémon (kif_ls_pick) and PIF's
+#   lookup then uses its pif_sprite as if Random Sprites were On, for that
+#   Pokémon only. Picking the species' own sprite keeps PIF's behaviour (the
+#   species-wide sprite, no mark); that and any other change of pif_sprite
+#   (evolving...) clears the mark. The blacklist (Down) is On only.
 #   The main Pokédex and the catch prompt (a species is passed) are unchanged.
 #   Evolving still picks a new sprite of the new species (PIF).
 # A label over the sprites names the group (This fusion, Swapped, Evolution
@@ -57,10 +62,30 @@ module KIF
       return _INTL("Evolution line") if sp != own && others(pkmn).include?(sp)
       return _INTL("This fusion")
     end
+
+    # Random Sprites Off: a Pokémon whose sprite was picked here is drawn as with On
+    def self.as_picked(pkmn)
+      return yield if $PokemonSystem.random_sprites || !(pkmn.is_a?(Pokemon) && pkmn.kif_ls_pick && pkmn.pif_sprite)
+      begin
+        $PokemonSystem.random_sprites = true
+        return yield
+      ensure
+        $PokemonSystem.random_sprites = false
+      end
+    end
   end
 end
 
 class Pokemon
+  attr_accessor :kif_ls_pick   # pif_sprite was picked on the Sprites page
+
+  alias kif_ls_pif_sprite_set pif_sprite= unless method_defined?(:kif_ls_pif_sprite_set) || private_method_defined?(:kif_ls_pif_sprite_set)
+
+  def pif_sprite=(value)
+    @kif_ls_pick = nil
+    return kif_ls_pif_sprite_set(value)
+  end
+
   alias kif_ls_species_set species= unless method_defined?(:kif_ls_species_set) || private_method_defined?(:kif_ls_species_set)
 
   # a pick of another species stays only while it is one the new species may use
@@ -69,9 +94,22 @@ class Pokemon
     ret = kif_ls_species_set(species_id)
     ps = @pif_sprite
     if ps && old != @species && ps.species != @species
-      @pif_sprite = nil unless (KIF::LineSprites.others(@species).include?(ps.species) rescue false)
+      @pif_sprite = @kif_ls_pick = nil unless (KIF::LineSprites.others(@species).include?(ps.species) rescue false)
     end
     return ret
+  end
+end
+
+module GameData
+  class Species
+    class << self
+      alias kif_ls_front_sprite_bitmap_pokemon front_sprite_bitmap_pokemon unless method_defined?(:kif_ls_front_sprite_bitmap_pokemon) || private_method_defined?(:kif_ls_front_sprite_bitmap_pokemon)
+
+      # every Pokémon sprite (summary, party, PC, battle front/back, EBDX) comes through here
+      def front_sprite_bitmap_pokemon(pokemon)
+        return KIF::LineSprites.as_picked(pokemon) { kif_ls_front_sprite_bitmap_pokemon(pokemon) }
+      end
+    end
   end
 end
 
@@ -80,7 +118,7 @@ class PokemonPokedexInfo_Scene
 
   def pbGetAvailableForms(species = nil)
     ret = kif_ls_pbGetAvailableForms(species)
-    return ret unless species.nil? && @pokemon && !@pokemon.egg? && $PokemonSystem.random_sprites
+    return ret unless species.nil? && @pokemon && !@pokemon.egg?
     begin
       KIF::LineSprites.others(@pokemon).each { |sp| ret += kif_ls_pbGetAvailableForms(sp) }
       ret = ret.uniq { |s| [s.species, s.alt_letter] }
@@ -137,7 +175,14 @@ class PokemonPokedexInfo_Scene
     old = subs[id]
     ret = kif_ls_swap_main_sprite(*args)
     had ? subs[id] = old : subs.delete(id)   # a line-mate's sprite is for this Pokemon only
+    @pokemon.kif_ls_pick = true unless $PokemonSystem.random_sprites   # Off: drawn for this Pokemon only
     return ret
+  end
+
+  alias kif_ls_is_main_sprite is_main_sprite unless method_defined?(:kif_ls_is_main_sprite) || private_method_defined?(:kif_ls_is_main_sprite)
+
+  def is_main_sprite(*args)
+    return KIF::LineSprites.as_picked(@pokemon) { kif_ls_is_main_sprite(*args) }
   end
 end
 

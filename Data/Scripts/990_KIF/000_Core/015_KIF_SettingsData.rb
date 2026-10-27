@@ -38,7 +38,7 @@ module KIF
         ["K-Eggs", ["K-Eggs Usage", "K-Eggs Rarity", "K-Eggs Fusion Odds", "K-Eggs Fusion Pool",
                     "K-Eggs Rewards"]]]],
       [:graphics, "Graphics", [110, 120, 220], [
-        ["Battle", ["Battle Animations", "Battle Movement", "Battle Type Icons", "Type Display", "Swap BattleGUI"]],
+        ["Battle", ["Battle Animations", "Battle Movement", "Battle Camera", "Battle Type Icons", "Type Display", "Swap BattleGUI"]],
         ["Sprites", ["Random Sprites", "Joke Sprites", "Custom Eggs", "Fusion Icons"]],
         ["Screens", ["Fusion Screen", "Fusion Preview", "Big Pokémon Icons", "Summary IVs/EVs", "Dark Mode"]],
         ["Pokédex", ["Autogen dex entries", "Improved Pokedex", "Dex Evolutions", "Dex Sprite Select"]],

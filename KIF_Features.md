@@ -93,6 +93,7 @@ All options in this menu are per-save.
 - **Modern Hail** - Off / Hail / Snow *(Off)*. Hail: Ice types get a defence boost during hail. Snow: hail becomes Gen 9 Snow.
 - **Frostbite** - Off / On *(Off)*. Replaces Freeze with Gen 9-style Frostbite: the Pokémon can still act, but takes damage each turn.
 - **Drowsy** - Off / On *(Off)*. Replaces Sleep with Drowsy: the Pokémon isn't fully disabled.
+- **Pre-Status** - Off / On *(Off)*. Adds *Start Battles* to Kuray Actions (PC or party menu): Normal / Burned / Poisoned. A Pokémon set to Burned or Poisoned gets that status each time it is sent out without one, for Guts, Poison Heal, Quick Feet or Marvel Scale without a Flame Orb or Toxic Orb. It only happens if it could be burned or poisoned (not a Fire type for burns, not a Poison or Steel type for poison, not with Water Veil or Immunity...).
 - **Bug Type Buffs** - Off / Defensive / + Offensive *(Off)*. Defensive: Bug resists Fairy, Psychic and Dark. + Offensive: also makes Fairy weak to Bug moves.
 - **Ice Type Buffs** - Off / On *(Off)*. Ice resists Water and Flying.
 - **Show Lv. in BSM** - Off / On *(Off)*. In PIF's Base Stats Mode, still shows Pokémon levels in battle. The level doesn't reflect their stats there.

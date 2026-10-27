@@ -22,7 +22,7 @@ module KIF
         ["Auto-Battle", ["Auto-Battle", "Auto-Battle Shiny Stop", "Auto-Battle Switching",
                          "Auto-Battle Level Up", "Auto-Battle New Moves", "Auto-Battle Evolutions"]],
         ["Mechanics", ["Battle AI", "Damage Variance", "Modern Hail", "Frostbite", "Drowsy",
-                       "Bug Type Buffs", "Ice Type Buffs"]],
+                       "Pre-Status", "Bug Type Buffs", "Ice Type Buffs"]],
         ["Gyms", ["Gym Leader teams", "Your Pokémon in gyms"]],
         ["Screens", ["Battle Info", "Foe Info", "Move Effectiveness", "Show Lv. in BSM"]],
         ["EBDX", ["EBDX Battles", "EBDX Camera Zoom", "EBDX Stat Stage Icons", "EBDX Own Trainer Animation"]]]],

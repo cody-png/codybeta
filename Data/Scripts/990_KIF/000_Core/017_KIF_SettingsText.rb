@@ -100,6 +100,9 @@ module KIF
       "Drowsy" => [
         "Sleep works as in PIF.",
         "Sleep becomes Drowsy: the Pokémon acts about half the time and deals half damage."],
+      "Pre-Status" => [
+        "Pokémon start battles with the status they already have.",
+        "Kuray Actions (PC or party) > Start Battles makes a Pokémon start every battle burned or poisoned, if it can be."],
       "Bug Type Buffs" => [
         "Bug types as in PIF.",
         "Bug types resist Fairy, Psychic and Dark.",

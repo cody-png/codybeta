@@ -13,10 +13,10 @@ module KIF
       "Shiny Gamble Odds" =>
         "Gamble Shininess (PC > Kuray Actions) makes a Pokémon shiny with a 1 in this number chance. 0 = it always works.",
       "Shiny Trainer Pokemon" => [
-        "Opposing trainers' Pokémon can be shiny, at the Wild Odds.",
-        "As Off, and each trainer's ace (strongest Pokémon) is always shiny.",
+        "Opposing trainers' Pokémon are never shiny.",
+        "As Normal, and each trainer's ace (strongest Pokémon) is always shiny.",
         "Every Pokémon of every opposing trainer is shiny.",
-        "Trainers' Pokémon use the same shiny odds as your Wild Shiny Odds slider, as in PIF (no extra roll)."],
+        "Opposing trainers' Pokémon can be shiny, at the Wild Odds."],
       "Shiny Colors" => [
         "KIF shinies only shift the hue. Fastest.",
         "KIF shinies shift the hue and swap colour channels.",
@@ -243,11 +243,9 @@ module KIF
       "Battle Animations" => [
         "Moves play their animations in battle.",
         "Moves don't play animations in battle."],
-      "Battle Type Icons" => [
-        "No type icons in battle.",
-        "The foe's types show next to its battle box."],
       "Type Display" => [
-        "No KIF type icons in battle.",
+        "No type icons in battle.",
+        "PIF's type icons in the foe's battle box.",
         "KIF's type icons next to the foe's battle box (set by Lolpy1).",
         "TCG-style type icons next to the foe's battle box.",
         "Square type icons next to the foe's battle box (triple fusion types by Lolpy1).",
@@ -269,8 +267,7 @@ module KIF
         "Every icon, PC boxes included, uses the full battle sprite."],
       "Map Zoom" => [
         "The overworld at its normal size.",
-        "Zooms the overworld out (map pixels at 1.5x): you see more of the map around you. Menus and text keep their size.",
-        "Zooms the overworld out further (map pixels at 1x): about four times as much map. Menus and text keep their size."],
+        "Zooms the overworld out (map pixels at 1x): you see about four times as much of the map. Menus and text keep their size."],
       "Summary IVs/EVs" => [
         "The Skills page shows stats only.",
         "The Skills page also shows IVs, EVs and base stats."],
@@ -353,10 +350,12 @@ module KIF
         "Opponents' stats rise by 2 every turn."],
       # Game
       "Speed-up type" => [
-        "Speed-up works while you hold the speed-up key.",
-        "The speed-up key turns speed-up on and off."],
-      "Speed-up Limit (Toggle)" =>
-        "The highest speed in Toggle mode. PIF stops at 3x.",
+        "Hold {X} to play at full speed (set below).",
+        "Each press of {X} (or RB on a controller) goes one step faster, up to the speed set below, then back to 1x."],
+      "Speed-up (Overworld)" =>
+        "Fastest speed on the map.",
+      "Speed-up (Battles)" =>
+        "Fastest speed in battles.",
       "Streamer's Dream" => [
         "Kuray Shop prices as usual.",
         "Rare Candies, Master Balls, Max Repels, stones and more are free in the Kuray Shop."],

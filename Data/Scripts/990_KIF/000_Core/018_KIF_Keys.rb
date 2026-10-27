@@ -137,7 +137,7 @@ module KIF
     # "{USE}", "{ACTION}"... in a text -> the keys (for descriptions written
     # once)
     def fill(text)
-      return text.to_s.gsub(/\{(USE|BACK|ACTION|SPECIAL|JUMPUP|JUMPDOWN|Y)\}/) { name(Input.const_get($1)) }
+      return text.to_s.gsub(/\{(USE|BACK|ACTION|SPECIAL|JUMPUP|JUMPDOWN|X|Y)\}/) { name(Input.const_get($1)) }
     end
 
     # the mkxp-z symbols (for Input.triggerex?) of the keys bound to button

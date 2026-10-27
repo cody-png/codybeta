@@ -62,7 +62,7 @@ Defaults are shown in *(italics)*.
 - **Shiny Fuse Dye** - Off / On / Random *(Off)*. On: fusing a shiny keeps its colours on the result, so you can "dye" a fusion. Random: the colours are re-rolled after every fusion or unfusion.
 - **Shiny Gamble Odds** - slider, 0-1000 *(100)*. The odds for the PC's Shiny Gamble: 1 in this number. 0 means every gamble wins.
 - **Wild Shiny Odds** - slider, 1-65536 *(16)*. Your shiny chance out of 65,536. 16 is the standard 1 in 4,096; raise it for more shinies. Use "Increment Slider by" (see the end of this guide) to move it faster.
-- **Shiny Trainer Pokemon** - Off / Ace / All / Normal *(Off)*.
+- **Shiny Trainer Pokemon** - Off / Ace / All / Normal *(Normal)*. Off: opposing trainers' Pokémon are never shiny. Normal: they can be shiny at your Wild Odds. Ace: as Normal, and each trainer's strongest Pokémon is shiny. All: every one is shiny.
   - Off: trainers' Pokémon have normal shiny odds.
   - Ace: every trainer's ace is shiny.
   - All: every trainer Pokémon is shiny.
@@ -153,7 +153,7 @@ K-Eggs are sold in the Kuray Shop (see "Others > Kuray QoL").
 
 ### Global
 
-- **Type Display** - Off / Ico / TCG / Sqr / FGM / Txt *(Off)*. Shows each Pokémon's in-battle types on its HP box.
+- **Type Icons** (Type Display) - Off / PIF / Ico / TCG / Sqr / FGM / Txt *(PIF)*. Shows each Pokémon's in-battle types on its HP box. PIF = PIF's own icons; this replaces PIF's Battle Type Icons setting.
   - Ico: icons by Lolpy1.
   - TCG: trading-card style.
   - Sqr: square icons (Triple Fusion by Lolpy1).
@@ -168,7 +168,7 @@ K-Eggs are sold in the Kuray Shop (see "Others > Kuray QoL").
   - All: also the PC boxes.
   - The party screen adjusts its layout for them: the level sits by the HP, and status badges (PSN, FNT...) sit on the sprite.
 - **Game's Font** - Default / FR/LG / D/P / R/B *(Default)*. Changes the game's font.
-- **Map Zoom** - Normal / Far / Farthest *(Normal)*. Zooms the overworld out so you see more of the map: Far draws map pixels at 1.5x, Farthest at 1x (about four times as much map). Menus, message boxes, the map name sign and battles keep their size. Zoomed out, the camera stops at a map's edge when no other map joins there, and a room smaller than the screen sits in the middle. In dark caves the lit circle shows the same tiles as at Normal. If a mod with its own map zoom has its zoom on, Map Zoom waits (works as Normal) until that zoom is Off.
+- **Map Zoom** - Normal / Far *(Normal)*. Far zooms the overworld out to 1x pixels, so you see about four times as much of the map. Menus, message boxes, the map name sign and battles keep their size. Zoomed out, the camera stops at a map's edge when no other map joins there, and a room smaller than the screen sits in the middle. In dark caves the lit circle shows the same tiles as at Normal. If a mod with its own map zoom has its zoom on, Map Zoom waits (works as Normal) until that zoom is Off.
 - **Evolution line sprites** (no setting; Information module, with the Pokédex's Dex Sprite Select). In a fused Pokémon's Summary > Pokédex > Sprites, the list also has the sprites of the other head and body combinations of its two evolution lines: Swapped (head and body the other way round, so Blastoise/Charizard can wear a Charizard/Blastoise sprite) and Evolution line (every head and body pair of the two lines, both ways). A label over the sprite names its group (This fusion, Swapped, Evolution line). The pick is for that one Pokémon and only changes its look, not its species, types or stats; after unfusing, a pick that no longer fits is dropped. An unfused Pokémon lists only its own sprites. With Random Sprites Off the pick still shows for that Pokémon only (every other Pokémon keeps the one sprite per species; picking one of its own species' sprites sets that species' sprite as before); evolving picks a new sprite as before. Choosing which sprites can appear at random (Down on that page) still lists only its own species (Random Sprites On only).
 
 ### Per-save
@@ -251,7 +251,7 @@ All options in this menu are per-save.
 - **Dex Evolutions** - Credits Box / Entry Box *(Credits Box)*. On the Pokédex info page, the Run button shows the Pokémon's evolutions (levels, items, conditions). Credits Box swaps the sprite-credits box for evolution lines; Entry Box shows an evolution chart in the entry box.
 - **Dex Sprite Select** - Off / On *(On)*. Each newly registered Pokémon or fusion asks which sprite to use.
 - **Summary IVs/EVs** - Off / On *(On)*. The Summary's Skills page shows IVs, EVs and base stats next to each stat.
-- **Speed-up Limit (Toggle)** - slider, 1-10 *(3)*. The top speed when speed-up is in Toggle mode. PIF stops at 3x.
+- **Speed-up** - Hold: holding the speed-up key plays at the Overworld or Battles speed. Toggle: each press (or RB on a controller) goes one step faster, up to the Overworld speed on the map and the Battles speed in battle, then back to 1x.
 - **Quicksave** - Off / On *(On)*. Press S (or the key you set for it in the controls) on the map to save instantly.
 
 ### Per-save
@@ -298,7 +298,7 @@ New features made for KIF 1.0 that were never part of the original KIF. They sit
 
 ### Breeding & Fusion
 
-- **Legendary Breeding** - Off / On *(Off, per save)*. Legendary Pokémon (and fusions with a legendary head or body) can breed with any Pokémon that can breed - no egg group or gender needed. The Egg is one of four results, 25% each: either parent, or either fusion of the two (Mewtwo + Vulpix > Mewtwo, Vulpix, Mewpix or Vultwo). With Ditto, the Egg is the other parent. Baby Pokémon still can't breed.
+- **Legendary Breeding** - Off / On *(Off, per save; shown under Head Legendary Breeding while that is On)*. Legendary Pokémon (and fusions with a legendary head or body) can breed with any Pokémon that can breed - no egg group or gender needed. The Egg is one of four results, 25% each: either parent, or either fusion of the two (Mewtwo + Vulpix > Mewtwo, Vulpix, Mewpix or Vultwo). With Ditto, the Egg is the other parent. Baby Pokémon still can't breed.
 
 ### Randomizer
 

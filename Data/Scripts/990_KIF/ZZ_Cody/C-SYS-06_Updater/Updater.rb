@@ -425,6 +425,7 @@ module KIF
     module Win
       CREATE_NO_WINDOW   = 0x08000000
       CREATE_NEW_CONSOLE = 0x00000010
+      CREATE_UNICODE_ENVIRONMENT = 0x00000400
       STILL_ACTIVE       = 259
 
       module_function
@@ -469,8 +470,12 @@ module KIF
       def spawn(cmdline, flags, cwd = nil)
         si = x64? ? [104].pack("L") + "\0" * 100 : [68].pack("L") + "\0" * 64
         pi = "\0" * (x64? ? 24 : 16)
+        # the environment the game started with: Steam (Multiplayer) adds SDL_GAMECONTROLLER_IGNORE_DEVICES
+        # and more to this one, and a copy started with those saw no controller (F12, update restart)
+        env = $kif_start_env.is_a?(Hash) && !$kif_start_env.empty? ? wide($kif_start_env.map { |k, v| "#{k}=#{v}\0" }.join) : nil
+        flags |= CREATE_UNICODE_ENVIRONMENT if env
         ok = api("kernel32", "CreateProcessW", %w[p p p p i L p p p p], "i")
-               .call(nil, wide(cmdline), nil, nil, 0, flags, nil, cwd ? wide(cwd) : nil, si, pi)
+               .call(nil, wide(cmdline), nil, nil, 0, flags, env, cwd ? wide(cwd) : nil, si, pi)
         return nil if ok == 0
         h, t, pid = x64? ? pi.unpack("Q2L") : pi.unpack("L3")
         api("kernel32", "CloseHandle", %w[L], "i").call(t)

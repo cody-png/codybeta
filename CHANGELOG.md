@@ -3,7 +3,27 @@
 Every KIF version, newest first: a short overview, then the full notes (click Full notes to open them).
 The game shows the same notes in Options > System > Update history.
 
-[1.2.11](#kif-1211) | [1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+[1.2.13](#kif-1213) | [1.2.11](#kif-1211) | [1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+
+## KIF 1.2.13
+
+- Fixed: a controller stopped working after F12 or after the game restarted itself for an update.
+- Map Zoom is now Normal or Far: no more thin black lines at map edges, and smoother walking when zoomed out.
+- Settings: Trainer Pokemon's Off now really means never shiny (Normal is the old Off), Type Icons is one setting, and settings that don't apply are hidden or locked (EV Training and EV Allocation, Legendary Breeding).
+- Speed-up toggle now goes up to each area's own speed (Overworld on the map, Battles in battle). On a controller, RB steps it up.
+
+<details><summary>Full notes</summary>
+
+- Controller: with Multiplayer On, Steam told the game to ignore your controller (Steam offers its own), and a restart by F12 or by the updater passed that on to the new window, so the controller was gone. Restarts now start with the game's own starting settings.
+- Map Zoom (Options > Graphics > Overworld): Normal or Far. Far shows the map at 1x pixels; the old in-between level looked uneven and is gone (saves on it use Far). Thin black lines that could show at screen and map edges while walking are gone, and walking while zoomed out does less work each step.
+- Shinies > Trainer Pokemon: Off (never shiny, not even trainers with a shiny set in their data), Ace, All, Normal (at your Wild Odds, what Off used to do). Saves keep how they played.
+- Graphics: Type Icons and Type Display are one setting, Type Icons (Off, PIF, Ico, TCG, Sqr, FGM, Txt).
+- Pokemon: with No EVs On, EV Training and EV Allocation are hidden. EV Training and EV Allocation can't both be On: the other one is locked and says why.
+- Breeding: Head Legendary Breeding comes first; Legendary Breeding (all legendaries) shows while Head Legendary Breeding is On.
+- Challenges: PIF's own Level caps and No reviving are hidden (KIF's Level Cap and Nuzlocke do more); a save that has one On still shows it until it's turned Off.
+- Speed-up: Toggle steps from 1x up to the current area's slider (Overworld on the map, Battles in battle) and back to 1x; the Toggle Limit slider is gone. RB on a controller steps it up too. Hold works as before.
+
+</details>
 
 ## KIF 1.2.11
 

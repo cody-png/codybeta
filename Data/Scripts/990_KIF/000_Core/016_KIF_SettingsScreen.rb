@@ -137,6 +137,9 @@ module KIF
         list = []
         groups.each do |heading, names|
           found = names.map { |n| by_name[n] }.compact
+          hide = found.select { |it| hidden_row?(it[:name]) }
+          hide.each { |it| placed[it[:name]] = true }   # hidden, not lost to "Other"
+          found -= hide
           next if found.empty?
           list << Row.new(:head, nil, nil, heading, id, heading, 0, nil)
           found.each { |it| add.call(list, it, id, heading, true) }
@@ -657,6 +660,8 @@ class KifSettingsScreen
     d = PF.utf8(d.to_s).gsub(/\s+/, " ").strip
     by = locked_by(opt)
     d = PF.utf8(_INTL("Set by {1} while that mod is On.", by)) + " " + d if by
+    why = KIF::SettingsScreen.grey_reason(opt)
+    d = PF.utf8(_INTL(why)) + " " + d if why
     return d
   end
 
@@ -780,7 +785,7 @@ class KifSettingsScreen
     return unless r
     o = r.opt
     return if KIF::SettingsScreen.button?(o)
-    return locked_buzz(r) if locked_by(o)
+    return locked_buzz(r) if locked_by(o) || KIF::SettingsScreen.grey_reason(o)
     cur = (o.get rescue nil)
     # a choice PIF never gave a value (Level caps on a new save) shows its first entry
     cur = 0 if cur.nil? && o.is_a?(EnumOption)
@@ -1142,8 +1147,9 @@ class KifSettingsScreen
         chip = PF.width(PF::TINY, PF.utf8((badge ? badge[0] : _INTL("OPEN")).to_s)) + 12
         label = PF.fit(PF::ROW, label, VAL_X1 - x - chip - 10)
       end
-      text(b, x, y - 1, 330, 26, label, TXT, PF::ROW)
-      if locked_by(r.opt)
+      grey = KIF::SettingsScreen.grey_reason(r.opt)
+      text(b, x, y - 1, 330, 26, label, grey ? DIM : TXT, PF::ROW)
+      if locked_by(r.opt) || grey
         lx = x + PF.width(PF::ROW, PF.utf8(label.to_s)) + 6
         pill(b, lx, y + 5, _INTL("LOCKED"), LOCKC) if lx + 52 < VAL_X1 - 120 || mode == :below
       end
@@ -1235,6 +1241,8 @@ class KifSettingsScreen
       by = PF.utf8(by.to_s)
       by = by[0, 17] + "..." if by.length > 20
       pill(b, x, y0 + 7, _INTL("LOCKED BY {1}", by.upcase), LOCKC, true)
+    elsif KIF::SettingsScreen.grey_reason(r.opt)
+      pill(b, x, y0 + 7, _INTL("LOCKED"), LOCKC, true)
     elsif @defaults.has_key?(r.opt) && KIF::SettingsScreen.choices?(r.opt)
       d = r.opt.values[@defaults[r.opt].to_i]
       pill(b, x, y0 + 7, _INTL("DEFAULT: {1}", PF.utf8(d.to_s).upcase), PILL, true) if d

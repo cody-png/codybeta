@@ -11,6 +11,7 @@
 #
 # L / R (keyboard Q / W by default): L = next speed, R = back to 1x.
 #   Only in Toggle speed-up mode (6.8.2's Hold mode has no stored speed).
+#   A controller's RB (JUMPDOWN) also steps up, like the toggle key.
 #   Only on the map (no menu, message or event running) and in battles –
 #   6.8.2 menus use L/R themselves (Pokédex pages, quest log, clothes shop);
 #   KIF reacted everywhere. Also off
@@ -113,7 +114,9 @@ module KIF
     def self.check_keys
       return unless $CanToggle && defined?(SPEEDUP_STAGES)
       return unless $PokemonSystem && $PokemonSystem.speedup == 1
-      return unless Input.trigger?(Input::AUX1) || Input.trigger?(Input::AUX2)
+      # RB (JUMPDOWN) on a controller steps up like the toggle key (2026-10-27)
+      rb = Input.trigger?(Input::JUMPDOWN) && KIF::Keys.pad?
+      return unless rb || Input.trigger?(Input::AUX1) || Input.trigger?(Input::AUX2)
       return unless keys_allowed?
       if Input.trigger?(Input::AUX2)
         $GameSpeed = 0

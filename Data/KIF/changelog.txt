@@ -1,3 +1,19 @@
+KIF 1.2.13
+OVERVIEW
+- Fixed: a controller stopped working after F12 or after the game restarted itself for an update.
+- Map Zoom is now Normal or Far: no more thin black lines at map edges, and smoother walking when zoomed out.
+- Settings: Trainer Pokemon's Off now really means never shiny (Normal is the old Off), Type Icons is one setting, and settings that don't apply are hidden or locked (EV Training and EV Allocation, Legendary Breeding).
+- Speed-up toggle now goes up to each area's own speed (Overworld on the map, Battles in battle). On a controller, RB steps it up.
+FULL NOTES
+- Controller: with Multiplayer On, Steam told the game to ignore your controller (Steam offers its own), and a restart by F12 or by the updater passed that on to the new window, so the controller was gone. Restarts now start with the game's own starting settings.
+- Map Zoom (Options > Graphics > Overworld): Normal or Far. Far shows the map at 1x pixels; the old in-between level looked uneven and is gone (saves on it use Far). Thin black lines that could show at screen and map edges while walking are gone, and walking while zoomed out does less work each step.
+- Shinies > Trainer Pokemon: Off (never shiny, not even trainers with a shiny set in their data), Ace, All, Normal (at your Wild Odds, what Off used to do). Saves keep how they played.
+- Graphics: Type Icons and Type Display are one setting, Type Icons (Off, PIF, Ico, TCG, Sqr, FGM, Txt).
+- Pokemon: with No EVs On, EV Training and EV Allocation are hidden. EV Training and EV Allocation can't both be On: the other one is locked and says why.
+- Breeding: Head Legendary Breeding comes first; Legendary Breeding (all legendaries) shows while Head Legendary Breeding is On.
+- Challenges: PIF's own Level caps and No reviving are hidden (KIF's Level Cap and Nuzlocke do more); a save that has one On still shows it until it's turned Off.
+- Speed-up: Toggle steps from 1x up to the current area's slider (Overworld on the map, Battles in battle) and back to 1x; the Toggle Limit slider is gone. RB on a controller steps it up too. Hold works as before.
+
 KIF 1.2.11
 OVERVIEW
 - Pre-Status: a locked status can also be unlocked for one Pokemon for 10,000 (it stays with that Pokemon through fusing and unfusing). The Kuray Shop now sells the Flame Orb and Toxic Orb for 100,000 each.

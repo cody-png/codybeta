@@ -28,5 +28,7 @@ module KIF
   end
 end
 
+# before Steam adds its controller settings to it: new copies start with this (Updater Win.spawn)
+$kif_start_env ||= (ENV.to_h rescue nil)
 KIF.restart_after_soft_reset if $kif_scripts_loaded
 $kif_scripts_loaded = true

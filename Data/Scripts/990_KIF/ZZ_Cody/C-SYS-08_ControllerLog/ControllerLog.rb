@@ -5,6 +5,9 @@
 #   "my controller doesn't work" report shows whether the game saw it at all.
 #   The engine uses one controller at a time. Looked at every CHECK_EVERY
 #   Input.update calls; does nothing on an engine without Input::Controller.
+#   (2026-10-26) It also notes whether a controller button or a key was
+#   pressed last, so KIF::Keys names "B" rather than "Esc" to a controller
+#   player.
 #===============================================================================
 module KIF
   module ControllerLog
@@ -22,6 +25,7 @@ module KIF
       def step
         return if @off
         @tick = (@tick || 0) + 1
+        note_device if @last
         return unless @tick == 1 || @tick % CHECK_EVERY == 0
         return (@off = true) unless defined?(Input::Controller)
         now = current
@@ -32,6 +36,24 @@ module KIF
       rescue StandardError => e
         @off = true
         KIF.log("Controller: can't be read on this engine (#{e.class}: #{e.message})")
+      end
+
+      # Was a controller button pressed more recently than a key? Hints name
+      # that button then (KIF::Keys). Looked at only while a controller is in
+      # use; the key states only while the controller was the last one.
+      def note_device
+        c = Input::Controller
+        return unless c.respond_to?(:raw_button_states) && Input.respond_to?(:raw_key_states)
+        # a press is true or non-zero: an engine giving 0/1 would make every 0 a press in Ruby
+        if c.raw_button_states.any? { |v| v && v != 0 }
+          @pad = true
+        elsif @pad && Input.raw_key_states.any? { |v| v && v != 0 }
+          @pad = false
+        end
+      end
+
+      def pad?
+        return !!(@pad && @last && !@off)
       end
     end
   end

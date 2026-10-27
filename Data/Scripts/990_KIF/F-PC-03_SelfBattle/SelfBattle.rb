@@ -418,7 +418,8 @@ class PokeBattle_Scene
         @kif_win_display = Sprite.new(@viewport)
         @kif_win_display.bitmap = Bitmap.new(Graphics.width, 24)
         @kif_win_display.z = 9999
-        @kif_win_display.y = Graphics.height - 96
+        # EBDX: on the top edge of its message box (it starts 10 px lower)
+        @kif_win_display.y = Graphics.height - (kif_sb_ebdx? ? 98 : 96)
       end
       key = [$PokemonSystem.player_wins, $PokemonSystem.enemy_wins]
       return if @kif_win_text == key   # per battle frame: compare the counts, build the text on change
@@ -426,10 +427,17 @@ class PokeBattle_Scene
       text = "[ Player: #{key[0]} | Enemy: #{key[1]} ]"
       bmp = @kif_win_display.bitmap
       bmp.clear
+      if kif_sb_ebdx?
+        # EBDX's own text style: white, dark outline
+        pbDrawOutlineText(bmp, 0, 0, bmp.width, bmp.height, text, Color.new(255, 255, 255), Color.new(0, 0, 0, 125), 1)
+        return
+      end
       # KIF: lighter text with dark mode on
       dark = defined?(KIF::BattleUI) ? KIF::BattleUI.dark? : false
       bmp.font.color = dark ? Color.new(225, 225, 225) : Color.new(40, 40, 44)
-      bmp.draw_text(bmp.rect, text, 1)
+      # 5-argument form: 001_MKXP_Compatibility's draw_text takes no Rect
+      # (the Rect form raised, the rescue hid it: the line never showed)
+      bmp.draw_text(0, 0, bmp.width, bmp.height, text, 1)
     elsif @kif_win_display
       @kif_win_display.bitmap.dispose if @kif_win_display.bitmap
       @kif_win_display.dispose
@@ -446,13 +454,49 @@ class PokeBattle_Scene
   end
 
   def pbEndBattle(*args)
+    kif_sb_free_win_display
+    return kif_sb_pbEndBattle(*args)
+  end
+
+  def kif_sb_free_win_display
     if @kif_win_display
       @kif_win_display.bitmap.dispose if @kif_win_display.bitmap
       @kif_win_display.dispose unless @kif_win_display.disposed?
       @kif_win_display = nil
     end
-    return kif_sb_pbEndBattle(*args)
   end
+
+  def kif_sb_ebdx?
+    return defined?(PokeBattle_SceneEBDX) && is_a?(PokeBattle_SceneEBDX)
+  end
+end
+
+# EBDX's scene (660/010) has its own pbUpdate and pbEndBattle, which never
+# reach PIF's: the line never showed with EBDX on
+if defined?(PokeBattle_SceneEBDX)
+  class PokeBattle_SceneEBDX
+    alias kif_sb_ebdx_pbUpdate pbUpdate unless method_defined?(:kif_sb_ebdx_pbUpdate) || private_method_defined?(:kif_sb_ebdx_pbUpdate)
+
+    def pbUpdate(*args)
+      kif_sb_ebdx_pbUpdate(*args)
+      kif_update_win_display
+    end
+  end
+
+  # 660/019 prepends EBDX's low-HP music reset to pbEndBattle: an alias of it
+  # would call itself forever (stack level too deep at every battle's end), so
+  # this is prepended too
+  module KIF
+    module SelfBattle
+      module EBDXEnd
+        def pbEndBattle(*args)
+          kif_sb_free_win_display
+          super
+        end
+      end
+    end
+  end
+  PokeBattle_SceneEBDX.prepend(KIF::SelfBattle::EBDXEnd)
 end
 
 #-------------------------------------------------------------------------------

@@ -212,6 +212,14 @@ module GameData
       end
       return kif_rand_replace_regular(species, trainerId, pokemonIndex)
     end
+
+    # Pinkan Island's police and Team Rocket keep their teams
+    alias kif_rand_replace_species replace_species_to_randomized unless method_defined?(:kif_rand_replace_species)
+
+    def replace_species_to_randomized(species, trainerId, pokemonIndex)
+      return species if KIF::Rand.pinkan?
+      return kif_rand_replace_species(species, trainerId, pokemonIndex)
+    end
   end
 end
 
@@ -226,6 +234,8 @@ class Object
   alias kif_rand_pbStartTrade pbStartTrade unless method_defined?(:kif_rand_pbStartTrade) || private_method_defined?(:kif_rand_pbStartTrade)
 
   def getRegularEncounter(encounter_type)
+    # Pinkan Island: the map's own table, without PIF's swap (KIF::Rand.pinkan?)
+    return $PokemonEncounters.choose_wild_pokemon(encounter_type) if KIF::Rand.pinkan?
     KIF::Rand.ensure_dex if $game_switches && $game_switches[SWITCH_WILD_RANDOM_GLOBAL]
     KIF::Rand.in_regular += 1
     begin
@@ -246,7 +256,8 @@ class Object
   def pbWildBattle(*args)
     statics = $game_switches && $game_switches[SWITCH_RANDOM_STATIC_ENCOUNTERS]
     return kif_rand_pbWildBattle(*args) unless statics
-    if KIF::Rand.in_encounter > 0
+    # Pinkan Island's bosses (and Diancie) stay as in PIF too
+    if KIF::Rand.in_encounter > 0 || KIF::Rand.pinkan?
       # the switch is only off until PIF's swap check has run (onStartBattle
       # puts it back before any autosave inside the battle can store it)
       $game_switches[SWITCH_RANDOM_STATIC_ENCOUNTERS] = false
@@ -284,6 +295,7 @@ class Object
   end
 
   def tryRandomizeGiftPokemon(*args)
+    return if KIF::Rand.pinkan?   # the quest team, the Cut Pokémon, Diancie
     KIF::Rand.ensure_dex if $game_switches && $game_switches[SWITCH_RANDOM_GIFT_POKEMON]
     return kif_rand_tryRandomizeGiftPokemon(*args)
   end
@@ -325,6 +337,15 @@ class PokemonEncounters
 
   alias kif_rand_setup setup unless method_defined?(:kif_rand_setup)
 
+  # Route / Area modes: Pinkan Island keeps its own table
+  alias kif_rand_getEncounterMode getEncounterMode unless method_defined?(:kif_rand_getEncounterMode)
+
+  def getEncounterMode
+    mode = kif_rand_getEncounterMode
+    return mode unless mode == GameData::EncounterRandom && KIF::Rand.pinkan?
+    return $game_switches[SWITCH_MODERN_MODE] ? GameData::EncounterModern : GameData::Encounter
+  end
+
   def setup(map_ID)
     begin
       KIF::Rand.ensure_routes
@@ -344,7 +365,7 @@ end
 module KIF
   module Rand
     def self.randomize_wild!(enc)
-      return enc if !enc || in_regular > 0 || !pokemon_parts_on?
+      return enc if !enc || in_regular > 0 || !pokemon_parts_on? || pinkan?
       begin
         if dynamic?
           enc[0] = dynamic_species(enc[0])
@@ -373,6 +394,12 @@ module KIF
       @for_map_wrapper = c.instance_method(:choose_wild_pokemon_for_map)
     end
   end
+end
+# The layer below also by name: the module gate reads this line, so with the
+# Randomizer Off the pick goes to the PIF fix (ChooseForMap), not PIF's
+# original that raises NameError (Bug-Catching Contest)
+class PokemonEncounters
+  alias kif_rand_choose_wild_pokemon_for_map choose_wild_pokemon_for_map unless method_defined?(:kif_rand_choose_wild_pokemon_for_map)
 end
 KIF::Rand.wrap_choose_for_map
 

@@ -71,6 +71,12 @@ module KIF
       end
     end
 
+    # A read-only game folder (phones): <save folder>/Mods is read as well
+    def self.extra_folders
+      dir = KIF::Paths.extra_drop_dir(FOLDER)
+      return dir ? [dir] : []
+    end
+
     # file names loaded straight from the Mods folder this session
     def self.loaded_root; @loaded_root || []; end
     def self.loaded_dirs; @loaded_dirs || []; end
@@ -82,8 +88,8 @@ module KIF
     def self.uninstall(e)
       return false unless e && e.source.is_a?(NativeSource)
       path = File.expand_path(e.path.to_s)
-      root = File.expand_path(e.source.dir.to_s)
-      return false unless path.start_with?(root + "/") && File.exist?(path)
+      roots = e.source.dirs.map { |d| File.expand_path(d.to_s) }
+      return false unless roots.any? { |root| path.start_with?(root + "/") } && File.exist?(path)
       KIF::ModSettings.stash(e.id) if defined?(KIF::ModSettings) && KIF::ModSettings.active?
       File.directory?(path) ? KIF.rm_tree(path) : File.delete(path)
       set_disabled(e.id, false) if disabled.include?(e.id)
@@ -136,7 +142,7 @@ module KIF
 
     def self.entries
       list = []
-      add_source(NativeSource.new(File.join(".", FOLDER))) if @sources.empty?
+      add_source(NativeSource.new(File.join(".", FOLDER), extra_folders)) if @sources.empty?
       @sources.each do |s|
         begin
           list.concat(Array(s.entries))
@@ -226,7 +232,7 @@ module KIF
               @i += 1
               e = @s[@i]
               out << ({ "n" => "\n", "t" => "\t", "r" => "\r", "b" => "\b", "f" => "\f" }[e] ||
-                      (e == "u" ? [@s[@i + 1, 4].hex].pack("U").tap { @i += 4 } : e))
+                      (e == "u" ? uchar : e))
             else
               out << @s[@i]
             end
@@ -244,6 +250,19 @@ module KIF
           return lit.include?(".") || lit =~ /e/i ? lit.to_f : lit.to_i
         end
       end
+
+      # \uXXXX at @i; a surrogate pair (how JSON writers escape an emoji) is one
+      # character, a lone half is U+FFFD (packed alone it is invalid UTF-8)
+      def uchar
+        cp = @s[@i + 1, 4].hex
+        @i += 4
+        if cp.between?(0xD800, 0xDBFF) && @s[@i + 1, 2] == "\\u" && (lo = @s[@i + 3, 4].hex).between?(0xDC00, 0xDFFF)
+          cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00)
+          @i += 6
+        end
+        cp = 0xFFFD if cp.between?(0xD800, 0xDFFF)
+        return [cp].pack("U")
+      end
     end
 
     def self.read_json(path)
@@ -259,19 +278,32 @@ module KIF
     #---------------------------------------------------------------------------
     def self.mkdir_p(dir); KIF.mkdir_p(dir); end
 
-    def self.unpack_zips(dir)
+    # zips a read-only Mods folder keeps (phones): unpacked into `to` (the
+    # save folder's Mods) once, remembered by name, size and time - the zip
+    # can't move to Imported, and an uninstalled mod stays uninstalled
+    ZIPS_DONE = "KIF_unpacked_mod_zips.txt"
+
+    def self.unpack_zips(dir, to = dir)
+      done_list = File.join(KIF.save_dir, ZIPS_DONE) if to != dir
       Dir.children(dir).sort.each do |c|
         next unless c =~ /\.zip\z/i
         zip = File.join(dir, c)
         next unless File.file?(zip)
         name = File.basename(c, ".*")
-        into = File.join(dir, name)
+        into = File.join(to, name)
+        key = "#{c}|#{File.size(zip)}|#{File.mtime(zip).to_i}" if done_list
+        next if done_list && File.file?(done_list) && File.read(done_list).split(/\r?\n/).include?(key)
         if File.exist?(into)
           KIF.log("Mod zip #{c}: Mods/#{name} already exists - the zip is left alone (delete one of them)")
           next
         end
         begin
           n = unzip(zip, into)
+          if done_list
+            File.open(done_list, "ab") { |f| f.write(key + "\n") }
+            KIF.log("Mod zip #{c}: #{n} files unpacked into #{into} (its Mods folder can't be written)")
+            next
+          end
           done = File.join(dir, DONE_DIR)
           mkdir_p(done)
           dest = File.join(done, c); k = 2
@@ -328,7 +360,11 @@ module KIF
     #---------------------------------------------------------------------------
     class NativeSource
       attr_reader :dir
-      def initialize(dir); @dir = dir; @entries = nil; end
+      # extra: more Mods folders (the save folder's on phones); a mod in a
+      # later folder replaces one of the same name in an earlier one: a
+      # read-only game folder's mod can only be updated by hand there
+      def initialize(dir, extra = []); @dir = dir; @extra = extra; @entries = nil; end
+      def dirs; return [@dir] + @extra; end
 
       def mod_manager_folders?
         return defined?(::ModManager) ? true : false
@@ -338,9 +374,20 @@ module KIF
       def entries
         return @entries if @entries
         list = []
-        return list unless File.directory?(@dir)
-        Dir.children(@dir).sort.each do |c|
-          path = File.join(@dir, c)
+        dirs.each do |d|
+          next unless File.directory?(d)
+          entries_in(d).each do |e|
+            i = list.index { |o| o.id == e.id }
+            i ? list[i] = e : list << e   # keeps its place in the load order
+          end
+        end
+        return @entries = list
+      end
+
+      def entries_in(dir)
+        list = []
+        Dir.children(dir).sort.each do |c|
+          path = File.join(dir, c)
           if File.file?(path) && c =~ /\.rb\z/i
             list << Entry.new(:id => c, :name => File.basename(c, ".*").sub(/\A\d+[_ -]*/, "").tr("_", " "),
                               :kind => :file, :path => path, :source => self)
@@ -356,13 +403,13 @@ module KIF
                                 :path => path, :source => self)
             else
               # a folder with only pictures / sounds is a mod too (KIF::ModAssets)
-              next if Dir[File.join(path, "**", "*.rb")].empty? &&
+              next if Dir.glob(File.join("**", "*.rb"), base: path).empty? &&   # base: a [ ] { } in the name isn't a pattern
                       KIF::ModAssets::DIRS.none? { |d| File.directory?(File.join(path, d)) }
               list << Entry.new(:id => c, :name => c, :kind => :folder, :path => path, :source => self)
             end
           end
         end
-        return @entries = list
+        return list
       end
 
       def enabled?(e); return !KIF::Mods.disabled.include?(e.id); end
@@ -466,7 +513,7 @@ module KIF
     end
 
     # Everything in one Mods folder (the game's, or a test's)
-    def self.load_dir(dir)
+    def self.load_dir(dir, extra = [])
       @loaded_root = []
       @loaded_root_paths = {}
       @loaded_dirs = []   # folder mods that loaded, in order (their pictures / sounds)
@@ -475,10 +522,11 @@ module KIF
       @names = {}
       KIF::Features.reset! if defined?(KIF::Features)
       KIF::Locks.reset! if defined?(KIF::Locks)
-      native = NativeSource.new(dir)
+      native = NativeSource.new(dir, extra)
       add_source(native)
       add_source(ModManagerSource.new)
-      unpack_zips(dir)
+      # a read-only game folder's zips unpack into the save folder's Mods
+      native.dirs.each { |d| unpack_zips(d, (d == dir && !extra.empty? && !KIF::Paths.game_writable?) ? extra.first : d) if File.directory?(d) }
       off = []
       on = mods_on(native)
       # loose .rb files first, in name order (as KIF 0.20.7)
@@ -558,10 +606,10 @@ module KIF
       KIF::DataLoad.after_load_all("Modded Pokémon (Mods folder)") { KIF::Mods.apply_species }
       KIF::ModCompat.patch_mod_manager if defined?(KIF::ModCompat)
       KIF::ModCompat.before_mods_load if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:before_mods_load)
-      Dir.mkdir(FOLDER) unless File.directory?(FOLDER)
+      (Dir.mkdir(FOLDER) rescue nil) unless File.directory?(FOLDER)   # a read-only game folder still loads its mods
       KIF::ModSettings.install(FOLDER) if defined?(KIF::ModSettings)
       KIF::ModCatalog.migrate_copied_assets(FOLDER) if defined?(KIF::ModCatalog)   # once: files older KIF copied into the game
-      load_dir(File.join(".", FOLDER))
+      load_dir(File.join(".", FOLDER), extra_folders)
       KIF::ModAssets.build(@loaded_dirs || []) if defined?(KIF::ModAssets)
       KIF::ModCompat.after_mods_loaded if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:after_mods_loaded)
       KIF::AbilityText.install if defined?(KIF::AbilityText)   # outside mods' own ability-text aliases

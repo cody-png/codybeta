@@ -204,7 +204,8 @@ module KIF
       bits << e.description.to_s.gsub(/\s+/, " ")[0, 160] if e.description && !e.description.empty?
       bits << _INTL("Mod Manager mod.") if e.kind == :mod_manager
       bits << _INTL("Mods folder: {1}", e.id) if bits.empty?
-      bits << _INTL("{1}: uninstall.", KIF::Keys.name(Input::USE)) if e.source.is_a?(KIF::Mods::NativeSource)
+      bits << (e.source.is_a?(KIF::Mods::NativeSource) ? _INTL("{1}: description or uninstall.", KIF::Keys.name(Input::USE)) :
+                                                          _INTL("{1}: description.", KIF::Keys.name(Input::USE)))
       return KIF::PixelFont.utf8(bits.join(" "))
     end
 
@@ -282,9 +283,8 @@ module KIF
           elsif !loaded.nil? && (loaded ? true : false) != e.enabled?
             opt.kif_badge = [e.enabled? ? _INTL("ON NEXT START") : _INTL("OFF NEXT START"), KIF::PixelUI::WARN]
           end
-          # USE: uninstall (KIF's own Mods folder; Mod Manager removes its own)
-          act = e.source.is_a?(KIF::Mods::NativeSource) ? [:mod_menu, e] : nil
-          rows << Row.new(:opt, opt, :global, e.name.to_s, :mods, "Installed", 0, nil, act)
+          # USE: description, uninstall (KIF's own Mods folder; Mod Manager removes its own)
+          rows << Row.new(:opt, opt, :global, e.name.to_s, :mods, "Installed", 0, nil, [:mod_menu, e])
         end
       end
       withset = list.reject { |e| e.settings.nil? || e.settings.empty? }
@@ -303,10 +303,13 @@ module KIF
       return rows
     end
 
-    # USE on an installed mod
+    # USE on an installed mod; true when it was uninstalled
     def mod_menu(e)
-      cmd = pbMessage(KIF::PixelFont.utf8(e.name.to_s), [_INTL("Uninstall"), _INTL("Cancel")], 2)
-      return false unless cmd == 0
+      native = e.source.is_a?(KIF::Mods::NativeSource)
+      cmds = [_INTL("Read description")] + (native ? [_INTL("Uninstall")] : []) + [_INTL("Cancel")]
+      cmd = pbMessage(KIF::PixelFont.utf8(e.name.to_s), cmds, cmds.length)
+      KIF::ModReadme.show_installed(e) if cmd == 0
+      return false unless native && cmd == 1
       return false unless pbConfirmMessage(KIF::PixelFont.utf8(_INTL("Remove {1}? Its settings are kept for if you install it again.", e.name)))
       if KIF::Mods.uninstall(e)
         pbMessage(KIF::PixelFont.utf8(_INTL("{1} was removed. The game finishes removing it the next time it starts.", e.name)))
@@ -357,7 +360,7 @@ module KIF
           else
             opt.kif_badge = [cat.size_label(it), KIF::PixelUI::PILL]
           end
-          rows << Row.new(:opt, opt, nil, it.name, :mods, head, 0, nil, [:catalog_install, it])
+          rows << Row.new(:opt, opt, nil, it.name, :mods, head, 0, nil, [:catalog_menu, it])
         end
       end
       cat.failed.each do |c|
@@ -779,6 +782,8 @@ class KifSettingsScreen
     return if KIF::SettingsScreen.button?(o)
     return locked_buzz(r) if locked_by(o)
     cur = (o.get rescue nil)
+    # a choice PIF never gave a value (Level caps on a new save) shows its first entry
+    cur = 0 if cur.nil? && o.is_a?(EnumOption)
     return if cur.nil?
     nv = dir > 0 ? o.next(cur) : o.prev(cur)
     return if nv == cur
@@ -823,25 +828,30 @@ class KifSettingsScreen
       when :mod_category
         name = r.action[1]
         open_sub(_INTL(name)) { category_page(name) }
+      # These only ask questions and show the download box (drawn above), so
+      # the screen stays behind them instead of the map
       when :mod_menu
-        hidden { KIF::SettingsScreen.mod_menu(r.action[1]) }
+        KIF::SettingsScreen.mod_menu(r.action[1])
         after_change
       when :catalog_install
-        hidden { KIF::ModCatalogUI.install(r.action[1]) }
+        KIF::ModCatalogUI.install(r.action[1])
+        after_change
+      when :catalog_menu
+        KIF::ModCatalogUI.menu(r.action[1])
         after_change
       when :catalog_update_all
-        hidden { KIF::ModCatalogUI.update_all }
+        KIF::ModCatalogUI.update_all
         after_change
       when :catalog_reload
-        hidden { KIF::ModCatalog.load(true) }
+        KIF::ModCatalog.load(true)
         after_change
       when :pack_install
-        hidden { KIF::ModCatalogUI.install_pack(r.action[1]) }
+        KIF::ModCatalogUI.install_pack(r.action[1])
         after_change
       when :share_export
-        hidden { KIF::ModCatalogUI.share_export }
+        KIF::ModCatalogUI.share_export
       when :share_import
-        hidden { KIF::ModCatalogUI.share_import }
+        KIF::ModCatalogUI.share_import
         after_change
       end
       return
@@ -1101,6 +1111,7 @@ class KifSettingsScreen
     list = rows
     if list.empty?
       msg = if @query then _INTL("Nothing matches \"{1}\".", @query)
+            elsif section_id == :mods && !KIF::Modules.visible?(:mod_settings) then _INTL("Set Modules > Mod Settings to On.")
             elsif section_id == :mods then _INTL("No mods yet. Put them in the Mods folder.")
             elsif !KIF.in_game? then _INTL("Load a save to change these settings.")
             else _INTL("Nothing here right now.")

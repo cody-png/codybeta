@@ -120,7 +120,7 @@ class PokemonEncounters
 
   def setup(map_ID)
     ret = kif_rand_dr_setup(map_ID)
-    KIF::Rand.reroll_tables(self, map_ID) if KIF::Rand.dynamic_route?
+    KIF::Rand.reroll_tables(self, map_ID) if KIF::Rand.dynamic_route? && !KIF::Rand.pinkan?
     return ret
   end
 end

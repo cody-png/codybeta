@@ -27,9 +27,15 @@
 #      and Day Care into the :kif_pending save key, so they are not shown or
 #      used as placeholder Pikachu. They will be given back when their data is
 #      ported. A party is never emptied this way.
-# Items: PIF 6.8.2 shows unknown item IDs (KIF K-Eggs etc.) as "UNKNOWN"
-# without crashing, and keeps the original ID, so they are left in place and
-# become real items again once K-Eggs (F-ITEM-02) is ported.
+#   6. Items whose ID doesn't exist (an item mod switched Off or removed) are
+#      taken out of the Bag, the PC item storage and the held items of the
+#      party, boxes and Day Care into :kif_pending[:items] as [id, qty] pairs.
+#      PIF 6.8.2 showed them as "UNKNOWN" (GameData::Item.get falls back to
+#      it), where Toss and Give act on :UNKNOWN instead. Once the ID exists
+#      again they go back into the Bag (held ones too). Added 2026-10-22.
+# Steps 1-4 run on every read; 5-6 only when the save's values are loaded
+# (SaveData.load_all_values, 2026-10-24): the load screen's previews read
+# every save 2-3 times per start and must not change or log anything.
 #
 # Old KIF saves are found automatically because Game.ini Title is
 # "kurayinfinitefusion" (KIF's save folder, %APPDATA%\kurayinfinitefusion).
@@ -50,6 +56,12 @@ module KIF
     @pending = {}
     class << self
       attr_accessor :pending
+    end
+
+    # A read save's :kif_pending by its player object (weak: kept only while
+    # that read's data is), for New Game+, which only gets the player
+    def self.read_pending
+      return @read_pending ||= ObjectSpace::WeakMap.new
     end
 
     def self.kif_save?(data)
@@ -180,15 +192,101 @@ module KIF
       return back
     end
 
+    def self.item_known?(id)
+      return true unless id.is_a?(Symbol)
+      return GameData::Item.exists?(id)
+    end
+
+    # Every Pokémon in the party, boxes (not the Transfer Box, see above) and Day Care
+    def self.each_saved_pokemon(data)
+      player = data[:player]
+      (player.party || []).each { |pk| yield pk if pk.is_a?(Pokemon) } if player.respond_to?(:party)
+      boxes = (data[:storage_system].instance_variable_get(:@boxes) rescue nil)
+      (boxes || []).each do |box|
+        next if defined?(StorageTransferBox) && box.is_a?(StorageTransferBox)
+        (box.instance_variable_get(:@pokemon) || []).each { |pk| yield pk if pk.is_a?(Pokemon) }
+      end
+      daycare = (data[:global_metadata].instance_variable_get(:@daycare) rescue nil)
+      (daycare || []).each { |slot| yield slot[0] if slot.is_a?(Array) && slot[0].is_a?(Pokemon) }
+    end
+
+    # Moves items with unknown IDs into pending[:items]
+    def self.set_aside_unknown_items(data, pending)
+      return 0 if GameData::Item::DATA.empty?
+      moved = []
+      bag = data[:bag]
+      if bag.is_a?(PokemonBag)
+        (bag.instance_variable_get(:@pockets) || []).each do |pocket|
+          next unless pocket.is_a?(Array)
+          pocket.reject! { |slot| slot.is_a?(Array) && !item_known?(slot[0]) && moved << [slot[0], slot[1].to_i] }
+        end
+        (bag.instance_variable_get(:@registeredItems) || []).reject! { |id| !item_known?(id) }
+      end
+      pc = (data[:global_metadata].pcItemStorage rescue nil)
+      (pc.items || []).reject! { |slot| slot.is_a?(Array) && !item_known?(slot[0]) && moved << [slot[0], slot[1].to_i] } if pc
+      each_saved_pokemon(data) do |pk|
+        id = pk.instance_variable_get(:@item)
+        next if item_known?(id)
+        moved << [id, 1]
+        pk.instance_variable_set(:@item, nil)
+      end
+      return 0 if moved.empty?
+      KIF.log("Set aside #{moved.length} unknown item(s) from this save: " + moved.map { |id, q| "#{id} x#{q}" }.join(", "))
+      return moved.length
+    ensure
+      pending[:items].concat(moved) if moved   # also when a step above raised: what was taken out stays set aside
+    end
+
+    # Set-aside items whose ID exists again go back into the Bag, one entry at
+    # a time: an entry leaves the list right after it is in the Bag, also when
+    # a store hook raised after storing it, so it is never in both
+    def self.return_known_items(data, pending)
+      bag = data[:bag]
+      return 0 if GameData::Item::DATA.empty? || !bag.is_a?(PokemonBag)
+      back = []
+      pending[:items].dup.each do |entry|
+        id, qty = entry
+        next unless item_known?(id)
+        had = bag.pbQuantity(id)
+        stored = begin
+                   bag.pbStoreItem(id, qty)
+                 rescue => e
+                   KIF.log("Giving back #{id} x#{qty}: #{e.class}: #{e.message}")
+                   bag.pbQuantity(id) > had
+                 end
+        next unless stored
+        # one entry per item returned (Array#- would drop every equal entry, also those that didn't fit)
+        i = pending[:items].index(entry)
+        pending[:items].delete_at(i) if i
+        back << entry
+      end
+      return 0 if back.empty?
+      KIF.log("#{back.length} set-aside item(s) are back in the Bag: " + back.map { |id, q| "#{id} x#{q}" }.join(", "))
+      return back.length
+    end
+
+    # Both steps, as a loaded save gets them
     def self.convert!(data)
-      return data unless data.is_a?(Hash) && !data.empty?
+      convert_format!(data)
+      set_aside!(data)
+      return data
+    end
+
+    def self.pending_in(data)
       pending = data[:kif_pending]
       pending = {} unless pending.is_a?(Hash)
       pending[:pokemon] ||= []
       # in the save data before any Pokémon moves into it: if a step below
       # raises, what was already taken out of the party / boxes isn't lost
       data[:kif_pending] = pending
+      return pending
+    end
+
+    # Steps 1-4, on every read (the load screen's previews too)
+    def self.convert_format!(data)
+      return data unless data.is_a?(Hash) && !data.empty?
       if kif_save?(data)
+        pending = pending_in(data)
         MODDED_KEYS.each do |kif_key, key|
           data[key] = data[kif_key] if data[kif_key]
           data.delete(kif_key)
@@ -203,12 +301,29 @@ module KIF
         end
         pending[:from] = _INTL("KIF (PIF {1})", data[:game_version].to_s)
         pending[:notified] = false
-        KIF.log("Converted a KIF save (game_version #{data[:game_version]})")
       end
       fill_pokemon_system(data[:pokemon_system])
+      return data
+    end
+
+    # Steps 5-6, only when a save is really loaded (SaveData.load_all_values):
+    # the load screen reads every save several times for its previews, which
+    # must change nothing (and logged each line 2-3 times per start)
+    def self.set_aside!(data)
+      return data unless data.is_a?(Hash) && !data.empty?
+      pending = pending_in(data)
+      KIF.log("Converted a KIF save (game_version #{data[:game_version]})") if pending[:from]
       returned = return_known_pokemon(data, pending)
       moved = set_aside_unknown_pokemon(data, pending)
       pending[:notified] = false if moved > 0 || returned > 0
+      pending[:items] ||= []
+      begin
+        return_known_items(data, pending)
+        set_aside_unknown_items(data, pending)
+      rescue => e
+        KIF.log("Setting aside unknown items failed: #{e.message}")
+      end
+      pending.delete(:items) if pending[:items].empty?
       data.delete(:kif_pending) unless pending.length > 1 || !pending[:pokemon].empty?
       return data
     end
@@ -240,13 +355,73 @@ module SaveData
     def read_from_file(file_path)
       data = kif_read_from_file(file_path)
       begin
-        KIF::SaveImport.convert!(data)
+        KIF::SaveImport.convert_format!(data)
+        KIF::SaveImport.read_pending[data[:player]] = data[:kif_pending] if data.is_a?(Hash) && data[:player] && data[:kif_pending].is_a?(Hash)
       rescue => e
         KIF.log("KIF save conversion failed for #{file_path}: #{e.message}")
       end
       return data
     end
   end
+end
+
+# The real load (Game.load and everything else that loads a save's values)
+module SaveData
+  class << self
+    alias kif_import_load_all_values load_all_values unless method_defined?(:kif_import_load_all_values)
+
+    def load_all_values(save_data)
+      begin
+        KIF::SaveImport.set_aside!(save_data)
+      rescue => e
+        KIF.log("Setting aside unknown Pokémon / items failed: #{e.message}")
+      end
+      return kif_import_load_all_values(save_data)
+    end
+  end
+end
+
+# New Game+ (MultiSaves pbStartLoadScreen: Game.start_new(true, bag, storage,
+# player)) starts from the load screen's preview data, where Pokémon of
+# unknown species aren't set aside: ngp_clean_pc_data turned them into Pichu
+# (GameData::Species.get falls back to Pikachu). They are set aside first and
+# stay set aside in the new game, coming back once their species exists, and
+# so do the Pokémon and items the old save had set aside already (held mod
+# items of its boxed Pokémon among them).
+module Game
+  class << self
+    alias kif_si_start_new start_new unless method_defined?(:kif_si_start_new)
+
+    def start_new(*args, &blk)
+      storage = args[2]
+      return kif_si_start_new(*args, &blk) unless storage
+      old = (args[3] && KIF::SaveImport.read_pending[args[3]]) || {}
+      carried = { :pokemon => (old[:pokemon] || []).dup, :items => (old[:items] || []).dup }
+      data = { :player => args[3], :storage_system => storage, :kif_pending => carried }
+      begin
+        KIF::SaveImport.set_aside!(data)
+      rescue => e
+        KIF.log("New Game+: setting aside unknown Pokémon failed: #{e.message}")
+      end
+      ret = kif_si_start_new(*args, &blk)
+      pend = data[:kif_pending]
+      if pend   # the new game's own (was {})
+        pend[:notified] = false unless pend[:pokemon].empty?
+        KIF::SaveImport.pending = pend
+      end
+      return ret
+    end
+  end
+end
+
+# A set-aside berry given back while a save loads from the title screen: the
+# Berry Dex hook on PokemonBag#pbStoreItem (053_PIF_Hoenn) registers it on
+# $Trainer, which is nil there, and raised after the berry was stored
+alias kif_si_pbRegisterBerry pbRegisterBerry unless defined?(kif_si_pbRegisterBerry)
+
+def pbRegisterBerry(berry)
+  return false unless $Trainer
+  return kif_si_pbRegisterBerry(berry)
 end
 
 # No ensure_class (see :kif_save_settings in 000_Core/002_KIF_Options.rb).

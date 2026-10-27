@@ -74,3 +74,151 @@ end
     map.events.delete(ev_id) if ev && ev.pages.any? { |pg| pg.list.any? { |c| c.code == 101 && c.parameters[0].to_s == text } }
   end
 end
+
+# 7. Celadon Café Backstore (map 407) event 9, the Pokémon seller: it prices
+#    its daily stock from base stats through the old Essentials dex file
+#    (pbOpenDexData / pbDexDataOffset(dexdata, species, 10), then six fgetb),
+#    which 6.8.2 removed: restocking crashed. A stand-in reads the same
+#    numbers from GameData. Only offset 10 (base stats) is used by any event.
+class KIFDexDataStandIn
+  ORDER = [:HP, :ATTACK, :DEFENSE, :SPEED, :SPECIAL_ATTACK, :SPECIAL_DEFENSE]
+
+  def seek_species(species, offset)
+    data = (GameData::Species.get(species) rescue nil)
+    @bytes = (offset == 10 && data) ? ORDER.map { |s| data.base_stats[s].to_i } : []
+  end
+
+  def fgetb; return (@bytes || []).shift.to_i; end
+  def close; end
+end
+
+def pbOpenDexData(*_args)
+  return KIFDexDataStandIn.new
+end
+
+def pbDexDataOffset(dexdata, species, offset)
+  dexdata.seek_species(species, offset) if dexdata.respond_to?(:seek_species)
+end
+
+# 8. Prices in event texts: PIF wrote them "$200 000" (a comma would split a
+#    \ch[] choice), "$50000", "15,000$" or "50$", sometimes three ways in one
+#    event (the Celadon Café sellers). Every price written in an event's text
+#    or choices now reads like PIF's Poké Mart ("$200,000", "$50"); a \ch[]
+#    choice with a comma is quoted, which \ch[] reads. Only the text changes:
+#    what is charged is the event's own money commands. A price shown from a
+#    game variable ("$\v[15]") is formatted when the message shows (below).
+#    A line or choice the loaded language translates (french.dat) is left
+#    alone: the English text is its translation key. Maps are done as they
+#    load, common events once the language is loaded (Cody, 2026-10-24: all
+#    of them).
+module KIF
+  module EventPrices
+    def self.money(digits)
+      return "$" + digits.delete(" ,").to_i.to_s_formatted
+    end
+
+    # "$200 000", "$50000", "15,000$", "50$" -> "$200,000", "$50,000", "$15,000", "$50"
+    def self.prices(text)
+      t = text.gsub(/(?<![\d$,])(\d{1,3}(?:,\d{3})+|\d+)\$/) { money($1) }
+      return t.gsub(/\$(\d{1,3}(?:[ ,]\d{3})+|\d+)(?!\d|,\d)/) { money($1) }
+    end
+
+    # "$\v[15]" with an Integer in variable 15 -> "$5,000" (a String or nil
+    # is left for PIF to print)
+    def self.variable_prices(text)
+      return text.gsub(/\$\\v\[(\d+)\]/i) do
+        whole = $&
+        v = $game_variables ? $game_variables[$1.to_i] : nil
+        v.is_a?(Integer) ? money(v.to_s) : whole
+      end
+    end
+
+    def self.fix_text(text)
+      m = text.match(/\\ch\[(\d+,\d+,)(.*)\]\z/)
+      return prices(text) unless m
+      fields = m[2].split(",").map { |f| g = prices(f); g.include?(",") ? "\"#{g}\"" : g }
+      return prices(m.pre_match) + "\\ch[" + m[1] + fields.join(",") + "]"
+    end
+
+    def self.translated?(map_id, text)
+      return MessageTypes.getFromMapHash(map_id, text) != text
+    end
+
+    def self.utf8(s)
+      return s.to_s.dup.force_encoding("UTF-8")
+    end
+
+    def self.fix_map(map, map_id)
+      map.events.each_value { |ev| ev.pages.each { |pg| fix_list(pg.list, map_id) if pg.list } }
+    end
+
+    # list: an event page's commands (or a common event's)
+    def self.fix_list(list, map_id)
+      list.each_with_index do |cmd, i|
+        if cmd.code == 102 && cmd.parameters[0].is_a?(Array)
+          next unless cmd.parameters[0].any? { |s| s.to_s.include?("$") }
+          cmd.parameters[0] = cmd.parameters[0].map do |s|
+            u = utf8(s)
+            f = prices(u)
+            (f == u || translated?(map_id, u)) ? s : f
+          end
+          next
+        end
+        next unless cmd.code == 101
+        lines = [cmd]
+        lines << list[i + lines.length] while list[i + lines.length] && list[i + lines.length].code == 401
+        next unless lines.any? { |c| c.parameters[0].to_s.include?("$") }
+        # joined the way Interpreter#command_101 joins them
+        text = lines.map { |c| utf8(c.parameters[0]) }.inject { |a, t| (t != "" && !a.end_with?(" ")) ? "#{a} #{t}" : a + t }
+        fixed = fix_text(text)
+        next if fixed == text || translated?(map_id, text)
+        cmd.parameters[0] = fixed
+        lines[1..-1].each { |c| c.parameters[0] = "" }
+      end
+    end
+  end
+end
+
+# Every map as it loads (after KIF::MapPatches)
+alias kif_mef_load_data load_data unless defined?(kif_mef_load_data)
+
+def load_data(filename, *args)
+  ret = kif_mef_load_data(filename, *args)
+  if filename.is_a?(String) && filename =~ /Map(\d+)\.rxdata\z/ && ret.respond_to?(:events) && ret.events
+    begin
+      KIF::EventPrices.fix_map(ret, $1.to_i)
+    rescue => e
+      KIF.log("Map prices not changed (#{filename}): #{e.class}: #{e.message}")
+    end
+  end
+  return ret
+end
+
+# Common events each time a language is loaded (start-up, and the load
+# screen's flag, which never reloads them): read again from the file, so a
+# line the new language translates keeps PIF's text, its translation key
+alias kif_mef_pbLoadMessages pbLoadMessages unless defined?(kif_mef_pbLoadMessages)
+
+def pbLoadMessages(file)
+  ret = kif_mef_pbLoadMessages(file)
+  if $data_common_events
+    begin
+      ces = load_data("Data/CommonEvents.rxdata")
+      ces.each { |ce| KIF::EventPrices.fix_list(ce.list, 0) if ce && ce.list }
+      $data_common_events = ces
+    rescue => e
+      KIF.log("Common event prices not changed: #{e.class}: #{e.message}")
+    end
+  end
+  return ret
+end
+
+# A price from a game variable ("$\v[15]", "\C[5]$\V[329]": tutors, gamblers'
+# bets, debts) prints like the Poké Mart, before pbMessageDisplay fills \v[]
+# in (011_Messages.rb:678-682). Choices don't fill \v[] in, so only messages.
+alias kif_mef_pbMessageDisplay pbMessageDisplay unless defined?(kif_mef_pbMessageDisplay)
+
+def pbMessageDisplay(msgwindow, message, *args, &block)
+  message = KIF::EventPrices.variable_prices(message) if message.is_a?(String) && message.include?("$")
+  return kif_mef_pbMessageDisplay(msgwindow, message, *args, &block)
+end

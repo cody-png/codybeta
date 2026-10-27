@@ -9,6 +9,9 @@
 #   After that, "Import Old Saves" on the load menu does the same any time
 #   old KIF has a save KIF doesn't. A save whose slot is already taken here
 #   goes into the first free File slot instead, so nothing is overwritten.
+#   (2026-10-26) The question and the result count saves only, and both say
+#   when the copies fill every File slot (8 old saves did; the new game then
+#   found no empty slot without having been told).
 #===============================================================================
 module KIF
   module SaveFolder
@@ -41,7 +44,9 @@ module KIF
 
     # Copy the old folder's saves etc. (never over a file already there).
     # With rehome, a save whose slot is taken goes into a free File slot.
-    # Returns [files copied, saves moved to another slot, saves left behind]
+    # Returns [saves copied, saves moved to another slot, saves left behind]
+    # (settings and controls files are copied too but not counted: the
+    # player was asked about saves)
     def import_report(new_d = new_dir, old_d = old_dir(new_d), rehome: false)
       n = 0
       moved = []
@@ -62,9 +67,21 @@ module KIF
           moved << "#{File.basename(f, '.*')} -> #{slot}"
         end
         File.binwrite(dst, File.binread(src))
-        n += 1
+        n += 1 if f =~ /\.rxdata\z/i
       end
+      forget_check(new_d)
       return [n, moved, left]
+    end
+
+    # Old KIF had 8 File slots too: copying 8 saves leaves none empty, and a
+    # new game then had to save over one without having been told (test 26 Oct)
+    def full?(dir)
+      return defined?(SaveData::MANUAL_SLOTS) && !SaveData::MANUAL_SLOTS.empty? && free_slot(dir).nil?
+    end
+
+    def full_note(dir)
+      return "" unless full?(dir)
+      return " " + _INTL("All {1} save slots are in use now, so a new game has to save over one of them.", SaveData::MANUAL_SLOTS.length)
     end
 
     def import(new_d = new_dir, old_d = old_dir(new_d))
@@ -88,11 +105,53 @@ module KIF
       end
     end
 
-    # Old saves that aren't here yet, in any slot
-    def importable(new_d = new_dir, old_d = old_dir(new_d))
-      return saves_in(old_d).reject { |f| already_here?(File.join(old_d, f), new_d) }
+    # Old saves that aren't here yet, in any slot. Past the deadline the
+    # rest count as not here (the import itself skips copies already here).
+    def importable(new_d = new_dir, old_d = old_dir(new_d), deadline: nil)
+      out = []
+      saves_in(old_d).each do |f|
+        if deadline && Time.now > deadline
+          out << f
+          next
+        end
+        out << f unless already_here?(File.join(old_d, f), new_d)
+      end
+      return out
     rescue
       return []
+    end
+
+    # The load menu's check, remembered until the old folder changes: on a
+    # player's PC it took 158 s on every start (1.2.8 log, 27 Oct)
+    CHECK_FILE = "KIF_import_check.krs"
+
+    def old_fingerprint(old_d)
+      return saves_in(old_d).sort.map do |f|
+        p = File.join(old_d, f)
+        "#{f}|#{File.size(p)}|#{File.mtime(p).to_i}"
+      end.join("\n")
+    end
+
+    def import_hint?(new_d = new_dir, old_d = old_dir(new_d))
+      return false unless Dir.exist?(old_d)
+      fp = old_fingerprint(old_d)
+      return false if fp.empty?
+      cache = File.join(new_d, CHECK_FILE)
+      saved = File.exist?(cache) ? File.binread(cache) : ""
+      return saved.start_with?("1") if saved.sub(/\A[01]\n/, "") == fp
+      t = Time.now
+      res = !importable(new_d, old_d, deadline: t + 3).empty?
+      secs = Time.now - t
+      KIF.log(format("Save folder: old save check took %.1f s (%d old saves)", secs, saves_in(old_d).length)) if secs > 1
+      File.binwrite(cache, (res ? "1\n" : "0\n") + fp) rescue nil
+      return res
+    end
+
+    def forget_check(new_d = new_dir)
+      cache = File.join(new_d, CHECK_FILE)
+      File.delete(cache) if File.exist?(cache)
+    rescue
+      nil
     end
 
     def mark_done(new_d = new_dir)
@@ -105,10 +164,13 @@ module KIF
       return if File.exist?(File.join(new_dir, MARKER))
       if offer?
         count = saves_in(old_dir).length
-        if pbConfirmMessage(_INTL("Saves from the old KIF were found ({1} files). Copy them into KIF's new save folder?", count))
+        q = _INTL("Saves from the old KIF were found ({1} saves). Copy them into KIF's new save folder?", count)
+        # the new folder is empty here: after the copy it has the old one's slots
+        q += " " + _INTL("They fill all {1} save slots, so a new game would have to save over one.", SaveData::MANUAL_SLOTS.length) if full?(old_dir)
+        if pbConfirmMessage(q)
           n = import
-          pbMessage(_INTL("Copied {1} files. Your old KIF keeps its own copies, and the old save backups stay in the old folder.", n))
-          KIF.log("Save folder: copied #{n} files from #{old_dir}")
+          pbMessage(_INTL("Copied {1} saves. Your old KIF keeps its own copies, and the old save backups stay in the old folder.", n) + full_note(new_dir))
+          KIF.log("Save folder: copied #{n} saves from #{old_dir}")
           show_copied_saves if n > 0
         else
           pbMessage(_INTL("Okay. You can still copy them yourself later: the old saves are in {1}.", old_dir))
@@ -163,7 +225,7 @@ module KIF
     def update_menu
       l = links
       return unless l
-      if File.expand_path(new_dir) != File.expand_path(old_dir) && !importable.empty?
+      if File.expand_path(new_dir) != File.expand_path(old_dir) && import_hint?
         l[MENU_LABEL] = MENU_URL
       else
         l.delete(MENU_LABEL)
@@ -180,12 +242,13 @@ module KIF
       end
       return unless pbConfirmMessage(_INTL("Copy {1} save(s) from the old KIF into KIF? Nothing here will be overwritten.", list.length))
       n, moved, left = import_report(rehome: true)
-      KIF.log("Save folder: menu import copied #{n} files from #{old_dir}" +
+      KIF.log("Save folder: menu import copied #{n} saves from #{old_dir}" +
               (moved.empty? ? "" : ", moved #{moved.join(', ')}") +
               (left.empty? ? "" : ", no free slot for #{left.join(', ')}"))
-      msg = _INTL("Copied {1} files. Your old KIF keeps its own copies.", n)
+      msg = _INTL("Copied {1} saves. Your old KIF keeps its own copies.", n)
       msg += " " + _INTL("Some saves had a slot that was already taken here, so they went into another slot: {1}.", moved.join(", ")) unless moved.empty?
       msg += " " + _INTL("No free slot was left for: {1}.", left.join(", ")) unless left.empty?
+      msg += full_note(new_dir) if n > 0 && left.empty?
       pbMessage(msg)
       update_menu
       # show the new saves: the menu reloads its slots (see Scene below)
@@ -254,5 +317,9 @@ PokemonLoad_Scene.prepend(KIF::SaveFolder::Scene) if defined?(PokemonLoad_Scene)
 alias kif_sf_openUrlInBrowser openUrlInBrowser unless defined?(kif_sf_openUrlInBrowser)
 def openUrlInBrowser(url = "")
   return KIF::SaveFolder.menu_import if url == KIF::SaveFolder::MENU_URL
+  if KIF.mobile?   # no browser to start from inside the game on a phone
+    Input.clipboard = url rescue nil
+    return pbMessage(_INTL("The link (copied if your device allows):\n{1}", url))
+  end
   return kif_sf_openUrlInBrowser(url)
 end

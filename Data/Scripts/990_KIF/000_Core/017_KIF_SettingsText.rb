@@ -94,12 +94,18 @@ module KIF
         "Hail as in PIF.",
         "In hail, Ice types take less damage from physical moves.",
         "Hail becomes Snow: no damage each turn, and Ice types take less damage from physical moves."],
+      "Weather Setter Immunity" => [
+        "Sand Stream and Snow Warning users take sandstorm and hail damage as in PIF.",
+        "A Pokémon with Sand Stream takes no sandstorm damage, and one with Snow Warning no hail damage, whatever its types."],
       "Frostbite" => [
         "Freezing works as in PIF.",
         "Freezing becomes Frostbite: the Pokémon can still act, loses a little HP each turn and deals half special damage."],
       "Drowsy" => [
         "Sleep works as in PIF.",
         "Sleep becomes Drowsy: the Pokémon acts about half the time and deals half damage."],
+      "Pre-Status" => [
+        "Pokémon start battles with the status they already have.",
+        "Kuray Actions (PC or party) > Start Battles makes a Pokémon start every battle burned (once you have a Flame Orb) or poisoned (once you have a Toxic Orb)."],
       "Bug Type Buffs" => [
         "Bug types as in PIF.",
         "Bug types resist Fairy, Psychic and Dark.",
@@ -121,12 +127,22 @@ module KIF
         "No battle info screen.",
         "In battle, INFO (or {ACTION}) shows stats, abilities, moves, the field and the speed order.",
         "Battle info opens with {ACTION} only; no INFO button on screen."],
+      "Foe Info" => [
+        "Battle Info lists a foe's abilities and moves from the start of the battle.",
+        "Battle Info shows a foe's abilities and moves only once the battle has shown them."],
       "Move Effectiveness" => [
         "The Fight menu doesn't show how effective moves are.",
         "The Fight menu marks how effective each move is against the foe."],
       "Show Lv. in BSM" => [
         "Base Stats Mode hides levels in battle.",
         "Base Stats Mode shows levels in battle (the level doesn't change the stats there)."],
+      "Level Up Stats" => [
+        "After a level up, two windows show the stat gains and the new stats.",
+        "After a level up, the stat windows are skipped in every battle. The level up message still shows."],
+      "Battle Camera" => [
+        "Double and triple battles look as in PIF.",
+        "Double and triple battles: your Pokémon a bit smaller and every Pokémon spaced out, so each one is fully visible. Singles look as in PIF.",
+        "Double and triple battles: every Pokémon smaller and spaced out, for the most room. Singles look as in PIF."],
       "EBDX Battles" => [
         "Battles look like PIF's own.",
         "Battles use Elite Battle DX's look and animations."],
@@ -175,6 +191,9 @@ module KIF
       "Recover Consumables" => [
         "Items used up in battle (berries, gems...) are gone.",
         "Items your Pokémon used up in battle come back after the battle."],
+      "Items to Bag" => [
+        "Thief, Covet and Pickup only work for a Pokémon with no held item.",
+        "If it holds an item, what it steals from wild Pokémon or finds with Pickup goes to the Bag."],
       "Fusion BaseStats" => [
         "Your fusions' base stats as in PIF.",
         "The sliders below set how much of each base stat comes from the head.",
@@ -236,8 +255,8 @@ module KIF
         "The foe's types as text next to its battle box."],
       "Swap BattleGUI" => [
         "PIF's battle boxes and bars.",
-        "Mirasein's battle boxes and bars, version 1.",
-        "Mirasein's battle boxes and bars, version 2."],
+        "Mirasein's battle boxes and bars, version 1. No effect with EBDX Battles.",
+        "Mirasein's battle boxes and bars, version 2. No effect with EBDX Battles."],
       "Fusion Screen" => [
         "The DNA Splicers show PIF's preview.",
         "The DNA Splicers show names, types, real stats, and let you preview evolved forms."],
@@ -248,12 +267,16 @@ module KIF
         "Pokémon use their small icons.",
         "Party and other screens use the full battle sprite as the icon (PC boxes keep small icons).",
         "Every icon, PC boxes included, uses the full battle sprite."],
+      "Map Zoom" => [
+        "The overworld at its normal size.",
+        "Zooms the overworld out (map pixels at 1.5x): you see more of the map around you. Menus and text keep their size.",
+        "Zooms the overworld out further (map pixels at 1x): about four times as much map. Menus and text keep their size."],
       "Summary IVs/EVs" => [
         "The Skills page shows stats only.",
         "The Skills page also shows IVs, EVs and base stats."],
       "Dark Mode" => [
         "Light Pokédex, Summary and PokéNav screens.",
-        "Dark Pokédex, Summary and PokéNav screens, and dark battle menus."],
+        "Dark Pokédex, Summary and PokéNav screens, and dark battle menus (no effect with EBDX Battles)."],
       "Improved Pokedex" => [
         "Catching a fusion registers only the fusion.",
         "Catching, hatching or evolving a fusion also registers its head and body."],

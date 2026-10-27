@@ -6,11 +6,20 @@
 #   * stat changes (+1 ... +6 / -1 ... -6) with their multiplier, and the
 #     resulting stats of your own Pokémon;
 #   * types (as changed in battle), HP, status;
-#   * ability and held item: always for yours, for foes only once the battle
-#     has shown them (ability pop-up or a message naming them);
+#   * ability and held item: always for yours; a foe's held item only once
+#     the battle has shown it (a message naming it). A foe's abilities (mods'
+#     too) and moves: from the start with "Foe Info: All" (default since
+#     2026-10-25, as in Elite Redux), or once shown with "As seen";
+#   * on the Abilities and Moves pages, USE picks a row and opens its full
+#     description (a move's type, category, power, accuracy and PP too);
+#     a hidden ("???") row doesn't open (2026-10-25);
+#   * a foe disguised by Illusion shows as the Pokémon it copies (its types,
+#     ability and moves) until the disguise breaks (2026-10-25);
 #   * effects with turns left (Taunt, Encore, Leech Seed, Substitute...);
 #   * weather, terrain, rooms and Gravity, screens and hazards per side,
-#     Future Sight and Wish.
+#     Future Sight and Wish;
+#   * Log: every message and ability pop-up of the battle so far, by turn
+#     (BattleLog.rb, 2026-10-25).
 # Works the same in PIF's battle screen and EBDX's. A base feature (no
 # module);
 # "Battle Info" setting, On by default (Off for Classic KIF).
@@ -28,6 +37,31 @@ KIF::Options.add(:others, :global) {
                  [_INTL("No battle info screen"),
                   _INTL("In battle, INFO (or {1}) shows stat changes, effects and the field", KIF::Keys.name(Input::ACTION)),
                   _INTL("Battle info with {1} only, no INFO button on screen", KIF::Keys.name(Input::ACTION))])
+}
+
+# 0 All: a foe's abilities and moves listed from the start; 1 As seen (the
+# default since 1.2.10: Cody, 27 Oct - a foe's ability stays hidden until the
+# battle shows it). Settings files keep the old default's 0, so it's switched
+# to As seen once (:cody_bi_foe_info_v2 remembers that).
+KIF::Options.define(:cody_bi_foe_info, 1, :global)
+KIF::Options.define(:cody_bi_foe_info_v2, 0, :global)
+
+module Game
+  class << self
+    alias kif_bifoe_set_up_system set_up_system unless method_defined?(:kif_bifoe_set_up_system)
+    def set_up_system
+      kif_bifoe_set_up_system
+      KIF::BattleInfo.foe_info_default_once
+    end
+  end
+end
+
+KIF::Options.add(:others, :global) {
+  EnumOption.new(_INTL("Foe Info"), [_INTL("All"), _INTL("As seen")],
+                 proc { $PokemonSystem.cody_bi_foe_info },
+                 proc { |value| $PokemonSystem.cody_bi_foe_info = value },
+                 [_INTL("Battle Info lists a foe's abilities and moves from the start"),
+                  _INTL("Battle Info shows a foe's abilities and moves once the battle shows them")])
 }
 
 module KIF
@@ -87,8 +121,55 @@ module KIF
     #---------------------------------------------------------------------------
     # What the battle has shown about a foe
     #---------------------------------------------------------------------------
+    def foe_info_default_once
+      sys = $PokemonSystem
+      return unless sys && sys.cody_bi_foe_info_v2.to_i == 0
+      sys.cody_bi_foe_info = 1
+      sys.cody_bi_foe_info_v2 = 1
+      KIF.log("Battle Info: Foe Info set to As seen (the new default)")
+    rescue => e
+      KIF.log("Battle Info: Foe Info default failed (#{e.class}: #{e.message})")
+    end
+
+    # Foe Info: All
+    def show_all?
+      return !$PokemonSystem.respond_to?(:cody_bi_foe_info) || $PokemonSystem.cody_bi_foe_info.to_i == 0
+    end
+
+    # A foe's Illusion disguise holds (a face below is the disguise itself)
+    def disguised?(battler)
+      i = const(:Illusion)
+      d = i && battler && !own?(battler) && battler.effects[i]
+      return !!(d && !battler.pokemon.equal?(d))
+    end
+
+    # A disguised foe as the Pokémon it copies (Cody, 2026-10-25: "???" would
+    # tell players it is a disguise): a copy of the battler set up as that
+    # Pokémon (mods' set-up hooks give it that Pokémon's innates), keeping
+    # what the battle shows of the real one (HP, status, level, held item,
+    # effects, stat changes, types changed in battle). Read by Battle Info and
+    # the Fight menu's effectiveness hints; As seen keys on that Pokémon.
+    def face(battler)
+      return battler unless disguised?(battler)
+      pkmn = battler.effects[const(:Illusion)]
+      battle = battler.battle
+      copies = battle.instance_variable_get(:@kif_bi_copies) || battle.instance_variable_set(:@kif_bi_copies, {})
+      # set up from a copy kept for the battle: hooks may mark the Pokémon
+      # (Endgame's doubled PP) or pick for it (KIF-ER's fusion innates, kept)
+      f = battler.dup
+      f.pbInitPokemon(copies[pkmn.object_id] ||= pkmn.dup, battler.pokemonIndex)
+      f.instance_variable_set(:@pokemon, pkmn)
+      [:@hp, :@totalhp, :@status, :@statusCount, :@level, :@item_id].each { |v| f.instance_variable_set(v, battler.instance_variable_get(v)) }
+      f.type1, f.type2 = battler.type1, battler.type2 if [battler.type1, battler.type2] != [battler.pokemon.type1, battler.pokemon.type2]
+      return f
+    rescue StandardError => e
+      KIF.log("Battle Info: disguise failed (#{e.class}: #{e.message})") if defined?(KIF.log)
+      return battler
+    end
+
     def ability_known?(battle, battler)
-      return true if own?(battler)
+      battler = face(battler)
+      return true if own?(battler) || show_all?
       known = battle.instance_variable_get(:@cody_known_abilities) || {}
       return true if known[battler.pokemon.object_id] == battler.ability_id
       shown = battle.instance_variable_get(:@kif_bi_abilities) || {}
@@ -267,7 +348,7 @@ end
 #   KIF::BattleInfo.register_abilities(:my_mod) do |battle, battler|
 #     [{ :label  => "INNATE",        # small label above the name
 #        :ability => :EFFECTSPORE,   # name and description come from the game
-#        :known  => true,            # false: shown as ??? (a foe's, not revealed)
+#        :known  => true,            # false: ??? with Foe Info: As seen (a foe's, not revealed)
 #        :worked => false }]         # true: "WORKED THIS BATTLE"
 #   end
 #
@@ -298,22 +379,29 @@ module KIF
 
     # [{label:, name:, desc:, known:, worked:}] – the main ability first
     def self.ability_entries(battle, battler)
+      return ability_entries_now(battle, face(battler))
+    end
+
+    def self.ability_entries_now(battle, battler)
       known = ability_known?(battle, battler)
       out = [{ :label => _INTL("ABILITY"), :name => known ? battler.abilityName.to_s : "???",
                :desc => known ? ability_description(battler.ability_id) : _INTL("Shown once the battle reveals it."),
                :known => known, :worked => ability_worked?(battle, battler, battler.ability_id),
                :main => true }]
+      all = show_all?
       @ability_providers.each do |id, prov|
         begin
           list = prov.call(battle, battler) || []
           list.each do |e|
-            k = e[:known] != false
+            seen = e[:known] != false
+            k = seen || all   # Foe Info: All shows a row the mod still calls unknown
             name = e[:name] || (e[:ability] && (GameData::Ability.get(e[:ability]).name rescue e[:ability].to_s))
             desc = e[:description] || (e[:ability] && ability_description(e[:ability])) || ""
             out << { :label => (e[:label] || _INTL("ABILITY")).to_s.upcase,
                      :name => k ? name.to_s : "???",
                      :desc => k ? desc.to_s : _INTL("Shown once it activates."),
-                     :known => k, :worked => k && e[:worked] }
+                     # REVEALED mark with As seen only (KIF-ER calls every innate known with All)
+                     :known => k, :revealed => seen && !all, :worked => k && e[:worked] }
           end
         rescue StandardError => ex
           KIF.log("Battle Info: ability list from #{id} failed (#{ex.class}: #{ex.message})") if defined?(KIF.log)
@@ -323,7 +411,8 @@ module KIF
     end
 
     #---------------------------------------------------------------------------
-    # Moves: yours in full; a foe's only once it has used them
+    # Moves: yours in full; a foe's all with Foe Info: All, else only once
+    # it has used them
     #---------------------------------------------------------------------------
     def self.note_move(battler, move_id)
       return unless battler && battler.pokemon && move_id
@@ -342,10 +431,12 @@ module KIF
 
     # [{name:, type:, cat:, power:, acc:, pp:}] or nil for an unseen foe move
     def self.move_entries(battle, battler)
+      battler = face(battler)
       own = own?(battler)
+      all = show_all?
       battler.moves.compact.first(4).map do |m|
         used = times_used(battle, battler, m.id)
-        next nil if !own && used == 0
+        next nil if !own && used == 0 && !all
         cat = case m.category
               when 0 then _INTL("Phys")
               when 1 then _INTL("Spec")
@@ -354,7 +445,11 @@ module KIF
         { :name => m.name.to_s, :type => m.type, :cat => cat,
           :power => (m.baseDamage.to_i > 1 ? m.baseDamage.to_s : "-"),
           :acc => (m.accuracy.to_i > 0 ? m.accuracy.to_s : "-"),
-          :pp => own ? "#{m.pp}/#{m.total_pp}" : (used == 1 ? _INTL("used 1x") : _INTL("used {1}x", used)) }
+          :pp => own ? "#{m.pp}/#{m.total_pp}" : (used == 0 ? "-" : used == 1 ? _INTL("used 1x") : _INTL("used {1}x", used)),
+          # the description box (a foe's PP left isn't shown, only its most)
+          :cat_full => { 0 => _INTL("Physical"), 1 => _INTL("Special") }[m.category] || _INTL("Status"),
+          :max_pp => own ? "#{m.pp}/#{m.total_pp}" : m.total_pp.to_s,
+          :desc => (GameData::Move.get(m.id).description.to_s rescue "") }
       end
     end
 
@@ -392,7 +487,13 @@ class PokeBattle_Battler
   # second, Outrage) aren't new uses.
   def pbUseMove(choice, specialUsage = false)
     multi = usingMultiTurnAttack?
-    ret = kif_bi_pbUseMove(choice, specialUsage)
+    actor = @battle&.instance_variable_get(:@kif_log_actor)
+    @battle&.instance_variable_set(:@kif_log_actor, self)   # the Log's side for "It's super effective!"
+    begin
+      ret = kif_bi_pbUseMove(choice, specialUsage)
+    ensure
+      @battle&.instance_variable_set(:@kif_log_actor, actor)
+    end
     KIF::BattleInfo.note_move(self, @lastRegularMoveUsed) if @lastRegularMoveUsed && !specialUsage && !multi
     return ret
   end
@@ -421,7 +522,7 @@ class KifBattleInfoScreen
 
   def initialize(battle)
     @battle = battle
-    @entries = KIF::BattleInfo.battlers(battle) + [:field, :speed]
+    @entries = KIF::BattleInfo.battlers(battle) + [:field, :speed, :log]
     @index = 0
     @page = 0
   end
@@ -435,16 +536,25 @@ class KifBattleInfoScreen
     loop do
       Graphics.update
       Input.update
+      next if @detail ? detail_input : (@row ? row_input : false)
       if Input.trigger?(Input::LEFT)
         @index = (@index - 1) % @entries.length
+        @row = nil
         pbPlayCursorSE
         refresh
       elsif Input.trigger?(Input::RIGHT)
         @index = (@index + 1) % @entries.length
+        @row = nil
         pbPlayCursorSE
         refresh
+      elsif current == :log && (Input.repeat?(Input::UP) || Input.repeat?(Input::DOWN))
+        log_scroll(Input.repeat?(Input::DOWN) ? 1 : -1)
       elsif (Input.trigger?(Input::UP) || Input.trigger?(Input::DOWN)) && battler?
         @page = (@page + (Input.trigger?(Input::DOWN) ? 1 : -1)) % PAGES.length
+        pbPlayCursorSE
+        refresh
+      elsif Input.trigger?(Input::USE) && list_page? && !@rows.empty?
+        @row = 0   # Abilities / Moves: pick a row to read
         pbPlayCursorSE
         refresh
       elsif Input.trigger?(Input::BACK) || Input.trigger?(Input::ACTION) || Input.trigger?(Input::USE)
@@ -456,6 +566,113 @@ class KifBattleInfoScreen
     @sprite.bitmap.dispose if @sprite && @sprite.bitmap
     @sprite.dispose if @sprite
     @viewport.dispose if @viewport
+  end
+
+  #---------------------------------------------------------------------------
+  # Description box (FulMinato via Cody, 2026-10-25): on Abilities and Moves,
+  # USE puts a cursor on the rows, USE again opens the row's full text. A
+  # hidden ("???") row doesn't open. @rows: [entry or nil, can open?] as drawn.
+  #---------------------------------------------------------------------------
+  attr_reader :row, :detail
+
+  def list_page?
+    return battler? && [:abilities, :moves].include?(PAGES[@page])
+  end
+
+  # true: the frame's key was used here
+  def row_input
+    if Input.trigger?(Input::UP) || Input.trigger?(Input::DOWN)
+      @row = (@row + (Input.trigger?(Input::DOWN) ? 1 : -1)) % [@rows.length, 1].max
+      pbPlayCursorSE
+    elsif Input.trigger?(Input::USE)
+      entry, ok = @rows[@row]
+      if ok
+        open_detail(entry)
+      else
+        pbPlayBuzzerSE   # hidden (Foe Info: As seen): nothing to read
+        return true
+      end
+    elsif Input.trigger?(Input::BACK)
+      @row = nil
+      pbPlayCancelSE
+    else
+      return false
+    end
+    refresh
+    return true
+  end
+
+  def detail_input
+    if Input.trigger?(Input::UP) || Input.trigger?(Input::DOWN)
+      s = (@scroll + (Input.trigger?(Input::DOWN) ? 1 : -1)).clamp(0, @scroll_max)
+      return true if s == @scroll
+      @scroll = s
+      pbPlayCursorSE
+    elsif Input.trigger?(Input::USE) || Input.trigger?(Input::BACK)
+      @detail = nil
+      pbPlayCancelSE
+    else
+      return true
+    end
+    refresh
+    return true
+  end
+
+  def open_detail(entry)
+    if PAGES[@page] == :moves
+      @detail = { :label => _INTL("MOVE"), :name => entry[:name], :move => entry, :desc => entry[:desc] }
+    else
+      @detail = { :label => entry[:label], :name => entry[:name], :desc => entry[:desc] }
+    end
+    @detail[:desc] = _INTL("No description.") if @detail[:desc].to_s.strip.empty?
+    @scroll = 0
+    pbPlayDecisionSE
+  end
+
+  # word wrap for the pixel font; a word wider than the line is cut with "..."
+  def wrap(font, str, max_w)
+    lines = []
+    PF.utf8(str).split(/\n/).each do |para|
+      line = ""
+      para.split(/ +/).each do |word|
+        try = line.empty? ? word : "#{line} #{word}"
+        if PF.width(font, try) <= max_w || line.empty?
+          line = try
+        else
+          lines << line
+          line = word
+        end
+      end
+      lines << line
+    end
+    return lines.map { |l| PF.fit(font, l, max_w) }
+  end
+
+  DETAIL_LINE = 21
+
+  def draw_detail(b)
+    d = @detail
+    x0, y0, x1, y1 = 10, 64, W - 10, H - 32
+    rbox(b, x0, y0, x1, y1, 6, PANEL, SELB)
+    text(b, x0 + 12, y0 + 6, 300, 13, d[:label].to_s.upcase, ACC, PF::TINY)
+    text(b, x0 + 12, y0 + 18, x1 - x0 - 24, 26, PF.fit(PF::ROW, d[:name], x1 - x0 - 24), TXT, PF::ROW)
+    ty = y0 + 48
+    if (m = d[:move])
+      w = pill(b, x0 + 12, ty + 4, type_name(m[:type]).upcase, type_color(m[:type]))
+      stats = _INTL("{1}   Power {2}   Accuracy {3}   PP {4}", m[:cat_full], m[:power], m[:acc], m[:max_pp])
+      text(b, x0 + 20 + w, ty, x1 - x0 - 32 - w, 22, PF.fit(PF::TEXT, stats, x1 - x0 - 32 - w), TXT)
+      ty += 26
+    end
+    b.fill_rect(x0 + 12, ty + 2, x1 - x0 - 24, 1, LINE)
+    ty += 8
+    lines = wrap(PF::TEXT, d[:desc], x1 - x0 - 40)
+    room = (y1 - 6 - ty) / DETAIL_LINE
+    @scroll_max = [lines.length - room, 0].max
+    @scroll = @scroll.to_i.clamp(0, @scroll_max)
+    @detail_lines = lines[@scroll, room]
+    @detail_lines.each_with_index { |l, i| text(b, x0 + 14, ty + i * DETAIL_LINE, x1 - x0 - 40, 22, l, TXT) }
+    tri(b, x1 - 20, ty + 4, :u, ACC, 4) if @scroll > 0
+    tri(b, x1 - 20, y1 - 18, :d, ACC, 4) if @scroll < @scroll_max
   end
 
   def current
@@ -478,10 +695,12 @@ class KifBattleInfoScreen
   def refresh
     b = @sprite.bitmap
     b.fill_rect(0, 0, W, H, BG)
+    @rows = []
     draw_top(b)
     case current
     when :field then draw_field(b)
     when :speed then draw_speed(b)
+    when :log then draw_log(b)
     else
       draw_battler_head(b, current)
       case PAGES[@page]
@@ -490,13 +709,26 @@ class KifBattleInfoScreen
       when :moves then draw_moves(b, current)
       end
     end
-    hints = [[:lr, _INTL("Pokémon")]]
-    hints << [:ud, _INTL("Page")] if battler?
-    hints << [KIF::Keys.name(Input::BACK), _INTL("Close")]
+    use = KIF::Keys.name(Input::USE)
+    back = KIF::Keys.name(Input::BACK)
+    if @detail
+      draw_detail(b)
+      hints = []
+      hints << [:ud, _INTL("Scroll")] if @scroll_max > 0
+      hints << [back, _INTL("Close")]
+    elsif @row
+      hints = [[:ud, _INTL("Choose")], [use, _INTL("Read")], [back, _INTL("Back")]]
+    else
+      hints = [[:lr, _INTL("Pokémon")]]
+      hints << [:ud, _INTL("Page")] if battler?
+      hints << [:ud, _INTL("Scroll")] if current == :log && log_rows.length > log_room
+      hints << [use, _INTL("Details")] if list_page? && !@rows.empty?
+      hints << [back, _INTL("Close")]
+    end
     footer(b, hints)
   end
 
-  # chips: every Pokémon (green dot yours, red foes), then Field and Speed
+  # chips: every Pokémon (green dot yours, red foes), then Field, Speed and Log
   def draw_top(b)
     b.fill_rect(0, 0, W, 32, PANEL2)
     b.fill_rect(0, 31, W, 1, LINE)
@@ -504,6 +736,7 @@ class KifBattleInfoScreen
       case e
       when :field then [_INTL("Field"), nil]
       when :speed then [_INTL("Speed"), nil]
+      when :log then [_INTL("Log"), nil]
       else [e.name.to_s, KIF::BattleInfo.own?(e) ? OWN : FOE]
       end
     end
@@ -543,7 +776,8 @@ class KifBattleInfoScreen
     hp = own ? "#{bt.hp}/#{bt.totalhp}" : "#{(100.0 * bt.hp / [bt.totalhp, 1].max).ceil}%"
     st = bt.status && bt.status != :NONE ? (GameData::Status.get(bt.status).name rescue bt.status.to_s) : _INTL("OK")
     xr = W - 8
-    types = (bt.pbTypes(true) rescue [bt.type1, bt.type2]).compact.uniq
+    fb = KIF::BattleInfo.face(bt)   # a disguised foe: the types it copies
+    types = (fb.pbTypes(true) rescue [fb.type1, fb.type2]).compact.uniq
     types.reverse.each { |t| xr -= pill(b, xr, 41, type_name(t).upcase, type_color(t), true) + 4 }
     info = _INTL("Lv.{1}  {2}  {3}", bt.level, hp, st)
     info = PF.fit(PF::TEXT, info, xr - 4 - (x + 4))
@@ -565,7 +799,8 @@ class KifBattleInfoScreen
       y += 25
     end
     rbox(b, 256, 62, W - 6, H - 30, 6, PANEL)
-    ab = bi.ability_known?(@battle, bt) ? bt.abilityName : "???"
+    fb = bi.face(bt)
+    ab = bi.ability_known?(@battle, fb) ? fb.abilityName : "???"
     it = bi.item_text(@battle, bt) || "???"
     heading(b, 264, W - 14, 68, _INTL("Ability"))
     text(b, 266, 82, 236, 22, PF.fit(PF::TEXT, ab, 232), ab == "???" ? DIM : TXT)
@@ -590,12 +825,13 @@ class KifBattleInfoScreen
     room = (H - 30 - 66) / 64
     shown = list.first(room)
     y = 66
-    shown.each do |e|
-      rbox(b, 12, y, W - 12, y + 60, 5, PANEL2)
+    shown.each_with_index do |e, i|
+      @rows << [e, e[:known] ? true : false]
+      rbox(b, 12, y, W - 12, y + 60, 5, PANEL2, i == @row ? SELB : nil)
       text(b, 22, y + 3, 200, 13, e[:label], e[:main] ? ACC : INNATE, PF::TINY)
       if e[:worked]
         pill(b, W - 22, y + 5, _INTL("WORKED THIS BATTLE"), Color.new(70, 120, 90), true)
-      elsif e[:known] && !KIF::BattleInfo.own?(bt) && !e[:main]
+      elsif e[:revealed] && !KIF::BattleInfo.own?(bt) && !e[:main]
         pill(b, W - 22, y + 5, _INTL("REVEALED"), Color.new(70, 120, 90), true)
       end
       text(b, 22, y + 13, 400, 26, e[:name], e[:known] ? TXT : DIM, PF::ROW)
@@ -615,8 +851,9 @@ class KifBattleInfoScreen
       text(b, x, 67, 0, 13, label, ACC, PF::TINY, al)
     end
     y = 84
-    KIF::BattleInfo.move_entries(@battle, bt).each do |m|
-      rbox(b, 12, y, W - 12, y + 60, 5, PANEL2)
+    KIF::BattleInfo.move_entries(@battle, bt).each_with_index do |m, i|
+      @rows << [m, !m.nil?]
+      rbox(b, 12, y, W - 12, y + 60, 5, PANEL2, i == @row ? SELB : nil)
       if m.nil?
         text(b, 22, y + 17, 100, 26, "???", DIM, PF::ROW)
         text(b, W - 22, y + 19, 0, 22, _INTL("not used yet"), DIM, PF::TEXT, 1)
@@ -842,16 +1079,19 @@ class PokeBattle_Battle
 
   def pbDisplay(msg, &block)
     KIF::BattleInfo.note_message(self, msg)
+    KIF::BattleLog.add(self, msg)
     return kif_bi_pbDisplay(msg, &block)
   end
 
   def pbDisplayBrief(msg)
     KIF::BattleInfo.note_message(self, msg)
+    KIF::BattleLog.add(self, msg)
     return kif_bi_pbDisplayBrief(msg)
   end
 
   def pbDisplayPaused(msg, &block)
     KIF::BattleInfo.note_message(self, msg)
+    KIF::BattleLog.add(self, msg)
     return kif_bi_pbDisplayPaused(msg, &block)
   end
 end
@@ -875,6 +1115,7 @@ class PokeBattle_Battle
       end
     rescue
     end
+    KIF::BattleLog.popup(self, battler, args[2])
     return cody_eff_pbShowAbilitySplash(battler, *args)
   end
 end

@@ -385,7 +385,7 @@ module KIF
     def self.bitmap(path)
       return nil unless path
       return @bitmaps[path] if @bitmaps[path] && !@bitmaps[path].disposed?
-      @bitmaps[path] = Bitmap.new(path) rescue nil
+      @bitmaps[path] = KIF::UnreadableSprites.read(path)   # SDLError gets past rescue nil
       return @bitmaps[path]
     end
 

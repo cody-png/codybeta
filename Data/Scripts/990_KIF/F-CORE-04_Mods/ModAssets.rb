@@ -47,9 +47,11 @@ module KIF
         DIRS.each do |sub|
           base = File.join(dir, sub)
           next unless File.directory?(base)
-          Dir.glob(File.join(base, "**", "*")).each do |f|
+          # base: a mod folder named "Pack [v2]" isn't read as a pattern
+          Dir.glob(File.join("**", "*"), base: base).each do |r|
+            f = File.join(base, r)
             next unless File.file?(f)
-            rel = f[(dir.length + 1)..-1]
+            rel = File.join(sub, r)
             k = key_for(rel)
             files[k] = f.sub(%r{\A\./}, "") if k
           end

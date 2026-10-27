@@ -151,6 +151,33 @@ class PokeBattle_Scene
   end
 end
 
+# EBDX's scene (660/010) has its own send-outs and battle start, which never
+# reach PIF's two methods above: "All" sparkled only real shinies there.
+if defined?(PokeBattle_SceneEBDX)
+  class PokeBattle_SceneEBDX
+    alias kif_shiny_ebdx_startSceneAnimation startSceneAnimation unless method_defined?(:kif_shiny_ebdx_startSceneAnimation) || private_method_defined?(:kif_shiny_ebdx_startSceneAnimation)
+    alias kif_shiny_ebdx_pbSendOutBattlers pbSendOutBattlers unless method_defined?(:kif_shiny_ebdx_pbSendOutBattlers) || private_method_defined?(:kif_shiny_ebdx_pbSendOutBattlers)
+
+    def startSceneAnimation(*args)
+      ret = kif_shiny_ebdx_startSceneAnimation(*args)
+      kif_shiny_ebdx_all((0...@battle.sideSizes[1]).map { |i| 2 * i + 1 }) if @battle.wildBattle?
+      ret
+    end
+
+    def pbSendOutBattlers(sendOuts, startBattle = false)
+      kif_shiny_ebdx_pbSendOutBattlers(sendOuts, startBattle)
+      kif_shiny_ebdx_all(sendOuts.map { |s| s[0] })
+    end
+
+    # EBDX plays its real shinies' sparkle with errors ignored: the same here
+    def kif_shiny_ebdx_all(indices)
+      kif_shiny_anim_for_all(indices)
+    rescue => e
+      KIF.log("Shiny animation (EBDX) failed: #{e.message}")
+    end
+  end
+end
+
 #-------------------------------------------------------------------------------
 # Fusing: head/body colours and Shiny Fuse Dye
 #-------------------------------------------------------------------------------

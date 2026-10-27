@@ -58,7 +58,7 @@ module KIF
 
     # Classic KIF = KIF 0.20.7 as it was: features KIF never had, but that
     # default to On inside their module, are switched off
-    NEW_ON_BY_DEFAULT = [:mp_ebdx_enabled, :cody_effectiveness, :cody_fusionscreen, :cody_battleinfo]
+    NEW_ON_BY_DEFAULT = [:mp_ebdx_enabled, :cody_effectiveness, :cody_fusionscreen, :cody_battleinfo, :kif_mouse, :kif_battle_camera]
 
     def classic_only!
       NEW_ON_BY_DEFAULT.each do |key|
@@ -79,4 +79,19 @@ def find_newer_available_version
   ret = kif_fc_find_newer_available_version
   KIF::FirstChoice.ask
   return ret
+end
+
+# Before that choice every module is Off, Quality of Life (C-SYS-02's Skip
+# intro) included, so on a first start the opening movie played although
+# Options showed Skip intro: On (26 Oct test). Until the player has chosen,
+# the intro follows the Skip intro setting itself.
+class Scene_Intro
+  if method_defined?(:playIntroCinematic)
+    alias kif_fc_playIntroCinematic playIntroCinematic unless method_defined?(:kif_fc_playIntroCinematic)
+
+    def playIntroCinematic
+      return if KIF::FirstChoice.needed? && defined?(KIF::SkipIntro) && KIF::SkipIntro.on?
+      kif_fc_playIntroCinematic
+    end
+  end
 end

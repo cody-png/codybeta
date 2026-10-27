@@ -41,6 +41,9 @@ module KIF
     RECORD     = ".kif_installed"
     ASSETS     = ".installed_assets"
     SKIP       = %w[modpacks]
+    # authors' git/editor files inside a mod folder; a mod's own dotfile
+    # (pokedex_voice_over's vendor/.project-root) still installs
+    JUNK       = %w[.git .gitignore .gitattributes .gitkeep .keep .idea .vscode .claude .DS_Store Thumbs.db desktop.ini]
     CACHE_TIME = 600   # seconds a fetched list is reused
     # GitHub trees (by head commit) and mod.json texts (by blob sha) kept
     # between sessions in the save folder, so an unchanged catalog costs one
@@ -372,7 +375,7 @@ module KIF
       by_folder = {}
       files.each do |path, info|
         top, rest = path.split("/", 2)
-        next if rest.nil? || top.start_with?(".") || SKIP.include?(top)
+        next if rest.nil? || top.start_with?(".") || SKIP.include?(top) || rest.split("/").any? { |s| JUNK.include?(s) }
         (by_folder[top] ||= {})[rest] = info
       end
       out = []
@@ -436,9 +439,13 @@ module KIF
 
     def local_tree(dir)
       out = {}
-      Dir.glob(File.join(dir, "**", "*"), File::FNM_DOTMATCH).each do |p|
+      # base: keeps the folder out of the pattern: in a typed path like
+      # D:\Mods\Catalog the backslashes (and any [ ] { }) are glob syntax, so
+      # nothing was found (2026-10-22)
+      Dir.glob(File.join("**", "*"), File::FNM_DOTMATCH, base: dir).each do |rel|
+        p = File.join(dir, rel)
         next unless File.file?(p)
-        rel = p[(dir.length + 1)..-1].tr("\\", "/")
+        rel = rel.tr("\\", "/")
         next if rel.split("/").any? { |seg| seg == ".git" }
         out[rel] = [updater.sha_ok? ? updater.git_sha(p) : "", File.size(p)]
       end
@@ -452,25 +459,48 @@ module KIF
     #---------------------------------------------------------------------------
     # What is installed
     #---------------------------------------------------------------------------
-    # the installed copy's folder (by folder name, then by id), so an update
-    # lands on the copy the player has even when they renamed its folder
-    def folder_of(item)
-      own = File.join(mods_dir, item.folder)
-      return own if File.file?(File.join(own, "mod.json"))
-      c = installed_index[item.id]
-      return c ? File.join(mods_dir, c) : own
+    # Mods folders, the one whose copy loads first: the save folder's on a
+    # phone, as in KIF::Mods (a read-only game folder's mod is updated there)
+    def mod_dirs
+      return KIF::Mods.extra_folders + [mods_dir]
     end
 
-    # mod id => folder, read once (cleared on load and after an install)
+    # the installed copy's folder: the catalog's folder name when it holds
+    # this mod (the copy that loads), then the mod's id among mods that load,
+    # so an update lands on the copy the player has even when they renamed
+    # its folder, and never on a switched-Off or "_" copy of it beside the
+    # live one (a backup, a template). A folder name can hold another mod
+    # in the other Mods folder on a phone.
+    def folder_of(item)
+      d = mod_dirs.find do |x|
+        j = File.join(x, item.folder.to_s, "mod.json")
+        id = File.file?(j) ? (KIF::Mods.read_json(j) || {}).fetch("id", item.id) : nil
+        id.to_s == item.id
+      end
+      return File.join(d, item.folder) if d
+      c = installed_index[item.id]
+      return File.join((@installed_in || {})[item.id] || mods_dir, c) if c
+      return File.join(mod_dirs.first, item.folder)   # a new install: the save folder's Mods when the game folder is read-only
+    end
+
+    # mod id => folder of the mods that load, read once (cleared on load and
+    # after an install); also the save folder's Mods when the game folder is
+    # read-only (phones)
     def installed_index
       return @installed_index if @installed_index
       @installed_index = {}
-      return @installed_index unless File.directory?(mods_dir)
-      Dir.children(mods_dir).sort.each do |c|
-        j = File.join(mods_dir, c, "mod.json")
-        next unless File.file?(j)
-        id = ((KIF::Mods.read_json(j) || {})["id"] || c).to_s
-        @installed_index[id] ||= c
+      @installed_in = {}   # mod id => the Mods folder it is in (a folder name can be in both)
+      mod_dirs.each do |dir|
+        next unless File.directory?(dir)
+        Dir.children(dir).sort.each do |c|
+          next if c.start_with?(".", "_") || KIF::Mods::SKIP_DIRS.include?(c) || KIF::Mods.disabled.include?(c)
+          j = File.join(dir, c, "mod.json")
+          next unless File.file?(j)
+          id = ((KIF::Mods.read_json(j) || {})["id"] || c).to_s
+          next if @installed_index[id]
+          @installed_index[id] = c
+          @installed_in[id] = dir
+        end
       end
       return @installed_index
     end
@@ -557,8 +587,9 @@ module KIF
     end
 
     def installed_id?(id)
-      return false unless File.directory?(mods_dir)
-      return true if File.directory?(File.join(mods_dir, id))
+      dirs = ([mods_dir] + KIF::Mods.extra_folders).select { |d| File.directory?(d) }
+      return false if dirs.empty?
+      return true if dirs.any? { |d| File.directory?(File.join(d, id)) }
       return KIF::Mods.entries.any? { |e| e.id == id || e.name == id } rescue false
     end
 
@@ -716,6 +747,19 @@ module KIF
 
     def cat; return KIF::ModCatalog; end
 
+    # USE on a mod in Browse: Install / Update, Read description
+    def menu(item)
+      cmds = [_INTL("Read description"), _INTL("Cancel")]
+      if cat.update?(item)
+        cmds.unshift(_INTL("Update"))
+      elsif !cat.installed?(item)
+        cmds.unshift(_INTL("Install"))
+      end
+      cmd = pbMessage(KIF::PixelFont.utf8(item.name), cmds, cmds.length)
+      return if cmd < 0 || cmd == cmds.length - 1
+      cmd == cmds.length - 2 ? KIF::ModReadme.show_catalog(item) : install(item)
+    end
+
     def install(item)
       updating = cat.update?(item)
       if cat.installed?(item) && !updating
@@ -832,6 +876,13 @@ module KIF
       ups = cat.startup_updates
       return false if ups.empty?
       cat.log("updates at start-up: #{ups.map { |it| "#{it.id} #{it.version}" }.join(', ')}")
+      if by_hand?   # once per set of new versions
+        told = ups.map { |it| "#{it.id} #{it.version}" }.sort.join(";")
+        return false if KIF::Updater.stored_choices["phone_mods_told"] == told
+        KIF::Updater.store_choice("phone_mods_told", told)
+        phone_notice(ups)
+        return false
+      end
       q = ups.length == 1 ? _INTL("An update for 1 mod. Open Mods > Updates?") : _INTL("Updates for {1} mods. Open Mods > Updates?", ups.length)
       return false unless pbMessage(q, [_INTL("Yes"), _INTL("Later")], 2) == 0
       KIF::SettingsScreen.mods_view = KIF::SettingsScreen::VIEWS.index(:updates)
@@ -842,7 +893,20 @@ module KIF
       return false
     end
 
+    # A phone whose game folder can't be written (JoiPlay's usually can):
+    # nothing is downloaded or installed; the player is told what's new and
+    # updates mods by hand
+    def by_hand?
+      return KIF.mobile? && !KIF::Paths.game_writable?
+    end
+
+    def phone_notice(list)
+      pbMessage(KIF::PixelFont.utf8(_INTL("New mod versions: {1}.", list.map { |it| "#{it.name} #{it.version}" }.join(", "))))
+      pbMessage(_INTL("On phones, mods are installed and updated by hand: download the mod and put its folder in the Mods folder."))
+    end
+
     def run(list)
+      return phone_notice(list) if by_hand?
       done, failed, cancelled = cat.install(list)
       if cancelled
         pbMessage(_INTL("Stopped. Nothing half-downloaded was installed."))

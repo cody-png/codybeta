@@ -24,6 +24,8 @@
 #   co_ev    {id,e}                 host: what its battle scene showed
 #   co_cmd / co_act {id,d}          a turn: host asks, guest answers
 #   co_sw / co_swr  {id,d}          a replacement: host asks, guest answers
+#   co_skip  {id,d}                 host: stopped waiting for that turn or
+#                                   replacement (B, time up); its AI chose
 #   co_end   {id,d}                 host: result, the guest's party, Exp, catches
 #===============================================================================
 module KIF
@@ -41,11 +43,12 @@ module KIF
       "co_act"   => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
       "co_sw"    => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
       "co_swr"   => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
+      "co_skip"  => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
       "co_end"   => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
     }.each { |k, v| KIF::Net::TYPES[k] = v }
 
     HOST_TYPES  = %w[co_join co_no co_act co_swr]
-    GUEST_TYPES = %w[co_begin co_ev co_cmd co_sw co_end]
+    GUEST_TYPES = %w[co_begin co_ev co_cmd co_sw co_skip co_end]
 
     # seconds; tests shorten them
     @ask_wait   = 3.0    # host: the partner answers a battle start
@@ -126,6 +129,7 @@ module KIF
     # the row on the Multiplayer connected screen
     def self.menu_label
       return _INTL("Fight together: On") if on?
+      return _INTL("Fight together: {1} asked", partner) if @their && !@want
       return _INTL("Fight together: Asked") if @want
       return _INTL("Fight together: Off")
     end
@@ -138,7 +142,7 @@ module KIF
         return
       end
       pbMessage(_INTL("Fighting together: a battle either of you starts while the other is on the same map becomes a double battle. Each of you uses your own Pokémon."))
-      return unless pbConfirmMessage(_INTL("Ask {1} to fight together?", partner))
+      return unless pbConfirmMessage(@their ? _INTL("{1} asked to fight together. OK?", partner) : _INTL("Ask {1} to fight together?", partner))
       set_want(true)
       @notes << (on? ? _INTL("You now fight together with {1}.", partner) : _INTL("Asked {1}. They need to say yes.", partner))
     end
@@ -163,6 +167,7 @@ module KIF
         @their = msg["on"] == 1
         @ask_pact = @their && !@want
         @notes << _INTL("{1} stopped fighting together.", partner) if was && !@their && @want
+        @notes << _INTL("You now fight together with {1}.", partner) if !was && @their && @want   # the answer to this player's ask
         send_status if @their
       when "co_st" then @their_map = msg["map"]
       when "co_ask" then guest_ask(msg)
@@ -177,6 +182,13 @@ module KIF
     end
 
     def self.take_notes; n = @notes.dup; @notes.clear; n; end
+
+    # the other player's look (presence) when this battle is a co-op one, or nil
+    def self.partner_look(scene)
+      b = scene.instance_variable_get(:@battle) or return nil
+      return nil unless b.instance_variable_get(:@kif_coop) || (@guest && @guest.mirror.equal?(b))
+      return defined?(KIF::Presence) ? KIF::Presence.ghost&.look : nil
+    end
 
     #---------------------------------------------------------------------------
     # Guest: the partner's battle starts; join when this game is free
@@ -251,6 +263,7 @@ module KIF
       unless reply && reply[0] == "co_join"
         log("#{partner} didn't join (#{reply ? reply[1]['why'] : 'no answer'})")
         s.post("co_end", "id" => id, "d" => { "x" => "late" }) if !reply && session
+        pbMessage(_INTL("{1} didn't join this battle.", partner))   # instead of a silent wait, then a battle alone
         return nil
       end
       join = read_join(reply[1])
@@ -483,6 +496,34 @@ module KIF
         return out
       end
     end
+  end
+end
+
+# PIF's own battle scene draws a partner trainer from its trainer type's
+# picture (the other player showed as Red); a co-op partner is drawn as PIF
+# draws the player, in their own outfit (EBDX's scene draws both from types)
+class PokeBattle_Scene
+  alias kif_coop_pbCreateTrainerBackSprite pbCreateTrainerBackSprite unless method_defined?(:kif_coop_pbCreateTrainerBackSprite)
+
+  def pbCreateTrainerBackSprite(idxTrainer, trainerType, numTrainers = 1)
+    ret = kif_coop_pbCreateTrainerBackSprite(idxTrainer, trainerType, numTrainers)
+    kif_coop_partner_look(idxTrainer)
+    return ret
+  end
+
+  def kif_coop_partner_look(idx)
+    return unless idx == 1 && (look = KIF::Coop.partner_look(self))
+    sp = @sprites["player_2"] or return
+    ab = generate_front_trainer_sprite_bitmap(false, nil, look["clothes"], look["hat"], look["hat2"], look["hair"],
+                                              look["skin"], look["hc"], look["tc"], look["cc"], look["t2c"], false)
+    return unless ab && ab.bitmap
+    sp.setBitmapDirectly(ab)   # an AnimatedBitmap, as the player's own sprite takes it
+    w, h = sp.bitmap.width, sp.bitmap.height
+    sp.src_rect = Rect.new(0, 0, w, h)
+    sp.ox = w / 2
+    sp.oy = h
+  rescue StandardError => e
+    KIF::Coop.log("partner drawn from the trainer type (#{e.class}: #{e.message})")
   end
 end
 

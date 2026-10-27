@@ -235,25 +235,68 @@ module KIF
         Input.update
       end
 
-      # true once the block is; false: time up, B pressed, or the line is gone
-      def wait(secs, label)
+      WHY = { back: "B pressed", time: "time up", lost: "connection lost" }
+
+      # true once the block is; else why not: :back (B, then Yes), :time or :lost
+      def wait(secs)
         t0 = KIF::Net.now
-        shown = false
+        shown = nil   # when the hint went up
+        left = nil
         loop do
           KIF::Net.update if KIF::Net.session.equal?(@s)
           return true if yield
-          return false unless connected?
-          return false if KIF::Net.now - t0 > secs
-          if label && !shown && KIF::Net.now - t0 > 0.3
-            shown = true
-            (quietly { @battle.pbDisplayBrief(label) } rescue nil)
+          return :lost unless connected?
+          now = KIF::Net.now
+          return :time if now - t0 > secs
+          if now - t0 > 0.3 && left != (secs - (now - t0)).ceil
+            left = (secs - (now - t0)).ceil
+            hint(wait_text(left), shown)
+            shown ||= now
           end
           frame
-          return false if Input.trigger?(Input::BACK)
+          # B counts once the hint has been up 1 s (a B for this player's own menu doesn't carry over)
+          next unless shown && now - shown >= 1.0 && Input.trigger?(Input::BACK)
+          if let_game_choose?
+            KIF::Net.update if KIF::Net.session.equal?(@s)
+            return yield ? true : :back   # their choice came while the question was up: it's used
+          end
+          left = shown = nil   # the hint again
         end
       end
 
-      def wait_text; _INTL("Waiting for {1}... ({2}: the game picks)", @name, KIF::Keys.name(Input::BACK)); end
+      # the hint; then only its text changes, once a second (no retyping)
+      def hint(text, again)
+        w = again && (@battle.scene.instance_variable_get(:@sprites) rescue nil)&.[]("messageWindow")
+        if w.respond_to?(:letterbyletter=) && w.respond_to?(:text=)
+          lbl = w.letterbyletter
+          w.letterbyletter = false
+          w.text = text
+          w.letterbyletter = lbl
+        else
+          (quietly { @battle.pbDisplayBrief(text) } rescue nil)
+        end
+      end
+
+      def let_game_choose?
+        q = _INTL("Let the game choose for {1} this turn?", @name)
+        return (quietly { @battle.scene.pbShowCommands(q, [_INTL("No"), _INTL("Yes")], 0) } rescue 0) == 1
+      end
+
+      # the button a controller player presses, else the bound key
+      def back_name
+        return "B" if (defined?(Input::Controller) && Input::Controller.connected? rescue false)
+        return KIF::Keys.name(Input::BACK)
+      end
+
+      def wait_text(left)
+        _INTL("Waiting for {1} to choose... ({2} s)\n{3}: let the game choose for {1}", @name, left, back_name)
+      end
+
+      # the partner's game is told it was chosen for (its menu closes); the reason is logged
+      def gave_up(why, what, d)
+        KIF::Coop.log("no choice from #{@name} for #{what} (#{WHY[why]})")
+        post("co_skip", "d" => d) if why != :lost
+      end
 
       #-------------------------------------------------------------------------
       # Turns
@@ -309,8 +352,9 @@ module KIF
         return if @pending.empty?
         if connected? && !@auto
           flush
-          unless wait(KIF::Coop.cmd_wait, wait_text) { collect }
-            KIF::Coop.log("no choice from #{@name} for turn #{@turn}") unless @lost
+          why = wait(KIF::Coop.cmd_wait) { collect }
+          if why != true
+            @pending.each_key { |i| gave_up(why, "turn #{@turn}", { "b" => i, "t" => @pending[i] }) unless @answers[i] }
           end
         end
         @pending.each_key do |i|
@@ -402,7 +446,7 @@ module KIF
         n = @swn
         post("co_sw", "d" => { "b" => idx, "n" => n, "c" => cancel ? 1 : 0, "ord" => order, "pt" => party_state })
         ans = nil
-        got = wait(KIF::Coop.sw_wait, wait_text) do
+        got = wait(KIF::Coop.sw_wait) do
           while (r = KIF::Coop.take_host(@id, ["co_swr", "co_act"]))
             if r[0] == "co_act"
               @auto = true if r[1]["d"]["b"] == -1
@@ -412,7 +456,8 @@ module KIF
           end
           ans || @auto
         end
-        return nil unless got && ans
+        gave_up(got, "a replacement", { "b" => idx, "n" => n }) if got != true
+        return nil unless got == true && ans
         p = ans["p"]
         return -1 if cancel && p == -1
         return nil unless p.is_a?(Integer) && p >= 0 && slot?(start + p)

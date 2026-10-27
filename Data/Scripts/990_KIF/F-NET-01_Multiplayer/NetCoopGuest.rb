@@ -41,6 +41,23 @@ module KIF
       def feed(type, msg); @box << [type, msg] if msg.is_a?(Hash) && msg["id"] == @id; end
       def lost; @lost = true; end
       def lost?; @lost || !@s.connected?; end
+      def session; @s; end
+
+      # the host stopped waiting for this request (co_cmd or co_sw): its AI chose
+      def skipped?(req); !skip_at(req).nil?; end
+
+      def skip_at(req)
+        @box.index { |t, m| t == "co_skip" && m["d"].is_a?(Hash) && %w[b t n].all? { |k| m["d"][k] == req[k] } }
+      end
+
+      # true (and the note taken) when the host chose for this request
+      def take_skip(req)
+        KIF::Net.update if KIF::Net.session.equal?(@s)   # a Bag or party screen doesn't read the line
+        i = skip_at(req) or return false
+        @box.delete_at(i)
+        @view.message(_INTL("{1}'s game chose for you this turn.", @host_name))
+        return true
+      end
       def started!; @started = true; end
 
       def int(v, lo, hi, d = nil); Mon.int(v, lo, hi, d); end
@@ -92,6 +109,7 @@ module KIF
         when "co_ev"    then (msg["e"] || []).each { |ev| @view.show(ev) if ev.is_a?(Array) }
         when "co_cmd"   then answer_command(msg["d"])
         when "co_sw"    then answer_switch(msg["d"])
+        when "co_skip"  then @view.message(_INTL("{1}'s game chose for you this turn.", @host_name))   # this player's pick came too late
         when "co_end"   then finish(msg["d"])
         end
       end
@@ -282,6 +300,7 @@ module KIF
           sync_moves(b, d["mv"])
           a = @view.command(mi, d) unless KIF::Coop.auto_battle?
         end
+        return if take_skip(d)   # nothing to send: the host went on
         if a && a["a"] == "item"
           @picked[a["i"]] += 1
           @balls += 1 if (GameData::Item.get(a["i"].to_sym).is_poke_ball? rescue false)
@@ -299,6 +318,7 @@ module KIF
           sync_party(d)
           p = @view.replacement(mi, d) || -2
         end
+        return if take_skip(d)
         @s.post("co_swr", "id" => @id, "d" => { "n" => d["n"], "p" => p })
         @view.waiting
       end
@@ -310,6 +330,7 @@ module KIF
         @done = true
         d = {} unless d.is_a?(Hash)
         @decision = int(d["dc"], 0, 5, 0)
+        KIF::Coop.log("#{@host_name}'s battle #{@id} over (#{d['x'] ? Mon.name(d['x']) : @decision})")   # the host logs its own end
         @can_lose = d["cl"] == 1
         if d["x"] || !@begun
           @aborted = true
@@ -495,7 +516,12 @@ module KIF
       end
 
       def make_scene; @scene ||= pbNewBattleScene; end
-      def start; @scene.pbStartBattle(@g.mirror); end
+
+      def start
+        @scene.extend(MenuWatch) unless @scene.is_a?(MenuWatch)
+        @scene.instance_variable_set(:@kif_coop_view, self)
+        @scene.pbStartBattle(@g.mirror)
+      end
       def finish(decision); call(:pbEndBattle, decision); end
       def waiting; call(:pbDisplayMessage, _INTL("Waiting for {1}...", @g.host_name), true); end
       def message(t); call(:pbDisplayPausedMessage, t); end
@@ -531,14 +557,33 @@ module KIF
         call(:pbShowAbilitySplash, *args)
       end
 
-      # the host's text calls this player's Pokémon "the ally ..."; here they're this player's own
+      # The host's text, worded for this player: the host calls this player's
+      # Pokémon "the ally ..." and its own by name; here it's the other way
+      # round, and the send-out line names the host as the trainer.
       def mine(t)
         t = Mon.text(t)
-        @g.mirror&.battlers&.each do |b|
-          next unless b && b.index.even? && @g.own_pk?(b.pokemon)
-          t = t.gsub(_INTL("The ally {1}", b.name), b.name).gsub(_INTL("the ally {1}", b.name), b.name)
-        end
-        return t
+        m = @g.mirror or return t
+        own, host = m.battlers.select { |b| b && b.index.even? }.partition { |b| @g.own_pk?(b.pokemon) }.map { |l| l.map(&:name) }
+        return sent_out(t, own, host) || t.split("\n", -1).map { |line| ally_line(line, own, host) }.join("\n")
+      end
+
+      # "<this player> sent out A!\nGo! B!" -> "<host> sent out B!\nGo! A!", or nil
+      def sent_out(t, own, host)
+        a, b = t.split("\n")
+        return nil unless own.length == 1 && host.length == 1 && t.count("\n") == 1 && b == _INTL("Go! {1}!", host[0])
+        pat = Regexp.escape(_INTL("{1} sent out {2}!", "KIFAAA", "KIFBBB")).sub("KIFAAA", ".+").sub("KIFBBB") { Regexp.escape(own[0]) }
+        return nil unless a =~ /\A#{pat}\z/
+        who = (@g.mirror.player[1].full_name rescue @g.host_name)
+        return _INTL("{1} sent out {2}!", who, host[0]) + "\n" + _INTL("Go! {1}!", own[0])
+      end
+
+      # (one pass at the start, so a host's and this player's Pokémon with the same name stay apart)
+      def ally_line(line, own, host)
+        own.each { |x| line = line.gsub(_INTL("the ally {1}", x), x) }
+        n = own.find { |x| line.start_with?(_INTL("The ally {1}", x)) }
+        return n + line[_INTL("The ally {1}", n).length..-1] if n
+        n = host.find { |x| line =~ /\A#{Regexp.escape(x)}[ ']/ }   # "Squirtle used", "Squirtle's" (not "Squirtle, come back!")
+        return n ? _INTL("The ally {1}", n) + line[n.length..-1] : line
       end
 
       def show(ev)
@@ -600,8 +645,44 @@ module KIF
 
       #-------------------------------------------------------------------------
       # This player's choices, on this game's menus. nil: the host's AI picks.
+      # While a menu is up the line is read each frame (MenuWatch): an invite
+      # is answered "busy", and when the host chose for this request the
+      # command menu closes.
       #-------------------------------------------------------------------------
-      def command(mi, req)
+      def menu(req)
+        @asking = req
+        cw = catch(:kif_coop_skip) { return yield }
+        @asking = nil   # before the hide animation's own frames
+        cw.hidePlay if cw.respond_to?(:hidePlay)   # EBDX's command window slides out
+        call(:pbSelectBattler, -1)
+        return nil
+      ensure
+        @asking = nil
+      end
+
+      # each frame of this game's battle scene (MenuWatch)
+      def menu_frame(cw)
+        req = @asking
+        return unless req && !@polling
+        begin
+          @polling = true
+          KIF::Net.update if KIF::Net.session.equal?(@g.session)
+        ensure
+          @polling = false
+        end
+        throw :kif_coop_skip, cw if command_window?(cw) && (@g.skipped?(req) || @g.lost?)
+      end
+
+      # only the command menu closes early: a fight, Bag or party screen ends as usual (then the note shows)
+      def command_window?(cw)
+        return false unless cw
+        sp = @scene.instance_variable_get(:@sprites)
+        return cw.equal?(@scene.instance_variable_get(:@commandWindow)) || (sp.respond_to?(:[]) && cw.equal?(sp["commandWindow"]))
+      end
+
+      def command(mi, req); menu(req) { pick_command(mi, req) }; end
+
+      def pick_command(mi, req)
         m = @g.mirror
         b = m.battlers[mi]
         200.times do
@@ -714,9 +795,18 @@ module KIF
       end
 
       def replacement(mi, req)
-        p = party(mi, req["c"] == 1)
+        p = menu(req) { party(mi, req["c"] == 1) }
         return p if p
         return req["c"] == 1 ? -1 : -2
+      end
+    end
+
+    # on the partner's battle scene object only (SceneView#start)
+    module MenuWatch
+      def pbUpdate(*args)
+        super
+        v = @kif_coop_view
+        v.menu_frame(args[0]) if v
       end
     end
 

@@ -17,7 +17,8 @@
 #            last pr_at ([x, y], or [x, y, 1] for a jump). Sent when something
 #            changed, at most 4 times a second (sooner only on a map change or
 #            after 24 tiles), nothing while standing still.
-#   pr_look  my outfit ids and colours: on connect and when they change.
+#   pr_look  my outfit ids and colours: on connect and when they change;
+#            again with a map change's pr_at and every 30 s of moving.
 # Outfit ids from the other game only ever name a file inside PIF's outfit
 # folders (letters, digits, _ - and spaces), so a peer can't point at
 # another file.
@@ -33,6 +34,7 @@ module KIF
     LOW        = %w[surf dive fish]   # drawn 16 px lower, as PIF draws the player
     SEND_EVERY = 0.25    # seconds between pr_at while something changes
     MAX_PATH   = 24
+    LOOK_AGAIN = 30.0    # seconds: the look goes again with a pr_at (and with every map change)
     HURRY_AT   = 2       # steps queued: walk one speed faster
     SNAP_AT    = 16      # steps queued: appear at the newest place
     MAX_PEERS  = 2       # partners drawn at once (2 or 3 players, never 4)
@@ -110,8 +112,10 @@ module KIF
         out = []
         if look && look != @look_sent
           @look_sent = look
+          @look_due = now + LOOK_AGAIN
           out << ["pr_look", look]
         end
+        sent_look = !out.empty?
         prev = @cur
         @cur = st
         if prev && prev.m != st.m
@@ -123,6 +127,12 @@ module KIF
         new_map = @sent.nil? || @sent.m != st.m
         return out unless new_map || !@path.empty? || changed?(@sent, st)
         return out unless new_map || now >= @next_at || @path.length >= MAX_PATH
+        # the same look again with a new map's place, or after LOOK_AGAIN s: one
+        # that didn't land is put right (the other game skips an unchanged look)
+        if look && !sent_look && (new_map || now >= @look_due)
+          @look_due = now + LOOK_AGAIN
+          out << ["pr_look", look]
+        end
         out << ["pr_at", at(st)]
         @path = []
         @sent = st

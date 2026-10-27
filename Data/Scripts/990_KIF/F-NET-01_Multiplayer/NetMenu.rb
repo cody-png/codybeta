@@ -10,6 +10,8 @@
 # "Send hello" (the partner sees "<name> says hello!").
 #===============================================================================
 KIF::Options.define(:kif_multiplayer, 0, :global)   # 0 Off, 1 On
+KIF::Options.define(:kif_mp_open_port, 0, :global)  # the port the player opened in the router by hand (0: none)
+KIF::Options.define(:kif_mp_public_ip, "", :global) # their public address, typed when the router doesn't tell it
 
 KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (015_KIF_SettingsData)
   next nil if KIF.mobile?
@@ -229,8 +231,20 @@ module KIF
       return JoinCode.make(:v6, ip: ip, port: @session.port, secret: @session.secret)
     end
 
+    # "I opened port N myself" was picked for the port this game hosts on
+    def self.opened_by_hand?
+      s = @session
+      return s && s.via == :direct && ($PokemonSystem.kif_mp_open_port rescue 0).to_i == s.port ? true : false
+    end
+
+    # the public address the player typed (checked again: settings can be old)
+    def self.typed_address
+      a = ($PokemonSystem.kif_mp_public_ip rescue "").to_s
+      return PortMap.public_ip?(a) ? a : nil
+    end
+
     # The code to send: through the router when it's open (or opened by
-    # hand: the external address is known), else for this network only
+    # hand: the external address is known, or typed), else for this network only
     def self.code
       s = @session or return nil
       return JoinCode.make(:relay, room: s.room, secret: s.secret) if s.via == :relay
@@ -240,6 +254,8 @@ module KIF
         return JoinCode.make(:v4, ip: ext, port: @pm[:external_port], secret: s.secret)
       elsif @pm[:status] == :closed && PortMap.ip_kind(ext) == :public
         return JoinCode.make(:v4, ip: ext, port: s.port, secret: s.secret)
+      elsif @pm[:status] == :closed && opened_by_hand? && (a = typed_address)
+        return JoinCode.make(a.include?(":") ? :v6 : :v4, ip: a, port: s.port, secret: s.secret)
       end
       return lan_code
     end
@@ -264,7 +280,23 @@ module KIF
       HEAD_H = 128
       HELP_H = 96
 
+      @open = []      # screens on view (nested: Soul Link's list over the connected screen)
+      @hushed = 0     # message windows up
+
+      # PIF's message box is see-through: the help text under it is hidden
+      # while one is up (pbCreateMessageWindow / pbDisposeMessageWindow below)
+      def self.hush(n)
+        @hushed = [@hushed + n, 0].max
+        @open.each { |s| s.help_visible = @hushed == 0 }
+      end
+
+      def self.opened(scr); @hushed = 0 if @open.empty?; @open << scr; end
+      def self.closed(scr); @open.delete(scr); end
+
+      attr_accessor :start_at   # the row a new list starts on (-1: the last); used once
+
       def initialize(list = Window_CommandPokemon)   # Soul Link lists pass a window with columns
+        Screen.opened(self)
         @vp = Viewport.new(0, 0, Graphics.width, Graphics.height)
         @vp.z = 99_999   # same z as the pause menu and PIF's map name box, made later: drawn over them; messages made later go on top
         @head = Window_UnformattedTextPokemon.newWithSize("", 0, 0, Graphics.width, HEAD_H, @vp)
@@ -287,9 +319,12 @@ module KIF
         @help.text = help if @help.text != help
         return if cmds == @cmds
         @cmd.commands = cmds   # a new list starts at the top
-        @cmd.index = 0
+        @cmd.index = @start_at ? @start_at % cmds.length : 0
+        @start_at = nil
         @cmds = cmds.dup
       end
+
+      def help_visible=(v); @help.visible = v unless @help.disposed?; end
 
       # one frame: the chosen row, -1 for Back, or nil
       def frame
@@ -310,6 +345,7 @@ module KIF
       end
 
       def dispose
+        Screen.closed(self)
         [@head, @cmd, @help].each(&:dispose)
         @vp.dispose
       end
@@ -408,26 +444,35 @@ module KIF
           pm = Net.pm
           relay = s.via == :relay
           code = Net.code
+          by_hand = !relay && pm && pm[:status] == :closed && Net.opened_by_hand?
+          no_address = by_hand && Net.lan_only?   # the router doesn't tell it and none was typed
           # a relay code (41 characters) doesn't fit on one line: Copy / Show
           lines = [_INTL("Host a game"), _INTL("Your code: {1}", relay ? _INTL("ready (Copy or Show)") : code || "...")]
           if relay
             lines << _INTL("Relay: {1}", s.relay.join(":"))
             lines << (s.state == :connecting ? _INTL("Connecting to the relay...") : _INTL("Friend joined: Not yet"))
           else
-            lines << _INTL("Port: {1}    Router port: {2}", s.port, router_text(pm))
+            lines << _INTL("Port: {1}    Router port: {2}", s.port, by_hand ? _INTL("Opened by you") : router_text(pm))
           end
           cmds = []
           acts = []
           add = proc { |text, act| cmds << text; acts << act }
-          if relay || pm.nil? || pm[:status] == :open
+          if relay || pm.nil? || pm[:status] == :open || by_hand
             lines << _INTL("Friend joined: Not yet") if !relay && pm
             help = if !relay && pm.nil? then _INTL("Opening your router...\nThis takes a few seconds.")
+                   elsif no_address then _INTL("Your router doesn't tell the game your public address. Type it so your code holds it.")
                    elsif copied then _INTL("Code copied. Waiting for them to join...")
                    else _INTL("Ready. Send this code to your friend.\nWaiting for them to join...")
                    end
-            if code
+            if code && !no_address
               add.call(_INTL("Copy code"), :copy)
               add.call(_INTL("Show code bigger"), :big)
+            end
+            if by_hand
+              if PortMap.ip_kind(pm[:external_ip]) != :public
+                add.call(no_address ? _INTL("Type your public address") : _INTL("Change your public address"), :address)
+              end
+              add.call(_INTL("Port {1} isn't open after all", s.port), :not_by_hand)
             end
           elsif pm[:status] == :shared
             help = if PortMap.ip_kind(pm[:external_ip]) == :private
@@ -443,6 +488,7 @@ module KIF
             help = _INTL("Your router didn't let the game open a door for your friend, so they can't reach you yet.")
             add.call(_INTL("Ask your friend to host instead"), :swap)
             add.call(_INTL("Open port {1} yourself (how?)", s.port), :how)
+            add.call(_INTL("I opened port {1} myself", s.port), :by_hand)
             add.call(_INTL("Use a relay"), :relay)
             add.call(Net.lan_only? ? _INTL("Copy code for this network") : _INTL("Copy code"), :copy) if code
           end
@@ -461,6 +507,12 @@ module KIF
           when :big
             pbMessage(_INTL("Your code:\n{1}", code))
           when :how then how_to_open(s.port)
+          when :by_hand
+            next unless pbConfirmMessage(_INTL("Is port {1} (TCP) forwarded to this PC in your router? The game remembers it.", s.port))
+            $PokemonSystem.kif_mp_open_port = s.port
+            ask_address if PortMap.ip_kind(pm[:external_ip]) != :public && !Net.typed_address   # once
+          when :address then ask_address
+          when :not_by_hand then $PokemonSystem.kif_mp_open_port = 0
           when :swap
             next unless pbConfirmMessage(_INTL("Stop hosting and join with your friend's code instead?"))
             Net.stop
@@ -471,21 +523,28 @@ module KIF
           when :stop
             next unless pbConfirmMessage(_INTL("Stop hosting?"))
             Net.stop
+            @scr.start_at = -1   # the menu opens on Back: one more A doesn't host again
             return
           end
         end
       end
 
+      # short lines, three boxes (it was seven presses to read)
       def how_to_open(port)
         local = PortMap.local_ip || "?"
         gw = PortMap.gateway_guess(local) || "192.168.1.1"
-        pbMessage(_INTL("1. Open your router's page in a browser (often {1}, on its sticker).\n2. Find \"Port forwarding\".", gw))
-        pbMessage(_INTL("3. Add: port {1}, TCP, to this PC: {2}.\n4. Save, then host again.", port, local))
-        if Net.lan_only?   # no router answered: nothing can see the port is open, or the public address
-          pbMessage(_INTL("Your router doesn't tell the game your public address, so your friend picks Join by address, types your public address (search \"what is my IP\" in a browser), then your code."))
-        else
-          pbMessage(_INTL("Do this once. Your code already holds your public address."))
-        end
+        pbMessage(_INTL("Open your router's page in a browser,\noften {1} (see its sticker).", gw))
+        pbMessage(_INTL("Find Port forwarding and add port {1},\nTCP, to this PC: {2}.", port, local))
+        pbMessage(_INTL("Save it there, then pick\n\"I opened port {1} myself\".", port))
+      end
+
+      # the public address for the code when the router doesn't tell it (kept; checked)
+      def ask_address
+        t = pbMessageFreeText(_INTL("Your public address (search \"what is my IP\" in a browser):"),
+                              ($PokemonSystem.kif_mp_public_ip rescue "").to_s, false, 45)
+        return if t.nil? || t.strip.empty?
+        return $PokemonSystem.kif_mp_public_ip = t.strip if PortMap.public_ip?(t.strip)
+        pbMessage(_INTL("That isn't a public address. It looks like 100.101.102.103 (from \"what is my IP\"), not 192.168..."))
       end
 
       #-------------------------------------------------------------------------
@@ -496,7 +555,7 @@ module KIF
         loop do
           lines = _INTL("Use a relay\nBoth of you use the same address.\n{1}", text.empty? ? "_" : text)
           r = pick(lines, [_INTL("Type the address"), _INTL("Paste"), _INTL("Connect"), _INTL("Back")],
-                   _INTL("A relay is a PC run by someone else that passes messages between you. KIF has none built in."))
+                   _INTL("A relay is someone else's PC that\npasses on your messages. KIF has none."))   # two short lines: the box shows two
           case r
           when 0 then text = (pbMessageFreeText(_INTL("Relay address:"), text, false, 80) || text).strip
           when 1 then text = (Input.clipboard.to_s rescue "").strip[0, 80]
@@ -670,6 +729,21 @@ module KIF
       end
     end
   end
+end
+
+# a message box hides the help text of a Multiplayer screen under it (Screen.hush)
+alias kif_net_pbCreateMessageWindow pbCreateMessageWindow unless defined?(kif_net_pbCreateMessageWindow)
+alias kif_net_pbDisposeMessageWindow pbDisposeMessageWindow unless defined?(kif_net_pbDisposeMessageWindow)
+
+def pbCreateMessageWindow(*args)
+  KIF::Net::Screen.hush(1)
+  return kif_net_pbCreateMessageWindow(*args)
+end
+
+def pbDisposeMessageWindow(*args)
+  return kif_net_pbDisposeMessageWindow(*args)
+ensure
+  KIF::Net::Screen.hush(-1)
 end
 
 KIF::PauseMenu.add(:kif_multiplayer, "Multiplayer", icon: "menuIcons/PLAYER", order: 60,

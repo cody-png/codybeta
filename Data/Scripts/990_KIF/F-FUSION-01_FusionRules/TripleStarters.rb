@@ -49,8 +49,29 @@ module KIF
              [0, ind + 1, []]]
       list.insert(j, *add.map { |code, indent, params| RPG::EventCommand.new(code, indent, params) })
     end
+
+    # puts PIF's two choices back (the module was turned Off)
+    def self.unpatch(ces)
+      ce = ces.is_a?(Array) && ces.compact.find { |c| c.respond_to?(:list) && c.name.to_s == "starter set selection" }
+      list = ce && ce.list
+      i = list && list.index { |c| c.code == 102 && c.parameters[0] == CHOICES + [LABEL] }
+      return unless i
+      ind = list[i].indent
+      j = (i + 1...list.length).find { |k| list[k].code == 402 && list[k].indent == ind && list[k].parameters == [2, LABEL] }
+      k = j && (j + 1...list.length).find { |n| list[n].indent <= ind }
+      return unless k
+      list.slice!(j...k)
+      list[i].parameters[0] = CHOICES.dup
+    end
   end
 end
+
+# load_data only patches while the module is on, and the common events are
+# loaded at start-up: follow the module being turned on or off later
+# (Options > Modules, an old save's first start)
+KIF::Modules.watch(:pokemon) { |on|
+  on ? KIF::TripleStarters.patch($data_common_events) : KIF::TripleStarters.unpatch($data_common_events)
+} if defined?(KIF::Modules)
 
 alias kif_ts_load_data load_data unless defined?(kif_ts_load_data)
 

@@ -1,7 +1,7 @@
 #===============================================================================
 # SCOPE-02 – Triple fusions by number (2026-10-26)
 #   PIF reads every species number above NB_POKEMON as a two-part fusion, so
-#   GameData::Species.get(1000006) (Venustoizard) crashed, and so did
+#   GameData::Species.get(1000006) (Venustoizard) crashed (try_get too), as did
 #   Pokemon.new, pbAddPokemonID and PBSpecies.getName with that number. Oak's
 #   lab (map 659) gives the custom starter by number, so a triple fusion
 #   starter could not work. Triple fusions have their own numbers from
@@ -19,6 +19,13 @@ module GameData
       def get(other)
         return self::DATA[other] if other.is_a?(Integer) && other >= Settings::ZAPMOLCUNO_NB && self::DATA.has_key?(other)
         return kif_ts_get(other)
+      end
+
+      alias kif_ts_try_get try_get unless method_defined?(:kif_ts_try_get) || private_method_defined?(:kif_ts_try_get)
+
+      def try_get(other)
+        return self::DATA[other] if other.is_a?(Integer) && other >= Settings::ZAPMOLCUNO_NB && self::DATA.has_key?(other)
+        return kif_ts_try_get(other)
       end
     end
   end

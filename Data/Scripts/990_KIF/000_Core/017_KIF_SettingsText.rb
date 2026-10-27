@@ -263,6 +263,10 @@ module KIF
         "Pokémon use their small icons.",
         "Party and other screens use the full battle sprite as the icon (PC boxes keep small icons).",
         "Every icon, PC boxes included, uses the full battle sprite."],
+      "Map Zoom" => [
+        "The overworld at its normal size.",
+        "Zooms the overworld out (map pixels at 1.5x): you see more of the map around you. Menus and text keep their size.",
+        "Zooms the overworld out further (map pixels at 1x): about four times as much map. Menus and text keep their size."],
       "Summary IVs/EVs" => [
         "The Skills page shows stats only.",
         "The Skills page also shows IVs, EVs and base stats."],

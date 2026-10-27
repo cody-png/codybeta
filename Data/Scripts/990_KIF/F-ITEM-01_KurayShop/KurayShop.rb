@@ -67,7 +67,9 @@ module KIF
       # Celadon Prize Corner TMs (still in the Prize Corner too)
       [[:TM, :HYPERBEAM], 15000, 7500], [[:TM, :FLAMETHROWER], 15000, 7500],
       [[:TM, :ICEBEAM], 15000, 7500], [[:TM, :THUNDERBOLT], 15000, 7500],
-      [:FOCUSSASH, 6000, 3000], [:FLAMEORB, 6000, 3000], [:TOXICORB, 6000, 3000],
+      [:FOCUSSASH, 6000, 3000],
+      # Cody, 2026-10-27: Guts and the KIF-ER status abilities are strong
+      [:FLAMEORB, 100000, 3000], [:TOXICORB, 100000, 3000],
       [:LIFEORB, 6000, 3000],
       [:DEEPSEASCALE, 10000, 1000],
       [:RAGECANDYBAR, 10000, 0, true], [:RARECANDY, 10000, 0, true],

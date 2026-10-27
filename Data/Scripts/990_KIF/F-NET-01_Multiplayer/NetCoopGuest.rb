@@ -220,6 +220,9 @@ module KIF
         host = trainer_from(d["ht"]) or return false
         host.trainer_type = Mon.partner_type(d["ht"]["ty"])
         host.party = host_party
+        host.define_singleton_method(:full_name) { name }   # "Monto sent out ...", not with a trainer class
+        t = d["tev"]
+        @tev = t if t.is_a?(Array) && t.length == 2 && t.all? { |x| x.is_a?(Integer) && x.between?(1, 99_999) }
         opp = nil
         unless wild
           return false unless d["ft"].is_a?(Array) && d["ft"].length.between?(1, 3)
@@ -446,6 +449,25 @@ module KIF
         money
         store_catches(d["c"])
         use_items(d["it"])
+        trainer_beaten if @decision == 1 && @tev
+      end
+
+      # won together: the trainer is beaten on this save too, when this game has
+      # that trainer (the same map and event, a trainer battle whose page turns
+      # on self switch A, as PIF's trainers do)
+      def trainer_beaten
+        map, ev = @tev
+        return unless $game_map && $game_map.map_id == map && $game_self_switches
+        e = $game_map.events[ev] or return
+        pages = e.instance_variable_get(:@event).pages rescue []
+        trainer = pages.any? { |pg| pg.list.any? { |c| c.parameters.any? { |x| x.is_a?(String) && x.include?("TrainerBattle") } } }
+        after = pages.any? { |pg| pg.condition.self_switch_valid && pg.condition.self_switch_ch == "A" }
+        return unless trainer && after
+        $game_self_switches[[map, ev, "A"]] = true
+        $game_map.need_refresh = true
+        KIF::Coop.log("#{@host_name}'s trainer (event #{ev}) beaten here too")
+      rescue StandardError => e
+        KIF::Coop.log("trainer not marked beaten (#{e.class}: #{e.message})")
       end
 
       def apply_final(pt)

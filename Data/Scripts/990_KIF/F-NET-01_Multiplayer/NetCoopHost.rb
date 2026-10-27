@@ -76,8 +76,17 @@ module KIF
       return n
     end
 
+    # a random wild encounter while fighting together on one map: two foes (2v2)
+    def self.co_double?
+      return false unless may_host? && @their_map && $game_map && @their_map == $game_map.map_id
+      return !(pbInSafari? rescue false) && !$PokemonTemp.forceSingleBattle
+    end
+
     def self.host_battle(kind, nfoes)
       join = invite(kind)
+      if !join && kind == :wild && nfoes == 2 && ($Trainer.able_pokemon_count rescue 2) <= 1 && !$PokemonTemp.battleRules["size"]
+        setBattleRule("1v2")   # two foes for a pair, the partner didn't come: one Pokémon here
+      end
       return yield unless join
       s = session
       return yield unless s
@@ -111,6 +120,9 @@ module KIF
         foes = battle.pbParty(1).count { |p| p && p.able? }
         battle.setBattleMode(battle.trainerBattle? && foes >= 2 ? "double" : "2v1")
       end
+      # the partner is named plainly ("Monto sent out ..."), not with a trainer class
+      ally = battle.player[1]
+      ally.define_singleton_method(:full_name) { name } if ally
       h.attach(battle)
     end
 
@@ -251,6 +263,14 @@ module KIF
 
       def disp(p); p ? KIF::Coop::Mon.dump(p) : nil; end
 
+      # a trainer battle an event started here: [map id, event id], or nil
+      def trainer_event
+        return nil unless @battle.trainerBattle? && $game_map
+        i = (pbMapInterpreter rescue nil)
+        ev = i && i.running? ? i.instance_variable_get(:@event_id).to_i : 0
+        return ev > 0 ? [$game_map.map_id, ev] : nil
+      end
+
       def trainer_h(t); { "n" => t.name.to_s[0, 24], "ty" => t.trainer_type.to_s[0, 48] }; end
 
       # the battle scene starts: everything the partner's game needs to show it
@@ -267,6 +287,8 @@ module KIF
         d["lo"] = 1 if guest_party.any? { |p| p&.instance_variable_get(:@kif_coop_lost) }   # the partner is told why
         m = ($game_system.getPlayingBGM rescue nil)   # the battle's music (gym leader, rival...), for the partner's game
         d["bgm"] = [m.name.to_s[0, 80], m.volume.to_i, m.pitch.to_i] if m && !m.name.to_s.empty?
+        ev = trainer_event
+        d["tev"] = ev if ev
         post("co_begin", "d" => d)
       end
 
@@ -313,7 +335,7 @@ module KIF
           end
           frame
           # B counts once the hint has been up 1 s (a B for this player's own menu doesn't carry over)
-          next unless shown && now - shown >= 1.0 && Input.trigger?(Input::BACK)
+          next unless shown && now - shown >= 1.0 && !left?(0) && Input.trigger?(Input::BACK)   # nothing to pick for a side that left
           case waiting_choice(change)
           when :let
             KIF::Net.update if KIF::Net.session.equal?(@s)
@@ -365,6 +387,7 @@ module KIF
       def back_name; KIF::Coop.back_name; end
 
       def wait_text(left, change = false)
+        return _INTL("You got away. {1} is finishing the battle.", @name) if left?(0)
         # (short: the second line fits PIF's message box)
         return _INTL("Waiting for {1} to choose... ({2} s)\n{3}: change or let the game pick", @name, left, back_name) if change
         _INTL("Waiting for {1} to choose... ({2} s)\n{3}: let the game pick", @name, left, back_name)
@@ -976,14 +999,20 @@ class PokeBattle_Battle
     c.new_turn
     later = c.later_balls
     foes = {}
+    aimed = {}   # the Pokémon each later ball was thrown at
     later.each do |i, ch|
-      foes[i] = (@battlers[ch[2]] && @battlers[ch[2]].pokemon ? @battlers[ch[2]].pokemon.name : "?") rescue "?"
+      aimed[i] = (@battlers[ch[2]] && @battlers[ch[2]].pokemon) rescue nil
+      foes[i] = aimed[i] ? aimed[i].name : "?"
       pbClearChoice(i)
     end
     kif_coop_pbAttackPhaseItems
     later.each do |i, ch|
       b = @battlers[i]
-      if @decision == 0 && b && !b.fainted?
+      t = ch[2].is_a?(Integer) ? @battlers[ch[2]] : nil
+      gone = !t || t.fainted? || !t.pokemon.equal?(aimed[i])   # caught by the first ball
+      if @decision == 0 && gone && KIF::Coop.rule(:kif_coop_second_ball) == 1
+        c.ball_unused(i, ch, foes[i])   # Co-op: second ball = Back to Bag
+      elsif @decision == 0 && b && !b.fainted?
         @choices[i] = ch
         pbUsePokeBallInBattle(ch[1], ch[2], b)
       elsif @decision == 4
@@ -1094,5 +1123,16 @@ class PokeBattle_Battle
       return send(orig, *args, &blk) unless c
       return c.quietly { send(orig, *args, &blk) }
     end
+  end
+end
+
+# fighting together on one map: a random wild encounter has two foes (2v2),
+# whatever either player's Battle Format says
+class PokemonEncounters
+  alias kif_coop_have_double_wild_battle? have_double_wild_battle? unless method_defined?(:kif_coop_have_double_wild_battle?) || private_method_defined?(:kif_coop_have_double_wild_battle?)
+
+  def have_double_wild_battle?
+    return true if (KIF::Coop.co_double? rescue false)
+    return kif_coop_have_double_wild_battle?
   end
 end

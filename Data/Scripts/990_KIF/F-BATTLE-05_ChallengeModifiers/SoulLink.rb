@@ -741,14 +741,31 @@ module KIF
           seen[t] ||= p
         end
       end
-      if $PokemonSystem.ch_sl_party == 1 && @partner_party && connected?
-        party.each do |p|
-          theirs = state[:places].values.find { |pl| ids_of(p).include?(pl[:mine]) && pl[:theirs].is_a?(Hash) }
-          next unless theirs
-          out << _INTL("Party rule: {1}'s pair isn't in {2}'s party.", p.name, partner) unless @partner_party.include?(theirs[:theirs][:i])
-        end
+      return out + party_rule_lines(party)
+    end
+
+    def self.party_rule_lines(party = nil)
+      out = []
+      return out unless $PokemonSystem.ch_sl_party == 1 && @partner_party && connected? && linked?
+      party ||= $Trainer.party.compact.reject { |p| p.egg? || p.kif_nz_dead }
+      party.each do |p|
+        theirs = state[:places].values.find { |pl| ids_of(p).include?(pl[:mine]) && pl[:theirs].is_a?(Hash) }
+        next unless theirs
+        out << _INTL("Party rule: {1}'s pair isn't in {2}'s party.", p.name, partner) unless @partner_party.include?(theirs[:theirs][:i])
       end
       return out
+    end
+
+    # the party rule on the map (checked each second): a line when a pair newly
+    # goes missing (a PC deposit, a party change on either side), not every step
+    def self.party_rule_check
+      lines = party_rule_lines
+      fresh = lines - (@party_told || [])
+      @party_told = lines
+      return if fresh.empty?
+      t = fresh.first
+      t += " " + _INTL("({1} more on Pause > Soul Link.)", fresh.length - 1) if fresh.length > 1
+      KIF::Net.notes << t
     end
   end
 end
@@ -864,6 +881,7 @@ Events.onMapUpdate += proc { |_sender, _e|
   if Graphics.frame_count % 60 == 0 && KIF::SoulLink.linked?
     begin
       KIF::SoulLink.send_party
+      KIF::SoulLink.party_rule_check
     rescue => e
       KIF.log("Soul Link: party not sent (#{e.class}: #{e.message})")
     end

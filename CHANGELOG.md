@@ -33,7 +33,7 @@ The game shows the same notes in Options > System > Update history.
 - Level Up Stats (Options > Battles > Screens): Show (default) or Skip. Skip leaves out both stat windows after a level up in PIF's battle screen and in EBDX; the level up message still shows. Auto-Battle's own Level Up setting works as before.
 - Foe Info (Options > Battles > Screens) defaults to As seen: a foe's abilities and moves show in Battle Info once the battle has shown them, and the Fight menu's "no effect" hint only counts an ability you have seen. Saves from 1.2.3 to 1.2.9 are switched to As seen once; All can be picked again.
 - Pre-Status: Burned unlocks for the save once you have a Flame Orb (in the Bag, or held by a Pokemon in your party or PC), Poisoned once you have a Toxic Orb. Until then the choice shows what it needs. A Pokemon already set to one keeps it.
-- Evolution line sprites (Summary > Pokedex > Sprites, Random Sprites On) are for fusions only: This fusion, Swapped (head and body the other way round) and every head and body pair of its two evolution lines, both ways. An unfused Pokemon lists its own sprites, as before 1.2.7.
+- Evolution line sprites (Summary > Pokedex > Sprites) are for fusions only: This fusion, Swapped (head and body the other way round) and every head and body pair of its two evolution lines, both ways. An unfused Pokemon lists its own sprites, as before 1.2.7.
 
 </details>
 

@@ -14,7 +14,7 @@ Every feature belongs to a module. Each module can be:
 |---|---|
 | Auto Battle | Auto-Battle and its options, Self-Battle from the PC |
 | Shinies | Shinies: custom colours, odds, gamble, selling, Poké Radar chains |
-| Graphical Changes | EBDX battles, battle box extras, Move Effectiveness, big icons, game font, dark mode, living title screen |
+| Graphical Changes | EBDX battles, battle box extras, Move Effectiveness, battle camera, big icons, game font, dark mode, living title screen |
 | Information | Fusion preview and fusion screen, the improved Pokédex (evolutions, sprites), IVs and EVs in the summary, Battle Info |
 | Battles & Challenges | Battle format, damage variance, Battle AI, Challenges, battle mechanics, level caps, EXP/EV/IV modes, Rocket mode, catching extras, Gym Leader teams, trainers keeping their rolled teams |
 | Randomizer | The randomizer (incl. Entrances) and gym leader teams. Off plays a randomized save without the randomizer until it's turned back on |
@@ -30,7 +30,7 @@ Things a module changes while the game starts (some data tables) stay in place u
 
 Settings of always-available features (frame rate, updates, caches) are in the **System** section, with **Increment Slider by** and **DEBUG**. Switch modules in the **Modules** section.
 
-The first time the game starts, it asks **How do you want to play?** - **Classic KIF** (every module On), **PIF only** (every module Off, plays like Pokémon Infinite Fusion) or **Let me choose** (opens Modules). Classic KIF leaves the features KIF 0.20.7 never had (EBDX battles, Move Effectiveness, Fusion Screen, Battle Info) Off; turn them on in KIF Settings. You can change everything later in Options > Modules.
+The first time the game starts, it asks **How do you want to play?** - **Classic KIF** (every module On), **PIF only** (every module Off, plays like Pokémon Infinite Fusion) or **Let me choose** (opens Modules). Classic KIF leaves the features KIF 0.20.7 never had (EBDX battles, Move Effectiveness, Fusion Screen, Battle Info, Battle Camera) Off; turn them on in KIF Settings. You can change everything later in Options > Modules.
 
 Players who were already playing KIF before Modules existed get every module turned On once, so nothing they had set up stops working.
 
@@ -160,6 +160,7 @@ K-Eggs are sold in the Kuray Shop (see "Others > Kuray QoL").
   - FGM: icons by FairyGodmother.
   - Txt: plain text.
 - **Swap BattleGUI** - Off / Type 1 / Type 2 *(Off)*. Alternative HP/Exp bar designs by Mirasein.
+- **Battle Camera** - PIF / Wide / Wider *(Wide; PIF with Classic KIF; global)*. In PIF's battle screen (not EBDX), double and triple battles are zoomed out so every Pokémon is fully visible. Wide: in doubles your Pokémon are a bit smaller (PIF draws them very large) and both pairs are spaced out. Wider: in doubles your Pokémon are smaller still, the same size as the foes. In triples both Wide and Wider draw every Pokémon at the foes' size, spaced out. Single battles look as in PIF. Part of Graphical Changes.
 - **EBDX Battles** - Off / On *(Off)*. Elite Battle DX battle visuals (Luka S.J.; the version from KIF Multiplayer by Aleks): animated backdrops, camera, move animations and its own battle boxes and menus. Also **EBDX Camera Zoom**, **EBDX Stat Stage Icons** and **EBDX Own Trainer Animation**. Type Display works on EBDX's boxes too. KIF's coloured shiny star shows on its boxes too (the name stays gold). Turning the Graphical Changes module Off gives PIF's normal battles.
 - **Fusion Preview** - Off / On *(Off)*. When fusing, shows the real sprite of fusions you haven't seen yet instead of a silhouette, with shiny colours if the result will be shiny.
 - **Big Pokémon Icons** - Off / Limited / All *(Off)*. Icons use a small version of the Pokémon's battle sprite.

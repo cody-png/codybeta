@@ -58,7 +58,7 @@ module KIF
 
     # Classic KIF = KIF 0.20.7 as it was: features KIF never had, but that
     # default to On inside their module, are switched off
-    NEW_ON_BY_DEFAULT = [:mp_ebdx_enabled, :cody_effectiveness, :cody_fusionscreen, :cody_battleinfo, :kif_mouse]
+    NEW_ON_BY_DEFAULT = [:mp_ebdx_enabled, :cody_effectiveness, :cody_fusionscreen, :cody_battleinfo, :kif_mouse, :kif_battle_camera]
 
     def classic_only!
       NEW_ON_BY_DEFAULT.each do |key|

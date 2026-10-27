@@ -139,6 +139,10 @@ module KIF
       "Level Up Stats" => [
         "After a level up, two windows show the stat gains and the new stats.",
         "After a level up, the stat windows are skipped in every battle. The level up message still shows."],
+      "Battle Camera" => [
+        "Double and triple battles look as in PIF.",
+        "Double and triple battles: your Pokémon a bit smaller and every Pokémon spaced out, so each one is fully visible. Singles look as in PIF.",
+        "Double and triple battles: every Pokémon smaller and spaced out, for the most room. Singles look as in PIF."],
       "EBDX Battles" => [
         "Battles look like PIF's own.",
         "Battles use Elite Battle DX's look and animations."],

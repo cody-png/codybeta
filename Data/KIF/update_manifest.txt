@@ -1,4 +1,4 @@
-KIF-MANIFEST 1 version=1.2.8 channel=stable files=29609
+KIF-MANIFEST 1 version=1.2.9 channel=stable files=29609
 de681bd919e873f94d1228b08bc1a242f4828b6f 22297 Archipelago/KIF.yaml
 f3c6b2175d8cfab969ee95340ebb475e0951e8a8 556387 Archipelago/kif.apworld
 9535e6ead24be7e2c9c1c4e7d9e62b77c0da28df 1973679 Audio/BGM/Azalea Town.ogg
@@ -3383,7 +3383,7 @@ f450154f4e400f5a8093df31eb3a10da45878659 57292 Audio/SE/snaredrum.mp3
 0fcdfa35350ee75066a25ba7163cc0301ee19dd8 16136 Audio/SE/superdamage.ogg
 307ee775d5ee6b3d0cb4ae49c4eda53e1d9c3acc 8080 Audio/SE/throw.ogg
 92e5337776335e4c00586e64a627788e66fb307b 13493 Audio/SE/whistle.ogg
-b799c870f6225c3eda14ef07134b71f31d4d535f 58203 CHANGELOG.md
+4597e8892e8261eca9d03d68a22683661077db59 58983 CHANGELOG.md
 673f7dfb1e6a65983a4aefd6672f1ecf2399e220 10352 Credits.txt
 41edc8e26959a1891c0cc015aaa682e411768576 1574 Data/Actors.rxdata
 d8f037637f438587596b1cef24aa5cd81dfb1ab7 21250 Data/Animations.rxdata
@@ -3395,10 +3395,10 @@ dee6de55a269bc79900f41c5c7c5de66081cf7a3 240857 Data/EditorScripts.rxdata
 be622f513a4092bfe4cd8545a48325fbbbe0276f 541 Data/Enemies.rxdata
 fe767fa0b1773b41eaea0464a459b076e6609c5b 428 Data/Items.rxdata
 ef274be56fa0a395d41f9d20c4627b84d49f9e46 4878 Data/KIF/MysteryGift_KIF.txt
-df764c04a5d7feedf961ff4aec3520a181969c80 57095 Data/KIF/changelog.txt
+829d2df931db5bc4ccc9e1efe2524ac3efc8b123 57825 Data/KIF/changelog.txt
 413b744ee0239402b70786e0cf48cf902aa2fcaa 613525 Data/KIF/entrances.dat
 ccdde561e5fc62b0b3ebd760916e6e29eb9c07f9 21721 Data/KIF/trainers_challenge.dat
-3a4ee2248e672d9536e4f8244bcd7353e13f88b9 8017 Data/KIF/update_notes.txt
+67e44319d1a56eb2e5406a0b9b03b88d579f22fd 8218 Data/KIF/update_notes.txt
 9a527fb1c545d642d4a709d95452fbabcc853867 78297 Data/Map001.rxdata
 775d19da5c3949f878e650e7bbd242a6a300dfe4 5213 Data/Map002.rxdata
 470905be3cae69dbe4a6a546f248949b09bb82b1 6159 Data/Map003.rxdata
@@ -4837,7 +4837,7 @@ f341ac24e79719f42e14df85ef67697b34e18ce7 5738 Data/Scripts/990_KIF/000_Core/018_
 b39d0a496ed3588fde4bc6f1a2512945696215ea 4673 Data/Scripts/990_KIF/000_Core/019_KIF_AbilityText.rb
 83c853f83f6306023c70c992cbfbd18cbbd8869e 4503 Data/Scripts/990_KIF/000_CrashLog.rb
 08d1a85457b2de28c02225d981e68d513e339585 5883 Data/Scripts/990_KIF/000_Paths.rb
-c897aab6ccd63b9d822e423f15ff02662aa14470 1657 Data/Scripts/990_KIF/000_README.rb
+206bc9f27a03a95cca57603bfef152fabd9566e2 1657 Data/Scripts/990_KIF/000_README.rb
 c71dc6639c04aa6eafd1faf81e55486063e7db0e 5270 Data/Scripts/990_KIF/F-BATTLE-01_BattleFormat/BattleFormat.rb
 0ded5723b23a37ce0182eaa944a2b6fad1181194 5334 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattle.rb
 4c8cf12552fc4b43fc50f733d2f668adb2e58b3d 13601 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattleChoices.rb
@@ -5012,7 +5012,7 @@ bd8c41e266dec68b8a68c8d1975db5824b4bc3f1 2022 Data/Scripts/990_KIF/ZZ_Cody/C-SYS
 ad199a7146dc50f4b21741e7c658ff540aa5aa30 4533 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-03_MapLoadCache/TileEvents.rb
 652f63a44f51fdf7b5336a8d28c1cc4bb9d43302 3843 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-03_MapLoadCache/ViewportLeak.rb
 bf5a72c11b565055f809fdcf86c133d3c79f5215 55471 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-04_SpriteImport/SpriteImport.rb
-864f4de718935e582a306c58fef7d6d58d396638 11512 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-05_SaveFolder/SaveFolder.rb
+798398f796d657ea575dfa1d2b8db5b1d21daccd 12990 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-05_SaveFolder/SaveFolder.rb
 52880f85ebb4c4e851605b6b2b2a40c0c928437b 57939 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-06_Updater/Updater.rb
 865d91c18d48c4239704bda16a73f32cc1b47c43 7050 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-06_Updater/Updater_History.rb
 e1e2f59b91c47187331ad2d9a13a222724845820 3735 Data/Scripts/990_KIF/ZZ_Cody/C-SYS-06_Updater/Updater_Startup.rb
@@ -5031,7 +5031,7 @@ a45219f5ef10c891f9d68fbf2dff723516dc2843 377 Data/Skills.rxdata
 64dd030190939deb6c8aa7a6027fc91a564c77b2 32107 Data/System.rxdata
 3b3389e09b90357c0655e74ffae380fc48b7e609 410184 Data/Tilesets.rxdata
 94c39352b0edb225fa90de0ca64fe19c8a5fdae3 345 Data/Troops.rxdata
-5975b143a0fe6a31d1d194b865ad5b2c4200a46e 5 Data/VERSION
+434dcac4fa636c26f799d7e7c54253ee9d0ee17a 5 Data/VERSION
 c7ea19a7a791e601e24bbc538d8611eb1e1025b0 245 Data/Weapons.rxdata
 88cb261de46afa991fb60f0251319dcc0a4b73f5 21823 Data/abilities.dat
 6db551d2203ffcddbf4b6d82646a77b13e790887 11962 Data/berry_data.dat

@@ -3,7 +3,17 @@
 Every KIF version, newest first: a short overview, then the full notes (click Full notes to open them).
 The game shows the same notes in Options > System > Update history.
 
-[1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+[1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+
+## KIF 1.2.9
+
+- Fixed: on some PCs the screen stayed black for minutes after Play. The check for saves to import from old KIF now runs only when that folder changes, and never for more than 3 seconds.
+
+<details><summary>Full notes</summary>
+
+- Each time the load screen opened, KIF compared every save in the old KIF save folder (kurayinfinitefusion) with your saves, to know whether to show Import Old Saves. On a player's PC that took 158 seconds on every start. The answer is now remembered until the old folder changes, the check stops after 3 seconds (then Import Old Saves shows, and the import still skips saves you already have), and a check over a second is written to the log.
+
+</details>
 
 ## KIF 1.2.8
 
@@ -14,7 +24,8 @@ The game shows the same notes in Options > System > Update history.
 <details><summary>Full notes</summary>
 
 - With Download data Off, PIF listed every file of the sprite pack (over 236,000 with the full pack) each time the load screen opened, only to check that there are at least 1000 sprites. KIF now reads the sprite list until it has counted 1000, which gives the same answer.
-- When the time from Play to the load screen is over 3 seconds, the log says how long it took, and names every step that took over a second (closing the title, reading each save, the old save folder check, the sprite count, the sprite download check, drawing the save panels...). Verbose logging logs every step.
+- When the time from Play to the load screen is over 3 seconds, the log says how long it took, and names every step that took over a second (closing the title, reading each save, the old save folder check, the sprite count, the sprite download check, drawing the save panels...).
+- With verbose logging on, every one of those steps and the total are logged, however short.
 - Verbose logging (for bug reports) turns on with verbose.txt, verbose or verbose.txt.txt in the Logs or save folder.
 
 </details>

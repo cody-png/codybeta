@@ -69,6 +69,7 @@ module KIF
         File.binwrite(dst, File.binread(src))
         n += 1 if f =~ /\.rxdata\z/i
       end
+      forget_check(new_d)
       return [n, moved, left]
     end
 
@@ -104,11 +105,53 @@ module KIF
       end
     end
 
-    # Old saves that aren't here yet, in any slot
-    def importable(new_d = new_dir, old_d = old_dir(new_d))
-      return saves_in(old_d).reject { |f| already_here?(File.join(old_d, f), new_d) }
+    # Old saves that aren't here yet, in any slot. Past the deadline the
+    # rest count as not here (the import itself skips copies already here).
+    def importable(new_d = new_dir, old_d = old_dir(new_d), deadline: nil)
+      out = []
+      saves_in(old_d).each do |f|
+        if deadline && Time.now > deadline
+          out << f
+          next
+        end
+        out << f unless already_here?(File.join(old_d, f), new_d)
+      end
+      return out
     rescue
       return []
+    end
+
+    # The load menu's check, remembered until the old folder changes: on a
+    # player's PC it took 158 s on every start (1.2.8 log, 27 Oct)
+    CHECK_FILE = "KIF_import_check.krs"
+
+    def old_fingerprint(old_d)
+      return saves_in(old_d).sort.map do |f|
+        p = File.join(old_d, f)
+        "#{f}|#{File.size(p)}|#{File.mtime(p).to_i}"
+      end.join("\n")
+    end
+
+    def import_hint?(new_d = new_dir, old_d = old_dir(new_d))
+      return false unless Dir.exist?(old_d)
+      fp = old_fingerprint(old_d)
+      return false if fp.empty?
+      cache = File.join(new_d, CHECK_FILE)
+      saved = File.exist?(cache) ? File.binread(cache) : ""
+      return saved.start_with?("1") if saved.sub(/\A[01]\n/, "") == fp
+      t = Time.now
+      res = !importable(new_d, old_d, deadline: t + 3).empty?
+      secs = Time.now - t
+      KIF.log(format("Save folder: old save check took %.1f s (%d old saves)", secs, saves_in(old_d).length)) if secs > 1
+      File.binwrite(cache, (res ? "1\n" : "0\n") + fp) rescue nil
+      return res
+    end
+
+    def forget_check(new_d = new_dir)
+      cache = File.join(new_d, CHECK_FILE)
+      File.delete(cache) if File.exist?(cache)
+    rescue
+      nil
     end
 
     def mark_done(new_d = new_dir)
@@ -182,7 +225,7 @@ module KIF
     def update_menu
       l = links
       return unless l
-      if File.expand_path(new_dir) != File.expand_path(old_dir) && !importable.empty?
+      if File.expand_path(new_dir) != File.expand_path(old_dir) && import_hint?
         l[MENU_LABEL] = MENU_URL
       else
         l.delete(MENU_LABEL)

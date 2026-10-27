@@ -13,9 +13,9 @@
 #   Random Sprites Off: PIF draws one sprite per species and ignores
 #   pif_sprite. A pick made here marks the Pokémon (kif_ls_pick) and PIF's
 #   lookup then uses its pif_sprite as if Random Sprites were On, for that
-#   Pokémon only; with Off every pick here is for this Pokémon only, and
-#   picking the species' own sprite clears the mark. Any other change of
-#   pif_sprite (evolving...) clears it too. The blacklist (Down) is On only.
+#   Pokémon only. Picking the species' own sprite keeps PIF's behaviour (the
+#   species-wide sprite, no mark); that and any other change of pif_sprite
+#   (evolving...) clears the mark. The blacklist (Down) is On only.
 #   The main Pokédex and the catch prompt (a species is passed) are unchanged.
 #   Evolving still picks a new sprite of the new species (PIF).
 # A label over the sprites names the group (This fusion, Swapped, Evolution
@@ -166,8 +166,7 @@ class PokemonPokedexInfo_Scene
 
   def swap_main_sprite(*args)
     pick = @selected_pif_sprite
-    off = @pokemon && pick && !$PokemonSystem.random_sprites
-    unless off || (@pokemon && pick && KIF::LineSprites.others(@pokemon).include?(pick.species))
+    unless @pokemon && pick && KIF::LineSprites.others(@pokemon).include?(pick.species)
       return kif_ls_swap_main_sprite(*args)
     end
     subs = $PokemonSystem.alt_sprite_substitutions
@@ -176,7 +175,7 @@ class PokemonPokedexInfo_Scene
     old = subs[id]
     ret = kif_ls_swap_main_sprite(*args)
     had ? subs[id] = old : subs.delete(id)   # a line-mate's sprite is for this Pokemon only
-    @pokemon.kif_ls_pick = true if off && !(old && old.equals(pick))   # Off: the species' own sprite needs no mark
+    @pokemon.kif_ls_pick = true unless $PokemonSystem.random_sprites   # Off: drawn for this Pokemon only
     return ret
   end
 

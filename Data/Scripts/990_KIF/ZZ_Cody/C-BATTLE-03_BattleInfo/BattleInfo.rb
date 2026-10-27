@@ -39,9 +39,22 @@ KIF::Options.add(:others, :global) {
                   _INTL("Battle info with {1} only, no INFO button on screen", KIF::Keys.name(Input::ACTION))])
 }
 
-# 0 All: a foe's abilities and moves listed from the start; 1 As seen. A new
-# key, so existing settings files read the default (no older choice to keep).
-KIF::Options.define(:cody_bi_foe_info, 0, :global)
+# 0 All: a foe's abilities and moves listed from the start; 1 As seen (the
+# default since 1.2.10: Cody, 27 Oct - a foe's ability stays hidden until the
+# battle shows it). Settings files keep the old default's 0, so it's switched
+# to As seen once (:cody_bi_foe_info_v2 remembers that).
+KIF::Options.define(:cody_bi_foe_info, 1, :global)
+KIF::Options.define(:cody_bi_foe_info_v2, 0, :global)
+
+module Game
+  class << self
+    alias kif_bifoe_set_up_system set_up_system unless method_defined?(:kif_bifoe_set_up_system)
+    def set_up_system
+      kif_bifoe_set_up_system
+      KIF::BattleInfo.foe_info_default_once
+    end
+  end
+end
 
 KIF::Options.add(:others, :global) {
   EnumOption.new(_INTL("Foe Info"), [_INTL("All"), _INTL("As seen")],
@@ -108,7 +121,17 @@ module KIF
     #---------------------------------------------------------------------------
     # What the battle has shown about a foe
     #---------------------------------------------------------------------------
-    # Foe Info: All (the default)
+    def foe_info_default_once
+      sys = $PokemonSystem
+      return unless sys && sys.cody_bi_foe_info_v2.to_i == 0
+      sys.cody_bi_foe_info = 1
+      sys.cody_bi_foe_info_v2 = 1
+      KIF.log("Battle Info: Foe Info set to As seen (the new default)")
+    rescue => e
+      KIF.log("Battle Info: Foe Info default failed (#{e.class}: #{e.message})")
+    end
+
+    # Foe Info: All
     def show_all?
       return !$PokemonSystem.respond_to?(:cody_bi_foe_info) || $PokemonSystem.cody_bi_foe_info.to_i == 0
     end

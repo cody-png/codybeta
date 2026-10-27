@@ -2,17 +2,20 @@
 # F-UI-14 – Evolution line sprites (new in KIF, player request, 2026-10-26)
 # Not in KIF 0.20.7 or PIF 6.8.2.
 #
-# Summary > Pokédex > Sprites lists the Pokémon's own sprites only. Here it
-# also lists the sprites of the rest of its evolution line, so one Charizard
-# can wear Charmeleon's sprite (a fusion: every head x body pair of its two
-# lines, e.g. B6H9 also gets B4H7, B5H8...). Picking one sets only that
-# Pokémon's pif_sprite: PIF's swap would also set the whole species' sprite
-# (alt_sprite_substitutions) to the other species' sprite, so that entry is
-# put back. PIF already draws a pif_sprite of another species everywhere
+# Summary > Pokédex > Sprites lists the Pokémon's own sprites only. Here a
+# fusion also lists the sprites of every head x body pair of its two
+# evolution lines, in both orders (B6H9 also gets B9H6, B4H7, B7H4...).
+# An unfused Pokémon keeps its own sprites only (Cody, 2026-10-27). Picking
+# one sets only that Pokémon's pif_sprite: PIF's swap would also set the whole
+# species' sprite (alt_sprite_substitutions) to the other species' sprite, so
+# that entry is put back. PIF already draws a pif_sprite of another species everywhere
 # (it does so for its shared-sprite species).
 #   Only with Random Sprites On (PIF ignores per-Pokémon sprites when Off).
 #   The main Pokédex and the catch prompt (a species is passed) are unchanged.
 #   Evolving still picks a new sprite of the new species (PIF).
+# A label over the sprites names the group (This fusion, Swapped, Evolution
+# line). Only the look changes. When the species changes (unfuse, reverse,
+# fuse) a pick that isn't one of the new species' is dropped.
 #===============================================================================
 module KIF
   module LineSprites
@@ -30,16 +33,45 @@ module KIF
       return (ret + data.get_family_evolutions.map { |e| e[1] }).uniq
     end
 
-    # the other species whose sprites this Pokémon may use
-    def self.others(pkmn)
-      return [] if pkmn.isTripleFusion?
-      return line(pkmn.species) - [pkmn.species] unless pkmn.isFusion?
-      body = getBodyID(pkmn.species)
-      head = getHeadID(pkmn.species, body)
-      heads = line(GameData::Species.get(head).species).map { |s| GameData::Species.get(s).id_number }
-      bodies = line(GameData::Species.get(body).species).map { |s| GameData::Species.get(s).id_number }
-      return bodies.product(heads).map { |b, h| getFusedPokemonIdFromDexNum(b, h) } - [pkmn.species]
+    def self.nums(dex)
+      line(GameData::Species.get(dex).species).map { |s| GameData::Species.get(s).id_number }
     end
+
+    # the other species whose sprites this Pokémon (or species) may use, in
+    # list order: swapped, then the lines' fusions (both orders); none unfused
+    def self.others(pkmn)
+      sp = pkmn.is_a?(Pokemon) ? pkmn.species : GameData::Species.get(pkmn).species
+      dex = GameData::Species.get(sp).id_number
+      return [] unless isFusion(dex)   # an unfused or triple Pokémon: its own sprites only
+      body = getBodyID(sp)
+      head = getHeadID(sp, body)
+      pairs = nums(body).product(nums(head))
+      ret = ([[head, body]] + pairs + pairs.map(&:reverse)).map { |b, h| getFusedPokemonIdFromDexNum(b, h) }
+      return ret.uniq - [sp]
+    end
+
+    # the label of a listed sprite's group (only fusions list other species)
+    def self.group(pkmn, sp)
+      own = pkmn.species
+      return _INTL("Swapped") if sp != own && sp == GameData::Species.get(reverseFusionSpecies(own)).species
+      return _INTL("Evolution line") if sp != own && others(pkmn).include?(sp)
+      return _INTL("This fusion")
+    end
+  end
+end
+
+class Pokemon
+  alias kif_ls_species_set species= unless method_defined?(:kif_ls_species_set) || private_method_defined?(:kif_ls_species_set)
+
+  # a pick of another species stays only while it is one the new species may use
+  def species=(species_id)
+    old = @species
+    ret = kif_ls_species_set(species_id)
+    ps = @pif_sprite
+    if ps && old != @species && ps.species != @species
+      @pif_sprite = nil unless (KIF::LineSprites.others(@species).include?(ps.species) rescue false)
+    end
+    return ret
   end
 end
 
@@ -105,6 +137,27 @@ class PokemonPokedexInfo_Scene
     old = subs[id]
     ret = kif_ls_swap_main_sprite(*args)
     had ? subs[id] = old : subs.delete(id)   # a line-mate's sprite is for this Pokemon only
+    return ret
+  end
+end
+
+class PokemonPokedexInfo_Scene
+  alias kif_ls_update_displayed update_displayed unless method_defined?(:kif_ls_update_displayed) || private_method_defined?(:kif_ls_update_displayed)
+
+  # names the selected sprite's group over it (Summary, with other species listed)
+  def update_displayed(*args)
+    ret = kif_ls_update_displayed(*args)
+    begin
+      ov = @creditsOverlay
+      sel = @available && @available[@selected_index]
+      return ret unless @pokemon && sel && ov && !ov.disposed?
+      return ret if @available.all? { |s| s.species == @pokemon.species }
+      ov.fill_rect(140, 36, 232, 56, Color.new(0, 0, 0, 0))
+      pbDrawTextPositions(ov, [[KIF::LineSprites.group(@pokemon, sel.species), Graphics.width / 2, 50, 2,
+                                Color.new(88, 88, 80), Color.new(168, 184, 184)]])
+    rescue StandardError => e
+      KIF.log("Line sprites: #{e.class}: #{e.message}")
+    end
     return ret
   end
 end

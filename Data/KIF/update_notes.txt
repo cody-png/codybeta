@@ -1,3 +1,16 @@
+KIF 1.2.7
+- What's new opens a full-screen reader: Up/Down scroll, Left/Right turn pages, A or B closes.
+- Options > Mods: press USE on a mod (Installed or Browse) to read its full description.
+- New, Off by default: Items to Bag (Options > Pokemon > Catching). A Pokemon holding an item still steals with Thief/Covet and still finds items with Pickup in wild battles; the new item goes to the Bag.
+- New, Off by default: Pre-Status (Options > Battles > Mechanics). Kuray Actions > Start Battles can make a Pokemon start every battle burned or poisoned.
+- New, Off by default: Weather Setter Immunity (Options > Battles > Mechanics). Sand Stream and Snow Warning Pokemon take no damage from their own weather, whatever their types.
+- Summary > Pokedex > Sprites also lists the sprites of the Pokemon's evolution line (Random Sprites On).
+- The Custom starter menu has a third choice: Triple fusion.
+- Hints name the controller button when you last pressed one.
+- Old save import counts only saves and says when the File slots are full.
+- Skip intro also skips the opening movie on a first start.
+- No more "You have no more Pokemon that can fight!" after a forfeit.
+
 KIF 1.2.6
 - New: Update history (Options > System). Read the notes of every KIF version: a short overview or the full notes.
 - What's new shows the notes of every version since the one you had, so a skipped version's notes are no longer missed. After an update, All updates opens the Update history.

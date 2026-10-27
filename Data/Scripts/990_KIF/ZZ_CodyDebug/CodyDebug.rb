@@ -218,18 +218,23 @@ module KIF
         $Trainer.money += 100_000
         pbMessage(_INTL("Money: ${1}", $Trainer.money.to_s_formatted)) rescue pbMessage(_INTL("Money added."))
       when :item
-        list = []
-        GameData::Item.each { |i| list << [i.id_number, i.name, i.id] }
-        id = pbChooseListWithFilter(list, nil, nil, 1, 0, 0, _INTL("Type to filter"))
+        id = pbChooseListWithFilter(item_list, nil, nil, 2, 0, 0, _INTL("Type to filter"))   # 2: kept in item_list's order
         return nil unless id
         params = ChooseNumberParams.new
         params.setRange(1, 999); params.setDefaultValue(1)
         qty = pbMessageChooseNumber(_INTL("How many {1}?", GameData::Item.get(id).name), params)
-        give_pack([[id, qty]], GameData::Item.get(id).name)
+        give_pack([[id, qty]], _INTL("Added"))   # the item's name as title read "TM102: TM102 x1."
       else
         give_pack(PACKS[pick], rows.find { |r| r[2] == pick }[0])
       end
       return nil
+    end
+
+    # every item by name, numbers in number order (TM9, TM10, TM100, not TM10, TM100, TM9)
+    def item_list
+      list = []
+      GameData::Item.each { |i| list << [i.id_number, i.name, i.id] }
+      return list.sort_by { |r| [r[1].gsub(/\d+/) { |d| d.rjust(6, "0") }, r[0]] }
     end
 
     def give_pack(list, title)

@@ -9,6 +9,9 @@
 #   After that, "Import Old Saves" on the load menu does the same any time
 #   old KIF has a save KIF doesn't. A save whose slot is already taken here
 #   goes into the first free File slot instead, so nothing is overwritten.
+#   (2026-10-26) The question and the result count saves only, and both say
+#   when the copies fill every File slot (8 old saves did; the new game then
+#   found no empty slot without having been told).
 #===============================================================================
 module KIF
   module SaveFolder
@@ -41,7 +44,9 @@ module KIF
 
     # Copy the old folder's saves etc. (never over a file already there).
     # With rehome, a save whose slot is taken goes into a free File slot.
-    # Returns [files copied, saves moved to another slot, saves left behind]
+    # Returns [saves copied, saves moved to another slot, saves left behind]
+    # (settings and controls files are copied too but not counted: the
+    # player was asked about saves)
     def import_report(new_d = new_dir, old_d = old_dir(new_d), rehome: false)
       n = 0
       moved = []
@@ -62,9 +67,20 @@ module KIF
           moved << "#{File.basename(f, '.*')} -> #{slot}"
         end
         File.binwrite(dst, File.binread(src))
-        n += 1
+        n += 1 if f =~ /\.rxdata\z/i
       end
       return [n, moved, left]
+    end
+
+    # Old KIF had 8 File slots too: copying 8 saves leaves none empty, and a
+    # new game then had to save over one without having been told (test 26 Oct)
+    def full?(dir)
+      return defined?(SaveData::MANUAL_SLOTS) && !SaveData::MANUAL_SLOTS.empty? && free_slot(dir).nil?
+    end
+
+    def full_note(dir)
+      return "" unless full?(dir)
+      return " " + _INTL("All {1} save slots are in use now, so a new game has to save over one of them.", SaveData::MANUAL_SLOTS.length)
     end
 
     def import(new_d = new_dir, old_d = old_dir(new_d))
@@ -105,10 +121,13 @@ module KIF
       return if File.exist?(File.join(new_dir, MARKER))
       if offer?
         count = saves_in(old_dir).length
-        if pbConfirmMessage(_INTL("Saves from the old KIF were found ({1} files). Copy them into KIF's new save folder?", count))
+        q = _INTL("Saves from the old KIF were found ({1} saves). Copy them into KIF's new save folder?", count)
+        # the new folder is empty here: after the copy it has the old one's slots
+        q += " " + _INTL("They fill all {1} save slots, so a new game would have to save over one.", SaveData::MANUAL_SLOTS.length) if full?(old_dir)
+        if pbConfirmMessage(q)
           n = import
-          pbMessage(_INTL("Copied {1} files. Your old KIF keeps its own copies, and the old save backups stay in the old folder.", n))
-          KIF.log("Save folder: copied #{n} files from #{old_dir}")
+          pbMessage(_INTL("Copied {1} saves. Your old KIF keeps its own copies, and the old save backups stay in the old folder.", n) + full_note(new_dir))
+          KIF.log("Save folder: copied #{n} saves from #{old_dir}")
           show_copied_saves if n > 0
         else
           pbMessage(_INTL("Okay. You can still copy them yourself later: the old saves are in {1}.", old_dir))
@@ -180,12 +199,13 @@ module KIF
       end
       return unless pbConfirmMessage(_INTL("Copy {1} save(s) from the old KIF into KIF? Nothing here will be overwritten.", list.length))
       n, moved, left = import_report(rehome: true)
-      KIF.log("Save folder: menu import copied #{n} files from #{old_dir}" +
+      KIF.log("Save folder: menu import copied #{n} saves from #{old_dir}" +
               (moved.empty? ? "" : ", moved #{moved.join(', ')}") +
               (left.empty? ? "" : ", no free slot for #{left.join(', ')}"))
-      msg = _INTL("Copied {1} files. Your old KIF keeps its own copies.", n)
+      msg = _INTL("Copied {1} saves. Your old KIF keeps its own copies.", n)
       msg += " " + _INTL("Some saves had a slot that was already taken here, so they went into another slot: {1}.", moved.join(", ")) unless moved.empty?
       msg += " " + _INTL("No free slot was left for: {1}.", left.join(", ")) unless left.empty?
+      msg += full_note(new_dir) if n > 0 && left.empty?
       pbMessage(msg)
       update_menu
       # show the new saves: the menu reloads its slots (see Scene below)

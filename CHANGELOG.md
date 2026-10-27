@@ -3,7 +3,39 @@
 Every KIF version, newest first: a short overview, then the full notes (click Full notes to open them).
 The game shows the same notes in Options > System > Update history.
 
-[1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+[1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+
+## KIF 1.2.7
+
+- What's new opens a full-screen reader: Up/Down scroll, Left/Right turn pages, A or B closes.
+- Options > Mods: press USE on a mod (Installed or Browse) to read its full description.
+- New, Off by default: Items to Bag (Options > Pokemon > Catching). A Pokemon holding an item still steals with Thief/Covet and still finds items with Pickup in wild battles; the new item goes to the Bag.
+- New, Off by default: Pre-Status (Options > Battles > Mechanics). Kuray Actions > Start Battles can make a Pokemon start every battle burned or poisoned.
+- New, Off by default: Weather Setter Immunity (Options > Battles > Mechanics). Sand Stream and Snow Warning Pokemon take no damage from their own weather, whatever their types.
+- Summary > Pokedex > Sprites also lists the sprites of the Pokemon's evolution line (Random Sprites On).
+- The Custom starter menu has a third choice: Triple fusion.
+- Hints name the controller button when you last pressed one.
+- Old save import counts only saves and says when the File slots are full.
+- Skip intro also skips the opening movie on a first start.
+- No more "You have no more Pokemon that can fight!" after a forfeit.
+
+<details><summary>Full notes</summary>
+
+- What's new (before and after an update) opens the Update history's full-screen reader with every new version's notes: Up/Down scroll a line, Left/Right a page, A or B closes. No more three-line message boxes over a black screen.
+- Options > Mods: press USE on a mod, in Installed or Browse, to read its README in the same reader. A mod that isn't installed is read from the catalog (and cached). Markdown shows as plain text; symbols the game's fonts lack become plain letters or are left out. A mod with no README shows its short description; offline says so.
+- Items to Bag (Options > Pokemon > Catching, Off by default): in wild battles a Pokemon holding an item still steals with Thief or Covet, and still finds items with Pickup after battle; the new item goes to the Bag with a message. Only the wild Pokemon's own item is stolen: an item you gave it with Trick, Switcheroo or Bestow comes back after battle. Trainer battles, partners' Pokemon and Self-Battle work as before.
+- Pre-Status (Options > Battles > Mechanics, Off by default): Kuray Actions (PC or party) > Start Battles: Normal, Burned or Poisoned. The Pokemon gets that status each time it is sent out without one, if it could get it at all (the same checks as Flame Orb and Toxic Orb).
+- Weather Setter Immunity (Options > Battles > Mechanics, Off by default): a Pokemon with Sand Stream takes no sandstorm damage, and one with Snow Warning no hail damage, whatever its types. Works for both sides.
+- Evolution line sprites: Summary > Pokedex > Sprites also lists the sprites of the Pokemon's evolution line (for a fusion, every head and body pair of its two lines). A pick there is for that Pokemon only. Random Sprites must be On. Blocking sprites lists only the species' own sprites.
+- The Custom starter menu has a third choice, Triple fusion, with the 26 triple fusions. Fixed: triple fusion species numbers were read as two-part fusions and crashed when given by number.
+- Hints name the controller button (A, B...) when you last pressed a controller button, and the keyboard key otherwise.
+- Old save import counts only save files and says when the copies fill all 8 File slots.
+- Skip intro also skips the opening movie on a first start, before any module is chosen.
+- EBDX: the stat stage pills of a battle box with another box under it sit above its own name.
+- After a forfeit, no more "You have no more Pokemon that can fight!" (a PIF bug).
+- Options > System > Test Code's description is a full sentence.
+
+</details>
 
 ## KIF 1.2.6
 

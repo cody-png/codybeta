@@ -94,12 +94,18 @@ module KIF
         "Hail as in PIF.",
         "In hail, Ice types take less damage from physical moves.",
         "Hail becomes Snow: no damage each turn, and Ice types take less damage from physical moves."],
+      "Weather Setter Immunity" => [
+        "Sand Stream and Snow Warning users take sandstorm and hail damage as in PIF.",
+        "A Pokémon with Sand Stream takes no sandstorm damage, and one with Snow Warning no hail damage, whatever its types."],
       "Frostbite" => [
         "Freezing works as in PIF.",
         "Freezing becomes Frostbite: the Pokémon can still act, loses a little HP each turn and deals half special damage."],
       "Drowsy" => [
         "Sleep works as in PIF.",
         "Sleep becomes Drowsy: the Pokémon acts about half the time and deals half damage."],
+      "Pre-Status" => [
+        "Pokémon start battles with the status they already have.",
+        "Kuray Actions (PC or party) > Start Battles makes a Pokémon start every battle burned or poisoned, if it can be."],
       "Bug Type Buffs" => [
         "Bug types as in PIF.",
         "Bug types resist Fairy, Psychic and Dark.",
@@ -178,6 +184,9 @@ module KIF
       "Recover Consumables" => [
         "Items used up in battle (berries, gems...) are gone.",
         "Items your Pokémon used up in battle come back after the battle."],
+      "Items to Bag" => [
+        "Thief, Covet and Pickup only work for a Pokémon with no held item.",
+        "If it holds an item, what it steals from wild Pokémon or finds with Pickup goes to the Bag."],
       "Fusion BaseStats" => [
         "Your fusions' base stats as in PIF.",
         "The sliders below set how much of each base stat comes from the head.",

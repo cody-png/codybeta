@@ -91,8 +91,10 @@ All options in this menu are per-save.
 ### Battle mechanics (by Bluewuppo)
 
 - **Modern Hail** - Off / Hail / Snow *(Off)*. Hail: Ice types get a defence boost during hail. Snow: hail becomes Gen 9 Snow.
+- **Weather Setter Immunity** - Off / On *(Off)*. A Pokémon with Sand Stream takes no sandstorm damage and one with Snow Warning no hail damage, whatever its types (for example a Crobat/Tyranitar fusion that is Poison/Dark). It works like Sand Veil: any sandstorm, not only its own. Foes get it too.
 - **Frostbite** - Off / On *(Off)*. Replaces Freeze with Gen 9-style Frostbite: the Pokémon can still act, but takes damage each turn.
 - **Drowsy** - Off / On *(Off)*. Replaces Sleep with Drowsy: the Pokémon isn't fully disabled.
+- **Pre-Status** - Off / On *(Off)*. Adds *Start Battles* to Kuray Actions (PC or party menu): Normal / Burned / Poisoned. A Pokémon set to Burned or Poisoned gets that status each time it is sent out without one, for Guts, Poison Heal, Quick Feet or Marvel Scale without a Flame Orb or Toxic Orb. It only happens if it could be burned or poisoned (not a Fire type for burns, not a Poison or Steel type for poison, not with Water Veil or Immunity...).
 - **Bug Type Buffs** - Off / Defensive / + Offensive *(Off)*. Defensive: Bug resists Fairy, Psychic and Dark. + Offensive: also makes Fairy weak to Bug moves.
 - **Ice Type Buffs** - Off / On *(Off)*. Ice resists Water and Flying.
 - **Show Lv. in BSM** - Off / On *(Off)*. In PIF's Base Stats Mode, still shows Pokémon levels in battle. The level doesn't reflect their stats there.
@@ -116,6 +118,7 @@ All options in this menu are per-save.
 - **Rocket Mode** - Off / On / All Balls *(Off)*. Lets Rocket Balls (sold in the Kuray Shop) steal trainers' Pokémon. All Balls lets any ball do it. Stolen Pokémon follow the Level Cap like your own (one stolen above it is held at the cap; its extra Exp is saved for later).
 - **Recover Consumables** - Off / On *(Off)*. Berries, gems and other items your Pokémon use up in battle come back afterwards.
 - **Skip Caught Prompt** - Off / On *(Off)*. With a full party, a caught Pokémon goes straight to the PC with no question asked.
+- **Items to Bag** - Off / On *(Off)*. A Pokémon that already holds an item can still steal with Thief or Covet in wild battles, and still finds items with Pickup after a battle. The new item goes to the Bag and it keeps its own. Trainer battles stay as before (their items come back after the battle), and only the wild Pokémon's own item can be taken (not one you gave it with Trick).
 - **Critical Captures** - Off / On *(On)*. Critical captures can happen with any ball, and get more likely the more Pokémon you own. Off keeps only PIF's own last-ball critical capture.
 
 ### Fusion
@@ -163,6 +166,7 @@ K-Eggs are sold in the Kuray Shop (see "Others > Kuray QoL").
   - All: also the PC boxes.
   - The party screen adjusts its layout for them: the level sits by the HP, and status badges (PSN, FNT...) sit on the sprite.
 - **Game's Font** - Default / FR/LG / D/P / R/B *(Default)*. Changes the game's font.
+- **Evolution line sprites** (no setting; Information module, with the Pokédex's Dex Sprite Select). In a Pokémon's Summary > Pokédex > Sprites, the list also has the sprites of the rest of its evolution line (for a fusion, every head and body pair of its two lines), so a Charizard can keep Charmeleon's sprite. The pick is for that one Pokémon only. Needs Random Sprites On; evolving picks a new sprite as before. Choosing which sprites can appear at random (Down on that page) still lists only its own species.
 
 ### Per-save
 
@@ -420,13 +424,14 @@ These features have no option of their own.
   - The Elite Four, Blue, the Fighting Arena leaders, Gold and Cynthia use level 100 fusion teams scaled to your strongest Pokémon.
   - Challenge rules: singles only, no items in trainer battles, Set style, and foes have doubled PP.
   - Beating Blue earns emblems; the Silver Emblem opens the Mt. Silver vortex to Cynthia.
+- **Triple fusion starters:** PIF's Custom starter menu (new game, when a save file already exists: *Use regular starters? No > Custom*) has a third choice, **Triple fusion**, next to Not fused and Fused. It lists PIF's 26 triple fusions (the legendary trios, the starter trios, Regitrio...). Debug mode also gets *Pokémon > Add triple fusion*. (Pokémon & Fusion module.)
 - **Mystery Gift:** KIF's gift "Fire Misbok!" appears in "Search for public gifts". It's a shiny Ghost/Fire Misdreavus/Arbok fusion: it shows that a Pokémon's types aren't always locked to its species.
 - **Speed keys:** with speed-up in Toggle mode, L goes to the next speed and R goes back to 1x.
 - **Skip the intro:** put an empty file named `NoIntro.krs` in your save folder to go straight to the load screen.
 - **Load screen:** links to the KIF Discord and documentation.
 - **Mods folder:** the `Mods` folder next to InfiniteFusion.exe takes a mod as a `.rb` file, a folder (its `.rb` files load in name order, or in the order its `mod.json` lists; mods it depends on load first) or a `.zip` (unpacked into a folder of the same name the next time the game starts; the zip is moved to `Mods/Imported`). Folders with a `mod.json` are left to Mod Manager when it's installed. A folder with only pictures and sounds (`Graphics/`, `Audio/`) is a mod too. A mod's pictures and sounds stay in its own folder and the game uses them from there (a mod that loads later wins when two have the same file), so deleting a mod's folder removes it completely. The **Mods** section of Options starts with a row that switches between five lists (Left / Right):
-  - **Installed** - every mod with **On / Off** (applies at the next start, shown as *ON/OFF NEXT START*; Mod Manager's mods use Mod Manager's own switch), a settings page for each mod that added settings, and *Settings by category*. A broken mod is skipped instead of crashing the game and shows *ERROR*. **USE** on a mod > **Uninstall** removes it (asks first); its settings are set aside, outside your save, and come back if you install it again.
-  - **Browse** - the mod catalogs (KIF-Mods is the one Mod Manager 2.0 lists). Enter installs a mod, and any mods it needs (it asks first and shows the download size), into `Mods/<mod>`. It starts working the next time the game starts.
+  - **Installed** - every mod with **On / Off** (applies at the next start, shown as *ON/OFF NEXT START*; Mod Manager's mods use Mod Manager's own switch), a settings page for each mod that added settings, and *Settings by category*. A broken mod is skipped instead of crashing the game and shows *ERROR*. **USE** on a mod > **Read description** shows its README (or its short description), and **Uninstall** removes it (asks first); its settings are set aside, outside your save, and come back if you install it again.
+  - **Browse** - the mod catalogs (KIF-Mods is the one Mod Manager 2.0 lists). Enter on a mod > **Read description** shows its README, read from the catalog (or its short description if it has none); **Install** installs it, and any mods it needs (it asks first and shows the download size), into `Mods/<mod>`. It starts working the next time the game starts.
   - **Modpacks** - sets of mods the catalogs offer. Enter installs the ones you don't have (and updates any older than the pack wants).
   - **Share Code** - *Copy my share code* copies a code (KIF-...) for the mods you have On; *Use a share code* installs the mods from a code someone copied for you (or type it in). Codes from Mod Manager 2.0 work too.
   - **Updates** - installed catalog mods with a newer version; **Update all** updates them in one go. Only changed files are downloaded, and a mod's own settings are kept. At start-up, right after KIF's own update check, KIF asks "Updates for N mods. Open Mods > Updates?" (not when Updates is Off or there's no internet).

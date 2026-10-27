@@ -747,6 +747,19 @@ module KIF
 
     def cat; return KIF::ModCatalog; end
 
+    # USE on a mod in Browse: Install / Update, Read description
+    def menu(item)
+      cmds = [_INTL("Read description"), _INTL("Cancel")]
+      if cat.update?(item)
+        cmds.unshift(_INTL("Update"))
+      elsif !cat.installed?(item)
+        cmds.unshift(_INTL("Install"))
+      end
+      cmd = pbMessage(KIF::PixelFont.utf8(item.name), cmds, cmds.length)
+      return if cmd < 0 || cmd == cmds.length - 1
+      cmd == cmds.length - 2 ? KIF::ModReadme.show_catalog(item) : install(item)
+    end
+
     def install(item)
       updating = cat.update?(item)
       if cat.installed?(item) && !updating

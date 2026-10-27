@@ -46,6 +46,9 @@ module KIF
       # the host stopped waiting for this request (co_cmd or co_sw): its AI chose
       def skipped?(req); !skip_at(req).nil?; end
 
+      # the host's battle ended meanwhile (its player ran away)
+      def ended?; @box.any? { |t, _m| t == "co_end" }; end
+
       def skip_at(req)
         @box.index { |t, m| t == "co_skip" && m["d"].is_a?(Hash) && %w[b t n].all? { |k| m["d"][k] == req[k] } }
       end
@@ -300,7 +303,7 @@ module KIF
           sync_moves(b, d["mv"])
           a = @view.command(mi, d) unless KIF::Coop.auto_battle?
         end
-        return if take_skip(d)   # nothing to send: the host went on
+        return if take_skip(d) || ended?   # nothing to send: the host went on
         if a && a["a"] == "item"
           @picked[a["i"]] += 1
           @balls += 1 if (GameData::Item.get(a["i"].to_sym).is_poke_ball? rescue false)
@@ -318,7 +321,7 @@ module KIF
           sync_party(d)
           p = @view.replacement(mi, d) || -2
         end
-        return if take_skip(d)
+        return if take_skip(d) || ended?
         @s.post("co_swr", "id" => @id, "d" => { "n" => d["n"], "p" => p })
         @view.waiting
       end
@@ -670,7 +673,7 @@ module KIF
         ensure
           @polling = false
         end
-        throw :kif_coop_skip, cw if command_window?(cw) && (@g.skipped?(req) || @g.lost?)
+        throw :kif_coop_skip, cw if command_window?(cw) && (@g.skipped?(req) || @g.ended? || @g.lost?)
       end
 
       # only the command menu closes early: a fight, Bag or party screen ends as usual (then the note shows)

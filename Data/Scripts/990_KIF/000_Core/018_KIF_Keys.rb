@@ -6,6 +6,9 @@
 # File: three Int32 (version, ?, count), then count entries of four Int32:
 # source type (1 key, 2 controller button, 3 axis), code (SDL scancode /
 # button / axis), extra, target button (Input::C, Input::L...).
+# While a controller is what the player pressed last (C-SYS-08 watches),
+# the controller button bound to it is named instead ("B", not "Esc": a
+# controller player was told "Esc" in the 26 Oct test).
 #===============================================================================
 module KIF
   module Keys
@@ -29,6 +32,10 @@ module KIF
     (1..12).each { |n| NAMES[57 + n] = ["F#{n}", :"F#{n}"] }
     (1..9).each { |n| NAMES[88 + n] = ["Num#{n}", :"KP_#{n}"] }
 
+    # SDL's controller buttons (in its order) and triggers, by their Xbox names as SDL gives them
+    PAD_BUTTONS = %w[A B X Y Back Guide Start L3 R3 LB RB Up Down Left Right]
+    PAD_AXES = { 4 => "LT", 5 => "RT" }
+
     module_function
 
     def paths
@@ -41,26 +48,56 @@ module KIF
 
     # button => [scancode, ...] (keyboard only), re-read when the file changes
     def bindings
+      return read_file[0]
+    end
+
+    # button => [controller button name, ...]
+    def pad_bindings
+      return read_file[1]
+    end
+
+    def read_file
       path = paths.find { |p| File.file?(p) }
-      return {} unless path
+      return [{}, {}] unless path
       stamp = [path, File.mtime(path).to_f, File.size(path)]
-      return @bindings if @bindings && @stamp == stamp
+      return @read if @read && @stamp == stamp
       @stamp = stamp
-      out = {}
+      keys = {}
+      pads = {}
       data = File.binread(path)
       n = data[8, 4].to_s.unpack1("l<").to_i
       n.times do |i|
         t, code, _extra, target = data[12 + i * 16, 16].to_s.unpack("l<4")
         break if target.nil?
-        (out[target] ||= []) << code if t == 1
+        (keys[target] ||= []) << code if t == 1
+        nm = (t == 2 && code >= 0) ? PAD_BUTTONS[code] : (t == 3 ? PAD_AXES[code] : nil)
+        (pads[target] ||= []) << nm if nm
       end
-      return @bindings = out
+      return @read = [keys, pads]
     rescue StandardError
-      return @bindings = {}
+      return @read = [{}, {}]
+    end
+
+    # mkxp-z's own controller layout (the game's Data/keybindings.mkxp1)
+    def pad_defaults
+      return @pad_defaults ||= {
+        Input::USE => "A", Input::BACK => "B", Input::ACTION => "X", Input::X => "Y",
+        Input::Y => "L3", Input::SPECIAL => "R3", Input::JUMPUP => "LB", Input::JUMPDOWN => "RB"
+      }
+    end
+
+    # a controller button was pressed more recently than a key
+    def pad?
+      return defined?(KIF::ControllerLog) && KIF::ControllerLog.respond_to?(:pad?) && KIF::ControllerLog.pad? ? true : false
+    end
+
+    def pad_label(button)
+      return (pad_bindings[button] || []).first || pad_defaults[button]
     end
 
     # what to print for a button ("D"); default when nothing is bound
     def label(button, default = nil)
+      return pad_label(button) || default if pad?
       (bindings[button] || []).each do |code|
         return NAMES[code][0] if NAMES[code]
       end
@@ -92,6 +129,7 @@ module KIF
 
     def short(button)
       return pad[button] || "?" if KIF.mobile?
+      return pad_label(button) || defaults[button] || "?" if pad?
       names = (bindings[button] || []).map { |c| NAMES[c] && NAMES[c][0] }.compact
       return names.min_by(&:length) || defaults[button] || "?"
     end

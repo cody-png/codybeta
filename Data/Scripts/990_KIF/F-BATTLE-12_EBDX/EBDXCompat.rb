@@ -343,6 +343,23 @@ if KIF::EBDX.installed?
     end
   end
 
+  # 660/007b's stat stage pills ("-1Def") hang under a box's HP bar. With two
+  # or three Pokémon on a side the boxes are stacked 50 px apart, and there
+  # the pills covered the start of the next box's name ("Charmander", 26 Oct
+  # test). A box with another one under it shows them above its own name.
+  if defined?(::DataBoxEBDX) && ::DataBoxEBDX.method_defined?(:drawStatStages)
+    class ::DataBoxEBDX
+      alias kif_pills_setUp setUp unless method_defined?(:kif_pills_setUp) || private_method_defined?(:kif_pills_setUp)
+      def setUp
+        kif_pills_setUp
+        pills = @sprites && @sprites["statStages"]
+        return unless pills && @battler && @battle
+        return unless @battler.index / 2 < @battle.pbSideSize(@battler.index) - 1
+        pills.ey = getMetric("name", :y) + 3 - EBDX_SS_PILL_H - 1   # the name is drawn 3 px down
+      end
+    end
+  end
+
   # 661/003's Type Display for EBDX boxes loads KIF 0.20.7's icon sheets from
   # Graphics/Pictures/TypeIcons_*.png; KIF keeps them in
   # Graphics/Pictures/KIF/TypeIcons (F-BATTLE-07), and "Txt" (5) has no sheet

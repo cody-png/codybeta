@@ -3,7 +3,19 @@
 Every KIF version, newest first: a short overview, then the full notes (click Full notes to open them).
 The game shows the same notes in Options > System > Update history.
 
-[1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+[1.2.11](#kif-1211) | [1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+
+## KIF 1.2.11
+
+- Pre-Status: a locked status can also be unlocked for one Pokemon for 10,000 (it stays with that Pokemon through fusing and unfusing). The Kuray Shop now sells the Flame Orb and Toxic Orb for 100,000 each.
+
+<details><summary>Full notes</summary>
+
+- Pre-Status (Kuray Actions > Start Battles): picking a locked status asks to pay 10,000 to unlock it for that Pokemon only (free in Streamer's Dream, like other PC purchases). Without enough money nothing is taken.
+- A paid unlock stays with the Pokemon: a fusion gets both parts' unlocks, and both parts keep them when unfused.
+- Having a Flame Orb or Toxic Orb still unlocks that status for every Pokemon in the save. The Kuray Shop sells each for 100,000 (was 6,000): Guts and several status abilities are very strong.
+
+</details>
 
 ## KIF 1.2.10
 

@@ -1,3 +1,11 @@
+KIF 1.2.11
+OVERVIEW
+- Pre-Status: a locked status can also be unlocked for one Pokemon for 10,000 (it stays with that Pokemon through fusing and unfusing). The Kuray Shop now sells the Flame Orb and Toxic Orb for 100,000 each.
+FULL NOTES
+- Pre-Status (Kuray Actions > Start Battles): picking a locked status asks to pay 10,000 to unlock it for that Pokemon only (free in Streamer's Dream, like other PC purchases). Without enough money nothing is taken.
+- A paid unlock stays with the Pokemon: a fusion gets both parts' unlocks, and both parts keep them when unfused.
+- Having a Flame Orb or Toxic Orb still unlocks that status for every Pokemon in the save. The Kuray Shop sells each for 100,000 (was 6,000): Guts and several status abilities are very strong.
+
 KIF 1.2.10
 OVERVIEW
 - New: Battle Camera (Options > Graphics). Doubles and triples in PIF's battle screen are zoomed out so every Pokemon is easy to see: Wide (default), Wider, or PIF.

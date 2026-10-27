@@ -17,7 +17,10 @@ KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (01
                  proc { $PokemonSystem.kif_multiplayer },
                  proc { |value|
                    $PokemonSystem.kif_multiplayer = value
-                   KIF::Net.stop if value == 0   # Off takes the pause entry away: hosting or a connection ends with it
+                   if value == 0   # Off takes the pause entry away: hosting or a connection ends with it,
+                     KIF::Net.stop
+                     KIF::Net.steam.shutdown   # and friends stop seeing "Playing Spacewar" (On starts Steam again)
+                   end
                  },
                  [_INTL("No Multiplayer entry in the pause menu."),
                   _INTL("Multiplayer in the pause menu: play with a friend over the internet or your network.")])
@@ -101,9 +104,10 @@ module KIF
       log("hosting on Steam")
     end
 
-    def self.start_steam_join(lobby)
+    # friend: the one picked or who invited; the lobby's owner must be them
+    def self.start_steam_join(lobby, friend)
       s = new_session
-      s.join_steam(steam, lobby)
+      s.join_steam(steam, lobby, friend)
       @session = s
       log("joining a friend on Steam")
     end
@@ -177,7 +181,7 @@ module KIF
       who = shown_name(steam.name(friend))
       q = live? ? _INTL("{1} invited you to play on Steam. Leave this game and join them?", who)
                 : _INTL("{1} invited you to play on Steam. Join them?", who)
-      Menu.open(steam_lobby: lobby) if pbConfirmMessage(q)
+      Menu.open(steam_lobby: [lobby, friend]) if pbConfirmMessage(q)
     end
 
     def self.stop
@@ -423,7 +427,7 @@ module KIF
     module Menu
       module_function
 
-      # steam_lobby: a friend's invite was accepted (on the map)
+      # steam_lobby: [lobby, friend] of a friend's invite accepted on the map
       def open(steam_lobby: nil)
         unless Net.available?
           return pbMessage(_INTL("Multiplayer needs the game's network library, which this copy of the game doesn't have."))
@@ -431,7 +435,7 @@ module KIF
         @scr = Screen.new
         begin
           s = Net.session
-          if steam_lobby then return steam_join(steam_lobby)
+          if steam_lobby then return steam_join(*steam_lobby)
           elsif s&.connected? then connected
           elsif s&.hosting? then s.via == :steam ? steam_hosting : hosting
           end
@@ -551,11 +555,11 @@ module KIF
         end
         names = games.map { |f, _, t| _INTL("{1} ({2}, KIF {3})", Net.shown_name(sl.name(f)), t["mode"], t["ver"]) } + [_INTL("Back")]
         i = pbMessage(_INTL("Friends hosting KIF:"), names, names.length)
-        steam_join(games[i][1], games[i][2]) if i < games.length
+        steam_join(games[i][1], games[i][0], games[i][2]) if i < games.length
       end
 
-      # tags: the lobby's (read again when nil); differences are shown first
-      def steam_join(lobby, tags = nil)
+      # friend: picked or who invited; tags: the lobby's (read again when nil); differences are shown first
+      def steam_join(lobby, friend, tags = nil)
         unless tags
           Net.steam.request_lobby_data(lobby)
           wait_for(_INTL("Join on Steam\nReading your friend's game..."), 3) { Net.lobby_tags(lobby) }
@@ -566,7 +570,7 @@ module KIF
           pbMessage(_INTL("{1}'s game is different from yours:", tags["name"]) + "\n" + warn.join("\n"))
           return unless pbConfirmMessage(_INTL("Join anyway?"))
         end
-        Net.start_steam_join(lobby)
+        Net.start_steam_join(lobby, friend)
         loop do
           s = Net.session
           break unless s && s.state != :closed && !s.connected?
@@ -583,7 +587,8 @@ module KIF
           busy: _INTL("Someone else is playing with them right now."),
           timeout: _INTL("Their game didn't answer in time (in a battle or a menu?). Try again when they're on the map."),
           declined: _INTL("Your friend didn't let you in (they said no, or didn't answer in time)."),
-          host_code: _INTL("That Steam game isn't a KIF game, or it has closed.")
+          host_code: _INTL("That Steam game isn't a KIF game, or it has closed."),
+          not_host: _INTL("Your friend is in someone else's game, not hosting one. Ask them to pick Host on Steam.")
         }[why] || _INTL("Couldn't get into your friend's Steam lobby. It may have closed."))
       end
 

@@ -7,6 +7,7 @@
 # Game.exe): friends see "Playing Spacewar". Starts only with Multiplayer On,
 # on 64-bit Windows, with both files there and Steam running; otherwise
 # start is false, the menu shows no Steam rows and nothing else changes.
+# Multiplayer Off shuts it down (On starts it again).
 # Callbacks are polled (ManualDispatch) once a frame from KIF::Net.update and
 # never wait. Messages: ISteamNetworkingMessages, reliable, channel 0, each
 # one frame of the usual protocol (Net.rb SteamConn, Session#host_steam).
@@ -71,7 +72,7 @@ module KIF
 
         def ready?; @ready == true; end
 
-        # once a game (a second script run keeps it): true when Steam is there and started
+        # once until shutdown (a second script run keeps it): true when Steam is there and started
         def start
           return @ready unless @ready.nil?
           @ready = false
@@ -194,10 +195,11 @@ module KIF
           end
         end
 
-        # Steam thread and game thread
+        # Steam thread and game thread: true sent, :full (k_EResultLimitExceeded: over 512 KB queued, try again later), false failed
         def send_to(peer, bytes)
           return false unless ready?
-          return i32(@fn[:Send].call(@nmsg, identity(peer), bytes, bytes.bytesize, SEND, 0)) == 1
+          r = i32(@fn[:Send].call(@nmsg, identity(peer), bytes, bytes.bytesize, SEND, 0))
+          return r == 1 || (r == 25 ? :full : false)
         end
 
         def accept(peer); b8(@fn[:Accept].call(@nmsg, identity(peer))); end
@@ -221,9 +223,10 @@ module KIF
           return out.reject { |_, peer| peer == 0 }
         end
 
+        # Multiplayer Off or the game closing; start can init again after it
         def shutdown
           return unless ready?
-          @ready = false
+          @ready = nil
           @fn[:Shutdown].call
           Net.log("Steam: shut down")
         end

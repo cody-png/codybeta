@@ -19,8 +19,9 @@
 #            after 24 tiles), nothing while standing still.
 #   pr_look  my outfit ids and colours: on connect and when they change;
 #            again with a map change's pr_at and every 30 s of moving.
-#   pr_do    what I'm doing: idle, talk (an event or a message box), menu or
-#            battle; sent when it changes, shown after the name
+#   pr_do    what I'm doing: idle, talk (an event or a message box), menu,
+#            bag, party (party, PC, a team pick), battle or trade; sent when
+#            it changes, shown as an icon after the name
 # Outfit ids from the other game only ever name a file inside PIF's outfit
 # folders (letters, digits, _ - and spaces), so a peer can't point at
 # another file.
@@ -58,7 +59,7 @@ module KIF
                      "cc" => COLOR, "hc" => COLOR, "tc" => COLOR, "t2c" => COLOR, "bc" => COLOR },
       "pr_do"   => { "a" => [String, 8] }
     )
-    DOING      = %w[idle talk menu battle]
+    DOING      = %w[idle talk menu bag party battle trade]
 
     # The local player in one frame (tests make their own)
     State = Struct.new(:m, :x, :y, :d, :a, :v, :h, :j)
@@ -181,11 +182,8 @@ module KIF
       attr_writer :map
       attr_accessor :doing
 
-      # the name tag: the name, and what they're doing unless idle
-      def tag
-        d = Presence.doing_label(@doing)
-        return d ? "#{@name} (#{d})" : @name
-      end
+      # the name tag: the name, and an icon for what they're doing unless idle
+      def tag; [@name, DOING.include?(@doing) ? @doing : "idle"]; end
 
       def initialize(name)
         super(nil)
@@ -556,16 +554,10 @@ module KIF
         if @tag_name != g.tag || @tag_bmp.nil?
           @tag_bmp.dispose if @tag_bmp   # replaced below, before the frame is drawn
           @tag_name = g.tag
-          probe = Bitmap.new(1, 1)
-          pbSetSmallFont(probe)
-          w = [probe.text_size(@tag_name).width + 8, 16].max
-          probe.dispose
-          @tag_bmp = Bitmap.new(w, 28)
-          pbSetSmallFont(@tag_bmp)
-          pbDrawShadowText(@tag_bmp, 0, 0, w, 24, @tag_name, Color.new(248, 248, 248), Color.new(48, 48, 48), 1)
+          @tag_bmp = Presence.tag_bitmap(*@tag_name)
         end
         @tag.bitmap = @tag_bmp unless @tag.bitmap.equal?(@tag_bmp)
-        @tag.ox = @tag_bmp.width / 2
+        @tag.ox = Presence.tag_name_width(@tag_bmp) / 2   # the name stays centred over the head
         @tag.oy = @tag_bmp.height
         @tag.x = @body.x
         @tag.y = top + @head_top - 8   # just over the top of what is drawn (a tall hat too)
@@ -649,16 +641,56 @@ module KIF
       case a
       when "talk" then _INTL("talking")
       when "menu" then _INTL("in a menu")
+      when "bag" then _INTL("in the Bag")
+      when "party" then _INTL("with their Pokémon")
       when "battle" then _INTL("in a battle")
+      when "trade" then _INTL("trading")
       end
     end
 
-    # in a menu or a battle until the block ends, then idle
+    # the game's own icons, drawn at their size (PIF's art is 2x already)
+    ICONS = { "talk" => "Graphics/Pictures/NPCIcons/dialogIcon", "menu" => "Graphics/Icons/menuIcons/POKENAV",
+              "bag" => "Graphics/Icons/menuIcons/BAG", "party" => "Graphics/Icons/menuIcons/POKEMON",
+              "battle" => "Graphics/Icons/bagPocket7", "trade" => "Graphics/Pictures/NPCIcons/tradeIcon" }
+
+    # an icon's picture (kept for the session), or nil
+    def self.icon(a)
+      @icons ||= {}
+      return @icons[a] if @icons[a] && !@icons[a].disposed?
+      f = ICONS[a] && pbResolveBitmap(ICONS[a])
+      return @icons[a] = f ? Bitmap.new(f) : nil
+    rescue StandardError
+      return nil
+    end
+
+    # the name tag: the name centred in its own part, the icon to its right
+    def self.tag_bitmap(name, doing = "idle")
+      probe = Bitmap.new(1, 1)
+      pbSetSmallFont(probe)
+      w = [probe.text_size(name).width + 8, 16].max
+      probe.dispose
+      ic = icon(doing)
+      h = [28, ic ? ic.height : 0].max
+      bmp = Bitmap.new(w + (ic ? ic.width + 2 : 0), h)
+      pbSetSmallFont(bmp)
+      pbDrawShadowText(bmp, 0, h - 28, w, 24, name, Color.new(248, 248, 248), Color.new(48, 48, 48), 1)
+      bmp.blt(w + 2, h - ic.height - 2, ic, ic.rect) if ic
+      bmp.instance_variable_set(:@kif_name_w, w)
+      return bmp
+    end
+
+    def self.tag_name_width(bmp); bmp.instance_variable_get(:@kif_name_w) || bmp.width; end
+
+    # a message box on the map: talking, unless a screen is up (its own messages)
+    def self.talk; doing("talk") if [nil, "idle", "talk"].include?(@doing); end
+
+    # in a screen until the block ends, then back to what came before
     def self.busy(a)
+      prev = @doing || "idle"
       doing(a)
       return yield
     ensure
-      doing("idle")
+      doing(prev)
     end
 
     # a new connection: everything is sent again, the old ghost goes
@@ -753,6 +785,60 @@ end
 alias kif_pr_pbMessageDisplay pbMessageDisplay unless defined?(kif_pr_pbMessageDisplay)
 
 def pbMessageDisplay(*args, &blk)
-  KIF::Presence.doing("talk") if $scene.is_a?(Scene_Map) && !$game_temp.in_menu && !$game_temp.in_battle
+  KIF::Presence.talk if $scene.is_a?(Scene_Map) && !$game_temp.in_menu && !$game_temp.in_battle
   return kif_pr_pbMessageDisplay(*args, &blk)
+end
+
+# Screens an event or the pause menu opens (an event's screen opens before
+# the map's next frame could see the event running, so each says so itself)
+class PokemonBagScreen
+  alias kif_pr_pbStartScreen pbStartScreen unless method_defined?(:kif_pr_pbStartScreen) || private_method_defined?(:kif_pr_pbStartScreen)
+  alias kif_pr_pbChooseItemScreen pbChooseItemScreen unless method_defined?(:kif_pr_pbChooseItemScreen) || private_method_defined?(:kif_pr_pbChooseItemScreen)
+
+  def pbStartScreen(*args, &blk); KIF::Presence.busy("bag") { kif_pr_pbStartScreen(*args, &blk) }; end
+  def pbChooseItemScreen(*args, &blk); KIF::Presence.busy("bag") { kif_pr_pbChooseItemScreen(*args, &blk) }; end
+end
+
+# (PokemonPartyScreen#pbPokemonScreen is prepended elsewhere: prepended here too, never aliased)
+module KIF
+  module Presence
+    module PartyBusy
+      def pbPokemonScreen(*args, &blk); KIF::Presence.busy("party") { super }; end
+    end
+  end
+end
+PokemonPartyScreen.prepend(KIF::Presence::PartyBusy) unless PokemonPartyScreen < KIF::Presence::PartyBusy
+
+class PokemonStorageScreen
+  alias kif_pr_pbStartScreen pbStartScreen unless method_defined?(:kif_pr_pbStartScreen) || private_method_defined?(:kif_pr_pbStartScreen)
+
+  def pbStartScreen(*args, &blk); KIF::Presence.busy("party") { kif_pr_pbStartScreen(*args, &blk) }; end
+end
+
+# a gym's team pick and other "choose your team" screens
+module PokemonSelection
+  class << self
+    alias kif_pr_choose choose unless method_defined?(:kif_pr_choose) || private_method_defined?(:kif_pr_choose)
+
+    def choose(*args, &blk); KIF::Presence.busy("party") { kif_pr_choose(*args, &blk) }; end
+  end
+end
+
+# an event's "choose a Pokémon" (a gift, a tutor, a trade partner)
+alias kif_pr_pbChoosePokemon pbChoosePokemon unless defined?(kif_pr_pbChoosePokemon)
+
+def pbChoosePokemon(*args, &blk)
+  KIF::Presence.busy("party") { kif_pr_pbChoosePokemon(*args, &blk) }
+end
+
+alias kif_pr_pbStartTrade pbStartTrade unless defined?(kif_pr_pbStartTrade)
+
+def pbStartTrade(*args, &blk)
+  KIF::Presence.busy("trade") { kif_pr_pbStartTrade(*args, &blk) }
+end
+
+alias kif_pr_pbPokemonMart pbPokemonMart unless defined?(kif_pr_pbPokemonMart)
+
+def pbPokemonMart(*args, &blk)
+  KIF::Presence.busy("menu") { kif_pr_pbPokemonMart(*args, &blk) }
 end

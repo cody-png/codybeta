@@ -58,19 +58,20 @@ module KIF
       end
     end
 
-    # Word-wrapped rows; a "- " line's later rows are indented, a heading
-    # (no "- ") gets an empty row above it
-    def self.text_rows(bmp, lines, width)
+    # Word-wrapped rows; a list line's ("- ", "1. ") later rows are indented.
+    # gaps: a heading (any other line) gets an empty row above it; without
+    # gaps the lines bring their own empty ones (mod descriptions)
+    def self.text_rows(bmp, lines, width, gaps = true)
       rows = []
       lines.each do |line|
-        bullet = line.start_with?("- ")
-        rows << "" if !bullet && !rows.empty?
-        cur = ""
+        item = line[/\A *(?:- |\d+[.)] )/]
+        rows << "" if gaps && !item && !rows.empty?
+        cur = line[/\A */]   # a nested list keeps its indent
         line.split(" ").each do |word|
-          test = cur.empty? ? word : "#{cur} #{word}"
+          test = cur.strip.empty? ? cur + word : "#{cur} #{word}"
           if !cur.strip.empty? && bmp.text_size(test).width > width
             rows << cur
-            cur = (bullet ? "  " : "") + word
+            cur = (item ? " " * item.length : "") + word
           else
             cur = test
           end
@@ -83,7 +84,7 @@ module KIF
     # Reader: Up/Down a line, Left/Right (or the page keys) a page, Use or
     # Back closes. Mouse and touch: the wheel scrolls, a click or tap on the
     # text's upper or lower half turns a page, one on the title closes.
-    def self.show_text(title, lines)
+    def self.show_text(title, lines, gaps = true)
       lines = [_INTL("No notes for this version.")] if lines.empty?
       vp = Viewport.new(0, 0, Graphics.width, Graphics.height)
       vp.z = 999999
@@ -105,7 +106,7 @@ module KIF
       pbSetSmallFont(win.contents) rescue nil
       base, shadow = (getDefaultTextColors(win.windowskin) rescue [Color.new(80, 80, 88), Color.new(160, 160, 168)])
       lh = 26
-      rows = text_rows(win.contents, lines, cw - 12)
+      rows = text_rows(win.contents, lines, cw - 12, gaps)
       per = [ch / lh, 1].max
       maxtop = [rows.length - per, 0].max
       top = 0

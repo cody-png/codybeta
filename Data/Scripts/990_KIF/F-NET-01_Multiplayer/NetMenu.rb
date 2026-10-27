@@ -245,6 +245,7 @@ module KIF
           KIF::Coop.on_connect(s) if defined?(KIF::Coop)
           ModShare.on_connect(s) if defined?(ModShare)
           KIF::NetSprite.on_connect(s) if defined?(KIF::NetSprite)
+          KIF::Trade.on_connect(s) if defined?(KIF::Trade)
         when :message
           if ev[1] == "wave"
             t = _INTL("{1} says hello!", s.partner)
@@ -265,6 +266,12 @@ module KIF
             rescue => e
               log("sprite message failed (#{e.class}: #{e.message})")
             end
+          elsif ev[1].start_with?("tr_") && defined?(KIF::Trade)
+            begin
+              KIF::Trade.receive(ev[1], ev[2])
+            rescue => e
+              log("trade message failed (#{e.class}: #{e.message})")
+            end
           elsif ev[1].start_with?("co_") && defined?(KIF::Coop)
             begin
               KIF::Coop.receive(ev[1], ev[2])
@@ -276,6 +283,7 @@ module KIF
           KIF::SoulLink.on_disconnect if defined?(KIF::SoulLink)
           KIF::Presence.on_disconnect if defined?(KIF::Presence)
           KIF::Coop.on_disconnect if defined?(KIF::Coop)
+          KIF::Trade.on_disconnect if defined?(KIF::Trade)
           @notes << (ev[1] == :bye ? _INTL("Your friend disconnected.") : _INTL("Lost the connection to your friend."))
           log("disconnected (#{ev[1]})")
         when :failed
@@ -938,17 +946,20 @@ module KIF
           sl = defined?(KIF::SoulLink) && KIF::SoulLink.on?
           cmds = [_INTL("Send hello"), _INTL("Disconnect")]
           cmds.unshift(_INTL("Soul Link")) if sl
+          tr = defined?(KIF::Trade) ? cmds.length : nil   # after Disconnect, before co-op's row
+          cmds << KIF::Trade.menu_label if tr
           co = defined?(KIF::Coop) ? KIF::Coop.menu_label : nil   # last row: the rows above keep their places
           cmds << co if co
           note = KIF::Coop.take_notes.last || note if co
           help = note || help
           r = pick(lines.join("\n"), cmds, help,
-                   proc { [Net.session&.connected?, Net.notes.length, co && KIF::Coop.menu_label,
+                   proc { [Net.session&.connected?, Net.notes.length, co && KIF::Coop.menu_label, tr && KIF::Trade.menu_label,
                            defined?(KIF::Presence) && KIF::Presence.ghost&.map_id] })
           next if r.nil?
           note = nil
           return if r < 0
           next KIF::Coop.menu_pick if co && r == cmds.length - 1
+          next KIF::Trade.menu_pick if tr && r == tr
           r -= 1 if sl
           case r
           when -1

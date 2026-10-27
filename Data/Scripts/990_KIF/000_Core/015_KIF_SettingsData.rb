@@ -117,6 +117,7 @@ module KIF
       # Type Display took over PIF's Battle Type Icons (its "PIF" choice)
       "Battle Type Icons"  => proc { true },
       "EV Allocation"      => proc { $PokemonSystem.noevsmode.to_i == 1 && $PokemonSystem.ev_alloc.to_i == 0 },
+      "EVs Train Mode"     => proc { $PokemonSystem.noevsmode.to_i == 1 && $PokemonSystem.evstrain.to_i == 0 },
       "Legendary Breeding" => proc { $PokemonSystem.legendarybreed.to_i == 0 && $PokemonSystem.cody_legendarybreed.to_i == 0 },
       # KIF's Level Cap and Nuzlocke replace PIF's two rules
       "Level caps"         => proc { $PokemonSystem.level_caps.to_i == 0 },

@@ -20,11 +20,12 @@ module KIF
       attr_reader :id, :mirror, :decision, :host_name, :party, :caught, :done
       attr_accessor :view
 
-      def initialize(session, id, trainer, view = nil, bag: nil)
+      def initialize(session, id, trainer, view = nil, bag: nil, max: 0)
         @s = session
         @id = id
         @trainer = trainer
-        @party = trainer.party.first(6)   # the Pokémon sent with co_join, in that order
+        @party = KIF::Coop.join_party(trainer, max)   # the Pokémon sent with co_join, in that order
+        @max = max.to_i > 0 && @party.length < trainer.party.length ? max.to_i : nil   # told at the start
         @bag = bag || (trainer.equal?($Trainer) ? $PokemonBag : nil)
         @view = view
         @host_name = session.partner.to_s
@@ -106,7 +107,11 @@ module KIF
         return unless @awaiting && KIF::Net.now - @awaited_at >= 0.5 && Input.trigger?(Input::BACK)
         rechoose
       end
-      def started!; @started = true; end
+      # the battle screen is up
+      def started!
+        @started = true
+        @view.message(_INTL("{1}'s battle allows {2} Pokémon each: your first {2} that can fight came.", @host_name, @max)) if @max && @mirror
+      end
 
       def int(v, lo, hi, d = nil); Mon.int(v, lo, hi, d); end
 
@@ -181,6 +186,15 @@ module KIF
         @s.post("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" })
       end
 
+      # the host's battle music (gym leader, rival, legendary...) when this game has the file
+      def battle_bgm(v)
+        return nil unless v.is_a?(Array) && v.length == 3 && v[0].is_a?(String)
+        n = v[0]
+        return nil unless n =~ /\A[^\\\/:*?"<>|\x00-\x1f]{1,80}\z/ && !n.include?("..")
+        return nil unless (FileTest.audio_exist?("Audio/BGM/" + n) rescue false)
+        return RPG::AudioFile.new(n, int(v[1], 0, 100, 100), int(v[2], 50, 150, 100))
+      end
+
       def trainer_from(t)
         return nil unless t.is_a?(Hash)
         ty = Mon.sym(t["ty"], GameData::TrainerType) || ($Trainer.trainer_type rescue nil) || GameData::TrainerType.keys.first
@@ -233,6 +247,7 @@ module KIF
         m.canRun = d["cr"] == 1
         m.moneyGain = d["mg"] == 1
         m.expGain = d["eg"] == 1
+        @bgm = battle_bgm(d["bgm"])
         @mirror = m
         return false unless d["bt"].is_a?(Array)
         d["bt"].each do |e|
@@ -536,7 +551,7 @@ module KIF
         Events.onStartBattle.trigger(nil)   # levels before, for the evolution check after
         if @mirror
           wild = @mirror.wildBattle?
-          bgm = wild ? pbGetWildBattleBGM(@mirror.pbParty(1)) : pbGetTrainerBattleBGM(@mirror.opponent)
+          bgm = @bgm || (wild ? pbGetWildBattleBGM(@mirror.pbParty(1)) : pbGetTrainerBattleBGM(@mirror.opponent))
           type = wild ? (@mirror.pbParty(1).length == 1 ? 0 : 2) : 3
           pbBattleAnimation(bgm, type, wild ? @mirror.pbParty(1) : @mirror.opponent) {
             pbSceneStandby { play }

@@ -17,7 +17,8 @@
 # Messages (KIF::Net signed frames; every field is checked again here):
 #   co_pact  {on}                   I want to fight together (1) / not (0)
 #   co_st    {map}                  my map, when it changes
-#   co_ask   {id,map,kind}          host: a battle starts here, join?
+#   co_ask   {id,map,kind,max}      host: a battle starts here, join? (max: its team
+#                                   size limit, from a gym's pick; 0 none)
 #   co_join  {id,name,type,tid,party}  guest: yes, with this party
 #   co_no    {id,why}               guest: not now
 #   co_begin {id,d}                 host: trainers, parties, battlers
@@ -54,7 +55,8 @@ module KIF
     {
       "co_pact"  => { "on" => [Integer, 0, 1] },
       "co_st"    => { "map" => [Integer, 0, 99_999] },
-      "co_ask"   => { "id" => [Integer, 1, 1_000_000_000], "map" => [Integer, 0, 99_999], "kind" => [String, 8] },
+      "co_ask"   => { "id" => [Integer, 1, 1_000_000_000], "map" => [Integer, 0, 99_999], "kind" => [String, 8],
+                      "max" => [Integer, 0, 6] },
       "co_join"  => { "id" => [Integer, 1, 1_000_000_000], "name" => [String, 24], "type" => [String, 48],
                       "tid" => [Integer, 0, 0xffffffff], "party" => [Array] },
       "co_no"    => { "id" => [Integer, 1, 1_000_000_000], "why" => [String, 16] },
@@ -375,15 +377,31 @@ module KIF
       ask_pact if @ask_pact && KIF::Net.quiet?
     end
 
-    def self.join_data(id, trainer)
+    # the battle's team size limit here: a gym's pick (PokemonSelection) left this
+    # many in the party; 0 none. The partner brings no more (the host's rule)
+    def self.team_limit
+      return 0 unless $PokemonGlobal && $PokemonGlobal.pokemonSelectionOriginalParty && $Trainer
+      return $Trainer.party.length.clamp(1, 6)
+    rescue StandardError
+      return 0
+    end
+
+    # the Pokémon a player brings: the party, or its first `max` that can fight
+    def self.join_party(trainer, max = 0)
+      return trainer.party.first(6) unless max.to_i > 0
+      return trainer.party.select { |p| p && p.able? }.first(max)
+    end
+
+    def self.join_data(id, trainer, max = 0)
       return { "id" => id, "name" => trainer.name.to_s[0, 24], "type" => trainer.trainer_type.to_s[0, 48],
-               "tid" => trainer.id.to_i & 0xffffffff, "party" => trainer.party.first(6).map { |p| Mon.dump(p, true) } }
+               "tid" => trainer.id.to_i & 0xffffffff, "party" => join_party(trainer, max).map { |p| Mon.dump(p, true) } }
     end
 
     def self.join_battle(s, ask)
-      s.post("co_join", join_data(ask["id"], $Trainer))
-      log("joining #{partner}'s battle #{ask['id']}")
-      g = Guest.new(s, ask["id"], $Trainer)
+      max = ask["max"].to_i
+      s.post("co_join", join_data(ask["id"], $Trainer, max))
+      log("joining #{partner}'s battle #{ask['id']}#{max > 0 ? " (#{max} Pokémon each)" : ''}")
+      g = Guest.new(s, ask["id"], $Trainer, max: max)
       @guest = g
       begin
         g.run
@@ -406,7 +424,8 @@ module KIF
       @next_id = 1 if @next_id == 0
       id = @next_id
       @host_box.clear
-      s.post("co_ask", "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => kind.to_s)
+      max = team_limit
+      s.post("co_ask", "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => kind.to_s, "max" => max)
       reply = nil
       wait_map(@ask_wait) { reply = take_host(id, %w[co_join co_no]) }
       unless reply && reply[0] == "co_join"
@@ -415,7 +434,7 @@ module KIF
         pbMessage(_INTL("{1} didn't join this battle.", partner))   # instead of a silent wait, then a battle alone
         return nil
       end
-      join = read_join(reply[1])
+      join = read_join(reply[1], max)
       unless join
         log("#{partner}'s party didn't fit; fighting alone")
         tell(:party, _INTL("{1}'s team has a Pokémon this game doesn't have (a mod's, or another KIF's), so you fight alone.", partner))
@@ -426,8 +445,8 @@ module KIF
       return join
     end
 
-    def self.read_join(msg)
-      party = msg["party"].first(6).map { |h| Mon.load(h, true) }
+    def self.read_join(msg, max = 0)
+      party = msg["party"].first(max > 0 ? max : 6).map { |h| Mon.load(h, true) }
       return nil if party.empty? || party.any?(&:nil?) || party.none? { |p| p.able? }
       if party.any? { |p| p.instance_variable_get(:@kif_coop_lost) }
         tell(:lost, _INTL("Some of {1}'s Pokémon have moves, Abilities or items this game doesn't have (a mod's, or another KIF's). Here they fight without them.", partner))

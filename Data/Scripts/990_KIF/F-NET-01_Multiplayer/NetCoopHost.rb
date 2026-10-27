@@ -265,6 +265,8 @@ module KIF
               "bt" => b.battlers.each_with_index.map { |x, i| x ? [i, x.pokemonIndex] : nil }.compact,
               "cl" => b.canLose ? 1 : 0, "cr" => b.canRun ? 1 : 0, "mg" => b.moneyGain ? 1 : 0, "eg" => b.expGain ? 1 : 0 }
         d["lo"] = 1 if guest_party.any? { |p| p&.instance_variable_get(:@kif_coop_lost) }   # the partner is told why
+        m = ($game_system.getPlayingBGM rescue nil)   # the battle's music (gym leader, rival...), for the partner's game
+        d["bgm"] = [m.name.to_s[0, 80], m.volume.to_i, m.pitch.to_i] if m && !m.name.to_s.empty?
         post("co_begin", "d" => d)
       end
 

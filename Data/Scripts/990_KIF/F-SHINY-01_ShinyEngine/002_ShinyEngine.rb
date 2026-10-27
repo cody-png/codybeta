@@ -118,8 +118,17 @@ module KIF
     # Decision (KIF pbGiveFinaleColor :515-588)
     #---------------------------------------------------------------------------
     # Returns [use_pif, use_kif] as booleans for a Pokémon.
+    # a colour setting for this Pokémon: a multiplayer partner's Pokémon keeps
+    # the settings of the game that rolled it (@kif_net_shiny, NetSprite), so
+    # both players see the same colours and star
+    def self.opt(pkmn, name, default)
+      o = pkmn && pkmn.instance_variable_get(:@kif_net_shiny)
+      return o[name] if o.is_a?(Hash) && o[name].is_a?(Integer)
+      return $PokemonSystem ? $PokemonSystem.send(name).to_i : default
+    end
+
     def self.decide(pkmn)
-      mode = $PokemonSystem ? $PokemonSystem.pifimprovedshinies : 0
+      mode = opt(pkmn, :pifimprovedshinies, 0)
       roll = pkmn.shinyimprovpif?
       use_pif = roll >= 1
       force_split = (roll == 1)
@@ -500,7 +509,7 @@ module KIF
     #---------------------------------------------------------------------------
     # Shiny Filter: 0 Off, 1 Filtered, 2 Hybrid (per-Pokémon roll)
     def self.filtered?(pkmn)
-      mode = $PokemonSystem ? $PokemonSystem.shinyfilter.to_i : 2
+      mode = opt(pkmn, :shinyfilter, 2)
       return false if mode == 0
       return true if mode == 1
       return pkmn.respond_to?(:kif_filter_roll?) ? pkmn.kif_filter_roll? == 1 : true
@@ -515,7 +524,7 @@ module KIF
     def self.colorize!(anim, pkmn, kind = :sprite, pif_done = false)
       use_pif, use_kif = decide(pkmn)
       return anim unless use_kif
-      adv = $PokemonSystem ? $PokemonSystem.shinyadvanced : 1
+      adv = opt(pkmn, :shinyadvanced, 1)
       polish = filtered?(pkmn)
       hue = pkmn.shinyValue?
       codes = (adv == 0) ? [0, 1, 2] : [pkmn.shinyR?, pkmn.shinyG?, pkmn.shinyB?]

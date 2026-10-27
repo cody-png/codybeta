@@ -1,3 +1,8 @@
+KIF 1.2.8
+- Faster start with a full sprite pack and Download data Off: the check before the load screen no longer goes through every sprite file.
+- The log now says which step was slow when the load screen takes a while to appear (send the Logs folder if the screen stays black after Play).
+- Verbose logging also turns on with a file named verbose or verbose.txt.txt in the Logs folder.
+
 KIF 1.2.7
 - What's new opens a full-screen reader: Up/Down scroll, Left/Right turn pages, A or B closes.
 - Options > Mods: press USE on a mod (Installed or Browse) to read its full description.

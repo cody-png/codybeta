@@ -74,17 +74,27 @@ module KIF
   # named verbose.txt is in the Logs folder (or the save folder). Players get
   # the short log. Looked up once a session.
   VERBOSE_MARKER = "verbose.txt"
+  # any case, and "verbose.txt.txt" (Windows hides the .txt it adds) or "verbose"
+  VERBOSE_NAME = /\Averbose(\.txt)*\s*\z/i
+
+  def self.verbose_marker_in?(dir)
+    return File.directory?(dir) && Dir.children(dir).any? { |c| c =~ VERBOSE_NAME }
+  rescue StandardError
+    return false
+  end
 
   def self.verbose?
     return @verbose unless @verbose.nil?
-    @verbose = begin
-      on = $DEBUG || marker?(VERBOSE_MARKER)
-      on ||= defined?(KIF::Paths) && File.exist?(File.join(KIF::Paths.logs, VERBOSE_MARKER))
-      on ? true : false
-    rescue
+    on = begin
+      $DEBUG || marker?(VERBOSE_MARKER) || verbose_marker_in?(save_dir) ||
+        (defined?(KIF::Paths) && verbose_marker_in?(KIF::Paths.logs))
+    rescue StandardError
       false
     end
-    return @verbose
+    on = on ? true : false
+    # before 000_Paths.rb is loaded the Logs folder isn't known: a "no" then isn't kept
+    @verbose = on if on || defined?(KIF::Paths)
+    return on
   end
 
   # A log line only verbose logging writes (details that help testing and

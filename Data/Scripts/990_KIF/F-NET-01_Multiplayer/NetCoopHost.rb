@@ -290,7 +290,13 @@ module KIF
 
       # true once the block is; else why not: :back (B, then let the game
       # choose), :change (B, then change this player's pick), :time or :lost
-      def wait(secs, change = false)
+      def wait(secs, change = false, &blk)
+        return wait_inner(secs, change, &blk)
+      ensure
+        hint_done
+      end
+
+      def wait_inner(secs, change)
         t0 = KIF::Net.now
         shown = nil   # when the hint went up
         left = nil
@@ -322,14 +328,21 @@ module KIF
       # the hint; then only its text changes, once a second (no retyping)
       def hint(text, again)
         w = again && (@battle.scene.instance_variable_get(:@sprites) rescue nil)&.[]("messageWindow")
+        # the window stays out of letter-by-letter mode until the wait ends:
+        # turned back on at once, it drew nothing new and "(90 s)" stayed up
         if w.respond_to?(:letterbyletter=) && w.respond_to?(:text=)
-          lbl = w.letterbyletter
+          @hint_win ||= [w, w.letterbyletter]
           w.letterbyletter = false
           w.text = text
-          w.letterbyletter = lbl
         else
           (quietly { @battle.pbDisplayBrief(text) } rescue nil)
         end
+      end
+
+      def hint_done
+        w, lbl = @hint_win
+        @hint_win = nil
+        w.letterbyletter = lbl if w && !(w.disposed? rescue true)
       end
 
       # B while waiting: :let (the game chooses for the partner), :change (this
@@ -352,8 +365,9 @@ module KIF
       def back_name; KIF::Coop.back_name; end
 
       def wait_text(left, change = false)
-        return _INTL("Waiting for {1} to choose... ({2} s)\n{3}: change your choice or let the game choose for {1}", @name, left, back_name) if change
-        _INTL("Waiting for {1} to choose... ({2} s)\n{3}: let the game choose for {1}", @name, left, back_name)
+        # (short: the second line fits PIF's message box)
+        return _INTL("Waiting for {1} to choose... ({2} s)\n{3}: change or let the game pick", @name, left, back_name) if change
+        _INTL("Waiting for {1} to choose... ({2} s)\n{3}: let the game pick", @name, left, back_name)
       end
 
       # the partner's game is told it was chosen for (its menu closes); the reason is logged

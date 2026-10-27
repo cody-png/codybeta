@@ -257,7 +257,10 @@ module KIF
         end
       end
       kc = shiny_dump(p)
-      h["kc"] = kc if kc
+      if kc
+        h["kc"] = kc
+        h["sm"] = shiny_modes(p)   # how this game draws its colours (Colours, style, filter)
+      end
       return h
     rescue StandardError => e
       log("no sprite key (#{e.class}: #{e.message})")
@@ -282,8 +285,21 @@ module KIF
       return [t, head, body, alt, x]
     end
 
+    # the sending game's colour settings: Colours (0-2), style (0-3), filter (0-2)
+    MODES = [[:shinyadvanced, 2, 1], [:pifimprovedshinies, 3, 0], [:shinyfilter, 2, 2]]
+
+    def self.shiny_modes(p)
+      return MODES.map { |k, _max, d| defined?(KIF::Shiny) ? KIF::Shiny.opt(p, k, d) : d }
+    end
+
     def self.load_into(p, h)
-      shiny_load(p, h["kc"]) if p.shiny? && h["kc"].is_a?(Hash)
+      if p.shiny? && h["kc"].is_a?(Hash)
+        m = h["sm"]
+        if m.is_a?(Array) && m.length == 3 && m.each_with_index.all? { |v, i| v.is_a?(Integer) && v.between?(0, MODES[i][1]) }
+          p.instance_variable_set(:@kif_net_shiny, MODES.each_with_index.map { |(k, _, _), i| [k, m[i]] }.to_h)
+        end
+        shiny_load(p, h["kc"])
+      end
       return p unless on?
       k = read_key(h["sp"]) or return p
       p.instance_variable_set(:@kif_net_sprite, k)
@@ -297,6 +313,7 @@ module KIF
     # a caught Pokémon is this player's own: its own sprite picks from now on
     def self.forget(p)
       p.remove_instance_variable(:@kif_net_sprite) if p.instance_variable_defined?(:@kif_net_sprite)
+      p.remove_instance_variable(:@kif_net_shiny) if p.instance_variable_defined?(:@kif_net_shiny)
     end
 
     def self.shiny_dump(p)

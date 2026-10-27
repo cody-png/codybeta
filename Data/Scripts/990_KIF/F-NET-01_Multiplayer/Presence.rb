@@ -59,7 +59,7 @@ module KIF
                      "cc" => COLOR, "hc" => COLOR, "tc" => COLOR, "t2c" => COLOR, "bc" => COLOR },
       "pr_do"   => { "a" => [String, 8] }
     )
-    DOING      = %w[idle talk menu bag party battle trade]
+    DOING      = %w[idle talk menu bag party battle trade dex card options save]
 
     # The local player in one frame (tests make their own)
     State = Struct.new(:m, :x, :y, :d, :a, :v, :h, :j)
@@ -608,7 +608,8 @@ module KIF
         return
       end
       @link ||= Link.new
-      doing(pbMapInterpreterRunning? || $game_temp.message_window_showing ? "talk" : "idle")
+      # the map's own state (talk or idle) never replaces a screen's
+      doing(pbMapInterpreterRunning? || $game_temp.message_window_showing ? "talk" : "idle") if [nil, "idle", "talk"].include?(@doing)
       if (st = local_state)
         @link.track(st, local_look, KIF::Net.now).each { |type, f| s.post(type, f) }
       end
@@ -645,13 +646,19 @@ module KIF
       when "party" then _INTL("with their Pokémon")
       when "battle" then _INTL("in a battle")
       when "trade" then _INTL("trading")
+      when "dex" then _INTL("in the Pokédex")
+      when "card" then _INTL("looking at their card")
+      when "options" then _INTL("in the settings")
+      when "save" then _INTL("saving")
       end
     end
 
     # the game's own icons, drawn at their size (PIF's art is 2x already)
     ICONS = { "talk" => "Graphics/Pictures/NPCIcons/dialogIcon", "menu" => "Graphics/Icons/menuIcons/POKENAV",
               "bag" => "Graphics/Icons/menuIcons/BAG", "party" => "Graphics/Icons/menuIcons/POKEMON",
-              "battle" => "Graphics/Icons/bagPocket7", "trade" => "Graphics/Pictures/NPCIcons/tradeIcon" }
+              "battle" => "Graphics/Icons/bagPocket7", "trade" => "Graphics/Pictures/NPCIcons/tradeIcon",
+              "dex" => "Graphics/Icons/menuIcons/POKEDEX", "card" => "Graphics/Icons/menuIcons/PLAYER",
+              "options" => "Graphics/Icons/menuIcons/OPTIONS", "save" => "Graphics/Icons/menuIcons/SAVE" }
 
     # an icon's picture (kept for the session), or nil
     def self.icon(a)
@@ -808,6 +815,17 @@ module KIF
   end
 end
 PokemonPartyScreen.prepend(KIF::Presence::PartyBusy) unless PokemonPartyScreen < KIF::Presence::PartyBusy
+
+# the pause menu's own screens (prepended: KIF replaces or prepends some of them already)
+{ "PokemonPokedexMenuScreen" => "dex", "PokemonPokedexScreen" => "dex", "PokemonTrainerCardScreen" => "card",
+  "PokemonOptionScreen" => "options", "PokemonSaveScreen" => "save" }.each do |name, st|
+  next unless Object.const_defined?(name)
+  klass = Object.const_get(name)
+  meth = name == "PokemonSaveScreen" ? :pbSaveScreen : :pbStartScreen
+  m = Module.new { define_method(meth) { |*args, &blk| KIF::Presence.busy(st) { super(*args, &blk) } } }
+  klass.prepend(m) unless klass.instance_variable_get(:@kif_pr_busy)
+  klass.instance_variable_set(:@kif_pr_busy, true)
+end
 
 class PokemonStorageScreen
   alias kif_pr_pbStartScreen pbStartScreen unless method_defined?(:kif_pr_pbStartScreen) || private_method_defined?(:kif_pr_pbStartScreen)

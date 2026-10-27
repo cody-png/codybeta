@@ -908,7 +908,9 @@ module KIF
       sections = lines.slice_before { |l| l =~ NOTES_HEAD }.to_a
       shown = since ? sections.select { |s| !(v = s[0][NOTES_HEAD, 1]) || newer?(v, since) } : []
       shown = sections.first(1) if shown.empty?
-      shown.each { |s| s.each_slice(3) { |chunk| pbMessage(chunk.join("\n")) } }
+      # the Update history's full-screen reader (Updater_History.rb), not 3-line
+      # message boxes over a black screen; B or A closes it (Cody, 2026-10-26)
+      show_text(_INTL("What's new"), shown.flatten)
     end
 
     # Stable asked, nothing there, but the beta branch answers: the release

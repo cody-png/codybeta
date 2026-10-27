@@ -44,9 +44,10 @@ module KIF
       def note_device
         c = Input::Controller
         return unless c.respond_to?(:raw_button_states) && Input.respond_to?(:raw_key_states)
-        if c.raw_button_states.any?
+        # a press is true or non-zero: an engine giving 0/1 would make every 0 a press in Ruby
+        if c.raw_button_states.any? { |v| v && v != 0 }
           @pad = true
-        elsif @pad && Input.raw_key_states.any?
+        elsif @pad && Input.raw_key_states.any? { |v| v && v != 0 }
           @pad = false
         end
       end

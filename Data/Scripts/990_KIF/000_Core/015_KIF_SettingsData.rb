@@ -42,7 +42,8 @@ module KIF
         ["Sprites", ["Random Sprites", "Joke Sprites", "Custom Eggs", "Fusion Icons"]],
         ["Screens", ["Fusion Screen", "Fusion Preview", "Big Pokémon Icons", "Summary IVs/EVs", "Dark Mode"]],
         ["Pokédex", ["Autogen dex entries", "Improved Pokedex", "Dex Evolutions", "Dex Sprite Select"]],
-        ["Text", ["Game's Font", "Speech Frame"]]]],
+        ["Text", ["Game's Font", "Speech Frame"]],
+        ["Overworld", ["Map Zoom"]]]],
       [:selfbattle, "Self-Battle", [200, 120, 60], [
         ["Self-Battle", ["Battle Size", "Player Size", "Level", "Team Select", "Limitless Select",
                          "Randomize Team", "Randomize Share", "Players Folder", "Battle Loop", "Stat Tracker"]],

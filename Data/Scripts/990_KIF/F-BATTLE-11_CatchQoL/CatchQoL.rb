@@ -18,7 +18,9 @@
 #     already holds an item still steals with Thief/Covet in WILD battles and
 #     still finds items with Pickup after battle; the new item goes to the
 #     Bag. Trainer battles stay as in PIF (their items come back after
-#     battle, so a Bag copy would be a free item).
+#     battle, so a Bag copy would be a free item). Only the wild Pokémon's
+#     own item: one the player gave it (Trick, Switcheroo, Bestow) comes
+#     back after battle too.
 #   Bug fix (always on, KIF :146): PIF's restock rule also ran for the FOE's
 #     side, so a wild/trainer Pokémon eating e.g. a Sitrus Berry deleted a
 #     Sitrus Berry from the player's bag. Restricted to the player's side.
@@ -104,6 +106,7 @@ class PokeBattle_Move_0F1
   def pbEffectAfterAllHits(user, target)
     if $PokemonSystem.items_to_bag == 1 && @battle.wildBattle? && user.pbOwnedByPlayerSerious? &&
        target.opposes?(user) && !user.fainted? && user.item && target.item &&
+       target.item_id == target.initialItem &&   # not one the player gave it: that one comes back after battle
        !target.damageState.unaffected && !target.damageState.substitute &&
        !target.unlosableItem?(target.item) &&
        !(target.hasActiveAbility?(:STICKYHOLD) && !@battle.moldBreaker) &&

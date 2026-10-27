@@ -23,3 +23,27 @@ def custom_exists(target_file)
   return false unless File.file?(Settings::CUSTOM_SPRITES_FILE_PATH)
   return kif_slm_custom_exists(target_file)
 end
+
+# PIF's load screen (checkEnableSpritesDownload) only wants to know whether
+# fewer than 1000 custom sprites are known, but builds the whole list for it
+# each start: 580 folder listings (236,000 files with a sprite pack) and the
+# list file above, read and parsed (226,000 lines). With the list file there,
+# that count is the list's own, so its first 1000 good lines give the same
+# answer (2026-10-27, a player's 2.5 min black screen).
+alias kif_slm_checkEnableSpritesDownload checkEnableSpritesDownload unless defined?(kif_slm_checkEnableSpritesDownload)
+
+def checkEnableSpritesDownload(*args)
+  dl = ($PokemonSystem.download_sprites rescue nil)
+  path = Settings::CUSTOM_SPRITES_FILE_PATH
+  if dl && dl != 0 && File.file?(path)
+    max = (NB_POKEMON * NB_POKEMON) + NB_POKEMON
+    n = 0
+    File.foreach(path) do |line|
+      num = getDexNumFromFilename(line)
+      n += 1 if num && num > 0 && num <= max
+      break if n >= 1000
+    end
+    return if n >= 1000
+  end
+  return kif_slm_checkEnableSpritesDownload(*args)
+end

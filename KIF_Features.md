@@ -116,6 +116,7 @@ All options in this menu are per-save.
 - **Rocket Mode** - Off / On / All Balls *(Off)*. Lets Rocket Balls (sold in the Kuray Shop) steal trainers' Pokémon. All Balls lets any ball do it. Stolen Pokémon follow the Level Cap like your own (one stolen above it is held at the cap; its extra Exp is saved for later).
 - **Recover Consumables** - Off / On *(Off)*. Berries, gems and other items your Pokémon use up in battle come back afterwards.
 - **Skip Caught Prompt** - Off / On *(Off)*. With a full party, a caught Pokémon goes straight to the PC with no question asked.
+- **Items to Bag** - Off / On *(Off)*. A Pokémon that already holds an item can still steal with Thief or Covet in wild battles, and still finds items with Pickup after a battle. The new item goes to the Bag and it keeps its own. Trainer battles stay as before (their items come back after the battle).
 - **Critical Captures** - Off / On *(On)*. Critical captures can happen with any ball, and get more likely the more Pokémon you own. Off keeps only PIF's own last-ball critical capture.
 
 ### Fusion

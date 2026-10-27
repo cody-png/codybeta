@@ -30,7 +30,7 @@ module KIF
         ["Levels and EXP", ["Level Cap", "Cap Behavior", "Trainer Exp. Boost", "ExpAll Redistribution"]],
         ["EVs and IVs", ["No-EVs Mode", "Max IVs Mode", "EVs Train Mode", "EV Allocation"]],
         ["Catching", ["Prompt Nicknames", "Critical Captures", "Rocket Mode", "Skip Caught Prompt",
-                      "Recover Consumables"]],
+                      "Recover Consumables", "Items to Bag"]],
         ["Fusion", ["Fusion BaseStats", "NPC Fusion BaseStats", "Self-Fusion Stat Boost",
                     "Dominant Fusion Types", "Unfuse Traded"]],
         ["Breeding and moves", ["Legendary Breeding", "Head Legendary Breeding", "Event Moves",

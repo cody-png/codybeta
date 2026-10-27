@@ -178,6 +178,9 @@ module KIF
       "Recover Consumables" => [
         "Items used up in battle (berries, gems...) are gone.",
         "Items your Pokémon used up in battle come back after the battle."],
+      "Items to Bag" => [
+        "Thief, Covet and Pickup only work for a Pokémon with no held item.",
+        "If it holds an item, what it steals from wild Pokémon or finds with Pickup goes to the Bag."],
       "Fusion BaseStats" => [
         "Your fusions' base stats as in PIF.",
         "The sliders below set how much of each base stat comes from the head.",

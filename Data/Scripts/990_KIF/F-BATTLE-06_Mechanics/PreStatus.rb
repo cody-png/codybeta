@@ -16,6 +16,10 @@
 #     or PC Pokémon (PokemonBag#pbStoreItem, save load, and each time the menu
 #     opens) and stays unlocked. A locked choice is listed with "(needs ...)"
 #     and can't be picked; a Pokémon set before the unlocks keeps its choice.
+#   Pay to unlock (2026-10-27, Cody): picking a locked choice offers to unlock
+#     it for that one Pokémon for PAY_PRICE. Stored on the Pokémon; a fusion
+#     gets both parts' unlocks, and unfusing gives each part its own plus the
+#     fusion's (DNA Reverser keeps the same Pokémon, so nothing changes).
 #===============================================================================
 KIF::Options.define(:prestatus, 0, :save)
 
@@ -29,6 +33,12 @@ KIF::Options.add(:battles, :save) {
 
 class Pokemon
   attr_accessor :kif_prestatus   # nil, :BURN or :POISON
+  attr_writer :kif_prestatus_paid
+  # statuses paid for on this Pokémon (always replaced, never changed in
+  # place: a fusion's original_body is a shallow clone sharing the array)
+  def kif_prestatus_paid
+    @kif_prestatus_paid || []
+  end
 end
 
 class PokemonGlobalMetadata
@@ -47,13 +57,17 @@ module KIF
     end
 
     ITEMS = { :BURN => :FLAMEORB, :POISON => :TOXICORB }
+    # Per-Pokémon unlock (Cody, 2026-10-27: Guts and the KIF-ER status
+    # abilities are strong; a Kuray Shop Orb is $100,000)
+    PAY_PRICE = 10_000
 
     def self.name(status)
       return [_INTL("Normal"), _INTL("Burned"), _INTL("Poisoned")][CHOICES.index(status) || 0]
     end
 
-    def self.unlocked?(status)
+    def self.unlocked?(status, pkmn = nil)
       return true if !ITEMS[status]
+      return true if pkmn && pkmn.kif_prestatus_paid.include?(status)
       return !!($PokemonGlobal && $PokemonGlobal.kif_prestatus_unlocked.include?(status))
     end
 
@@ -88,14 +102,47 @@ KIF::PCActions.add(:prestatus,
     ps.scan
     ids = ps::CHOICES
     names = ids.map { |s|
-      next ps.name(s) if ps.unlocked?(s)
+      next ps.name(s) if ps.unlocked?(s, pkmn)
       _INTL("{1} (needs {2})", ps.name(s), GameData::Item.get(ps::ITEMS[s]).name)
     }
     cmd = screen.pbShowCommands(_INTL("How should {1} start battles?", pkmn.name),
                                 names + [_INTL("Cancel")], ids.index(pkmn.kif_prestatus) || 0)
-    # a locked choice can't be picked (one set before the unlocks stays as it is)
-    pkmn.kif_prestatus = ids[cmd] if cmd.between?(0, ids.length - 1) && ps.unlocked?(ids[cmd])
+    next if !cmd.between?(0, ids.length - 1)
+    status = ids[cmd]
+    if !ps.unlocked?(status, pkmn)
+      # a locked choice can be paid for on this Pokémon (one set before the unlocks stays as it is)
+      price = KIF::PCActions.price(ps::PAY_PRICE)
+      if $Trainer.money < price
+        pbPlayBuzzerSE
+        screen.pbDisplay(_INTL("Not enough money! Unlocking {1} costs ${2}.", ps.name(status), price.to_s_formatted))
+        next
+      end
+      next if !screen.pbConfirm(_INTL("Pay ${1} to unlock {2} for {3}?", price.to_s_formatted, ps.name(status), pkmn.name))
+      $Trainer.money -= price
+      pkmn.kif_prestatus_paid = pkmn.kif_prestatus_paid | [status]
+    end
+    pkmn.kif_prestatus = status
   })
+
+# Fusing: the fusion (the body's object) gets both parts' paid unlocks
+alias kif_prestatus_pbFuse pbFuse unless Object.method_defined?(:kif_prestatus_pbFuse) || Object.private_method_defined?(:kif_prestatus_pbFuse)
+
+def pbFuse(pokemon_body, pokemon_head, *args)
+  paid = pokemon_body.kif_prestatus_paid | pokemon_head.kif_prestatus_paid
+  ret = kif_prestatus_pbFuse(pokemon_body, pokemon_head, *args)
+  pokemon_body.kif_prestatus_paid = paid if ret && !paid.empty?
+  return ret
+end
+
+# Unfusing: each part keeps its own and gets the fusion's
+alias kif_prestatus_unfuseCore unfuseCore unless Object.method_defined?(:kif_prestatus_unfuseCore) || Object.private_method_defined?(:kif_prestatus_unfuseCore)
+
+def unfuseCore(fused_pokemon)
+  paid = fused_pokemon.kif_prestatus_paid
+  ret = kif_prestatus_unfuseCore(fused_pokemon)
+  (ret || []).each { |p| p.kif_prestatus_paid = p.kif_prestatus_paid | paid if p && !paid.empty? }
+  return ret
+end
 
 class PokemonBag
   alias kif_prestatus_pbStoreItem pbStoreItem unless method_defined?(:kif_prestatus_pbStoreItem) || private_method_defined?(:kif_prestatus_pbStoreItem)

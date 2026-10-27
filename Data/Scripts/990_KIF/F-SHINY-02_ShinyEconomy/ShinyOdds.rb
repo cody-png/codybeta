@@ -15,13 +15,18 @@
 #     16/65536. As in PIF, any shiny made with odds other than 16
 #     (S_CHANCE_VALIDATOR) is flagged debug_shiny (different star icon).
 #   Shiny Trainer Pokemon (shiny_trainer_pkmn):
-#     0 Off      – each trainer Pokémon rolls shinyodds/65536 again
+#     0 Normal   – each trainer Pokémon rolls shinyodds/65536 (PIF's
+#                  trainer Pokémon are never shiny unless the trainer file
+#                  says so, so this roll is what gives Wild Odds shinies)
 #     1 Ace      – same, then the ace (last Pokémon if its level >= the
 #                  highest level, else the highest-level one) is made shiny
 #     2 All      – the whole party is shiny
-#     3 Normal   – nothing is done: the same odds as the Wild Shiny Odds
-#                  slider, as in PIF (named "Disabled" before 2026-10-19;
-#                  never-shiny trainers are a setting of their own)
+#     3 Off      – never shiny, not even ones the trainer file marks shiny
+#   Until 2026-10-27, 0 was shown as "Off" and 3 as "Normal" (no roll, i.e.
+#   as PIF), so the two looked the same (Cody's settings review). The stored
+#   values keep their behaviour and only swap places on screen: saves that
+#   had "Off" now show Normal and play the same; saves that had "Normal"
+#   show Off (only trainer-file shinies, which PIF has very few of, change).
 #   Opposing trainers only: partner trainers and the player's own Pokémon
 #   (e.g. passed into customTrainerBattle) are never touched.
 #   Shiny fusions always get head/body shiny parts so their colours change.
@@ -44,15 +49,21 @@ KIF::Options.add(:shinies, :save) {
 }
 KIF::Options.add(:shinies, :save) {
   EnumOption.new(_INTL("Shiny Trainer Pokemon"), [_INTL("Off"), _INTL("Ace"), _INTL("All"), _INTL("Normal")],
-                 proc { $PokemonSystem.shiny_trainer_pkmn },
-                 proc { |value| $PokemonSystem.shiny_trainer_pkmn = value },
-                 [_INTL("Trainer pokemon will have their normal shiny rates"),
+                 # on screen Off is first and Normal last; stored 3 = Off, 0 = Normal
+                 proc { KIF.shiny_trainer_swap($PokemonSystem.shiny_trainer_pkmn) },
+                 proc { |value| $PokemonSystem.shiny_trainer_pkmn = KIF.shiny_trainer_swap(value) },
+                 [_INTL("Trainer Pokemon are never shiny"),
                   _INTL("Draws the opposing trainers ace pokemon as shiny"),
                   _INTL("All trainers pokemon in their party will be shiny"),
                   _INTL("Trainer Pokemon use the same shiny odds as your Wild Shiny Odds slider")])
 }
 
 module KIF
+  def self.shiny_trainer_swap(v)
+    v = v.to_i
+    return v == 0 ? 3 : (v == 3 ? 0 : v)
+  end
+
   def self.shiny_odds
     return Settings::SHINY_POKEMON_CHANCE unless $PokemonSystem
     return $PokemonSystem.shinyodds
@@ -154,8 +165,14 @@ Events.onTrainerPartyLoad += proc { |_sender, e|
   next if KIF.loading_partner
   next if !trainer || !trainer.respond_to?(:party) || trainer.party.empty?
   next if $Trainer && trainer.equal?($Trainer)
-  mode = $PokemonSystem.shiny_trainer_pkmn
-  if mode < 3
+  mode = $PokemonSystem.shiny_trainer_pkmn.to_i
+  if mode == 3   # Off
+    trainer.party.each do |pokemon|
+      next if $Trainer && $Trainer.party.any? { |p| p.equal?(pokemon) }
+      pokemon.shiny = false
+      pokemon.head_shiny = pokemon.body_shiny = false
+    end
+  elsif mode < 3
     trainer.party.each do |pokemon|
       next if $Trainer && $Trainer.party.any? { |p| p.equal?(pokemon) }
       if rand(65536) < $PokemonSystem.shinyodds

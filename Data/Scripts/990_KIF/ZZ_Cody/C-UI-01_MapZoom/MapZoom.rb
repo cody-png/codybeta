@@ -1,7 +1,8 @@
 #===============================================================================
 # C-UI-01 – Map Zoom (2026-10-27)
 #   Options > Graphics > Overworld > "Map Zoom": Normal (PIF's 2x pixels),
-#   Far (1.5x: 24 px tiles) or Farthest (1x: 16 px tiles). Global setting.
+#   Far (1x: 16 px tiles). Global setting. (A 1.5x level was tried and
+#   dropped 2026-10-27: 2x2 art pixels can't land evenly on 1.5x.)
 #   New in KIF (0.20.7 never had it); Normal is the default, so Classic KIF
 #   stays as PIF draws it.
 #   How: every map tile sprite is drawn smaller and the tile grid is made
@@ -10,7 +11,7 @@
 #   same way and the camera centres on a larger view. Windows, menus, the map
 #   name sign, weather and screen tone are on other viewports and stay as
 #   they are.
-#   Camera at Far/Farthest: it stops at a map edge with no connected map on
+#   Camera at Far: it stops at a map edge with no connected map on
 #   that side; a map smaller than the view (on an axis with no connections)
 #   is centred. Dark maps keep the camera on the player (the light circle is
 #   drawn round the screen centre), their edges are black anyway.
@@ -24,7 +25,7 @@ KIF::Options.define(:kif_mapzoom, 0, :global)   # index into KIF::MapZoom::LEVEL
 
 module KIF
   module MapZoom
-    LEVELS = [1.0, 0.75, 0.5]
+    LEVELS = [1.0, 0.5]
     FOLDER = "C-UI-01_MapZoom"
 
     @scale = nil      # the zoom in use (1.0 = Normal)
@@ -35,9 +36,16 @@ module KIF
     def self.wanted
       return 1.0 unless $PokemonSystem
       return 1.0 if defined?(KIF::Modules) && !KIF::Modules.active?(FOLDER)
-      s = LEVELS[$PokemonSystem.kif_mapzoom.to_i] || 1.0
+      s = LEVELS[level] || 1.0
       return 1.0 if s != 1.0 && mod_zoom?
       return s
+    end
+
+    # The chosen level. Saves from before 1.5x was dropped had 1 = 1.5x and
+    # 2 = 1x: both are the new Far (1)
+    def self.level
+      i = $PokemonSystem.kif_mapzoom.to_i
+      return i <= 1 ? [i, 0].max : 1
     end
 
     # A mod's own zoom (e.g. a camera mod) is on: KIF's zoom waits, so the map
@@ -202,20 +210,50 @@ class TilemapRenderer
     @need_refresh = true
   end
 
+  # Zoomed: placed straight from the grid (one x/y set per tile, floor so every
+  # column/row is exactly one zoomed tile from the next: rounding .5 away from
+  # zero left a 1 px gap where the positions cross 0). Empty layers (no
+  # bitmap, most of layers 2 and 3) are skipped: refresh_tile places a tile
+  # when it gets a bitmap. KIF's frame-rate ring draws the grid one tile on.
   def refresh_tile_coordinates(tile, x, y)
-    mz_orig_tile_coordinates(tile, x, y)
     s = KIF::MapZoom.scale
-    return if s == 1.0
-    tile.x = (tile.x * s).round
-    tile.y = (tile.y * s).round
-    tile.zoom_x = s
-    tile.zoom_y = s
+    return mz_orig_tile_coordinates(tile, x, y) if s == 1.0
+    return unless tile.visible
+    if @kif_ring
+      x -= 1
+      y -= 1
+    end
+    tile.x = ((x * DISPLAY_TILE_WIDTH - @pixel_offset_x) * s).floor
+    tile.y = ((y * DISPLAY_TILE_HEIGHT - @pixel_offset_y) * s).floor
   end
 
+  # 6.8.2's rule (TilemapRenderer#refresh_tile_z), in the zoomed space of screen_z
   def refresh_tile_z(tile, map, y, layer, tile_id)
-    mz_orig_tile_z(tile, map, y, layer, tile_id)
     s = KIF::MapZoom.scale
-    tile.z = (tile.z * s).round if s != 1.0 && tile.z > 0   # priority tiles, same space as screen_z
+    return mz_orig_tile_z(tile, map, y, layer, tile_id) if s == 1.0
+    return unless tile.visible
+    y -= 1 if @kif_ring
+    if tile.underwater_tile
+      tile.z = -5
+    elsif tile.bridge && $PokemonGlobal.bridge > 0
+      tile.z = 0
+    else
+      priority = tile.priority
+      tile.z = (priority == 0) ? 0 : ((y * DISPLAY_TILE_HEIGHT + priority * 32 + 32) * s).round
+    end
+  end
+
+  # tiles get their size once, when their picture is set
+  class TileSprite
+    alias mz_orig_set_bitmap set_bitmap unless method_defined?(:mz_orig_set_bitmap) || private_method_defined?(:mz_orig_set_bitmap)
+
+    def set_bitmap(filename, tile_id, autotile, animated, priority, bitmap)
+      mz_orig_set_bitmap(filename, tile_id, autotile, animated, priority, bitmap)
+      s = KIF::MapZoom.scale
+      return if s == 1.0
+      self.zoom_x = s
+      self.zoom_y = s
+    end
   end
 
   if method_defined?(:kif_fps_ring)
@@ -228,7 +266,131 @@ class TilemapRenderer
       mz_fit_grid
     end
   end
+
+  # Zoomed, the grid is about 3x PIF's (2835 tile sprites at 1x with the
+  # frame-rate ring), so 6.8.2's TilemapRenderer#update (copied below, same
+  # steps) runs its tile loop with less work per tile: no per-frame visited
+  # table, coordinates and z set inline, and empty layers skipped.
+  if method_defined?(:kif_fps_update)
+    alias mz_orig_base_update kif_fps_update unless method_defined?(:mz_orig_base_update) || private_method_defined?(:mz_orig_base_update)
+
+    def kif_fps_update
+      return mz_orig_base_update if KIF::MapZoom.scale == 1.0
+      mz_zoomed_update
+    end
+  end
+
+  def mz_zoomed_update
+    # Update tone / colour
+    if @old_tone != @tone
+      @tiles.each { |col| col.each { |coord| coord.each { |tile| tile.tone = @tone } } }
+      @old_tone = @tone.clone
+    end
+    if @old_color != @color
+      @tiles.each { |col| col.each { |coord| coord.each { |tile| tile.color = @color } } }
+      @old_color = @color.clone
+    end
+    # Check for updated weather
+    current_weather = $game_weather&.map_current_weather_type($game_map.map_id)
+    if current_weather != @last_weather_type
+      tileset_id = $game_map.tileset_id
+      add_extra_autotiles(tileset_id, $game_map.map_id)
+      refresh
+      @last_weather_type = current_weather
+    end
+    # Recalculate autotile frames
+    @tilesets.update
+    @autotiles.update
+    do_full_refresh = @need_refresh
+    if @viewport.ox != @old_viewport_ox || @viewport.oy != @old_viewport_oy
+      @old_viewport_ox = @viewport.ox
+      @old_viewport_oy = @viewport.oy
+      do_full_refresh = true
+    end
+    @screen_moved = false
+    @screen_moved_vertically = false
+    if $PokemonGlobal.bridge != @bridge
+      @bridge = $PokemonGlobal.bridge
+      @screen_moved_vertically = true
+    end
+    do_full_refresh = true if check_if_screen_moved
+    cols = @tiles_horizontal_count
+    rows = @tiles_vertical_count
+    visited = (@mz_visited ||= [])
+    visited.fill(false, 0, cols * rows)
+    s = KIF::MapZoom.scale
+    ring = @kif_ring ? 1 : 0
+    moved = @screen_moved
+    moved_v = @screen_moved_vertically
+    frames = @autotiles.changed
+    tw = DISPLAY_TILE_WIDTH
+    th = DISPLAY_TILE_HEIGHT
+    pox = @pixel_offset_x
+    poy = @pixel_offset_y
+    bridge_on = $PokemonGlobal.bridge > 0
+    $MapFactory.maps.each do |map|
+      map_display_x_tile = (map.display_x.to_f / Game_Map::X_SUBPIXELS).round / tw
+      map_display_y_tile = (map.display_y.to_f / Game_Map::Y_SUBPIXELS).round / th
+      start_x = [-map_display_x_tile, 0].max
+      start_y = [-map_display_y_tile, 0].max
+      end_x = [cols - 1, map.width - map_display_x_tile - 1].min
+      end_y = [rows - 1, map.height - map_display_y_tile - 1].min
+      next if start_x > end_x || start_y > end_y || end_x < 0 || end_y < 0
+      data = map.data
+      (start_x..end_x).each do |i|
+        tile_x = i + map_display_x_tile
+        col = @tiles[i]
+        sx = (((i - ring) * tw - pox) * s).floor
+        (start_y..end_y).each do |j|
+          tile_y = j + map_display_y_tile
+          coord = col[j]
+          sy = nil
+          3.times do |layer|
+            tile = coord[layer]
+            tile_id = data[tile_x, tile_y, layer]
+            if do_full_refresh || tile.need_refresh || tile.tile_id != tile_id
+              refresh_tile(tile, i, j, map, layer, tile_id)
+            elsif tile.visible
+              refresh_tile_frame(tile, tile_id) if frames && tile.animated
+              if moved
+                tile.x = sx
+                tile.y = (sy ||= (((j - ring) * th - poy) * s).floor)
+              end
+              if moved_v
+                if tile.underwater_tile
+                  tile.z = -5
+                elsif tile.bridge && bridge_on
+                  tile.z = 0
+                else
+                  pr = tile.priority
+                  tile.z = (pr == 0) ? 0 : (((j - ring) * th + pr * 32 + 32) * s).round
+                end
+              end
+            end
+          end
+          visited[i * rows + j] = true
+        end
+      end
+    end
+    # Clear all unvisited tile sprites
+    @tiles.each_with_index do |col, i|
+      base = i * rows
+      col.each_with_index do |coord, j|
+        next if visited[base + j]
+        coord.each do |tile|
+          next if !tile.visible && tile.tile_id == 0   # already clear
+          tile.set_bitmap("", 0, false, false, 0, nil)
+          tile.shows_reflection = false
+          tile.bridge = false
+        end
+      end
+    end
+    @need_refresh = false
+    @autotiles.changed = false
+  end
 end
+
+KIF.guard_base("006_Map renderer/001_TilemapRenderer.rb", 1813210744, "TilemapRenderer#update (C-UI-01 MapZoom#mz_zoomed_update)") if KIF.respond_to?(:guard_base)
 
 # Frames drawn in between slide the map by the camera's move, which is drawn smaller
 if defined?(KIF::FrameRate) && KIF::FrameRate.respond_to?(:camera_move)
@@ -349,13 +511,13 @@ class Game_Character
   def screen_x
     s = KIF::MapZoom.scale
     return mz_orig_screen_x if s == 1.0
-    return (mz_orig_screen_x * s).round
+    return (mz_orig_screen_x * s).floor   # floor, like the tiles
   end
 
   def screen_y_ground
     s = KIF::MapZoom.scale
     return mz_orig_screen_y_ground if s == 1.0
-    return (mz_orig_screen_y_ground * s).round
+    return (mz_orig_screen_y_ground * s).floor
   end
 
   # 6.8.2 adds the jump height to screen_y_ground: that part is scaled too

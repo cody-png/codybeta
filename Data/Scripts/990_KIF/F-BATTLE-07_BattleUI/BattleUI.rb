@@ -20,9 +20,11 @@
 #     Swap BattleGUI, Dark Mode)
 #
 # Options
-#   Graphics > "Type Display" (Off/Ico/TCG/Sqr/FGM/Txt, all saves): the foe's
+#   Graphics > "Type Display" (Off/PIF/Ico/TCG/Sqr/FGM/Txt, all saves): the foe's
 #     types next to its battle box. While it is on it replaces PIF's own
-#     "type icons" in the battle box.
+#     "type icons" in the battle box. Since 2026-10-27 it is also PIF's
+#     "Battle Type Icons" switch (Off = no icons, PIF = PIF's icons), so that
+#     row is hidden on the settings screen: both drew the same thing.
 #   Graphics > "Swap BattleGUI" (Off/Type 1/Type 2, all saves): Mirasein's
 #     battle boxes, HP/Exp bars, message box and command menu.
 #   Battles > "Show Lv. in BSM" (per save): levels stay visible in battle in
@@ -58,10 +60,15 @@ KIF::Options.define(:showlevel_nolevelmode, 0, :save)
 
 KIF::Options.add(:graphics, :global) {
   EnumOption.new(_INTL("Type Display"),
-                 [_INTL("Off"), _INTL("Ico"), _INTL("TCG"), _INTL("Sqr"), _INTL("FGM"), _INTL("Txt")],
-                 proc { $PokemonSystem.typedisplay },
-                 proc { |value| $PokemonSystem.typedisplay = value },
+                 [_INTL("Off"), _INTL("PIF"), _INTL("Ico"), _INTL("TCG"), _INTL("Sqr"), _INTL("FGM"), _INTL("Txt")],
+                 # choice 1 is PIF's own type_icons; 2.. are typedisplay 1..
+                 proc { t = $PokemonSystem.typedisplay.to_i; t > 0 ? t + 1 : ($PokemonSystem.type_icons ? 1 : 0) },
+                 proc { |value|
+                   $PokemonSystem.typedisplay = [value - 1, 0].max
+                   $PokemonSystem.type_icons = value == 1 if value < 2
+                 },
                  [_INTL("Don't draw the type indicator in battle"),
+                  _INTL("PIF's type icons in the foe's battle box"),
                   _INTL("Draws handmade custom type icons in battle | By Lolpy1"),
                   _INTL("Draws TCG themed type icons in battle"),
                   _INTL("Draws the square type icons in battle | Triple Fusion by Lolpy1"),

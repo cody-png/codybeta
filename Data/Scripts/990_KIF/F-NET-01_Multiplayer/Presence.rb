@@ -19,6 +19,8 @@
 #            after 24 tiles), nothing while standing still.
 #   pr_look  my outfit ids and colours: on connect and when they change;
 #            again with a map change's pr_at and every 30 s of moving.
+#   pr_do    what I'm doing: idle, talk (an event or a message box), menu or
+#            battle; sent when it changes, shown after the name
 # Outfit ids from the other game only ever name a file inside PIF's outfit
 # folders (letters, digits, _ - and spaces), so a peer can't point at
 # another file.
@@ -53,8 +55,10 @@ module KIF
                      "a" => [String, 8], "v" => [Integer, 1, 80], "h" => [Integer, 0, 1], "p" => [Array] },
       "pr_look" => { "skin" => [String, 24], "clothes" => [String, 40], "hair" => [String, 40],
                      "hat" => [String, 40], "hat2" => [String, 40], "surf" => [String, 24],
-                     "cc" => COLOR, "hc" => COLOR, "tc" => COLOR, "t2c" => COLOR, "bc" => COLOR }
+                     "cc" => COLOR, "hc" => COLOR, "tc" => COLOR, "t2c" => COLOR, "bc" => COLOR },
+      "pr_do"   => { "a" => [String, 8] }
     )
+    DOING      = %w[idle talk menu battle]
 
     # The local player in one frame (tests make their own)
     State = Struct.new(:m, :x, :y, :d, :a, :v, :h, :j)
@@ -146,7 +150,11 @@ module KIF
           return nil if @ghosts.length >= MAX_PEERS
           g = @ghosts[key] = Ghost.new(name)
         end
-        type == "pr_look" ? g.look = Presence.read_look(msg) : g.receive_at(msg)
+        case type
+        when "pr_look" then g.look = Presence.read_look(msg)
+        when "pr_do" then g.doing = DOING.include?(msg["a"]) ? msg["a"] : "idle"
+        else g.receive_at(msg)
+        end
         return g
       end
 
@@ -171,6 +179,13 @@ module KIF
     class Ghost < Game_Character
       attr_reader :name, :map_id, :action, :look, :plan, :pending
       attr_writer :map
+      attr_accessor :doing
+
+      # the name tag: the name, and what they're doing unless idle
+      def tag
+        d = Presence.doing_label(@doing)
+        return d ? "#{@name} (#{d})" : @name
+      end
 
       def initialize(name)
         super(nil)
@@ -538,16 +553,16 @@ module KIF
       end
 
       def draw_tag(g, top)
-        if @tag_name != g.name || @tag_bmp.nil?
+        if @tag_name != g.tag || @tag_bmp.nil?
           @tag_bmp.dispose if @tag_bmp   # replaced below, before the frame is drawn
-          @tag_name = g.name
+          @tag_name = g.tag
           probe = Bitmap.new(1, 1)
           pbSetSmallFont(probe)
-          w = [probe.text_size(g.name).width + 8, 16].max
+          w = [probe.text_size(@tag_name).width + 8, 16].max
           probe.dispose
           @tag_bmp = Bitmap.new(w, 28)
           pbSetSmallFont(@tag_bmp)
-          pbDrawShadowText(@tag_bmp, 0, 0, w, 24, g.name, Color.new(248, 248, 248), Color.new(48, 48, 48), 1)
+          pbDrawShadowText(@tag_bmp, 0, 0, w, 24, @tag_name, Color.new(248, 248, 248), Color.new(48, 48, 48), 1)
         end
         @tag.bitmap = @tag_bmp unless @tag.bitmap.equal?(@tag_bmp)
         @tag.ox = @tag_bmp.width / 2
@@ -601,6 +616,7 @@ module KIF
         return
       end
       @link ||= Link.new
+      doing(pbMapInterpreterRunning? || $game_temp.message_window_showing ? "talk" : "idle")
       if (st = local_state)
         @link.track(st, local_look, KIF::Net.now).each { |type, f| s.post(type, f) }
       end
@@ -617,9 +633,38 @@ module KIF
       oops(e)
     end
 
+    # what this player is doing (DOING), sent when it changes
+    def self.doing(a)
+      return if a == (@doing || "idle")   # idle at the start: nothing to send
+      s = KIF::Net.session
+      return unless s && s.connected?
+      @doing = a
+      s.post("pr_do", "a" => a)
+    rescue StandardError => e
+      oops(e)
+    end
+
+    # for the name tag and the Multiplayer screen; nil when idle
+    def self.doing_label(a)
+      case a
+      when "talk" then _INTL("talking")
+      when "menu" then _INTL("in a menu")
+      when "battle" then _INTL("in a battle")
+      end
+    end
+
+    # in a menu or a battle until the block ends, then idle
+    def self.busy(a)
+      doing(a)
+      return yield
+    ensure
+      doing("idle")
+    end
+
     # a new connection: everything is sent again, the old ghost goes
     def self.on_connect
       drop
+      @doing = nil
       @link = Link.new
     end
 
@@ -674,13 +719,40 @@ module KIF
     def self.where_line(name)
       g = ghost or return nil
       return nil unless g.map_id
+      d = doing_label(g.doing)
+      return _INTL("{1} is on this map ({2}).", name, d) if d && $game_map && g.map_id == $game_map.map_id
       return _INTL("{1} is on this map.", name) if $game_map && g.map_id == $game_map.map_id
       place = (pbGetMessage(MessageTypes::MapNames, g.map_id) rescue nil)
       place = (pbGetBasicMapNameFromId(g.map_id) rescue nil) if nil_or_empty?(place)
       return nil if nil_or_empty?(place)
-      return _INTL("{1} is in {2}.", name, place.to_s.gsub(/\\PN/, name))   # "\PN's house" is theirs
+      place = place.to_s.gsub(/\\PN/, name)   # "\PN's house" is theirs
+      return d ? _INTL("{1} is in {2} ({3}).", name, place, d) : _INTL("{1} is in {2}.", name, place)
     end
   end
 end
 
 Events.onMapUpdate += proc { |_sender, _e| KIF::Presence.frame }
+
+# What this player is doing, for the partner's name tag (pr_do). The map's own
+# frame says talk or idle; the pause menu and battles say so while they last
+# (the map doesn't update meanwhile).
+class Scene_Map
+  alias kif_pr_call_menu call_menu unless method_defined?(:kif_pr_call_menu) || private_method_defined?(:kif_pr_call_menu)
+
+  def call_menu
+    KIF::Presence.busy("menu") { kif_pr_call_menu }
+  end
+end
+
+alias kif_pr_pbBattleAnimation pbBattleAnimation unless defined?(kif_pr_pbBattleAnimation)
+
+def pbBattleAnimation(*args, &blk)
+  KIF::Presence.busy("battle") { kif_pr_pbBattleAnimation(*args, &blk) }
+end
+
+alias kif_pr_pbMessageDisplay pbMessageDisplay unless defined?(kif_pr_pbMessageDisplay)
+
+def pbMessageDisplay(*args, &blk)
+  KIF::Presence.doing("talk") if $scene.is_a?(Scene_Map) && !$game_temp.in_menu && !$game_temp.in_battle
+  return kif_pr_pbMessageDisplay(*args, &blk)
+end

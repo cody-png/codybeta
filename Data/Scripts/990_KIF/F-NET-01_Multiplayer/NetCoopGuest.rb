@@ -61,6 +61,51 @@ module KIF
         @view.message(_INTL("{1}'s game chose for you this turn.", @host_name))
         return true
       end
+
+      # the host already used this player's pick for that turn (co_lock)
+      def lock_at(req)
+        @box.index { |t, m| t == "co_lock" && m["d"].is_a?(Hash) && %w[b t].all? { |k| m["d"][k] == req[k] } }
+      end
+      def locked?(req); !lock_at(req).nil?; end
+
+      # choosing again came too late: the first pick stands
+      def take_lock(req)
+        i = lock_at(req) or return false
+        @box.delete_at(i)
+        @view.message(_INTL("Too late to change: {1}'s game already used your first choice.", @host_name))
+        return true
+      end
+
+      # the host player's pick this turn (co_int)
+      def intent_from(msg)
+        d = msg["d"]
+        return unless msg["id"] == @id && d.is_a?(Hash) && d["t"].is_a?(Integer) && d["it"].is_a?(String)
+        @intent = [d["t"], d["it"]]
+      end
+
+      # "Monto: Water Gun -> Pidgey" for this player's menus this turn, or nil
+      def intent
+        return nil unless @turn_req && !@done
+        it = @intent && @intent[0] == @turn_req["t"] ? @intent[1] : ""
+        return KIF::Coop.intent_line(@host_name, it)
+      end
+
+      # B while waiting for the host: take the pick back and choose again
+      def rechoose
+        req = @awaiting
+        @awaiting = nil
+        return unless req && !@done && !lost?
+        KIF::Net.update if KIF::Net.session.equal?(@s)
+        return if lock_at(req) || skipped?(req) || ended?   # already used (or chosen for): nothing to change
+        @s.post("co_undo", "id" => @id, "d" => { "b" => req["b"], "t" => req["t"] })
+        answer_command(req, true)
+      end
+
+      # every frame while this player waits on the host's turn
+      def wait_frame
+        return unless @awaiting && KIF::Net.now - @awaited_at >= 0.5 && Input.trigger?(Input::BACK)
+        rechoose
+      end
       def started!; @started = true; end
 
       def int(v, lo, hi, d = nil); Mon.int(v, lo, hi, d); end
@@ -113,6 +158,7 @@ module KIF
         when "co_cmd"   then answer_command(msg["d"])
         when "co_sw"    then answer_switch(msg["d"])
         when "co_skip"  then @view.message(_INTL("{1}'s game chose for you this turn.", @host_name))   # this player's pick came too late
+        when "co_lock"  then @awaiting = nil if @awaiting && msg["d"].is_a?(Hash) && %w[b t].all? { |k| msg["d"][k] == @awaiting[k] }
         when "co_end"   then finish(msg["d"])
         end
       end
@@ -292,25 +338,61 @@ module KIF
         end
       end
 
-      def answer_command(d)
+      def answer_command(d, again = false)
         return unless d.is_a?(Hash)
         mi = bat_checked(d["b"])
         b = mi && @mirror ? @mirror.battlers[mi] : nil
         @mirror.instance_variable_set(:@kif_log_turn, int(d["t"], 0, 9999, 0)) if @mirror   # Battle Log: lines from here on are this turn's
+        @turn_req = d
         a = nil
         if b && mi.even? && own_pk?(b.pokemon)
-          sync_party(d)
-          sync_moves(b, d["mv"])
+          unless again
+            sync_party(d)
+            sync_moves(b, d["mv"])
+          end
           a = @view.command(mi, d) unless KIF::Coop.auto_battle?
         end
-        return if take_skip(d) || ended?   # nothing to send: the host went on
+        return if take_skip(d) || ended? || take_lock(d)   # nothing to send: the host went on
+        if again && (old = @last_pick) && old["a"] == "item"   # the pick taken back
+          @picked[old["i"]] -= 1
+          @balls -= 1 if (GameData::Item.get(old["i"].to_sym).is_poke_ball? rescue false)
+        end
         if a && a["a"] == "item"
           @picked[a["i"]] += 1
           @balls += 1 if (GameData::Item.get(a["i"].to_sym).is_poke_ball? rescue false)
         end
+        @last_pick = a
         a ||= { "a" => "auto" }
+        it = b && a["a"] != "auto" ? pick_text(b, a) : nil
+        a = a.merge("it" => it) if it
         @s.post("co_act", "id" => @id, "d" => a.merge("b" => d["b"], "t" => d["t"]))
-        @view.waiting
+        if a["a"] == "auto" || a["a"] == "run"
+          @view.waiting(false)
+        else
+          @awaiting = d   # B: choose again until the host has used it (co_lock)
+          @awaited_at = KIF::Net.now
+          @view.waiting(true)
+        end
+      end
+
+      # this player's pick for the host's menus: "Water Gun -> Pidgey" (the host
+      # sees the same words for the same picks as this player's game sees its own)
+      def pick_text(b, a)
+        case a["a"]
+        when "move"
+          mv = a["m"].is_a?(Integer) && a["m"] >= 0 ? b.moves[a["m"]] : nil
+          return nil unless mv
+          tb = a["tg"].is_a?(Integer) && a["tg"] >= 0 ? battler(a["tg"]) : nil
+          return tb && !tb.equal?(b) ? _INTL("{1} -> {2}", mv.name, tb.name) : mv.name
+        when "item"
+          it = GameData::Item.try_get(a["i"].to_s.to_sym) or return nil
+          return it.is_poke_ball? ? _INTL("throwing a {1}", it.name) : _INTL("using a {1}", it.name)
+        when "switch" then return _INTL("switching")
+        when "run" then return _INTL("running")
+        end
+        return nil
+      rescue StandardError
+        return nil
       end
 
       def answer_switch(d)
@@ -493,6 +575,7 @@ module KIF
           @view.frame
           KIF::Net.update
           step
+          wait_frame
         end
         @view.finish(@decision || 0)
       end
@@ -502,7 +585,9 @@ module KIF
           KIF::Nuzlocke.pending = [@nz[0], @mirror.pbParty(1).compact]   # this player's catch uses up the place
         end
         d = @decision || 0
-        pbAfterBattle(d, @can_lose || d == 0 || @aborted ? true : false)
+        safe = @can_lose || d == 0 || @aborted ? true : false
+        pbAfterBattle(d, safe)
+        KIF::Coop.black_out_check(d, safe)   # this player's Pokémon all fainted though the host won
       end
     end
 
@@ -522,11 +607,16 @@ module KIF
 
       def start
         @scene.extend(MenuWatch) unless @scene.is_a?(MenuWatch)
+        @scene.extend(IntentShow) unless @scene.is_a?(IntentShow)
         @scene.instance_variable_set(:@kif_coop_view, self)
         @scene.pbStartBattle(@g.mirror)
       end
       def finish(decision); call(:pbEndBattle, decision); end
-      def waiting; call(:pbDisplayMessage, _INTL("Waiting for {1}...", @g.host_name), true); end
+
+      def waiting(change = false)
+        t = change ? _INTL("Waiting for {1}...\n{2}: change your choice", @g.host_name, KIF::Coop.back_name) : _INTL("Waiting for {1}...", @g.host_name)
+        call(:pbDisplayMessage, t, true)
+      end
       def message(t); call(:pbDisplayPausedMessage, t); end
       def int(v, lo, hi, d = nil); Mon.int(v, lo, hi, d); end
 
@@ -673,7 +763,7 @@ module KIF
         ensure
           @polling = false
         end
-        throw :kif_coop_skip, cw if command_window?(cw) && (@g.skipped?(req) || @g.ended? || @g.lost?)
+        throw :kif_coop_skip, cw if command_window?(cw) && (@g.skipped?(req) || @g.ended? || @g.lost? || @g.locked?(req))
       end
 
       # only the command menu closes early: a fight, Bag or party screen ends as usual (then the note shows)
@@ -849,7 +939,7 @@ module KIF
       def start; pbMessage(_INTL("This game couldn't show {1}'s battle. The game fights for your Pokémon there.", @g.host_name)); end
       def finish(_d); end
       def frame; Graphics.update; Input.update; end
-      def waiting; end
+      def waiting(_change = false); end
       def message(t); pbMessage(t); end
       def show(_ev); end
       def command(_mi, _req); nil; end

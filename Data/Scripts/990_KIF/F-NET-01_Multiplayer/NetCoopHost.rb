@@ -16,7 +16,17 @@
 #   * foes the partner's Pokémon fought are noted for its Exp (its own game
 #     works the Exp out, with its own options); a Pokémon the partner's ball
 #     caught goes to the partner, not here; items it used come off its Bag;
-#   * PIF heals both teams after a partner battle; a co-op battle doesn't.
+#   * PIF heals both teams after a partner battle; a co-op battle doesn't;
+#   * the partner's ball is thrown in its own name; when both players throw,
+#     this game's player throws first and a catch gives the partner's ball
+#     back unused; a ball holds the other player's attack on that Pokémon
+#     that turn (Co-op: hold attacks for a ball, the Multiplayer host's);
+#   * in a wild battle a player who runs leaves alone while the other can
+#     fight on: their Pokémon go back, the other finishes the battle;
+#   * either player can change their pick until both have picked (B while
+#     waiting), and each sees the other's pick in the battle menus;
+#   * a player whose Pokémon all fainted blacks out after the battle even
+#     when the other player won it.
 # Exp is the partner's at the end of the battle; levels gained show then.
 #===============================================================================
 module KIF
@@ -35,6 +45,9 @@ module KIF
       h = @battle_host
       return h && !h.caught.empty? && !h.own_catch ? true : false
     end
+
+    # this co-op battle: this player ran away and left the partner fighting
+    def self.left_alone?; (h = @battle_host) && h.left?(0) ? true : false; end
 
     # a battle starting here may ask the partner
     def self.may_host?
@@ -80,7 +93,7 @@ module KIF
       @battle_host = host
       log("battle #{join[:id]} with #{join[:name]} (#{kind})")
       begin
-        return yield
+        return with_rules { yield }   # the wild Pokémon or trainer team is made inside: with the host's settings
       ensure
         $PokemonGlobal.partner = old
         @pending_host = @battle_host = nil
@@ -124,6 +137,10 @@ module KIF
         @swn = 0
         @lost = false
         @done = false
+        @left = {}       # owner (0 this player, 1 the partner) => true: ran away alone
+        @thrown = []     # this turn's balls: [owner, target index or nil]
+        @thrower = nil
+        @mute = 0
       end
 
       def attach(battle)
@@ -131,8 +148,40 @@ module KIF
         battle.instance_variable_set(:@kif_coop, self)
         sc = battle.scene
         sc.extend(KIF::Coop::Capture)
+        sc.extend(KIF::Coop::IntentShow)
         sc.instance_variable_set(:@kif_coop, self)
       end
+
+      def owner(i); @battle.pbGetOwnerIndexFromBattlerIndex(i); end
+      def owner_name(o); o == 0 ? @battle.pbPlayer.name.to_s : @name; end
+
+      #-------------------------------------------------------------------------
+      # Names: the partner's ball is thrown in the partner's name
+      #-------------------------------------------------------------------------
+      def throwing(name)
+        old = @thrower
+        @thrower = name
+        return yield
+      ensure
+        @thrower = old
+      end
+
+      # a line the battle says in this player's name while the partner throws
+      def named(t)
+        return t unless @thrower && t.is_a?(String)
+        me = @battle.pbPlayer.name.to_s
+        return t.start_with?(me + " ") ? @thrower + t[me.length..-1] : t
+      end
+
+      # nothing shown on either screen (the lines are said again, worded for both)
+      def muted
+        @mute += 1
+        return yield
+      ensure
+        @mute -= 1
+      end
+
+      def muted?; @mute > 0; end
 
       def start; @battle.pbPartyStarts(0)[1]; end
       def guest_party; @battle.pbParty(0)[start..-1] || []; end
@@ -237,8 +286,9 @@ module KIF
 
       WHY = { back: "B pressed", time: "time up", lost: "connection lost" }
 
-      # true once the block is; else why not: :back (B, then Yes), :time or :lost
-      def wait(secs)
+      # true once the block is; else why not: :back (B, then let the game
+      # choose), :change (B, then change this player's pick), :time or :lost
+      def wait(secs, change = false)
         t0 = KIF::Net.now
         shown = nil   # when the hint went up
         left = nil
@@ -250,15 +300,18 @@ module KIF
           return :time if now - t0 > secs
           if now - t0 > 0.3 && left != (secs - (now - t0)).ceil
             left = (secs - (now - t0)).ceil
-            hint(wait_text(left), shown)
+            hint(wait_text(left, change), shown)
             shown ||= now
           end
           frame
           # B counts once the hint has been up 1 s (a B for this player's own menu doesn't carry over)
           next unless shown && now - shown >= 1.0 && Input.trigger?(Input::BACK)
-          if let_game_choose?
+          case waiting_choice(change)
+          when :let
             KIF::Net.update if KIF::Net.session.equal?(@s)
             return yield ? true : :back   # their choice came while the question was up: it's used
+          when :change
+            return :change
           end
           left = shown = nil   # the hint again
         end
@@ -277,24 +330,27 @@ module KIF
         end
       end
 
-      def let_game_choose?
+      # B while waiting: :let (the game chooses for the partner), :change (this
+      # player picks again) or nil (wait on); the cursor starts on waiting on
+      def waiting_choice(change)
         sc = @battle.scene
-        # EBDX draws the No/Yes box under its data boxes: they step aside while it's up
+        # EBDX draws the box under its data boxes: they step aside while it's up
         hide = sc.respond_to?(:pbHideAllDataboxes) && !sc.instance_variable_get(:@dataBoxesHidden)
         sc.pbHideAllDataboxes if hide
-        q = _INTL("Let the game choose for {1} this turn?", @name)
-        return (quietly { sc.pbShowCommands(q, [_INTL("No"), _INTL("Yes")], 0) } rescue 0) == 1
+        q = _INTL("Waiting for {1}.", @name)
+        cmds = [[nil, _INTL("Keep waiting")]]
+        cmds << [:change, _INTL("Change my choice")] if change
+        cmds << [:let, _INTL("Let the game choose for {1}", @name)]
+        i = (quietly { sc.pbShowCommands(q, cmds.map(&:last), 0) } rescue 0)
+        return i.is_a?(Integer) && i >= 0 && cmds[i] ? cmds[i][0] : nil
       ensure
         (sc.pbShowAllDataboxes rescue nil) if hide
       end
 
-      # the button a controller player presses, else the bound key
-      def back_name
-        return "B" if (defined?(Input::Controller) && Input::Controller.connected? rescue false)
-        return KIF::Keys.name(Input::BACK)
-      end
+      def back_name; KIF::Coop.back_name; end
 
-      def wait_text(left)
+      def wait_text(left, change = false)
+        return _INTL("Waiting for {1} to choose... ({2} s)\n{3}: change your choice or let the game choose for {1}", @name, left, back_name) if change
         _INTL("Waiting for {1} to choose... ({2} s)\n{3}: let the game choose for {1}", @name, left, back_name)
       end
 
@@ -342,15 +398,63 @@ module KIF
       end
 
       def collect
-        while (r = KIF::Coop.take_host(@id, ["co_act"]))
+        while (r = KIF::Coop.take_host(@id, ["co_act", "co_undo"]))
           d = r[1]["d"]
           if d["b"] == -1 && d["a"] == "auto"
             @auto = true   # the partner's game can't show the battle: the AI fights for it
             next
           end
-          @answers[d["b"]] = d if @pending[d["b"]] && d["t"] == @pending[d["b"]]
+          next unless @pending[d["b"]] && d["t"] == @pending[d["b"]]
+          r[0] == "co_undo" ? @answers.delete(d["b"]) : @answers[d["b"]] = d   # a new pick replaces the old one
         end
         return @auto || @pending.keys.all? { |i| @answers[i] }
+      end
+
+      # the partner's pick this turn for this player's battle menus: its text,
+      # "" (not chosen yet) or nil (nothing asked of the partner)
+      def partner_intent
+        return nil if @pending.empty? || @auto || @lost || @done
+        KIF::Net.update if KIF::Net.session.equal?(@s)   # this player's own menu doesn't read the line
+        it = nil
+        @pending.each_key { |i| it = @answers[i] && @answers[i]["it"] }
+        KIF::Coop.host_box.each do |t, m|   # not taken yet: the newest says
+          d = m["d"]
+          next unless %w[co_act co_undo].include?(t) && m["id"] == @id && d.is_a?(Hash) && @pending[d["b"]] && d["t"] == @pending[d["b"]]
+          it = t == "co_act" ? d["it"] : nil
+        end
+        return KIF::Coop.intent_line(@name, it.is_a?(String) ? it : "")
+      end
+
+      # this player's picks, for the partner's menus ("" while choosing again)
+      def send_intent(clear = false)
+        return if @pending.empty? || !connected? || @auto
+        it = ""
+        unless clear
+          @battle.battlers.each_with_index do |b, i|
+            next unless b && !@battle.opposes?(i) && owner(i) == 0
+            t = KIF::Coop.intent_text(@battle, i)
+            it = t if t
+          end
+        end
+        post("co_int", "d" => { "t" => @turn, "it" => it.to_s[0, 60] })
+      end
+
+      # this player's battlers that picked something it can take back
+      def can_change?
+        return @battle.battlers.each_with_index.any? do |b, i|
+          b && !@battle.opposes?(i) && owner(i) == 0 && !b.fainted? && @battle.choices[i] &&
+            ![:None, :Run].include?(@battle.choices[i][0])
+        end
+      end
+
+      # this player picks again (B while waiting): the picks go back, the menus open again
+      def change_picks
+        @battle.battlers.each_with_index do |b, i|
+          next unless b && !@battle.opposes?(i) && owner(i) == 0 && @battle.choices[i] && @battle.choices[i][0] != :None
+          @battle.pbCancelChoice(i)
+        end
+        send_intent(true)
+        @battle.kif_coop_pbCommandPhaseLoop(true)
       end
 
       # before the AI chooses: the partner's choices, or none (the AI picks)
@@ -358,10 +462,20 @@ module KIF
         return if @pending.empty?
         if connected? && !@auto
           flush
-          why = wait(KIF::Coop.cmd_wait) { collect }
-          if why != true
-            @pending.each_key { |i| gave_up(why, "turn #{@turn}", { "b" => i, "t" => @pending[i] }) unless @answers[i] }
+          send_intent
+          why = nil
+          loop do
+            why = wait(KIF::Coop.cmd_wait, can_change?) { collect }
+            break unless why == :change
+            change_picks
+            break if @battle.decision != 0
+            send_intent
           end
+          if why != true
+            @pending.each_key { |i| gave_up(why, "turn #{@turn}", { "b" => i, "t" => @pending[i] }) unless @answers[i] || why == :change }
+          end
+          # the partner's menu can't take its pick back from here on
+          @pending.each_key { |i| post("co_lock", "d" => { "b" => i, "t" => @pending[i] }) if @answers[i] }
         end
         @pending.each_key do |i|
           a = @answers[i]
@@ -442,6 +556,92 @@ module KIF
           return @battle.pbRegisterItem(i, it, i, -1)
         end
         return false
+      end
+
+      #-------------------------------------------------------------------------
+      # Running from a wild battle: one player leaves, the other fights on
+      #-------------------------------------------------------------------------
+      def left?(o); @left[o] ? true : false; end
+      def left_any?; !@left.empty?; end
+
+      # able Pokémon of one player's team here
+      def able_of(o)
+        st = @battle.pbPartyStarts(0)
+        party = @battle.pbParty(0)
+        return (party[st[o]...(st[o + 1] || party.length)] || []).count { |p| p && p.able? }
+      end
+
+      # a run from battler i leaves only its player: a wild battle the other
+      # player is still in (connected, with Pokémon that can fight)
+      def may_leave?(i)
+        return false unless @battle && @battle.wildBattle? && !@battle.opposes?(i) && !@done
+        o = owner(i)
+        return false if left?(o) || left?(1 - o)
+        return false if o == 0 && (!connected? || @auto)   # nobody would play the partner's side
+        return false if o == 1 && !connected?
+        return able_of(1 - o) > 0
+      end
+
+      # i's player got away: their Pokémon go back (they keep their HP), the battle goes on
+      def leave(i)
+        o = owner(i)
+        @left[o] = true
+        @battle.instance_variable_set(:@decision, 0)
+        KIF::Coop.log("#{o == 0 ? 'this player' : @name} ran from battle #{@id} alone")
+        @battle.battlers.each do |b|
+          next unless b && !@battle.opposes?(b.index) && owner(b.index) == o
+          next if b.fainted?
+          (@battle.scene.pbRecall(b.index) rescue nil)
+          b.instance_variable_set(:@hp, 0)        # the battler only: the Pokémon keeps its HP
+          b.instance_variable_set(:@fainted, true)
+          @battle.pbClearChoice(b.index)
+        end
+        t = _INTL("{1} got away safely!", owner_name(o))
+        o == 0 ? push("mp", [t]) : @battle.pbDisplayPaused(t)   # this player saw PIF's own line
+        finish(3) if o == 1   # the partner's game ends its battle now, with what it had
+      end
+
+      #-------------------------------------------------------------------------
+      # Balls: this player's first; a catch keeps the partner's; a ball holds
+      # the other player's attack on that Pokémon this turn
+      #-------------------------------------------------------------------------
+      def ball_choice?(i)
+        ch = @battle.choices[i]
+        return ch && ch[0] == :UseItem && ch[1] && (GameData::Item.get(ch[1]).is_poke_ball? rescue false)
+      end
+
+      # the partner's balls when this player throws one too: [[index, choice]]
+      def later_balls
+        side = @battle.battlers.each_with_index.select { |b, i| b && !@battle.opposes?(i) && ball_choice?(i) }.map(&:last)
+        return [] unless side.any? { |i| owner(i) == 0 } && side.any? { |i| owner(i) == 1 }
+        return side.select { |i| owner(i) == 1 }.map { |i| [i, @battle.choices[i].dup] }
+      end
+
+      def ball_thrown(user, target)
+        @thrown << [owner(user.index), target.is_a?(Integer) && target >= 0 && @battle.opposes?(target) ? target : nil]
+      end
+
+      def new_turn; @thrown = []; end
+
+      # a ball the partner didn't need: back in its Bag (not counted as used)
+      def ball_unused(i, ch, foe)
+        @battle.pbReturnUnusedItemToBag(ch[1], i)
+        it = GameData::Item.get(ch[1]).name
+        @battle.pbDisplay(_INTL("{1} was already caught by {2}, so {3}'s {4} wasn't used.", foe, owner_name(0), @name, it))
+      end
+
+      # after the balls: the other player's attacks on a Pokémon a ball was thrown at wait
+      def hold_attacks
+        return if @thrown.empty? || KIF::Coop.rule(:kif_coop_hold) != 1
+        @battle.battlers.each_with_index do |b, i|
+          next unless b && !b.fainted? && !@battle.opposes?(i)
+          ch = @battle.choices[i]
+          next unless ch && ch[0] == :UseMove && ch[2] && ch[2].damagingMove?
+          t = ch[3].to_i
+          th = @thrown.find { |o, ti| o != owner(i) && (ti.nil? || t < 0 || t == ti) } or next
+          @battle.pbClearChoice(i)
+          @battle.pbDisplay(_INTL("{1} held back its attack for {2}'s Poké Ball.", b.pbThis, owner_name(th[0])))
+        end
       end
 
       # the partner's replacement (party index), -1 (cancelled) or nil (the AI picks)
@@ -547,11 +747,15 @@ module KIF
       end
 
       def pbDisplayMessage(*args, &blk)
+        return if @kif_coop&.muted?
+        args[0] = @kif_coop.named(args[0]) if @kif_coop
         kif_rec { ["m", [kif_t(args[0]), args[1] ? 1 : 0]] }
         kif_in { super }
       end
 
       def pbDisplayPausedMessage(*args, &blk)
+        return if @kif_coop&.muted?
+        args[0] = @kif_coop.named(args[0]) if @kif_coop
         kif_rec { ["mp", [kif_t(args[0])]] }
         kif_in { super }
       end
@@ -720,10 +924,14 @@ def pbAfterBattle(decision, canLose)
   # only the partner caught: the encounter was theirs (their Nuzlocke place, their
   # Soul Link catch); this player's place stays open, as theirs does when this player catches
   KIF::Nuzlocke.pending = nil if defined?(KIF::Nuzlocke) && KIF::Coop.partner_caught_alone?
+  # this player ran away alone and the partner lost on: not this player's loss
+  decision = 3 if [2, 5].include?(decision) && KIF::Coop.left_alone?
   old = $PokemonGlobal.partner
   $PokemonGlobal.partner = nil
   begin
-    return kif_coop_pbAfterBattle(decision, canLose)
+    ret = kif_coop_pbAfterBattle(decision, canLose)
+    KIF::Coop.black_out_check(decision, canLose)
+    return ret
   ensure
     $PokemonGlobal.partner = old
   end
@@ -739,6 +947,66 @@ class PokeBattle_Battle
   alias kif_coop_pbRegisterItem pbRegisterItem unless method_defined?(:kif_coop_pbRegisterItem)
   alias kif_coop_pbReturnUnusedItemToBag pbReturnUnusedItemToBag unless method_defined?(:kif_coop_pbReturnUnusedItemToBag)
   alias kif_coop_pbEndOfBattle pbEndOfBattle unless method_defined?(:kif_coop_pbEndOfBattle)
+  alias kif_coop_pbAttackPhaseItems pbAttackPhaseItems unless method_defined?(:kif_coop_pbAttackPhaseItems) || private_method_defined?(:kif_coop_pbAttackPhaseItems)
+  alias kif_coop_pbRun pbRun unless method_defined?(:kif_coop_pbRun) || private_method_defined?(:kif_coop_pbRun)
+  alias kif_coop_pbAbleCount pbAbleCount unless method_defined?(:kif_coop_pbAbleCount) || private_method_defined?(:kif_coop_pbAbleCount)
+  alias kif_coop_pbCanChooseNonActive? pbCanChooseNonActive? unless method_defined?(:kif_coop_pbCanChooseNonActive?) || private_method_defined?(:kif_coop_pbCanChooseNonActive?)
+
+  # balls: this player's first, the partner's after unless that caught; then
+  # the other player's attacks on a Pokémon a ball was thrown at wait
+  def pbAttackPhaseItems
+    c = @kif_coop
+    return kif_coop_pbAttackPhaseItems unless c && wildBattle?
+    c.new_turn
+    later = c.later_balls
+    foes = {}
+    later.each do |i, ch|
+      foes[i] = (@battlers[ch[2]] && @battlers[ch[2]].pokemon ? @battlers[ch[2]].pokemon.name : "?") rescue "?"
+      pbClearChoice(i)
+    end
+    kif_coop_pbAttackPhaseItems
+    later.each do |i, ch|
+      b = @battlers[i]
+      if @decision == 0 && b && !b.fainted?
+        @choices[i] = ch
+        pbUsePokeBallInBattle(ch[1], ch[2], b)
+      elsif @decision == 4
+        c.ball_unused(i, ch, foes[i])
+      else
+        pbReturnUnusedItemToBag(ch[1], i)
+      end
+    end
+    c.hold_attacks if @decision == 0
+  end
+
+  # a wild battle: a player who gets away leaves alone while the other fights on
+  def pbRun(idxBattler, duringBattle = false)
+    c = @kif_coop
+    return kif_coop_pbRun(idxBattler, duringBattle) unless c && c.may_leave?(idxBattler)
+    o = c.owner(idxBattler)
+    # this player's own run says PIF's lines here; the partner's is worded for both
+    r = o == 0 ? c.quietly { kif_coop_pbRun(idxBattler, duringBattle) } : c.muted { kif_coop_pbRun(idxBattler, duringBattle) }
+    if r == 1 && @decision == 3
+      c.leave(idxBattler)
+    elsif r != 0
+      t = _INTL("{1} couldn't get away!", c.owner_name(o))
+      o == 0 ? c.push("mp", [t]) : pbDisplayPaused(t)
+    end
+    return r
+  end
+
+  # a player who ran away alone: their Pokémon don't count for this side
+  def pbAbleCount(idxBattler = 0)
+    c = @kif_coop
+    return kif_coop_pbAbleCount(idxBattler) unless c && c.left_any? && !opposes?(idxBattler)
+    return [0, 1].sum { |o| c.left?(o) ? 0 : c.able_of(o) }
+  end
+
+  def pbCanChooseNonActive?(idxBattler)
+    c = @kif_coop
+    return false if c && c.left_any? && !opposes?(idxBattler) && c.left?(c.owner(idxBattler))
+    return kif_coop_pbCanChooseNonActive?(idxBattler)
+  end
 
   # player first (the partner is asked at the same time), then the AI
   def pbCommandPhaseLoop(isPlayer)
@@ -769,12 +1037,14 @@ class PokeBattle_Battle
     return c.quietly { kif_coop_pbGainExp(*args) }
   end
 
-  # the partner's ball: a catch is the partner's
+  # the partner's ball: thrown in the partner's name, a catch is the partner's
   def pbUsePokeBallInBattle(item, idxBattler, userBattler)
     c = @kif_coop
-    return kif_coop_pbUsePokeBallInBattle(item, idxBattler, userBattler) unless c && userBattler && c.guest?(userBattler.index)
+    return kif_coop_pbUsePokeBallInBattle(item, idxBattler, userBattler) unless c && userBattler
+    c.ball_thrown(userBattler, idxBattler)
+    return kif_coop_pbUsePokeBallInBattle(item, idxBattler, userBattler) unless c.guest?(userBattler.index)
     n = @caughtPokemon.length
-    ret = kif_coop_pbUsePokeBallInBattle(item, idxBattler, userBattler)
+    ret = c.throwing(c.name) { kif_coop_pbUsePokeBallInBattle(item, idxBattler, userBattler) }
     c.caught_by_guest(@caughtPokemon.slice!(n..-1) || [])
     return ret
   end

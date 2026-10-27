@@ -301,6 +301,9 @@ module KIF
 
     def self.shiny_dump(p)
       return nil unless p.shiny?
+      # the colours are rolled when first drawn: a foe not drawn yet (co_begin
+      # goes before the battle scene draws) is rolled here, so both games draw these
+      SHINY.each { |k, r| p.send(:"#{k}?") if r[0] != :bool && p.instance_variable_get(:"@#{k}").nil? && p.respond_to?(:"#{k}?") }
       out = {}
       SHINY.each_key do |k|
         v = p.instance_variable_get(:"@#{k}")

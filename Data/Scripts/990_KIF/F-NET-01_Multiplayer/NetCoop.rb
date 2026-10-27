@@ -249,6 +249,15 @@ module KIF
       return nil
     end
 
+    # PIF's scene: the pick panel's top, over the command box and over the
+    # Battle Info "INFO" tab that sits on the box's left end (it covered the text)
+    INTENT_H = 26   # the pick strip, as tall as the INFO tab
+
+    def self.intent_panel_y(h)
+      tab = defined?(KIF::BattleInfo::TAB_H) ? KIF::BattleInfo::TAB_H : 0
+      return Graphics.height - 96 - tab - 2 - h
+    end
+
     # the partner's pick as a line: "Monto: Water Gun -> Pidgey", "Monto: not chosen yet"
     def self.intent_line(name, it)
       return nil if it.nil?
@@ -709,17 +718,27 @@ module KIF
         w.visible = true
         return if t == @kif_intent_text
         @kif_intent_text = t
-        if w.is_a?(Window)
-          w.text = t
-          w.resizeToFit(t, Graphics.width)
-          w.y = Graphics.height - 96 - w.height   # just over the message box
-        else
-          b = w.bitmap
-          b.clear
+        b = w.bitmap
+        b.clear
+        if @kif_intent_ebdx
           pbSetSystemFont(b)
           tw = [b.text_size(t).width + 24, Graphics.width].min
           b.fill_rect(0, 0, tw, b.height, Color.new(0, 0, 0, 150))
           pbDrawShadowText(b, 12, 2, tw - 24, b.height - 4, t, Color.new(248, 248, 248), Color.new(64, 64, 64))
+        else
+          # PIF's scene: a strip in the INFO tab's look, from the left edge to
+          # short of this side's data boxes (a long pick is cut there)
+          pbSetSmallFont(b)
+          tw = [b.text_size(t).width + 16, kif_intent_room].min
+          h = b.height
+          b.fill_rect(2, 0, tw - 4, h, Color.new(88, 88, 96))
+          b.fill_rect(0, 2, tw, h - 4, Color.new(88, 88, 96))
+          b.fill_rect(2, 2, tw - 4, h - 4, Color.new(232, 232, 240))
+          b.fill_rect(2, h / 2 + 1, tw - 4, h / 2 - 3, Color.new(200, 200, 212))
+          b.font.color = Color.new(176, 176, 184)
+          b.draw_text(9, 1, tw - 16, h - 2, t)
+          b.font.color = Color.new(64, 64, 72)
+          b.draw_text(8, 0, tw - 16, h - 2, t)
         end
       rescue StandardError => e
         KIF::Coop.log("partner's pick not shown (#{e.class}: #{e.message})") unless @kif_intent_warned
@@ -728,15 +747,26 @@ module KIF
 
       def kif_intent_make
         vp = @viewport
-        if defined?(PokeBattle_SceneEBDX) && is_a?(PokeBattle_SceneEBDX)
+        @kif_intent_ebdx = defined?(PokeBattle_SceneEBDX) && is_a?(PokeBattle_SceneEBDX) ? true : false
+        if @kif_intent_ebdx
           s = BitmapSprite.new(Graphics.width, 32, vp)
           s.y = Graphics.height - 140   # over EBDX's command bar
           s.z = 99_999
           return s
         end
-        w = Window_UnformattedTextPokemon.newWithSize("", 0, Graphics.height - 160, Graphics.width / 2, 64, vp)
-        w.z = 99_999
-        return w
+        s = BitmapSprite.new(Graphics.width, KIF::Coop::INTENT_H, vp)
+        s.x = 4   # in line with the INFO tab
+        s.y = KIF::Coop.intent_panel_y(KIF::Coop::INTENT_H)
+        s.z = 99_999
+        return s
+      end
+
+      # width up to this side's data boxes (PIF's scene draws them on the right)
+      def kif_intent_room
+        sp = @sprites || {}
+        xs = sp.keys.select { |k| k.to_s =~ /\AdataBox_\d*[02468]\z/ }.map { |k| sp[k] }.select { |d| d && !(d.disposed? rescue true) }.map(&:x)
+        room = (xs.min || Graphics.width / 2) - 4 - 4
+        return room.clamp(120, Graphics.width - 8)
       end
     end
   end

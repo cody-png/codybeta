@@ -18,9 +18,31 @@ module KIF
     FOLD = { "–" => "-", "—" => "-", "‐" => "-", "‑" => "-", "−" => "-", "‘" => "'", "’" => "'", "‚" => "'",
              "“" => '"', "”" => '"', "„" => '"', "…" => "...", "×" => "x", " " => " ", "→" => "->", "←" => "<-",
              "•" => "-", "\t" => "  ", "✓" => "OK", "✔" => "OK", "✅" => "OK", "☑" => "OK", "✗" => "x", "✘" => "x",
-             "❌" => "x", "⚠" => "!", "€" => "EUR", "©" => "(c)", "®" => "(R)", "™" => "(TM)", "★" => "*" }
+             "❌" => "x", "⚠" => "!", "€" => "EUR", "©" => "(c)", "®" => "(R)", "™" => "(TM)", "★" => "*",
+             "Œ" => "OE", "œ" => "oe", "Ĳ" => "IJ", "ĳ" => "ij", "ŉ" => "'n" }
     FOLD_RE = Regexp.union(FOLD.keys)
-    UNDRAWN = / ?[^\n\x20-\x7E¡-¬®-ÿ♀♂]+/   # with a space before it: no double space is left
+    # Latin Extended-A, -B and Additional letters (Łódź, Việt, Ș) as the
+    # letter without its marks, or the Latin-1 one with a mark less (ǖ: ü)
+    LATIN = ["ĀāĂăĄąĆćĈĉĊċČčĎďĐđĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħĨĩĪīĬĭĮįİıĴĵĶķĸĹĺĻļĽľĿŀŁłŃńŅņŇňŊ" \
+             "ŋŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŠšŢţŤťŦŧŨũŪūŬŭŮůŰűŲųŴŵŶŷŸŹźŻżŽžſƀƁƇƈƊƑƒƓƗƘƙƚƝƞƠơƤƥƬƭƮ" \
+             "ƯưƲƳƴƵƶǍǎǏǐǑǒǓǔǕǖǗǘǙǚǛǜǞǟǠǡǢǣǤǥǦǧǨǩǪǫǬǭǰǴǵǸǹǺǻǼǽǾǿȀȁȂȃȄȅȆȇȈȉȊȋȌȍȎȏȐȑȒȓȔȕ" \
+             "ȖȗȘșȚțȞȟȦȧȨȩȪȫȬȭȮȯȰȱȲȳȴȵȶȷȺȻȼȽȾȿɀɃɄɆɇɈɉɊɋɌɍɎɏḀḁḂḃḄḅḆḇḈḉḊḋḌḍḎḏḐḑḒḓḔḕḖḗḘḙḚ" \
+             "ḛḜḝḞḟḠḡḢḣḤḥḦḧḨḩḪḫḬḭḮḯḰḱḲḳḴḵḶḷḸḹḺḻḼḽḾḿṀṁṂṃṄṅṆṇṈṉṊṋṌṍṎṏṐṑṒṓṔṕṖṗṘṙṚṛṜṝṞṟṠṡṢ" \
+             "ṣṤṥṦṧṨṩṪṫṬṭṮṯṰṱṲṳṴṵṶṷṸṹṺṻṼṽṾṿẀẁẂẃẄẅẆẇẈẉẊẋẌẍẎẏẐẑẒẓẔẕẖẗẘẙẚẛẜẝẞẟẠạẢảẤấẦầẨẩẪ" \
+             "ẫẬậẮắẰằẲẳẴẵẶặẸẹẺẻẼẽẾếỀềỂểỄễỆệỈỉỊịỌọỎỏỐốỒồỔổỖỗỘộỚớỜờỞởỠỡỢợỤụỦủỨứỪừỬửỮữỰựỲ" \
+             "ỳỴỵỶỷỸỹỺỻỼỽỾỿ",
+             "AaAaAaCcCcCcCcDdDdEeEeEeEeEeGgGgGgGgHhHhIiIiIiIiIiJjKkkLlLlLlLlLlNnNnNnN" \
+             "nOoOoOoRrRrRrSsSsSsSsTtTtTtUuUuUuUuUuUuWwYyYZzZzZzsbBCcDFfGIKklNnOoPpTtT" \
+             "UuVYyZzAaIiOoUuÜüÜüÜüÜüÄäAaÆæGgGgKkOoOojGgNnÅåÆæØøAaAaEeEeIiIiOoOoRrRrUu" \
+             "UuSsTtHhAaEeÖöÕõOoOoYylntjACcLTszBUEeJjQqRrYyAaBbBbBbÇçDdDdDdDdDdEeEeEeE" \
+             "eEeFfGgHhHhHhHhHhIiÏïKkKkKkLlLlLlLlMmMmMmNnNnNnNnÕõÕõOoOoPpPpRrRrRrRrSsS" \
+             "sSsSsSsTtTtTtTtUuUuUuUuUuVvVvWwWwWwWwWwXxXxYyZzZzZzhtwyasssßdAaAaÂâÂâÂâÂ" \
+             "âAaAaAaAaAaAaEeEeEeÊêÊêÊêÊêEeIiIiOoOoÔôÔôÔôÔôOoOoOoOoOoOoUuUuUuUuUuUuUuY" \
+             "yYyYyYyLlVvYy"].map(&:chars).transpose.to_h
+    LATIN_RE = /[#{LATIN.keys.join}]/   # a gsub, not tr: tr builds its 500-letter table on every call (every entity)
+    # the space before it goes too only when a space, a line end or a mark
+    # follows ("Party 🎉 time", "Done ✨."), not when a word does ("## 🚀Setup")
+    UNDRAWN = / ?[^\n\x20-\x7E¡-¬®-ÿ♀♂]+(?=[ \n.,;:!?)\]]|\z)|[^\n\x20-\x7E¡-¬®-ÿ♀♂]+/
     ENTITIES = { "amp" => "&", "lt" => "<", "gt" => ">", "quot" => '"', "apos" => "'", "nbsp" => " ", "copy" => "©",
                  "reg" => "®", "trade" => "™", "mdash" => "—", "ndash" => "–", "hellip" => "…", "laquo" => "«",
                  "raquo" => "»" }
@@ -77,7 +99,7 @@ module KIF
     end
 
     def show(title, found, desc)
-      KIF::Updater.show_text(fold(title), lines_for(found, desc), false)
+      KIF::Updater.show_text(fold(title).strip, lines_for(found, desc), false)
     end
 
     # a README that is really a picture or an archive: NUL bytes, or more
@@ -105,16 +127,16 @@ module KIF
     # Text
     #---------------------------------------------------------------------------
     def fold(s)
-      return KIF::PixelFont.utf8(s.to_s).gsub(FOLD_RE, FOLD).gsub(UNDRAWN, "")
+      return KIF::PixelFont.utf8(s.to_s).gsub(FOLD_RE, FOLD).gsub(LATIN_RE, LATIN).gsub(UNDRAWN, "")
     end
 
     # &copy; &#169; &#xA9; as what they stand for, folded; one pass, so
-    # &amp;lt; is "&lt;"
+    # &amp;lt; is "&lt;"; &#10; is a space, not a new row
     def entities(s)
       return s.gsub(/&(#\d{1,7}|#[xX]\h{1,6}|[A-Za-z]+);/) do
         e = $1
         c = ENTITIES[e] || (e.start_with?("#") ? ((e =~ /x/i ? e[2..-1].hex : e[1..-1].to_i).chr(Encoding::UTF_8) rescue "") : nil)
-        c ? fold(c) : $&
+        c ? fold(c).tr("\n", " ") : $&
       end
     end
 
@@ -138,6 +160,17 @@ module KIF
       para = nil
       fence = nil
       flush = proc { out << para if para; para = nil }
+      # code first: a fence's lines and `spans` get their marks kept (see
+      # keep), so the html cleanup below can't touch "`<!--`" or "a <b"
+      text = text.split("\n", -1).map do |l|
+        if fence
+          fence = nil if l.strip.start_with?(fence)
+          next fence ? keep(l) : l
+        end
+        fence = $1 if l.strip.sub(/\A(>\s?)+/, "").strip =~ /\A(```|~~~)/
+        fence || l.length > LINE ? l : literal(l)
+      end.join("\n")
+      fence = nil
       # html: no comments, scripts or styles (unclosed: to the end, as a
       # browser does); a tag over several lines is put on one, then dropped
       text = text.gsub(/<!--.*?(?:-->|\z)/m, "").gsub(/<(script|style)\b.*?(?:<\/\1\s*>|\z)/mi, "")
@@ -147,7 +180,7 @@ module KIF
             fence = nil
             out << ""
           else
-            out << "  " + l.rstrip
+            out << "  " + unkeep(l.rstrip)
           end
           next
         end
@@ -192,20 +225,34 @@ module KIF
       return out
     end
 
+    # ASCII marks as private-use characters, which no Markdown or html step
+    # matches; unkeep turns them back
+    def keep(t)
+      return t.gsub(/[!-\/:-@\[-`{-~]/) { |c| (0xE000 + c.ord).chr(Encoding::UTF_8) }
+    end
+
+    def unkeep(s)
+      return s.gsub(/[\u{E021}-\u{E07E}]/) { |c| (c.ord - 0xE000).chr }
+    end
+
+    # \* and `code` kept as they are
+    def literal(s)
+      s = s.gsub(/\\([!-\/:-@\[-`{-~])/) { keep($1) }   # \* stays a *
+      return s.gsub(/(`+)(.+?)\1/) { keep($2.strip) }    # code: its text, as it is
+    end
+
     # one line's text: pictures as [picture], links as their text, no
     # emphasis, code or html marks
     def inline(s)
       # shortcut: a line over LINE keeps its Markdown marks (hostile or generated files only)
-      return entities(s.gsub(/<\/?[A-Za-z][^<>]*>/, "")).strip if s.length > LINE
-      keep = proc { |t| t.gsub(/[!-\/:-@\[-`{-~]/) { |c| (0xE000 + c.ord).chr(Encoding::UTF_8) } }
-      s = s.gsub(/\\([!-\/:-@\[-`{-~])/) { keep.call($1) }   # \* stays a *
-      s = s.gsub(/(`+)(.+?)\1/) { keep.call($2.strip) }     # code: its text, as it is
+      return unkeep(entities(s.gsub(/<\/?[A-Za-z][^<>]*>/, ""))).strip if s.length > LINE
+      s = literal(s)
       s = s.gsub(/<img\b[^>]*>/i, "[picture]").gsub(/!\[[^\]]*\](\([^)]*\)|\[[^\]]*\])/, "[picture]")
       s = s.gsub(/\[((?:[^\[\]]|\[[^\]]*\])*)\](\([^)]*\)|\[[^\]]*\])/, '\1')
       s = s.gsub(/<((?:https?|mailto):[^>\s]+)>/, '\1').gsub(/<\/?[A-Za-z][^>]*>/, "")
       s = s.gsub(/(\*\*|__)(?=\S)((?:(?!\1).)+?)(?<=\S)\1/, '\2').gsub(/~~(.+?)~~/, '\1')   # bold not past the next **: linear time
       s = s.gsub(/(?<![\w*])\*(?=\S)(.+?)(?<=\S)\*(?![\w*])/, '\1').gsub(/(?<!\w)_(?=\S)(.+?)(?<=\S)_(?!\w)/, '\1')
-      return entities(s).gsub(/[\u{E021}-\u{E07E}]/) { |c| (c.ord - 0xE000).chr }.strip
+      return unkeep(entities(s)).strip
     end
   end
 end

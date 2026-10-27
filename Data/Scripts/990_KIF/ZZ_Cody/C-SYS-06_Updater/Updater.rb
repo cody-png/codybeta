@@ -1283,7 +1283,7 @@ KIF::Options.add(:others, :global) {
 }
 KIF::Options.add(:others, :global) {
   ButtonOption.new(_INTL("Test Code"), proc { KIF::Updater.test_code_menu },
-                   _INTL("Enter the code you were sent to get test builds, or leave them"))
+                   _INTL("Enter the code you were sent to get test builds, or stop getting them."))
 }
 
 # The load screen's version check (PIF's spot). KIF's own check runs here

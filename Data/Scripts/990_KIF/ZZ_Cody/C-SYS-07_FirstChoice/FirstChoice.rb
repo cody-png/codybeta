@@ -80,3 +80,18 @@ def find_newer_available_version
   KIF::FirstChoice.ask
   return ret
 end
+
+# Before that choice every module is Off, Quality of Life (C-SYS-02's Skip
+# intro) included, so on a first start the opening movie played although
+# Options showed Skip intro: On (26 Oct test). Until the player has chosen,
+# the intro follows the Skip intro setting itself.
+class Scene_Intro
+  if method_defined?(:playIntroCinematic)
+    alias kif_fc_playIntroCinematic playIntroCinematic unless method_defined?(:kif_fc_playIntroCinematic)
+
+    def playIntroCinematic
+      return if KIF::FirstChoice.needed? && defined?(KIF::SkipIntro) && KIF::SkipIntro.on?
+      kif_fc_playIntroCinematic
+    end
+  end
+end

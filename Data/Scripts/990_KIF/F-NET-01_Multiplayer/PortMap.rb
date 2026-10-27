@@ -96,6 +96,13 @@ module KIF
 
       def shared?(ip); [:cgnat, :private].include?(ip_kind(ip)); end
 
+      # a public IPv4 or a global IPv6 address (2000::/3), as the player types it
+      def public_ip?(ip)
+        return true if ip_kind(ip) == :public
+        return false unless ip.to_s =~ /\A[23][0-9a-f]{3}:[0-9a-f:]{2,35}\z/i
+        return (Addrinfo.ip(ip).ipv6? rescue false)
+      end
+
       # this PC's address on the network (a UDP "connect" sends nothing)
       def local_ip(toward = "192.0.2.1")
         u = UDPSocket.new

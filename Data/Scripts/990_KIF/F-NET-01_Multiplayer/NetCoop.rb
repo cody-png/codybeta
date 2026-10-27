@@ -24,8 +24,31 @@
 #   co_ev    {id,e}                 host: what its battle scene showed
 #   co_cmd / co_act {id,d}          a turn: host asks, guest answers
 #   co_sw / co_swr  {id,d}          a replacement: host asks, guest answers
+#   co_skip  {id,d}                 host: stopped waiting for that turn or
+#                                   replacement (B, time up); its AI chose
 #   co_end   {id,d}                 host: result, the guest's party, Exp, catches
+#   co_undo  {id,d}                 guest: forget my pick for that turn, I choose again
+#   co_lock  {id,d}                 host: that turn's pick was used (too late to change)
+#   co_int   {id,d}                 host: what its player picked this turn ("" not yet)
+#   co_rules {r}                    the Multiplayer host: its gameplay settings (RULES)
+#
+# Settings: gameplay ones (RULES: shiny odds, trainer shinies, difficulty, AI,
+# battle mechanics, the ball hold) are the Multiplayer host's in every shared
+# battle, whichever game runs it; looks (battle UI, animations, sprites, shiny
+# colour style) stay each player's own; Exp, level caps, EV/IV modes,
+# Nuzlocke and Soul Link are each player's own, worked out on their own game.
 #===============================================================================
+KIF::Options.define(:kif_coop_hold, 1, :global)   # 0 Off, 1 On
+
+KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (015_KIF_SettingsData)
+  next nil if KIF.mobile?
+  EnumOption.new(_INTL("Co-op: hold attacks for a ball"), [_INTL("Off"), _INTL("On")],
+                 proc { $PokemonSystem.kif_coop_hold },
+                 proc { |value| $PokemonSystem.kif_coop_hold = value },
+                 [_INTL("Fighting together: a ball thrown at a wild Pokémon doesn't stop the partner's attack on it."),
+                  _INTL("Fighting together: when one of you throws a ball at a wild Pokémon, the other's attack on it waits that turn. The host's setting counts.")])
+}
+
 module KIF
   module Coop
     {
@@ -41,11 +64,24 @@ module KIF
       "co_act"   => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
       "co_sw"    => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
       "co_swr"   => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
+      "co_skip"  => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
       "co_end"   => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
+      "co_undo"  => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
+      "co_lock"  => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
+      "co_int"   => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
+      "co_rules" => { "r" => [Hash] },
     }.each { |k, v| KIF::Net::TYPES[k] = v }
 
-    HOST_TYPES  = %w[co_join co_no co_act co_swr]
-    GUEST_TYPES = %w[co_begin co_ev co_cmd co_sw co_end]
+    HOST_TYPES  = %w[co_join co_no co_act co_swr co_undo]
+    GUEST_TYPES = %w[co_begin co_ev co_cmd co_sw co_skip co_end co_lock]
+
+    # the Multiplayer host's gameplay settings: $PokemonSystem field => [min, max]
+    RULES = { "shinyodds" => [1, 65_536], "shiny_trainer_pkmn" => [0, 3], "kif_coop_hold" => [0, 1],
+              "damage_variance" => [0, 9], "powerfulai" => [0, 9], "modernhail" => [0, 9], "frostbite" => [0, 9],
+              "drowsy" => [0, 9], "bugbuff" => [0, 9], "icebuff" => [0, 9], "critical_captures" => [0, 9],
+              "rocketballsteal" => [0, 9], "custom_bst_npc" => [0, 9], "cody_leader_teams" => [0, 9] }
+    # difficulty: game switches, true/false
+    RULE_SWITCHES = { "easy" => :SWITCH_GAME_DIFFICULTY_EASY, "hard" => :SWITCH_GAME_DIFFICULTY_HARD }
 
     # seconds; tests shorten them
     @ask_wait   = 3.0    # host: the partner answers a battle start
@@ -87,7 +123,7 @@ module KIF
 
     def self.on_connect(_s = nil)
       @want = @their = @ask_pact = false
-      @their_map = @sent_map = @ask = nil
+      @their_map = @sent_map = @ask = @rules = @rules_sent = nil
       @told = {}
       @host_box.clear
     end
@@ -121,11 +157,116 @@ module KIF
       return unless $game_map
       @sent_map = $game_map.map_id
       s.post("co_st", "map" => @sent_map)
+      send_rules
+    end
+
+    #---------------------------------------------------------------------------
+    # Gameplay settings: the Multiplayer host's count in every shared battle
+    #---------------------------------------------------------------------------
+    def self.rules_host?; (s = session) && s.respond_to?(:role) && s.role == :host ? true : false; end
+
+    def self.my_rules
+      r = {}
+      RULES.each_key { |k| r[k] = $PokemonSystem.send(k).to_i if $PokemonSystem.respond_to?(k) }
+      RULE_SWITCHES.each { |k, c| r[k] = ($game_switches[Object.const_get(c)] ? 1 : 0) rescue nil }
+      return r
+    end
+
+    # the host sends its settings with its status, and again when they changed
+    def self.send_rules
+      s = session or return
+      return unless rules_host? && $PokemonSystem
+      r = my_rules
+      return if r == @rules_sent
+      @rules_sent = r
+      s.post("co_rules", "r" => r)
+    end
+
+    # checked settings from the host: known names, Integers in range
+    def self.read_rules(h)
+      out = {}
+      RULES.each { |k, (lo, hi)| out[k] = h[k] if h[k].is_a?(Integer) && h[k].between?(lo, hi) }
+      RULE_SWITCHES.each_key { |k| out[k] = h[k] if h[k] == 0 || h[k] == 1 }
+      return out
+    end
+
+    # a setting for this shared battle (the host's while with_rules runs)
+    def self.rule(k); $PokemonSystem.respond_to?(k) ? $PokemonSystem.send(k).to_i : 0; end
+
+    # the block runs with the Multiplayer host's gameplay settings (on the
+    # joiner's game; the host's own game already has them)
+    def self.with_rules
+      r = @rules
+      return yield if rules_host? || !r || r.empty? || !$PokemonSystem
+      old = {}
+      r.each do |k, v|
+        if RULE_SWITCHES[k]
+          c = Object.const_get(RULE_SWITCHES[k]) rescue next
+          old[k] = $game_switches[c]
+          $game_switches[c] = v == 1
+        elsif $PokemonSystem.respond_to?(:"#{k}=")
+          old[k] = $PokemonSystem.send(k)
+          $PokemonSystem.send(:"#{k}=", v)
+        end
+      end
+      begin
+        return yield
+      ensure
+        old.each { |k, v| RULE_SWITCHES[k] ? ($game_switches[Object.const_get(RULE_SWITCHES[k])] = v) : $PokemonSystem.send(:"#{k}=", v) }
+      end
+    end
+
+    #---------------------------------------------------------------------------
+    # Shared helpers
+    #---------------------------------------------------------------------------
+    # the button a controller player presses, else the bound key
+    def self.back_name
+      return "B" if (defined?(Input::Controller) && Input::Controller.connected? rescue false)
+      return KIF::Keys.name(Input::BACK)
+    end
+
+    # what a battler is about to do this turn, for the partner's screen: "Water
+    # Gun -> Pidgey", "throwing a Poké Ball", "switching", "running"; nil: nothing yet
+    def self.intent_text(battle, i)
+      ch = battle.choices[i] or return nil
+      b = battle.battlers[i]
+      case ch[0]
+      when :UseMove
+        mv = ch[2] or return nil
+        t = ch[3]
+        tb = t.is_a?(Integer) && t >= 0 && t != i ? battle.battlers[t] : nil
+        return tb ? _INTL("{1} -> {2}", mv.name, tb.name) : mv.name
+      when :UseItem
+        it = GameData::Item.try_get(ch[1]) or return nil
+        return it.is_poke_ball? ? _INTL("throwing a {1}", it.name) : _INTL("using a {1}", it.name)
+      when :SwitchOut then return _INTL("switching")
+      when :Run then return _INTL("running")
+      end
+      return nil
+    rescue StandardError
+      return nil
+    end
+
+    # the partner's pick as a line: "Monto: Water Gun -> Pidgey", "Monto: not chosen yet"
+    def self.intent_line(name, it)
+      return nil if it.nil?
+      t = Mon.text(it, 60).delete("\n")
+      return t.empty? ? _INTL("{1}: not chosen yet", name) : _INTL("{1}: {2}", name, t)
+    end
+
+    # PIF whites out a lost battle; a player whose own Pokémon all fainted in a
+    # shared battle the partner won (or got away from) blacks out the same way
+    def self.black_out_check(decision, can_lose)
+      return if can_lose || decision == 2 || decision == 5 || !$Trainer
+      return if $Trainer.party.none? { |p| p && !p.egg? } || $Trainer.able_pokemon_count > 0
+      log("every Pokémon of this player fainted in the shared battle: blacked out")
+      pbCheckAllFainted
     end
 
     # the row on the Multiplayer connected screen
     def self.menu_label
       return _INTL("Fight together: On") if on?
+      return _INTL("Fight together: {1} asked", partner) if @their && !@want
       return _INTL("Fight together: Asked") if @want
       return _INTL("Fight together: Off")
     end
@@ -138,7 +279,7 @@ module KIF
         return
       end
       pbMessage(_INTL("Fighting together: a battle either of you starts while the other is on the same map becomes a double battle. Each of you uses your own Pokémon."))
-      return unless pbConfirmMessage(_INTL("Ask {1} to fight together?", partner))
+      return unless pbConfirmMessage(@their ? _INTL("{1} asked to fight together. OK?", partner) : _INTL("Ask {1} to fight together?", partner))
       set_want(true)
       @notes << (on? ? _INTL("You now fight together with {1}.", partner) : _INTL("Asked {1}. They need to say yes.", partner))
     end
@@ -163,8 +304,11 @@ module KIF
         @their = msg["on"] == 1
         @ask_pact = @their && !@want
         @notes << _INTL("{1} stopped fighting together.", partner) if was && !@their && @want
+        @notes << _INTL("You now fight together with {1}.", partner) if !was && @their && @want   # the answer to this player's ask
         send_status if @their
       when "co_st" then @their_map = msg["map"]
+      when "co_rules" then @rules = read_rules(msg["r"]) unless rules_host?
+      when "co_int" then @guest&.intent_from(msg)
       when "co_ask" then guest_ask(msg)
       when *HOST_TYPES then @host_box << [type, msg]
       when *GUEST_TYPES
@@ -177,6 +321,22 @@ module KIF
     end
 
     def self.take_notes; n = @notes.dup; @notes.clear; n; end
+
+    # the other player's look (presence) when this battle is a co-op one, or nil
+    # the partner's pick for the battle menus of this game's co-op battle, or nil
+    def self.intent_for(scene)
+      b = scene.instance_variable_get(:@battle) or return nil
+      h = b.instance_variable_get(:@kif_coop)
+      return h.partner_intent if h
+      return @guest.intent if @guest && @guest.mirror.equal?(b)
+      return nil
+    end
+
+    def self.partner_look(scene)
+      b = scene.instance_variable_get(:@battle) or return nil
+      return nil unless b.instance_variable_get(:@kif_coop) || (@guest && @guest.mirror.equal?(b))
+      return defined?(KIF::Presence) ? KIF::Presence.ghost&.look : nil
+    end
 
     #---------------------------------------------------------------------------
     # Guest: the partner's battle starts; join when this game is free
@@ -193,6 +353,7 @@ module KIF
     def self.map_tick
       s = session or return
       send_status if $game_map && $game_map.map_id != @sent_map && (@want || @their)
+      send_rules if @want || @their   # a setting changed on the host (sent only then)
       if @ask
         ask = @ask
         why = if !on? then "off"
@@ -251,6 +412,7 @@ module KIF
       unless reply && reply[0] == "co_join"
         log("#{partner} didn't join (#{reply ? reply[1]['why'] : 'no answer'})")
         s.post("co_end", "id" => id, "d" => { "x" => "late" }) if !reply && session
+        pbMessage(_INTL("{1} didn't join this battle.", partner))   # instead of a silent wait, then a battle alone
         return nil
       end
       join = read_join(reply[1])
@@ -483,6 +645,109 @@ module KIF
         return out
       end
     end
+  end
+end
+
+module KIF
+  module Coop
+    # On a co-op battle's scene object (both games): the partner's pick shows
+    # while this player's command, fight and target menus are up, in the
+    # scene's own look (PIF's window skin; EBDX's dark bar)
+    module IntentShow
+      def pbCommandMenu(*args, &blk); kif_intent(true); super; ensure; kif_intent(false); end
+      def pbFightMenu(*args, &blk); kif_intent(true); super; ensure; kif_intent(false); end
+      def pbChooseTarget(*args, &blk); kif_intent(true); super; ensure; kif_intent(false); end
+
+      def pbUpdate(*args)
+        super
+        kif_intent_draw if @kif_intent_on
+      end
+
+      def pbEndBattle(*args, &blk)
+        super
+      ensure
+        @kif_intent_win.dispose if @kif_intent_win && !@kif_intent_win.disposed?
+        @kif_intent_win = nil
+      end
+
+      def kif_intent(on)
+        @kif_intent_on = on
+        return kif_intent_draw if on
+        @kif_intent_win.visible = false if @kif_intent_win && !@kif_intent_win.disposed?
+      end
+
+      def kif_intent_draw
+        t = KIF::Coop.intent_for(self)
+        w = @kif_intent_win
+        if !t
+          w.visible = false if w && !w.disposed?
+          return
+        end
+        if !w || w.disposed?
+          w = @kif_intent_win = kif_intent_make
+          @kif_intent_text = nil
+        end
+        w.visible = true
+        return if t == @kif_intent_text
+        @kif_intent_text = t
+        if w.is_a?(Window)
+          w.text = t
+          w.resizeToFit(t, Graphics.width)
+          w.y = Graphics.height - 96 - w.height   # just over the message box
+        else
+          b = w.bitmap
+          b.clear
+          pbSetSystemFont(b)
+          tw = [b.text_size(t).width + 24, Graphics.width].min
+          b.fill_rect(0, 0, tw, b.height, Color.new(0, 0, 0, 150))
+          pbDrawShadowText(b, 12, 2, tw - 24, b.height - 4, t, Color.new(248, 248, 248), Color.new(64, 64, 64))
+        end
+      rescue StandardError => e
+        KIF::Coop.log("partner's pick not shown (#{e.class}: #{e.message})") unless @kif_intent_warned
+        @kif_intent_warned = true
+      end
+
+      def kif_intent_make
+        vp = @viewport
+        if defined?(PokeBattle_SceneEBDX) && is_a?(PokeBattle_SceneEBDX)
+          s = BitmapSprite.new(Graphics.width, 32, vp)
+          s.y = Graphics.height - 140   # over EBDX's command bar
+          s.z = 99_999
+          return s
+        end
+        w = Window_UnformattedTextPokemon.newWithSize("", 0, Graphics.height - 160, Graphics.width / 2, 64, vp)
+        w.z = 99_999
+        return w
+      end
+    end
+  end
+end
+
+# PIF's own battle scene draws a partner trainer from its trainer type's
+# picture (the other player showed as Red); a co-op partner is drawn as PIF
+# draws the player, in their own outfit (EBDX's scene draws both from types)
+class PokeBattle_Scene
+  alias kif_coop_pbCreateTrainerBackSprite pbCreateTrainerBackSprite unless method_defined?(:kif_coop_pbCreateTrainerBackSprite)
+
+  def pbCreateTrainerBackSprite(idxTrainer, trainerType, numTrainers = 1)
+    ret = kif_coop_pbCreateTrainerBackSprite(idxTrainer, trainerType, numTrainers)
+    kif_coop_partner_look(idxTrainer)
+    return ret
+  end
+
+  def kif_coop_partner_look(idx)
+    return unless idx == 1 && (look = KIF::Coop.partner_look(self))
+    sp = @sprites["player_2"] or return
+    ab = generate_front_trainer_sprite_bitmap(false, nil, look["clothes"], look["hat"], look["hat2"], look["hair"],
+                                              look["skin"], look["hc"], look["tc"], look["cc"], look["t2c"], false)
+    return unless ab && ab.bitmap
+    sp.setBitmapDirectly(ab)   # an AnimatedBitmap, as the player's own sprite takes it
+    w, h = sp.bitmap.width, sp.bitmap.height
+    sp.src_rect = Rect.new(0, 0, w, h)
+    sp.ox = w / 2
+    sp.oy = h
+  rescue StandardError => e
+    KIF::Coop.log("partner drawn from the trainer type (#{e.class}: #{e.message})")
   end
 end
 

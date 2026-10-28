@@ -134,7 +134,7 @@ module KIF
         return out unless new_map || now >= @next_at || @path.length >= MAX_PATH
         # the same look again with a new map's place, or after LOOK_AGAIN s: one
         # that didn't land is put right (the other game skips an unchanged look)
-        if look && !sent_look && (new_map || now >= @look_due)
+        if look && !sent_look && (new_map || now >= (@look_due || 0))   # nil on a Link made before an F12 reload
           @look_due = now + LOOK_AGAIN
           out << ["pr_look", look]
         end

@@ -79,6 +79,23 @@ module KIF
       return $PokemonGlobal ? $PokemonGlobal.kif_nuzlocke : {}
     end
 
+    # The standard rule: deaths and the first-encounter rule start with the
+    # first Poké Balls (a ball stored in the Bag, or one there now; a run
+    # already under way counts). Before that (Oak's lab rival battle) a loss
+    # heals as in PIF. Once started it stays started.
+    def self.started?
+      s = state
+      return true if s[:started]
+      had = !(s[:places] || {}).empty? || !(s[:deaths] || []).empty? ||
+            ($PokemonBag && $PokemonBag.pockets.any? { |pk| pk && pk.any? { |it| ball?(it[0]) } })
+      s[:started] = true if had && $PokemonGlobal
+      return had ? true : false
+    end
+
+    def self.ball?(item)
+      return (GameData::Item.get(item).is_poke_ball? rescue false)
+    end
+
     # "Mt. Moon B1F" -> "Mt. Moon", "Seafoam Islands B3" -> "Seafoam Islands"
     def self.place_name(map_id)
       name = (pbGetMapNameFromId(map_id) rescue nil).to_s
@@ -415,7 +432,7 @@ KIF::Options.add(:challenges, :save) {
                  proc { $PokemonSystem.ch_nuzlocke },
                  proc { |value| $PokemonSystem.ch_nuzlocke = value },
                  [_INTL("No Nuzlocke rules."),
-                  _INTL("Only the first wild Pokémon in each place can be caught, and a Pokémon that faints is dead.")])
+                  _INTL("From your first Poké Balls on, only the first wild Pokémon in each place can be caught, and a Pokémon that faints is dead.")])
 }
 KIF::Options.add(:challenges, :save) {
   EnumOption.new(_INTL("Fainted Pokémon"), [_INTL("Graveyard"), _INTL("Released"), _INTL("Stay")],
@@ -546,7 +563,7 @@ class PokeBattle_Battle
 
   def pbStartBattle
     KIF::Nuzlocke.pending = nil
-    if KIF::Nuzlocke.on? && wildBattle?
+    if KIF::Nuzlocke.on? && wildBattle? && KIF::Nuzlocke.started?
       begin
         foes = pbParty(1).compact
         place, verdict = KIF::Nuzlocke.judge(foes)
@@ -687,6 +704,17 @@ class PokemonMart_Scene
   end
 end
 
+# the first Poké Balls start the rules even if they're all thrown before a battle ends
+class PokemonBag
+  alias kif_nz_pbStoreItem pbStoreItem unless method_defined?(:kif_nz_pbStoreItem) || private_method_defined?(:kif_nz_pbStoreItem)
+
+  def pbStoreItem(item, *args)
+    ret = kif_nz_pbStoreItem(item, *args)
+    KIF::Nuzlocke.state[:started] = true if ret && $PokemonGlobal && KIF::Nuzlocke.ball?(item)
+    return ret
+  end
+end
+
 class PokemonMartAdapter
   alias kif_nz_addItem addItem unless method_defined?(:kif_nz_addItem)
 
@@ -705,7 +733,7 @@ alias kif_nz_pbAfterBattle pbAfterBattle unless defined?(kif_nz_pbAfterBattle)
 # doesn't black out (canLose battles, rematches, the Bug Contest, a partner
 # winning alone). Self Battle fights with copies: nothing to bury.
 def pbAfterBattle(decision, canLose)
-  nz = KIF::Nuzlocke.on? && !(defined?(KIF::SelfBattle) && KIF::SelfBattle.instance_variable_get(:@active))
+  nz = KIF::Nuzlocke.on? && KIF::Nuzlocke.started? && !(defined?(KIF::SelfBattle) && KIF::SelfBattle.instance_variable_get(:@active))
   if nz
     begin
       place, foes = KIF::Nuzlocke.pending
@@ -735,7 +763,7 @@ end
 alias kif_nz_pbStartOver pbStartOver unless defined?(kif_nz_pbStartOver)
 
 def pbStartOver(*args)
-  if KIF::Nuzlocke.on? && $Trainer
+  if KIF::Nuzlocke.on? && KIF::Nuzlocke.started? && $Trainer
     KIF::Nuzlocke.started_over = true
     return if KIF::Nuzlocke.whiteout == :title
     # the living are healed as usual; the dead stay dead (Pokemon#heal)

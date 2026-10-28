@@ -251,7 +251,8 @@ module KIF
           return
         end
         @buf << [type, args, snap]
-        flush if type == "m" || type == "mp" || @buf.length >= 24
+        # HP changes and faints go at once too: after a hit with no message the partner's bar waited for the next one (K6)
+        flush if %w[m mp hl hp fa].include?(type) || @buf.length >= 24
       end
 
       def flush

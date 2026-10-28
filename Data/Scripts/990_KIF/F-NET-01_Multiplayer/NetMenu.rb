@@ -480,6 +480,7 @@ module KIF
               if PortMap.ip_kind(pm[:external_ip]) != :public
                 add.call(no_address ? _INTL("Type your public address") : _INTL("Change your public address"), :address)
               end
+              add.call(_INTL("Copy code for this network"), :copy) if code && no_address
               add.call(_INTL("Port {1} isn't open after all", s.port), :not_by_hand)
             end
           elsif pm[:status] == :shared
@@ -552,7 +553,7 @@ module KIF
                               ($PokemonSystem.kif_mp_public_ip rescue "").to_s, false, 45)
         return if t.nil? || t.strip.empty?
         return $PokemonSystem.kif_mp_public_ip = t.strip if PortMap.public_ip?(t.strip)
-        pbMessage(_INTL("That isn't a public address. It looks like 100.101.102.103 (from \"what is my IP\"), not 192.168..."))
+        pbMessage(_INTL("That isn't a public address. It looks like 203.0.113.25 (from \"what is my IP\"), not 192.168..."))
       end
 
       #-------------------------------------------------------------------------
@@ -607,10 +608,10 @@ module KIF
       end
 
       def join_address
-        t = pbMessageFreeText(_INTL("Address of your friend's game (for example 100.101.102.103):"), "", false, 60)
+        t = pbMessageFreeText(_INTL("Address of your friend's game (for example 203.0.113.25):"), "", false, 60)
         return if t.nil? || t.strip.empty?
         addr = Net.parse_address(t, nil)   # no port typed: the code's (the host may not be on 52411)
-        return pbMessage(_INTL("That isn't an address. It looks like 100.101.102.103 or 100.101.102.103:52411.")) unless addr
+        return pbMessage(_INTL("That isn't an address. It looks like 203.0.113.25 or 203.0.113.25:52411.")) unless addr
         pbMessage(_INTL("Now the code your friend sent: it holds the key. The address you typed is used instead of the one in the code."))
         join_code(addr)
       end

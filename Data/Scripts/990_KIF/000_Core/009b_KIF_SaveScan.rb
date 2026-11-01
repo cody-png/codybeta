@@ -74,18 +74,20 @@ module SaveData
         full_path = self.get_full_path(file_slot)
         next if !File.file?(full_path)
         paths << full_path
-        save_time = KIF::Perf::SaveScan.saved_time(full_path)
-        unless save_time
-          st = KIF::Perf::SaveScan.stamp(full_path)
-          begin
-            temp_save_data = self.read_from_file(full_path)
-          rescue
-            next
+        # a slot that can't be read, has no player or a save time that isn't
+        # a Time is skipped (SCOPE-02 SaveRobustness item 2 lives here)
+        begin
+          save_time = KIF::Perf::SaveScan.saved_time(full_path)
+          unless save_time
+            st = KIF::Perf::SaveScan.stamp(full_path)
+            save_time = self.read_from_file(full_path)[:player].last_time_saved || Time.at(1)
+            KIF::Perf::SaveScan.remember(full_path, st, save_time)
           end
-          save_time = temp_save_data[:player].last_time_saved || Time.at(1)
-          KIF::Perf::SaveScan.remember(full_path, st, save_time)
+          newer = save_time > newest_time
+        rescue StandardError
+          next
         end
-        if save_time > newest_time
+        if newer
           newest_time = save_time
           newest_slot = file_slot
         end

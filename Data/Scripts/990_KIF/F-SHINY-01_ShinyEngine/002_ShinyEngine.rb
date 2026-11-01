@@ -484,10 +484,12 @@ module KIF
       @memory[key] = bmp
     end
 
-    def self.cache_put(key, bmp)
+    # disk: false for a multiplayer partner's colours (memory only; the partner picks the colours,
+    # so it would pick how many files this folder gets)
+    def self.cache_put(key, bmp, disk = true)
       return if key.nil? || cache_mode == 2
       cache_put_memory(key, copy_bitmap(bmp))
-      if cache_mode == 0
+      if cache_mode == 0 && disk
         begin
           top = cache_dir
           dir = "#{top}/#{Settings::GAME_VERSION_NUMBER}"
@@ -548,7 +550,7 @@ module KIF
       end
       anim.bitmap.hue_change(hue) if hue != 0
       channel_shift!(anim.bitmap, codes, krs, adv, polish) if adv != 0
-      cache_put(key, anim.bitmap)
+      cache_put(key, anim.bitmap, !pkmn.instance_variable_get(:@kif_net_kc))
       return anim
     end
 

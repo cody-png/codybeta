@@ -18,13 +18,17 @@
 #     (all mods together); over that, share returns false / the message is dropped
 #   * nothing received is eval'd, Marshal-loaded or turned into a class,
 #     method or file name; a handler that raises is logged, never fatal
+#   * strings in data and the key are the PARTNER's text: they may hold message
+#     codes (\wtnp[99999], \v[1]) and tags (<img=file>) that a message window
+#     acts on. Show them only through KIF::Net.safe_text(text, max)
+#   * one mod id, one mod: a second on_share for an id in use is ignored and logged
 # Messages: mod_ls {ids: "a,b,c"}, mod_sh {m: mod id, k: key, d: data}.
 # Same messages over every transport (direct today, Steam later).
 #===============================================================================
 module KIF
   module Net
     TYPES["mod_ls"] = { "ids" => [String, 2_000] }
-    TYPES["mod_sh"] = { "m" => [String, 32], "k" => [String, 64], "d" => [Object] }
+    TYPES["mod_sh"] = { "m" => [String, 32], "k" => [String, 64], "d" => [Object, 9_000] }   # d: the cleaned data is at most MAX_DATA bytes of JSON
 
     module ModShare
       ID        = /\A[A-Za-z0-9_.\-]{1,32}\z/
@@ -47,6 +51,10 @@ module KIF
         id = mod_id.to_s
         raise ArgumentError, "mod id #{id.inspect}: use 1-32 of A-Z a-z 0-9 _ . -" unless id =~ ID
         raise ArgumentError, "KIF::Net.on_share(#{id}) needs a block" unless blk
+        if @handlers.key?(id)
+          Net.log("mod share #{id}: another mod already uses this id; the second on_share was ignored")
+          return nil
+        end
         @handlers[id] = [blk, host_only ? true : false]
         s = Net.session if Net.respond_to?(:session)
         announce(s) if s&.connected?
@@ -107,11 +115,16 @@ module KIF
         return true
       end
 
-      # one log line per mod and reason until the next connection
+      MAX_WARNED = 32
+
+      # one log line per mod and reason until the next connection, at most
+      # MAX_WARNED lines (the partner picks the ids)
       def self.note(id, why)
         k = "#{id}|#{why}"
-        Net.log("mod share #{id =~ ID ? id : '(bad id)'}: #{why}") unless @warned[k]
-        @warned[k] = true
+        if !@warned[k] && @warned.length < MAX_WARNED
+          @warned[k] = true
+          Net.log("mod share #{id =~ ID ? id : '(bad id)'}: #{why}")
+        end
         return false
       end
 
@@ -148,7 +161,7 @@ module KIF
           return note(id, "partner over the rate limit; dropped") unless spend(st, :rx, size)
           begin
             h[0].call(Net.shown_name(s.partner), msg["k"], d)
-          rescue StandardError => e
+          rescue StandardError, ScriptError, SystemStackError => e
             Net.log("mod share #{id}: its handler failed (#{e.class}: #{e.message})")
           end
         end

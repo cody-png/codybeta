@@ -139,7 +139,11 @@ module KIF
           KIF::SoulLink.on_connect(s) if defined?(KIF::SoulLink)
           KIF::Presence.on_connect if defined?(KIF::Presence)
           KIF::Coop.on_connect(s) if defined?(KIF::Coop)
-          ModShare.on_connect(s) if defined?(ModShare)
+          begin
+            ModShare.on_connect(s) if defined?(ModShare)
+          rescue StandardError, ScriptError, SystemStackError => e
+            log("mod share failed (#{e.class}: #{e.message})")
+          end
           KIF::NetSprite.on_connect(s) if defined?(KIF::NetSprite)
           KIF::Trade.on_connect(s) if defined?(KIF::Trade)
         when :message
@@ -153,9 +157,17 @@ module KIF
               log("Soul Link message failed (#{e.class}: #{e.message})")
             end
           elsif ev[1].start_with?("pr_") && defined?(KIF::Presence)
-            KIF::Presence.receive(ev[1], ev[2])
+            begin
+              KIF::Presence.receive(ev[1], ev[2])
+            rescue => e
+              log("presence message failed (#{e.class}: #{e.message})")
+            end
           elsif ev[1].start_with?("mod_") && defined?(ModShare)
-            ModShare.receive(s, ev[1], ev[2])
+            begin
+              ModShare.receive(s, ev[1], ev[2])
+            rescue StandardError, ScriptError, SystemStackError => e
+              log("mod share message failed (#{e.class}: #{e.message})")
+            end
           elsif ev[1].start_with?("sp_") && defined?(KIF::NetSprite)
             begin
               KIF::NetSprite.receive(s, ev[1], ev[2])

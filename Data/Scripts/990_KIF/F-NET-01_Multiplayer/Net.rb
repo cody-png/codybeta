@@ -46,7 +46,12 @@ module KIF
     MAX_PRE    = 1024    # frames before the handshake is done
     MAX_BAD    = 5       # bad frames before the line is closed
     MAX_RATE   = 400     # frames a second before the line is closed
-    PROTO      = 2
+    BYTE_BURST = 2_097_152   # bytes a line may send at once; then BYTE_RATE a second (sustained), else it is closed
+    BYTE_RATE  = 131_072
+    MAX_QUEUED = 4_194_304   # bytes read but not yet taken by the game thread; more and the line is closed
+    POLL_BYTES = 65_536      # one poll() stops after about this many frame bytes...
+    POLL_SECS  = 0.004       # ...or this long (the rest stays queued for the next frame), but takes at least one
+    PROTO      = 3       # 3: picture hashes are 32 hex digits (sp_get / sp_img)
     HS_LIMIT   = 10      # handshakes a host starts in 10 s
 
     # Message types after the handshake: field => [class, max length] or
@@ -66,8 +71,28 @@ module KIF
     }
     NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined }
 
+    # Text from the other game, safe to show in a PIF message or draw: no
+    # backslash (message codes such as \wtnp[99999] or \v[1]), no "<" (a tag such
+    # as <img=file> loads a file; one that is not a picture crashes the game) and
+    # no ">" except in "->", no control characters (a new line stays) and no
+    # text-direction characters.
+    UNSAFE_TEXT = /[\\<\x00-\x09\x0b-\x1f\x7f\u0080-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]|(?<!-)>/
+    def self.safe_text(s, max = 200)
+      return s.to_s.dup.force_encoding("UTF-8").scrub("").gsub("\r\n", "\n").gsub(UNSAFE_TEXT, "")[0, max]
+    end
+
     # a name from the other game, safe to show in a PIF message (no \ codes)
-    def self.shown_name(n); n.to_s.gsub(/[\\<>\x00-\x1f]/, "")[0, 24]; end
+    def self.shown_name(n); safe_text(n, 24).delete("\n>"); end
+
+    # the most JSON bytes a message of this type can take (every character may
+    # be escaped as \uXXXX: 6 bytes, 12 for a pair); a field with no length
+    # ([Object, bytes]) names its own, else MAX_FRAME. An unknown type gets 256.
+    def self.json_cap(type)
+      spec = TYPES[type] or return 256
+      cap = 128   # braces, "t" and "s"
+      spec.each { |k, (cls, a, _b)| cap += k.length + 8 + (cls == String ? a * 12 : cls == Integer ? 24 : (a || MAX_FRAME)) }
+      return [cap, MAX_FRAME].min
+    end
 
     def self.available?
       return @available unless @available.nil?
@@ -229,7 +254,7 @@ module KIF
     class Parser
       DEPTH = 16
       WS  = /\G[ \t\r\n]*/
-      NUM = /\G-?(?:0|[1-9]\d{0,17})(?:\.\d{1,17})?(?:[eE][+-]?\d{1,3})?/
+      NUM = /\G-?(?:0|[1-9]\d{0,17})(?:\.\d{1,30})?(?:[eE][+-]?\d{1,3})?/   # Float#to_s writes up to 20 digits after the point
       STR = /\G"((?:[^"\\\x00-\x1f]|\\["\\\/bfnrt]|\\u[0-9a-fA-F]{4})*)"/
       ESC = { "b" => "\b", "f" => "\f", "n" => "\n", "r" => "\r", "t" => "\t" }
 
@@ -409,6 +434,8 @@ module KIF
         @sock = sock
         @addr = (sock.remote_address.ip_address rescue "?")
         @inbox = Queue.new
+        @queued = 0               # bytes in @inbox
+        @qlock = Mutex.new
         @out = Queue.new
         @cap = MAX_PRE
         @ping_every = 5.0
@@ -422,6 +449,15 @@ module KIF
       end
 
       def closed?; @closed; end
+
+      # the next frame (a String) or event ([:closed] ...) for the game thread, or nil
+      def take
+        f = @inbox.pop(true)
+        @qlock.synchronize { @queued -= f.bytesize } if f.is_a?(String)
+        return f
+      rescue ThreadError
+        return nil
+      end
 
       # from now on every message is signed with this key (writer thread signs)
       def sign_with(key); @key = key; end
@@ -456,6 +492,8 @@ module KIF
         buf = "".b
         count = 0
         second = Net.now.floor
+        tokens = BYTE_BURST.to_f
+        t_last = Net.now
         loop do
           chunk = @sock.readpartial(16_384)
           @last_rx = Net.now
@@ -467,13 +505,17 @@ module KIF
               return hard_close
             end
             break if buf.bytesize < 4 + n
+            @qlock.synchronize { @queued += n }
             @inbox << buf.byteslice(4, n)
             buf = buf.byteslice(4 + n, buf.bytesize - 4 - n)
-            sec = Net.now.floor
+            now = Net.now
+            sec = now.floor
             count = 0 if sec != second
             second = sec
             count += 1
-            if count > MAX_RATE
+            tokens = [BYTE_BURST.to_f, tokens + [now - t_last, 0].max * BYTE_RATE].min - (4 + n)
+            t_last = now
+            if count > MAX_RATE || tokens < 0 || @queued > MAX_QUEUED
               @inbox << [:error, :flood]
               return hard_close
             end
@@ -668,8 +710,12 @@ module KIF
           end
         end
         if @conn
-          while @conn && (f = (@conn.inbox.pop(true) rescue nil))
+          t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          bytes = 0
+          while @conn && (f = @conn.take)
             f.is_a?(Array) ? line_ended(f[1] || :closed, out) : frame(f, out)
+            bytes += f.bytesize if f.is_a?(String)
+            break if bytes >= POLL_BYTES || Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0 > POLL_SECS
           end
           check_time(out) if @conn
         end
@@ -810,7 +856,16 @@ module KIF
       def signed(payload, out)
         mac = payload.byteslice(0, 32)
         json = payload.byteslice(32, payload.bytesize - 32).to_s
-        h = Crypto.same?(Crypto.hmac(@rx_key, json), mac) ? Wire.parse(json) : nil
+        return bad_frame(out, "bad signature") unless Crypto.same?(Crypto.hmac(@rx_key, json), mac)
+        # the writer puts "t" first: the type is read without parsing, and a message longer than its type allows is dropped unparsed
+        type = json[/\A\{"t":"([a-z_0-9]{1,16})"/, 1]
+        return if type && !TYPES.key?(type)   # a newer version's message: ignored
+        # longer than its type allows: fine as long as it is not made of many values (an extra text field costs the
+        # parser little; thousands of nested or listed values cost it tens of ms a frame)
+        if json.bytesize > Net.json_cap(type) && json.count("[{,") > 64
+          return bad_frame(out, "longer than a #{type || 'message'} can be")
+        end
+        h = Wire.parse(json)
         return bad_frame(out, "bad signature") unless h
         seq = h["s"]
         return bad_frame(out, "old or missing number") unless seq.is_a?(Integer) && seq > @rx_seq

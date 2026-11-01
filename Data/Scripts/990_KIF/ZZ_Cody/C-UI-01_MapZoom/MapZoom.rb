@@ -458,6 +458,7 @@ module KIF
       def update_screen_position(last_real_x, last_real_y)
         return super unless KIF::MapZoom.zoomed?
         return if self.map.scrolling? || !(@moved_last_frame || @moved_this_frame)
+        return if $game_temp.respond_to?(:map_locked) && $game_temp.map_locked   # Overworld Encounters' camera lock
         dx, dy = mz_camera(@real_x, @real_y)
         self.map.display_x = dx
         self.map.display_y = dy

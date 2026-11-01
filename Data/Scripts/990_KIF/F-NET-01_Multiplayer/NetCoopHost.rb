@@ -58,6 +58,7 @@ module KIF
       return false if r["size"] && !%w[double 2v2 2v1].include?(r["size"])
       return false if (pbInSafari? rescue false) || (pbInBugContest? rescue false)
       return false if defined?(KIF::SelfBattle) && KIF::SelfBattle.instance_variable_get(:@active)
+      return false if defined?(KIF::Endgame) && KIF::Endgame.challenge_map?   # the challenge maps are 1v1
       return false if ($Trainer.able_pokemon_count rescue 0) == 0
       return false if ($game_switches[SWITCH_TRIPLE_BOSS_BATTLE] rescue false)
       return true
@@ -102,7 +103,7 @@ module KIF
       @battle_host = host
       log("battle #{join[:id]} with #{join[:name]} (#{kind})")
       begin
-        return with_rules { yield }   # the wild Pokémon or trainer team is made inside: with the host's settings
+        return with_rules { KIF::Teams.with_mult(2) { yield } }   # the wild Pokémon or trainer team is made inside: with the host's settings; 2 players (3 once the lobby takes a third)
       ensure
         $PokemonGlobal.partner = old
         @pending_host = @battle_host = nil
@@ -722,7 +723,7 @@ module KIF
         @battle.battlers.each do |b|
           next unless b && b.opposes? && b.pokemon && !b.participants.empty? && (b.fainted? || b.captured)
           # all of them, as host party indices: the partner's Exp Share needs a fought foe too
-          @kills << { "s" => b.pokemon.species.to_s, "l" => b.level, "p" => b.participants.first(12) } if @kills.length < 60
+          @kills << { "s" => b.pokemon.species.to_s, "l" => b.level, "p" => b.participants.first(12), "m" => KIF::Teams.foe_mult(@battle, b) } if @kills.length < 60
         end
       end
 
@@ -945,7 +946,7 @@ end
 
 def pbTrainerBattleCore(*args)
   return kif_coop_pbTrainerBattleCore(*args) unless KIF::Coop.may_host?
-  KIF::Coop.host_battle(:trainer, nil) { kif_coop_pbTrainerBattleCore(*args) }
+  KIF::Coop.host_battle(:trainer, nil) { kif_coop_pbTrainerBattleCore(*KIF::Teams.extend_waiting(args)) }
 end
 
 def pbPrepareBattle(battle)

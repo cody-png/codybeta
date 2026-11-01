@@ -732,7 +732,14 @@ class KifSettingsScreen
     # the list
     n = opt_rows.length
     if n == 0
-      @focus = :side unless @query
+      if @query && Input.trigger?(Input::BACK)   # a search that found nothing: Back clears it
+        pbPlayCancelSE
+        self.query = nil
+        @focus = :side
+        refresh
+      else
+        @focus = :side unless @query
+      end
       return nil
     end
     if Input.repeat?(Input::DOWN) || Input.repeat?(Input::UP)
@@ -943,7 +950,7 @@ class KifSettingsScreen
       q = nil
       hidden { q = pbEnterText(_INTL("Search settings"), 0, 20, @query || "") }
       self.query = q
-      @focus = :list if @query
+      @focus = :list if @query && !opt_rows.empty?
       refresh
     elsif Input.trigger?(Input::BACK) && keys_back.none? { |k| (Input.triggerex?(k) rescue false) }
       stop_search(:keep)

@@ -168,8 +168,10 @@ module KIF
       return evaluate(e, rec, sig) if rec.nil? || rec["sig"] != sig
       return held_reason(e, rec)
     rescue StandardError => ex
+      # a mod the check could not read is not let in unseen (one it already knows keeps loading)
       KIF.log("Mod trust: #{id} not checked (#{ex.class}: #{ex.message})")
-      return nil
+      known = mods[id] && %w[approved grandfathered new].include?(mods[id]["state"])
+      return known ? nil : _INTL("Needs your OK: KIF could not check it. Open Options > Mods to review it.")
     end
 
     def self.today; return Time.now.strftime("%Y-%m-%d"); end

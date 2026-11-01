@@ -272,6 +272,17 @@ module KIF
 
       def lib_names; return KIF::ModCheck::STDLIB; end
 
+      # The first three arguments as plain text where they are path-like objects, so the path the guard checked
+      # is the path the call gets (an object could answer to_path differently the second time).
+      def fix_args(args)
+        return args unless args.any? { |a| !(a.is_a?(String) || a.is_a?(Integer) || a.nil? || a == true || a == false || a.is_a?(Symbol) || a.is_a?(Array) || a.is_a?(Hash) || a.is_a?(Float) || a.is_a?(IO) || a.is_a?(Module)) }
+        return args.each_with_index.map do |a, i|
+          next a if i > 2 || a.is_a?(String) || a.is_a?(Integer) || a.nil? || a == true || a == false || a.is_a?(Symbol) || a.is_a?(Array) || a.is_a?(Hash) || a.is_a?(Float) || a.is_a?(IO) || a.is_a?(Module)
+          s = a.respond_to?(:to_path) ? a.to_path : (a.respond_to?(:to_str) ? a.to_str : a)
+          s.is_a?(String) ? s.dup.freeze : a
+        end
+      end
+
       def short(x); return x.is_a?(String) ? x[0, 60] : x.class.to_s; end
 
       def write_mode?(args, kw)
@@ -385,7 +396,10 @@ module KIF
           if guard.armed?
             l = caller_locations(1, 1)[0]
             c = l ? guard.classify(l.path) : :t
-            guard.check(kind, name, args, kw, blk, l, c) if c
+            if c
+              args = guard.fix_args(args)   # an object that answers to_path twice is asked once
+              guard.check(kind, name, args, kw, blk, l, c)
+            end
           end
           r = super(*args, **kw, &blk)
           guard.rearm_after_require(args[0]) if name == :require && guard.armed?

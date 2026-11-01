@@ -791,6 +791,8 @@ KIF::Safe.open_url("https://example.org")              # asks the player first
 
 Stopped when not listed (Normal mode): `network`, `programs`, `native`, `game_files`, `save_files`, `outside_files`, `load_code`. The others are only noted.
 
+Two permissions are quieter than they look. `game_files` lets a mod rewrite the game's own scripts (KIF's included) for the next start, and `save_files` lets it edit saves, settings and KIF's own lists (the trust file too). They are yellow because many honest mods keep a small file there; treat them as serious, and prefer `KIF::Safe` (the mod's own data folder needs neither).
+
 **The scan** (`KIF::ModCheck.scan`, also used by Publish a mod). It reads a mod's code and files without running
 anything and grades it:
 
@@ -886,6 +888,7 @@ Not seen by design:
 9. Native code once a mod holds `native`; whatever a started program does once a mod holds `programs`.
 10. Mods that another loader starts (Mod Manager's own mods load themselves): they are scanned and listed but not guarded.
 11. A mod that draws a fake message or asks for a password on screen. No check can tell.
+12. A race: a link swapped in between the moment the guard looks at a path and the moment the file opens. The guard follows links when it looks; it cannot hold the file still.
 
 If you only remember one thing: the guard and the scan make honest mods easy to recognise and stop the lazy attacks. A motivated attacker with Ruby skill gets around them. The complete protections
 are not installing mods from strangers, the reviewed list, and your own judgment.

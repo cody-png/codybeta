@@ -192,9 +192,14 @@ module KIF
       return [title, lines.join("\n") + "\n"]
     end
 
+    # only letters, digits, "." "_" "-" (a mod.json can hold anything, and this goes onto a command line)
+    def slug(s)
+      return s.to_s.gsub(/[^A-Za-z0-9._\-]/, "-")
+    end
+
     def branch_for(json)
-      v = json["version"].to_s.gsub(/\.{2,}/, ".").sub(/[.\-]+\z/, "")
-      return "mod/#{json['id']}-#{v}"
+      v = slug(json["version"]).gsub(/\.{2,}/, ".").sub(/[.\-]+\z/, "")
+      return "mod/#{slug(json['id'])}-#{v}"
     end
 
     def request_dir
@@ -227,6 +232,11 @@ module KIF
     # player runs it: the command is in Cache/Publish/command.txt) or false.
     def launch(args)
       return false if KIF.mobile?
+      # a quote or a line break would end the quoted argument and add commands (cmd.exe), so none is passed on
+      if args.any? { |a| a.to_s =~ /["\x00-\x1f]/ }
+        log("not started: an argument holds a quote or a control character")
+        return false
+      end
       if windows?
         bat = script("bat")
         return false unless File.file?(bat)
@@ -391,7 +401,7 @@ module KIF
       return unless ask(_INTL("Publish {1} {2}? A window opens that signs you in to GitHub in your browser (the first time) and uploads the mod. The game stays open.",
                               json["name"], json["version"]), [_INTL("Publish"), _INTL("Cancel")]) == 0
       msg, bod = write_request(title, body)
-      res = launch([path, folder, branch_for(json), msg, bod, json["id"].to_s])
+      res = launch([path, folder, branch_for(json), msg, bod, slug(json["id"])])
       case res
       when :started
         pbMessage(t(_INTL("The publish window is open. Follow its steps; it may ask to install Git or the GitHub CLI first.")))

@@ -76,6 +76,15 @@ module KIF
     # never in any file list (PIF's own Data/.idea, zips before 2026-10-09), so plan() can't remove them
     DEV_LEFTOVERS = %w[.idea Data/.idea Data/.DS_Store build_release.cmd push_branches.cmd push_stable.cmd publish_release.cmd]
 
+    # What a file list from the internet may say, well above the real one
+    # (29,612 files, the biggest 31 MB, 1.1 GB in all, 2.7 MB of text)
+    MAX_MANIFEST_BYTES = 32 * 1024 * 1024
+    MAX_FILES          = 200_000
+    MAX_FILE_BYTES     = 2 * 1024 ** 3
+    MAX_TOTAL_BYTES    = 16 * 1024 ** 3
+    MAX_FETCH          = 64 * 1024 * 1024   # an answer bigger than this is dropped unread
+    GITHUB_HOSTS       = %w[raw.githubusercontent.com api.github.com]   # the only web addresses KIF reads (https)
+
     Manifest = Struct.new(:version, :channel, :files)   # files: path => [sha, size]
 
     #---------------------------------------------------------------------------
@@ -127,23 +136,29 @@ module KIF
 
     def parse_manifest(text)
       return nil unless text
+      return nil if text.bytesize > MAX_MANIFEST_BYTES
       text = text.dup.force_encoding("UTF-8")
+      return nil unless text.valid_encoding?   # split and the patterns below raise on broken bytes
       lines = text.split("\n")
       head = lines.shift.to_s.chomp("\r")
       return nil unless head.start_with?("KIF-MANIFEST 1 ")
       info = {}
       head.split(" ").each { |kv| k, v = kv.split("=", 2); info[k] = v if v }
+      return nil if lines.length > MAX_FILES + 1 || info["files"].to_i > MAX_FILES
       files = {}
+      total = 0
       lines.each do |l|
         l = l.chomp("\r")
         next if l.empty?
         sha, size, path = l.split(" ", 3)
-        next unless path && sha =~ /\A[0-9a-f]{40}\z/
+        next unless path && sha =~ /\A[0-9a-f]{40}\z/ && size =~ /\A\d{1,12}\z/ && size.to_i <= MAX_FILE_BYTES
         # only plain paths inside the game folder ("Audio/ME/x..mp3" is fine, a ".." part is not)
         next unless KIF.safe_rel_path?(path)
         files[path] = [sha, size.to_i]
+        total += size.to_i
       end
-      return nil if info["files"].to_i != files.length   # cut short
+      # a line skipped above leaves the count short: the whole list is refused, not applied in part
+      return nil if info["files"].to_i != files.length || total > MAX_TOTAL_BYTES
       return Manifest.new(info["version"], info["channel"], files)
     end
 
@@ -280,6 +295,15 @@ module KIF
       return p
     end
 
+    # https on GitHub's two hosts, a file: address, or the player's own test
+    # source (KIF_update_source.txt next to the game)
+    def trusted_url?(url)
+      return true if url.start_with?("file:")
+      return true if GITHUB_HOSTS.any? { |h| url.start_with?("https://#{h}/") }
+      line = (File.read(File.join(root, SOURCE_FILE)).to_s.strip.split(/\r?\n/).first.to_s.strip.chomp("/") rescue "")
+      return !line.empty? && url.start_with?(line + "/")
+    end
+
     # body of a URL (http(s) or file://), nil when it can't be read
     # (@last_status: the answer's HTTP status, 0 for none)
     def fetch(url)
@@ -289,6 +313,10 @@ module KIF
         return File.file?(path) ? File.binread(path) : nil
       end
       return nil unless defined?(HTTPLite)
+      unless trusted_url?(url)
+        log("#{url} not read: KIF only reads https addresses on GitHub")
+        return nil
+      end
       t = Time.now
       auth = auth_headers(url)
       # mkxp-z's HTTPLite.get follows no redirect unless a third argument asks: the code stays on TEST_BASE
@@ -301,6 +329,10 @@ module KIF
       end
       # slow or big answers only: the one-at-a-time fallback fetches thousands
       bytes = res[:body].to_s.bytesize
+      if bytes > MAX_FETCH
+        log("#{url}: #{size_text(bytes)} is more than KIF reads, dropped")
+        return nil
+      end
       log(format("%s: %s in %.1fs", url, size_text(bytes), secs)) if secs >= 2 || bytes >= 1048576
       return res[:body]
     rescue StandardError, (defined?(MKXPError) ? MKXPError : StandardError) => e
@@ -340,8 +372,9 @@ module KIF
       return false
     end
 
+    # any case: Windows reads "mods/x.rb" as Mods/x.rb, so a manifest can't slip past NEVER with a lower-case name
     def under?(path, prefixes)
-      return prefixes.any? { |p| path.start_with?(p) }
+      return prefixes.any? { |p| path[0, p.length].casecmp?(p) }
     end
 
     def removable?(path)
@@ -592,11 +625,20 @@ module KIF
     # Downloads `items` ([path, sha, size]) into dir/files; returns the paths
     # that couldn't be fetched, or :cancelled
     def download(base, items, dir, version, title = nil)
+      # a path or size from the internet that isn't plain: nothing is fetched or written for it
+      unsafe = items.reject { |path, _sha, size| KIF.safe_rel_path?(path) && size.is_a?(Integer) && size >= 0 }
+      unless unsafe.empty?
+        log("refused #{unsafe.length} unsafe file entries, nothing downloaded: #{unsafe.first(3).map { |i| i[0].to_s.inspect[0, 60] }.join(', ')}")
+        return unsafe.map(&:first)
+      end
       total = items.inject(0) { |s, it| s + it[2] }
       title ||= _INTL("Updating to KIF {1}", version)
       status(title, _INTL("Checking downloaded files...")) if File.directory?(File.join(dir, "files"))
       todo = items.reject { |path, sha, size| good_file?(staged(dir, path), sha, size) }   # resumed downloads
-      curl = !todo.empty? && windows? && Win.curl
+      # curl takes its file list from a file, but the folder name sits on its command line and the base
+      # in the list: a quote or a line break in either would add options, so those go one at a time
+      plain = [dir, base].none? { |s| s.to_s =~ /["\x00-\x1f]/ }
+      curl = !todo.empty? && plain && windows? && Win.curl
       log("downloading #{todo.length} of #{items.length} files (#{size_text(total)} in all) #{curl ? 'with curl' : 'one at a time'}")
       if curl
         # the test code: in a config file in the save folder (removed below), never on the command line, which other programs can read
@@ -614,8 +656,12 @@ module KIF
         err = File.join(dir, "curl_errors.txt")
         # -q first: the player's own .curlrc is never read (its "verbose" wrote the code into curl_errors.txt);
         # no -L with the code: an old Windows curl (7.55) sends the header along to any host a redirect names
+        # https stays https, also through a redirect, and no file is bigger than the biggest one listed
+        limits = base.to_s.start_with?("https://") ? " --proto =https --proto-redir =https --max-redirs 5" : ""
+        biggest = todo.map { |_p, _s, size| size }.max.to_i
+        limits += " --max-filesize #{biggest}" if biggest > 0
         cmd = "\"#{win_path(curl)}\" -q -K \"#{win_path(cfg)}\" --parallel --parallel-max 6 --create-dirs " \
-              "--fail --retry 3 --retry-delay 1 --connect-timeout 15#{auth ? '' : ' -L'} -s -S --stderr \"#{win_path(err)}\""
+              "--fail --retry 3 --retry-delay 1 --connect-timeout 15#{auth ? '' : ' -L'}#{limits} -s -S --stderr \"#{win_path(err)}\""
         h, _pid = Win.spawn(cmd, Win::CREATE_NO_WINDOW, root)
         log("curl couldn't be started") unless h
         if h
@@ -653,6 +699,7 @@ module KIF
       failed = []
       # (without curl, todo was just checked: every staged file read again would double a phone's wait)
       bad = curl ? items.reject { |path, sha, size| good_file?(staged(dir, path), sha, size) } : todo
+      bad.each { |path, _sha, _size| (File.delete(staged(dir, path)) rescue nil) if File.file?(staged(dir, path)) }   # wrong size or id: not kept
       log("#{bad.length} files left for one at a time") unless bad.empty? || todo.empty? || !curl
       last = 0
       streak = 0   # out here: a variable first set inside the block starts again for every file
@@ -668,13 +715,14 @@ module KIF
         return :cancelled if cancel_pressed?
         data = fetch(url_for(base, path))
         dest = staged(dir, path)
-        if data
+        if data && data.bytesize == size   # the list says how big it is: a different size is never written
           mkdir_p(File.dirname(dest))
           File.open(dest, "wb") { |f| f.write(data) }
         end
         if good_file?(dest, sha, size)
           streak = 0
         else
+          (File.delete(dest) rescue nil) if File.file?(dest)
           failed << path
           streak += 1
           # the server is gone: don't spend an hour trying every file (what was fetched is kept)
@@ -764,7 +812,7 @@ module KIF
       if File.file?(rm_file)
         File.read(rm_file).force_encoding("UTF-8").split(/\r?\n/).each do |rel|
           rel = rel.tr("\\", "/")
-          next if rel.empty? || !removable?(rel)
+          next if rel.empty? || !KIF.safe_rel_path?(rel) || !removable?(rel)
           p = File.join(root, rel)
           KIF::UpdateFinish.discard(p) if File.file?(p)
         end
@@ -904,6 +952,7 @@ module KIF
 
     def show_notes(base, since = base && current_version)
       text = base ? fetch(url_for(base, NOTES)) : nil
+      text = text.byteslice(0, 1 << 20) if text && text.bytesize > (1 << 20)   # notes are a few KB
       text = File.binread(File.join(root, NOTES)) if text.nil? && File.file?(File.join(root, NOTES))
       lines = text.to_s.force_encoding("UTF-8").split(/\r?\n/).map(&:strip).reject(&:empty?)
       if lines.empty?

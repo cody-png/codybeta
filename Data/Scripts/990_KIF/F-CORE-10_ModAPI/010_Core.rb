@@ -353,7 +353,7 @@ module KIF
     def self.on(event, id = nil, priority: 0, mod: nil, once: false, cancelled: false, **rest, &blk)
       raise ArgumentError, "KIF::API.on needs a block" unless blk
       locs = caller_locations(1, 40)
-      key = mod || Attribution.key_from_caller(locs)
+      key = mod.equal?(:kif) ? nil : (mod || Attribution.key_from_caller(locs))   # mod: :kif = KIF's own handler
       ev = event.is_a?(Symbol) ? event : event.to_s.to_sym
       unless supports_or_reserved?(ev)
         return unknown_event(ev, key)

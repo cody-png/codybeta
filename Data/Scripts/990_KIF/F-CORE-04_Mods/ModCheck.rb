@@ -134,7 +134,7 @@ module KIF
     STR_RE = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\?["'`]|(?<![^\s])#(?![{$@]).*/m
     DEF_RE = /\bdef\s+(?:self\.)?[\w?!=]+|\balias(?:_method)?\s+[:\w?!=]+\s*,?\s*[:\w?!=]*/
     # a cheap test on the raw line: every rule's key word is in here, so most lines are never looked at again
-    TRIGGER = /system|spawn|exec|`|%x|popen|Open3|Process|syscall|System|IO\.|\bopen\b|Win32|Fiddle|FFI|\bDL\b|Net::|Socket|URI|HTTP|pbDownload|pbPost|Updater|File\.|FileUtils|Dir\.|mkdir_p|rm_tree|to_file|save_data|~[\\\/]|[A-Za-z]:[\\\/]|APPDATA|USERPROFILE|Documents|Desktop|Downloads|Startup|Start Menu|CurrentVersion|reg add|ENV|Etc\.|eval|Marshal|YAML|Psych|ObjectSpace|\bload\b|require|Base64|unpack|pack|\\x|send|const_get|KIF::Mod|Trace|trace|Signal|trap|at_exit|^\s*(?:class|module)\s+(?:Kernel|File|IO|Dir|Marshal|ENV|Process|FileUtils|ObjectSpace|Socket|HTTPLite)|\.(?:bat|cmd|ps1|vbs)|exit!|abort|fork|kill|clipboard/
+    TRIGGER = /system|spawn|exec|`|%x|popen|Open3|Process|syscall|System|IO\.|\bopen\b|Win32|Fiddle|FFI|\bDL\b|Net::|Socket|URI|HTTP|pbDownload|pbPost|Updater|File\.|FileUtils|Dir\.|mkdir_p|rm_tree|to_file|save_data|~[\\\/]|[A-Za-z]:[\\\/]|APPDATA|USERPROFILE|Documents|Desktop|Downloads|Startup|Start Menu|CurrentVersion|reg add|ENV|Etc\.|eval|Marshal|YAML|Psych|ObjectSpace|\bload\b|require|Base64|unpack|pack|\\x|send|const_get|super_method|instance_method|KIF::Mod|Trace|trace|Signal|trap|at_exit|^\s*(?:class|module)\s+(?:Kernel|File|IO|Dir|Marshal|ENV|Process|FileUtils|ObjectSpace|Socket|HTTPLite)|\.(?:bat|cmd|ps1|vbs)|exit!|abort|fork|kill|clipboard/
     BIDI_RE = /[‪-‮⁦-⁩]/
     R14_RE = /^[ \t]*unless[ \t]+(?:self\.)?(?:private_)?method_defined\?[^\n]*\n[ \t]*def\b/
     R01_CALL = /(?<![\w.:@$])(?:system|spawn|exec)(?:\s*\(|[ \t]+(?!if\b|unless\b|while\b|until\b|and\b|or\b|then\b|do\b|end\b|rescue\b|ensure\b|in\b|not\b)[\w"'`:\[%*@$])/
@@ -551,14 +551,16 @@ module KIF
         end
         if c.match?(R04_RE)
           hit.call("R04", :yellow, %w[game_files save_files], "Writes or deletes files")
-        elsif (m = R04_OPEN.match(r)) && write_open?(r, m.end(0))
+        elsif (rd = r.gsub(DEF_RE, "def X")) && (m = R04_OPEN.match(rd)) && write_open?(rd, m.end(0))
           hit.call("R04", :yellow, %w[game_files save_files], "Writes or deletes files")
         end
         hit.call("R05", :red, "outside_files", "Reads or changes files outside the game") if r.match?(R05_RE)
         hit.call("R06", :yellow, "environment", "Reads your computer's settings") if c.match?(R06_RE)
         if c.match?(R07A_RE)
-          m = r.match(/\beval\b\s*\(?\s*(.?)/)
-          lit = m && (m[1] == '"' || m[1] == "'") && r !~ /\beval\b\s*\(?\s*["'][^"']*#\{/
+          # eval of one plain text is read as code above; anything built (joined, interpolated, from a variable) is flagged
+          m = r.match(/\beval\b\s*\(?\s*/)
+          arg = m ? args_at(r, m.end(0))[0].to_s : ""
+          lit = arg.match?(/\A(?:"(?:[^"\\#]|\\.)*"|'(?:[^'\\]|\\.)*')\z/)
           unless lit
             @file_eval = true
             hit.call("R07a", :yellow, "eval", "Builds code from text while running")
@@ -631,9 +633,10 @@ module KIF
         bad = true if r =~ /\bpack\s*\(?\s*["']c\*["']/
         bad = true if r =~ /(?:\\x[0-9a-fA-F]{2}){8,}/
         bad = true if r =~ R11_DANGER
+        bad = true if c =~ /\.super_method\b|\binstance_method\s*\(\s*:(?:system|exec|spawn|eval|`|open|load|require)\b/
         if !bad && (m = R11_SEND.match(r))
           arg = m[1].gsub(/#\{[^}]*\}/, "")
-          bad = true if arg =~ BUILT_RE
+          bad = true if arg =~ /\\[xu]\h/ || arg =~ BUILT_RE
         end
         add("R11", :red, nil, rel, n, "Hides what the code does", snip) if bad
       end
@@ -670,7 +673,7 @@ module KIF
           end
           undeclared.each do |p|
             where = @used[p]
-            sev = %w[game_files save_files].include?(p) ? :yellow : :red
+            sev = %w[network programs native outside_files].include?(p) ? :red : :yellow
             add("R30", sev, p, where[0], where[1], "Does more than it says: #{PERM_TEXT[p].sub(/\A./) { |ch| ch.downcase }}")
           end
           unused = declared - used

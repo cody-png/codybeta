@@ -48,6 +48,7 @@ module KIF
                       "with Ruby skill can get around the guard. Do not install mods you do not trust.".freeze unless const_defined?(:ABOUT_UNGUARDED)
     MODES = [:off, :normal, :strict, :warn].freeze unless const_defined?(:MODES)
 
+    THIS_FILE = __FILE__ unless const_defined?(:THIS_FILE)
     @doors ||= {}
     @events ||= []
     @counts ||= Hash.new(0)
@@ -156,7 +157,8 @@ module KIF
       def classify(path)
         c = @pc[path]
         return c unless c.nil?
-        c = KIF::ModContract.transparent?(path) ? :t : (KIF::ModContract.owner_of_path(path) || false)
+        # the guard's own frames (a door's super call, with a block running below it) never decide who is calling
+        c = (path == THIS_FILE || KIF::ModContract.transparent?(path)) ? :t : (KIF::ModContract.owner_of_path(path) || false)
         return @pc[path] = c
       end
 
@@ -256,6 +258,13 @@ module KIF
           return path_need(mod, a0, write_mode?(args, kw), name)
         when :load then return load_need(mod, name, a0, loc)
         when :launch then return ["programs", "launch #{short(a0)}"]
+        when :copy_stream
+          to = args[1]
+          w = (to.is_a?(String) || to.respond_to?(:to_path)) ? path_need(mod, to, true, name) : nil
+          return w if w
+          from = a0
+          return (from.is_a?(String) || from.respond_to?(:to_path)) ? path_need(mod, from, false, name) : nil
+        when :autoload then return load_need(mod, name, args[1], loc)
         when :url then h = host_of(a0); return ["network", "#{name} #{h || short(a0)}", h]
         end
         return nil
@@ -412,6 +421,9 @@ module KIF
         end
         doors_for(IO.singleton_class, %i[popen], :program)
         doors_for(IO.singleton_class, %i[read readlines foreach binread write binwrite sysopen], :iopath)
+        doors_for(IO.singleton_class, %i[copy_stream], :copy_stream)   # FileUtils.cp and mv use it with two paths
+        doors_for(Kernel, %i[autoload], :autoload)
+        door!(Module, :autoload, :autoload)
         fs = File.singleton_class
         doors_for(fs, %i[open new], :fopen)
         doors_for(fs, %i[write binwrite delete unlink rename chmod lchmod chown truncate symlink link utime mkfifo], :write)
@@ -469,14 +481,28 @@ module KIF
 
       def arm!
         install_doors
+        @want_armed = true
         @game_dir = nil
         @lib_dirs = nil
         reset_cache
         @armed = true
+        watch
+      end
+
+      # every 30 seconds: are the doors still the guard's? (a mod that undoes one is found within that time)
+      def watch
+        return if @watching || !defined?(KIF::API) || !KIF::API.respond_to?(:every)
+        @watching = true
+        KIF::API.every(seconds: 30, scope: :always, id: "kif_modguard_verify") do
+          verify.each { |key| KIF.log("ModGuard: #{key} was changed") }
+        end
+      rescue StandardError
+        @watching = false
       end
 
       def disarm!
         @armed = false
+        @want_armed = false
       end
 
       # a require of a library whose doors are not there yet arms them (called by the require door's result)
@@ -487,6 +513,10 @@ module KIF
       # names of the doors that do not resolve to the guard's module any more
       def verify
         bad = []
+        if @want_armed && !@armed   # a mod flipped the switch from inside
+          bad << "ModGuard.armed"
+          @armed = true
+        end
         @doors.each do |key, (target, name, door)|
           owner = (target.instance_method(name).owner rescue nil)
           bad << key unless owner.equal?(door)

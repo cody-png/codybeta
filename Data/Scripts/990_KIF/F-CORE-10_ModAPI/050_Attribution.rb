@@ -256,7 +256,7 @@ module KIF
         return t.uniq
       end
 
-      # target text => [source file or nil, original name, owner is the class itself]
+      # target text => [full source location or nil, original name, owner is the class itself]
       def self.snapshot
         out = {}
         watched.each do |t|
@@ -266,35 +266,50 @@ module KIF
           tc = single ? klass.singleton_class : klass
           um = (tc.instance_method(name) rescue nil)
           next unless um
-          out[t] = [um.source_location && um.source_location[0], um.original_name, um.owner == tc]
+          out[t] = [um.source_location, um.original_name, um.owner == tc]
         end
         return out
       end
 
-      def self.before(mod); @snap[mod] = snapshot; end
+      def self.before(mod); @snap[mod] ||= snapshot; end
 
-      # Compares with the snapshot taken before the mod's files loaded.
+      # a mod that wraps (`alias old m` + `def m`) leaves the old method reachable under another name
+      def self.old_reachable?(tc, name, loc)
+        (tc.instance_methods(false) + tc.private_instance_methods(false)).any? do |n|
+          next false if n == name
+          um = (tc.instance_method(n) rescue nil)
+          um && um.source_location == loc
+        end
+      end
+
+      # Compares with the snapshot taken before the mod's first file loaded.
+      # Run after each file of the mod; cleared by forget_snapshots.
       def self.after(mod)
-        old = @snap.delete(mod)
+        old = @snap[mod]
         return [] unless old
         found = []
         snapshot.each do |t, now|
           was = old[t]
           next if was.nil? || was[0] == now[0]
-          next unless now[0] && KIF::ModContract.owner_of_path(now[0]) == mod
-          r = Hook.resolve(t)
-          name = r[1]
-          kind = (now[1] == name && now[2]) ? :replaced : :wrapped
-          found << { :mod => mod, :target => t, :kind => kind, :was => was[0].to_s.sub(/\A.*Data\/Scripts\//, "") }
+          next unless now[0] && KIF::ModContract.owner_of_path(now[0][0]) == mod
+          klass, name, single = Hook.resolve(t)
+          tc = single ? klass.singleton_class : klass
+          kind = (now[1] == name && now[2] && !old_reachable?(tc, name, was[0])) ? :replaced : :wrapped
+          next if @list.any? { |e| e[:mod] == mod && e[:target] == t && e[:kind] == kind }
+          @list.reject! { |e| e[:mod] == mod && e[:target] == t }
+          entry = { :mod => mod, :target => t, :kind => kind, :was => was[0].to_a[0].to_s.sub(/\A.*Data\/Scripts\//, "") }
+          found << entry
+          @list << entry
           if kind == :replaced
-            KIF.log("Mod #{Attribution.display(mod)} replaced #{t} (was #{found.last[:was]}); wrappers made before it are bypassed")
+            KIF.log("Mod #{Attribution.display(mod)} replaced #{t} (was #{entry[:was]}); wrappers made before it are bypassed")
           else
             KIF.verbose("Mod #{Attribution.display(mod)} wrapped #{t}")
           end
         end
-        @list.concat(found)
         return found
       end
+
+      def self.forget_snapshots; @snap.clear; end
 
       def self.list; return @list.dup; end
       def self.add(entry); @list << entry; end

@@ -879,6 +879,7 @@ module KIF
             lines << (s.state == :connecting ? _INTL("Connecting to the relay...") : _INTL("Friend joined: Not yet"))
           else
             lines << _INTL("Port: {1}    Router port: {2}", s.port, by_hand ? _INTL("Opened by you") : router_text(pm))
+            lines << _INTL("Players: up to {1} (both friends use this code)", Net.max_players) if Net.max_players > 2
           end
           cmds = []
           acts = []

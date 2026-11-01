@@ -8,7 +8,7 @@
 # challenged, over the co-op machinery (NetCoop*.rb): the guest plays the host's
 # log on its own battle screen, from the other side (battler i is the host's
 # i ^ 1), and sends back checked choices. Messages:
-#   co_vs  {id, fmt, n, lv}   challenge (fmt 0: cancelled); fmt 1 single, 2 double
+#   co_vs  {id, fmt, n, lv}   challenge (fmt 0: cancelled); fmt 1 single, 2 double, 3 triple
 #   co_vsr {id, ok, why}      the answer (why: busy, no, few)
 # After a yes the host sends co_ask (kind "pvp"), the other game answers co_join
 # with its team, and co_begin .. co_end run as in co-op.
@@ -32,7 +32,7 @@ module KIF
   module PvP
     ID = [Integer, 1, 1_000_000_000]
     # (plain fields only: Net.frame_limits gives these a few hundred bytes and 36 values)
-    { "co_vs"  => { "id" => ID, "fmt" => [Integer, 0, 2], "n" => [Integer, 1, 6], "lv" => [Integer, 0, 100] },
+    { "co_vs"  => { "id" => ID, "fmt" => [Integer, 0, 3], "n" => [Integer, 1, 6], "lv" => [Integer, 0, 100] },
       "co_vsr" => { "id" => ID, "ok" => [Integer, 0, 1], "why" => [String, 16] },
     }.each { |k, v| KIF::Net::TYPES[k] = v }
 
@@ -102,7 +102,7 @@ module KIF
     end
 
     def self.describe(fmt, n, lv)
-      return _INTL("{1}, {2}, {3}", fmt == 2 ? _INTL("Double battle") : _INTL("Single battle"),
+      return _INTL("{1}, {2}, {3}", fmt == 3 ? _INTL("Triple battle") : fmt == 2 ? _INTL("Double battle") : _INTL("Single battle"),
                    n == 1 ? _INTL("1 Pokemon each") : _INTL("{1} Pokemon each", n),
                    lv == 0 ? _INTL("levels as they are") : _INTL("all level {1}", lv))
     end
@@ -180,10 +180,10 @@ module KIF
       pbMessage(_INTL("A friendly match against {1}: no Exp, money or catches, and no Bag. You each bring your own Pokemon.", who))
       pbMessage(_INTL("{1}'s game runs the battle. A modified game could cheat, so only battle friends you trust.",
                       KIF::Coop.rules_host? ? $Trainer.name.to_s : who))
-      c = pbMessage(_INTL("Challenge {1}?", who), [_INTL("Single battle"), _INTL("Double battle"), _INTL("Cancel")], 3)
-      return unless c.is_a?(Integer) && c >= 0 && c <= 1
+      c = pbMessage(_INTL("Challenge {1}?", who), [_INTL("Single battle"), _INTL("Double battle"), _INTL("Triple battle"), _INTL("Cancel")], 4)
+      return unless c.is_a?(Integer) && c >= 0 && c <= 2
       fmt = c + 1
-      min = fmt == 2 ? 2 : 1
+      min = fmt
       n = choose_number(_INTL("How many Pokemon each?"), min, 6, 6) or return
       l = pbMessage(_INTL("Level rule?"), [_INTL("Levels as they are"), _INTL("All level 50"), _INTL("All level 100"), _INTL("Cancel")], 4)
       return unless l.is_a?(Integer) && l >= 0 && l <= 2
@@ -221,7 +221,7 @@ module KIF
         st[:acc] = nil if st[:acc] && st[:acc][:id] == m["id"] && st[:acc][:with] == from
         return
       end
-      return unless LEVELS.include?(m["lv"]) && (m["fmt"] == 1 || m["n"] >= 2)
+      return unless LEVELS.include?(m["lv"]) && m["n"] >= m["fmt"]
       now = KIF::Net.now
       # at most one question at a time, and a short "busy" a few seconds apart (a stream of challenges costs this game almost nothing)
       if st[:in] || st[:go] || st[:acc] || busy? || now < st[:mute] || (st[:out] && KIF::Coop.rules_host?)
@@ -303,7 +303,7 @@ module KIF
       yes = pbConfirmMessage(_INTL("{1} challenges you: {2}. Accept?", who, describe(c[:fmt], c[:n], c[:lv])))
       return unless session
       team = yes ? pick_team(c[:n]) : nil
-      min = c[:fmt] == 2 ? 2 : 1
+      min = c[:fmt]
       few = team && team.length < min
       if !team || few
         unless few   # (a No, or a pick cancelled)
@@ -360,7 +360,7 @@ module KIF
       list = msg["party"]
       return nil unless list.is_a?(Array) && list.length.between?(1, go[:n])
       party = list.map { |h| load_strict(h) }
-      return nil if party.any?(&:nil?) || (go[:fmt] == 2 && party.length < 2)
+      return nil if party.any?(&:nil?) || party.length < go[:fmt]
       return { party: party, name: KIF::Net.shown_name(msg["name"]), type: KIF::Coop::Mon.partner_type(msg["type"]),
                tid: msg["tid"].is_a?(Integer) ? msg["tid"] : 0, bag: {} }
     end
@@ -389,7 +389,7 @@ module KIF
 
     # Runs the match on this game (the Multiplayer host). Own runner, not pbTrainerBattleCore: no pbAfterBattle.
     def self.battle(s, join, go)
-      dbl = go[:fmt] == 2
+      dbl = go[:fmt] >= 2   # (a double or a triple: the battle's size is named below)
       lv = go[:lv]
       decision = 0
       host = nil
@@ -409,14 +409,14 @@ module KIF
         battle = PokeBattle_Battle.new(pbNewBattleScene, mine, foe, [$Trainer], [trainer])
         battle.party1starts = [0]
         battle.party2starts = [0]
-        setBattleRule(dbl ? "double" : "single", "canLose", "noexp", "nomoney", "cannotrun", "setstyle")
+        setBattleRule(%w[single double triple][go[:fmt] - 1], "canLose", "noexp", "nomoney", "cannotrun", "setstyle")
         pbPrepareBattle(battle)
         $PokemonTemp.clearBattleRules
         battle.switchStyle = false
         host = Host.new(s, join)
         host.attach(battle)
         Audio.me_stop
-        log("match #{join[:id]} with #{join[:name]} (#{dbl ? 'double' : 'single'}, #{mine.length} v #{foe.length}, level rule #{lv})")
+        log("match #{join[:id]} with #{join[:name]} (#{%w[single double triple][go[:fmt] - 1]}, #{mine.length} v #{foe.length}, level rule #{lv})")
         pbBattleAnimation(pbGetTrainerBattleBGM([trainer]), dbl ? 3 : 1, [trainer]) {
           pbSceneStandby { decision = battle.pbStartBattle }
         }
@@ -657,7 +657,7 @@ module KIF
       def build(d)
         return false unless d.is_a?(Hash)
         sz = d["sz"]
-        return false unless sz.is_a?(Array) && sz.length == 2 && sz[0] == sz[1] && [1, 2].include?(sz[0])
+        return false unless sz.is_a?(Array) && sz.length == 2 && sz[0] == sz[1] && [1, 2, 3].include?(sz[0])
         @hn = int(d["gs"], 1, 6) or return false
         @gn = int(d["gn"], 1, 6) or return false
         return false unless @gn == @party.length && d["hp"].is_a?(Array) && d["hp"].length == @hn

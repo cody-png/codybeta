@@ -275,6 +275,8 @@ module KIF
       KIF.log("Soul Link: linked with #{info['n']}")
       @offer = nil
       @asked = false
+      @asked_slot = nil
+      @offers = {}
       @sent = nil
       send_hello
       starter_check
@@ -307,11 +309,43 @@ module KIF
 
     # Over the connection: picking Link sends my code; the link is made once
     # both players picked it. :linked, :waiting
-    def self.ask_link(session = KIF::Net.session)
+    def self.ask_link(session = KIF::Net.session, slot = nil)
       @asked = true
-      session.post("sl_link", "code" => link_code) if session&.connected?
-      return link_with(@offer) ? :linked : :waiting if @offer
+      @asked_slot = slot if slot
+      sl_post("sl_link", { "code" => link_code }, session, slot) if session&.connected?
+      offer = slot ? (@offers ||= {})[slot] : @offer   # a lobby of three: the offer of the player picked
+      return link_with(offer) ? :linked : :waiting if offer
       return :waiting
+    end
+
+    # Which of the players in a lobby of three this save links with (the pick in the Soul Link screen): their hello
+    # and offer are the ones that count from now on. A game for two has no pick.
+    def self.choose(slot)
+      seen = (@hellos ||= {})[slot]
+      @asked_slot = slot
+      return false unless seen
+      @peer, @peer_info = seen
+      @peer_code = @peer["code"]
+      @peer_line = session.peer(slot) if session.respond_to?(:peer)
+      @offer = (@offers ||= {})[slot]
+      return true
+    end
+
+    def self.hello_of(slot); ((@hellos ||= {})[slot] || [])[1]; end
+
+    # to the partner's slot: the player picked, else the one whose hello was last read. Which of two players it is
+    # not known: nothing goes (a message for the wrong player is one the right one never sees).
+    def self.partner_slot(s = session)
+      return @asked_slot if @asked_slot && s.respond_to?(:peers) && s.peers.any? { |sl, _, _| sl == @asked_slot }
+      return @peer_line.slot if @peer_line.respond_to?(:slot)
+      return nil
+    end
+
+    def self.sl_post(type, fields, s = session, slot = nil)
+      return false unless s
+      slot ||= partner_slot(s)
+      return false if slot.nil? && s.respond_to?(:peers) && s.peers.length > 1
+      return KIF::Net.post_to(s, type, fields, slot)
     end
 
     def self.offer; @offer; end
@@ -766,7 +800,7 @@ module KIF
     # The line to my partner: the connection their hello came on (a lobby with
     # more players has more lines; every sl_* message goes to this one), else the session
     def self.session
-      s = @peer_line if @peer_line.respond_to?(:connected?) && @peer_line.connected?
+      s = (@peer_line.respond_to?(:session) ? @peer_line.session : @peer_line) if @peer_line.respond_to?(:connected?) && @peer_line.connected?
       s ||= KIF::Net.session if defined?(KIF::Net) && KIF::Net.respond_to?(:session)
       return s&.connected? ? s : nil
     end
@@ -797,8 +831,22 @@ module KIF
       @peer_info = nil   # (a new partner must not be linked with the last one's code)
       @offer = nil
       @asked = false
+      @asked_slot = nil
+      @hellos = {}
+      @offers = {}
       @party_sent = nil
       @hello_sent = false
+    end
+
+    # a player joined a game that goes on (a lobby of three): they hear this save's hello
+    def self.on_peer_joined(_line = nil); send_hello; end
+
+    # a player left: only if it was the partner does the link's connection end (on_disconnect checks the line)
+    def self.on_peer_left(line)
+      (@hellos ||= {}).delete(line.slot) if line.respond_to?(:slot)
+      (@offers ||= {}).delete(line.slot) if line.respond_to?(:slot)
+      @asked_slot = nil if line.respond_to?(:slot) && @asked_slot == line.slot
+      on_disconnect(line)
     end
 
     # force: also when the link is gone (Unlink: the partner learns from the hello)
@@ -808,7 +856,7 @@ module KIF
       st = state
       s.post("sl_hello", "link" => st[:link] || "", "seen" => st[:their_seq] || 0, "acked" => st[:acked] || 0,
                          "code" => link_code)
-      s.post("sl_party", "ids" => @party_sent = party_ids) if st[:key]
+      sl_post("sl_party", { "ids" => @party_sent = party_ids }, s) if st[:key]
       @hello_sent = true
     end
 
@@ -835,7 +883,7 @@ module KIF
       return unless connected?
       ids = party_ids
       return if ids == @party_sent
-      session.post("sl_party", "ids" => @party_sent = ids)
+      sl_post("sl_party", { "ids" => @party_sent = ids })
     end
 
     # the partner's last party: {id => [species, level, hp, totalhp, name or nil]}
@@ -855,7 +903,7 @@ module KIF
       return unless connected?
       st = state
       list = st[:my_log].select { |e| e["q"] > (@sent || st[:acked]) }
-      list.each_slice(CHUNK) { |part| session.post("sl_up", "code" => update_code(part)) }
+      list.each_slice(CHUNK) { |part| sl_post("sl_up", { "code" => update_code(part) }) }
       @sent = st[:my_seq]
     end
 
@@ -877,11 +925,17 @@ module KIF
       if type == "sl_hello"   # kept while Off too: linking needs it once Soul Link is turned on
         # a third player's hello never replaces my partner's (a lobby with more players)
         return if line && @peer_line && !line.equal?(@peer_line) && linked? && msg["link"] != state[:link]
+        if line.respond_to?(:slot)   # a lobby of three: each player's hello is kept; only the one picked (or the partner) is taken
+          prev = (@hellos ||= {})[line.slot]
+          info = prev && prev[0]["code"] == msg["code"] ? prev[1] : read_link_code(msg["code"])
+          @hellos[line.slot] = [msg, info]
+          return if @asked_slot && line.slot != @asked_slot && !linked?   # I picked the other player
+        end
         @peer = msg
         @peer_line = line
         unless msg["code"] == @peer_code   # (a hello again with the same code: nothing new to read)
           @peer_code = msg["code"]
-          @peer_info = read_link_code(msg["code"])
+          @peer_info = (@hellos && line.respond_to?(:slot) && @hellos[line.slot][1]) || read_link_code(msg["code"])
         end
       end
       return unless awake?
@@ -898,15 +952,19 @@ module KIF
         st.delete(:left)
         st[:acked] = [msg["seen"], st[:my_seq]].min
         mine = st[:my_log].select { |e| e["q"] > msg["seen"] }
-        mine.each_slice(CHUNK) { |part| s.post("sl_up", "code" => update_code(part)) }
+        mine.each_slice(CHUNK) { |part| sl_post("sl_up", { "code" => update_code(part) }, s) }
         @sent = st[:my_seq]
         echo = st[:their_log].select { |e| e["q"] > msg["acked"] }
-        echo.each_slice(CHUNK) { |part| s.post("sl_up", "code" => update_code(part, 1 - st[:side])) }
-        s.post("sl_party", "ids" => @party_sent = party_ids)
+        echo.each_slice(CHUNK) { |part| sl_post("sl_up", { "code" => update_code(part, 1 - st[:side]) }, s) }
+        sl_post("sl_party", { "ids" => @party_sent = party_ids }, s)
       when "sl_link"
         return unless partner_line?(line) || !st[:key]
         info = read_link_code(msg["code"])
         return unless info.is_a?(Hash)
+        if line.respond_to?(:slot)   # a lobby of three: an offer from the player I did not pick is kept, not taken
+          (@offers ||= {})[line.slot] = info
+          return if @asked_slot && @asked_slot != line.slot
+        end
         @offer = info
         @peer_info = info
         link_with(info) if @asked && !st[:key]
@@ -918,7 +976,7 @@ module KIF
         lines, n = receive_update(h)
         @notes = (@notes || []) + lines
         # tell them what arrived (an empty update carries "a")
-        session&.post("sl_up", "code" => update_code([])) if n > 0 && h["f"] != st[:side]
+        sl_post("sl_up", { "code" => update_code([]) }) if n > 0 && h["f"] != st[:side]
         news(h["e"], before, st[:their_seq]) if n > 0 && h["f"] != st[:side]
       when "sl_party"
         return unless connected? && partner_line?(line)   # only my partner's party

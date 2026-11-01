@@ -1061,6 +1061,14 @@ module KIF
     # joiner talks only to the lobby's owner (the friend picked), and
     # leaving the lobby ends it.
     #---------------------------------------------------------------------------
+    # One player of a session, for code that tells players apart by object (Soul Link)
+    class Peer
+      attr_reader :slot, :session
+      def initialize(session, slot); @session = session; @slot = slot; end
+      def name; @session.name_of(@slot); end
+      def connected?; @session.connected? && !@session.name_of(@slot).nil?; end
+    end
+
     class Session
       attr_reader :role, :port, :via, :ports, :secret, :room, :relay, :lobby, :steam, :max_peers
       attr_accessor :ping_every, :timeout, :handshake_timeout, :answer_timeout, :hs_limit, :name, :ver
@@ -1134,6 +1142,12 @@ module KIF
 
       def name_of(slot); pr = peers.find { |s, _, _| s == slot }; pr && pr[1]; end
 
+      # a player in the session as an object with a stable identity (Soul Link keeps its partner's by it)
+      def peer(slot); (@peer_refs ||= {})[slot] ||= Peer.new(self, slot); end
+
+      # host: the name of the player the question "Let <name> join?" is for
+      def asking_name; l = @lines.find { |x| x.st == :asking }; l && l.name; end
+
       # host: no place left (the code is used up)
       def full?; @lines.count { |l| l.st == :connected } >= (lobby? ? @max_peers : 1); end
 
@@ -1156,6 +1170,7 @@ module KIF
         go(line, :connected)
         @later << [:connected, line.name, line.slot]
         send_roster if lobby?
+        steam_players
         # the code is used up: whoever saw it later needs a new one (the host screen shows it). In a lobby the
         # second friend has the same code, so it lasts until a guest leaves (see line_ended).
         renew_secrets if @via == :direct && !lobby?
@@ -1452,6 +1467,12 @@ module KIF
         ins = @lines.select { |l| l.st == :connected }
         list = [[0, @name, @ver]] + ins.map { |l| [l.slot, l.name, l.ver] }
         ins.each { |l| l.conn.send_msg({ "t" => "ro", "me" => l.slot, "p" => list }) }
+      end
+
+      # Steam host: the lobby tag friends see ("2 of 3")
+      def steam_players
+        return unless @via == :steam && @role == :host && @lobby
+        @steam.set_lobby_data(@lobby, "pl", (1 + @lines.count { |l| l.st == :connected }).to_s)
       end
 
       # host: the later joiner of a name that is taken (case aside) is "Red 2": names tell the players apart in battle text
@@ -1877,6 +1898,7 @@ module KIF
         if was == :connected && lobby?
           out << [:peer_left, line.slot, why, line.name]
           send_roster
+          steam_players
           renew_secrets if @via == :direct   # a place is free: the guest who left has the old code
           out << [:disconnected, why] unless @lines.any? { |l| l.st == :connected }   # the last guest is gone: the lobby is empty
         elsif was == :connected
@@ -2062,7 +2084,7 @@ module KIF
       # Host: answers askers on this network with its name and the port of
       # `code` (the rest of the code, the secret, stays home). One answer a
       # second to each asker, ten a second in all.
-      def responder(name, code, port: LAN_PORT)
+      def responder(name, code, port: LAN_PORT, full: nil)   # full: asked per question; true = no answer (a lobby with no place left)
         info = JoinCode.read(code)
         return nil unless info.is_a?(Hash) && info[:kind] != :relay
         nm = name.to_s[0, 24]
@@ -2087,6 +2109,7 @@ module KIF
               next
             end
             next unless data == ASK && from && Net.near?(from[3], info[:kind] == :v4 ? info[:ip] : nil)
+            next if full && (full.call rescue false)
             now = Net.now
             next if seen[from[3]] && now - seen[from[3]] < 1.0
             recent.reject! { |x| now - x > 1.0 }

@@ -70,7 +70,7 @@ module KIF
       # per connection: the partner's mod ids and the rate counters
       def self.state(s)
         s.instance_variable_get(:@kif_mod_share) ||
-          s.instance_variable_set(:@kif_mod_share, { peer: [], tx: [0, 0, 0], rx: [0, 0, 0], vals: [SHARE_BURST.to_f, Net.now] })
+          s.instance_variable_set(:@kif_mod_share, { peer: [], peers: {}, rx_by: {}, tx: [0, 0, 0], rx: [0, 0, 0], vals: [SHARE_BURST.to_f, Net.now] })
       end
 
       def self.on_connect(s)
@@ -81,7 +81,27 @@ module KIF
 
       def self.announce(s); s.post("mod_ls", "ids" => ids.join(",")[0, 2_000]); end
 
-      def self.partner_has?(s, mod_id); s&.connected? ? state(s)[:peer].include?(mod_id.to_s) : false; end
+      # a player joined a game that goes on (a lobby of three): they hear my mods
+      def self.on_peer_joined(s, slot); Net.post_to(s, "mod_ls", { "ids" => ids.join(",")[0, 2_000] }, slot); end
+
+      # the slots (a lobby of three) that have the mod; [nil] for the one partner of a game for two; [] when none does
+      def self.targets(s, mod_id)
+        st = state(s)
+        id = mod_id.to_s
+        ps = s.respond_to?(:peers) ? s.peers : []
+        return st[:peer].include?(id) ? [nil] : [] if ps.length <= 1
+        return ps.map(&:first).select { |sl| (st[:peers][sl] || []).include?(id) }
+      end
+
+      # true when every player in has the mod (the safe meaning for state that must agree)
+      def self.partner_has?(s, mod_id)
+        return false unless s&.connected?
+        ps = s.respond_to?(:peers) ? s.peers : []
+        return state(s)[:peer].include?(mod_id.to_s) if ps.length <= 1
+        return ps.all? { |sl, _, _| (state(s)[:peers][sl] || []).include?(mod_id.to_s) }
+      end
+
+      def self.peers_with(s, mod_id); s&.connected? ? targets(s, mod_id).compact : []; end
 
       # a copy holding only JSON-safe values, or BAD
       def self.clean(v, depth = 0)
@@ -156,11 +176,14 @@ module KIF
         return false
       end
 
-      def self.share(s, mod_id, key, data)
+      # to: a slot (a lobby of three); none: every player that has the mod
+      def self.share(s, mod_id, key, data, to: nil)
         id = mod_id.to_s
         return false unless s&.connected?
         h = @handlers[id] or return note(id, "not registered in this game (call KIF::Net.on_share first)")
-        return note(id, "the partner's game doesn't have this mod; nothing sent") unless state(s)[:peer].include?(id)
+        have = targets(s, id)
+        send_to = to ? (have.include?(to) ? [to] : []) : have
+        return note(id, "the partner's game doesn't have this mod; nothing sent") if send_to.empty?
         return note(id, "only the host's game shares it") if h[1] && s.role != :host
         k = key.to_s
         return note(id, "a key is 1-64 characters, no control characters") unless k.length.between?(1, 64) && k !~ /[\x00-\x1f\x7f]/
@@ -171,28 +194,39 @@ module KIF
         values = Net.cost(json) + 8   # + the message around it (the same count the partner's game makes before it reads)
         return note(id, "data over #{MAX_DATA} bytes (#{size})") if size > MAX_DATA
         return note(id, "data over #{FRAME_VALUES - 8} values (#{values - 8}; every number, text, list and table counts)") if values > FRAME_VALUES
-        return note(id, "over #{MAX_MSGS} messages or #{MAX_BYTES} bytes a second; dropped") unless spend(state(s), :tx, size)
-        return note(id, "over #{SHARE_RATE} values a second (#{values}); dropped") unless pay(state(s), values)
-        return s.post("mod_sh", "m" => id, "k" => k, "d" => d) || note(id, "the message was refused; nothing sent")
+        sent = false
+        send_to.each do |t|   # each player it goes to costs this game's limits once
+          return note(id, "over #{MAX_MSGS} messages or #{MAX_BYTES} bytes a second; dropped") unless spend(state(s), :tx, size)
+          return note(id, "over #{SHARE_RATE} values a second (#{values}); dropped") unless pay(state(s), values)
+          sent = Net.post_to(s, "mod_sh", { "m" => id, "k" => k, "d" => d }, t) || sent
+        end
+        return sent || note(id, "the message was refused; nothing sent")
       end
 
-      def self.receive(s, type, msg)
+      # from: the sender's slot in a lobby of three (0 is the host); nil: the one partner. The sender's name and slot
+      # go to the handler (the slot as an optional fourth argument).
+      def self.receive(s, type, msg, from = nil)
         st = state(s)
         case type
         when "mod_ls"
           st[:peer] = msg["ids"].split(",").select { |x| x =~ ID }.first(64)
+          st[:peers][from] = st[:peer] if from
         when "mod_sh"
           id = msg["m"]
           h = @handlers[id] if id =~ ID
           return note(id, "a mod this game doesn't have; ignored") unless h
-          return note(id, "sent by a partner who isn't the host; ignored") if h[1] && s.role == :host
+          return note(id, "sent by a partner who isn't the host; ignored") if h[1] && (s.role == :host || (from && from != 0))
           d = clean(msg["d"])
           return note(id, "data that isn't JSON-safe; dropped") if d.equal?(BAD)
           size = Wire.json(d).bytesize
           return note(id, "data over #{MAX_DATA} bytes; dropped") if size > MAX_DATA
-          return note(id, "partner over the rate limit; dropped") unless spend(st, :rx, size)
+          bucket = from ? { rx: (st[:rx_by][from] ||= [0, 0, 0]) } : st   # a bucket for each sender
+          return note(id, "partner over the rate limit; dropped") unless spend(bucket, :rx, size)
           begin
-            h[0].call(Net.shown_name(s.partner), msg["k"], d)
+            name = Net.shown_name((from && s.respond_to?(:name_of) && s.name_of(from)) || s.partner)
+            blk = h[0]
+            four = from && (!blk.lambda? || blk.arity >= 4 || blk.arity <= -4)
+            four ? blk.call(name, msg["k"], d, from) : blk.call(name, msg["k"], d)
           rescue StandardError, ScriptError, SystemStackError => e
             Net.log("mod share #{id}: its handler failed (#{e.class}: #{e.message})")
           end
@@ -205,8 +239,13 @@ module KIF
     #---------------------------------------------------------------------------
     # true when sent; false when not connected, the partner lacks the mod, or
     # the data or rate doesn't fit (the reason is logged once)
-    def self.share(mod_id, key, data)
-      return ModShare.share(respond_to?(:session) ? session : nil, mod_id, key, data)
+    def self.share(mod_id, key, data, to: nil)
+      return ModShare.share(respond_to?(:session) ? session : nil, mod_id, key, data, to: to)
+    end
+
+    # post `type` to a slot when two players are in (a lobby of three), else as always (to the one partner)
+    def self.post_to(s, type, fields, slot)
+      return (slot && s.respond_to?(:peers) && s.peers.length > 1) ? s.post(type, fields, to: slot) : s.post(type, fields)
     end
 
     # block |from (partner's name), key, data|; host_only: drop what a
@@ -218,5 +257,8 @@ module KIF
     def self.connected?; (respond_to?(:session) && session&.connected?) ? true : false; end
     def self.host?; (connected? && session.role == :host) ? true : false; end
     def self.partner_has?(mod_id); ModShare.partner_has?(respond_to?(:session) ? session : nil, mod_id); end
+
+    # slots of the players that have the mod (a lobby of three); partner_has? is true when all of them do
+    def self.peers_with(mod_id); ModShare.peers_with(respond_to?(:session) ? session : nil, mod_id); end
   end
 end

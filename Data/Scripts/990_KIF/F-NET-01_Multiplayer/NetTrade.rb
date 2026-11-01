@@ -61,16 +61,37 @@ module KIF
 
     @st = nil      # the trade on now
     @asked = nil   # the partner's ask not answered yet
+    @asked_from = nil   # ... and the slot it came from (a lobby of three: any two of the three trade)
     @line = nil    # per line (one session): No answers, the mute, undo work held back during a battle
 
     class << self
-      attr_accessor :st, :asked
+      attr_accessor :st, :asked, :asked_from
     end
 
     def self.log(msg); KIF::Net.log("trade: #{msg}"); end
     def self.session; s = KIF::Net.session if KIF::Net.respond_to?(:session); s&.connected? ? s : nil; end
-    def self.partner; (s = session) ? KIF::Net.shown_name(s.partner) : "?"; end
-    def self.post(t, f = {}); (s = session) ? s.post(t, f) : false; end
+    # the name of the player in slot `slot` (nil: the one partner of a game for two)
+    def self.name_for(slot)
+      s = session or return "?"
+      n = slot && s.respond_to?(:name_of) ? s.name_of(slot) : nil
+      return KIF::Net.shown_name(n || s.partner)
+    end
+
+    # who the trade on now (or the ask waiting) is with: a record of a trade carries this name (the book)
+    def self.partner; name_for(@st ? @st[:with] : @asked_from); end
+
+    # to: a slot; none: the player the trade on now is with
+    def self.post(t, f = {}, slot = nil)
+      s = session or return false
+      return KIF::Net.post_to(s, t, f, slot || (@st ? @st[:with] : @asked_from))
+    end
+
+    # the slot of the only other player in (the trade is with them), or nil: a stand-in session, or nobody
+    def self.only_peer
+      s = session
+      return nil unless s && s.respond_to?(:peers) && s.peers.length == 1
+      return s.peers[0][0]
+    end
     def self.save_game; Game.save; end   # tests replace it
 
     def self.line
@@ -85,14 +106,25 @@ module KIF
       g.instance_variable_get(:@kif_trades) || g.instance_variable_set(:@kif_trades, {})
     end
 
+    def self.sync_ids; book.keys.last(LIST).map { |i| format("%08x", i) }.join; end
+
     def self.on_connect(_s = nil)
-      @st = @asked = nil
-      post("tr_sync", "ids" => book.keys.last(LIST).map { |i| format("%08x", i) }.join)
+      @st = @asked = @asked_from = nil
+      post("tr_sync", { "ids" => sync_ids }, only_peer)
     end
 
     def self.on_disconnect
-      @asked = nil
+      @asked = @asked_from = nil
       @st[:why] ||= :lost if @st && !@st[:done]
+    end
+
+    # a second player joined: they hear which trades this save knows
+    def self.on_peer_joined(slot); post("tr_sync", { "ids" => sync_ids }, slot); end
+
+    # a player left: a trade or ask with them ends
+    def self.on_peer_left(slot)
+      @asked = @asked_from = nil if @asked_from == slot
+      @st[:why] ||= :lost if @st && @st[:with] == slot && !@st[:done]
     end
 
     # offers and OKs worked on: a burst, then a few a second (a flood costs the game thread)
@@ -178,24 +210,28 @@ module KIF
       end
     end
 
-    # both offers, the host's first: what each OK is for
+    # both offers, the lower slot's first (the host is slot 0): what each OK is for
     def self.digest
       a, b = KIF::Net::Wire.json(@st[:md]), KIF::Net::Wire.json(@st[:td])
-      a, b = b, a unless session&.role == :host
+      s = session
+      mine_first = @st[:with] && s.respond_to?(:my_slot) ? s.my_slot < @st[:with] : s&.role == :host
+      a, b = b, a unless mine_first
       return KIF::Net::Crypto.hex(KIF::Net::Crypto.sha256("#{a}|#{b}"))[0, 16]
     end
 
     #---------------------------------------------------------------------------
     # The trade's steps (the screen below calls these; so do the tests)
     #---------------------------------------------------------------------------
-    def self.start
+    # with: the slot of the player the trade is with (the one who asked, when there is an ask)
+    def self.start(with = nil)
       id = @asked
+      with ||= @asked_from
       id ||= loop do   # not an id the save's book holds: commit would overwrite that escrow
         i = (KIF::Net::Crypto.random(4).unpack1("N") & ID[2]) | 1
         break i unless book.key?(i)
       end
-      @st = { id: id, open: !@asked.nil?, v: 0 }
-      @asked = nil
+      @st = { id: id, open: !@asked.nil?, v: 0, with: with }
+      @asked = @asked_from = nil
       post("tr_ask", "id" => id)
     end
 
@@ -343,11 +379,12 @@ module KIF
 
     # the partner's game never swapped: the received Pokémon goes, the given one comes back.
     # Only for the partner the trade was made with, only while the received one is unchanged.
-    def self.undo(id)
+    # who: the name of the player this is about (the sender of the message that ended the trade)
+    def self.undo(id, who_now = partner)
       e = book[id]
       return unless e.is_a?(Array)
       _, gave, loc, tag, who, fp, t0, dex = e
-      return unless who == partner   # a name, not a key: a legacy or foreign entry is left alone
+      return unless who == who_now   # a name, not a key: a legacy or foreign entry, or a trade with another player, is left alone
       if !tag.is_a?(String) || Time.now.to_i - t0.to_i > EXPIRE
         book[id] = :done
         return log("#{id}: too old to undo")
@@ -360,49 +397,54 @@ module KIF
         $PokemonStorage[*own[0][1]] = gave
       else   # changed, fused or copied since: the player keeps what came
         book[id] = :done
-        KIF::Net.notes << _INTL("The trade with {1} didn't finish on their side. You keep the Pokemon you got.", partner)
+        KIF::Net.notes << _INTL("The trade with {1} didn't finish on their side. You keep the Pokemon you got.", who_now)
         return log("#{id}: not undone (the received one was changed)")
       end
       book.delete(id)
       dex_back(dex)
       trades(-1)
       log("#{id}: undone (#{hits.empty? ? 'received one not found' : 'received one taken back'})")
-      KIF::Net.notes << _INTL("The trade with {1} didn't finish on their side. {2} is back with you.", partner, gave.name)
+      KIF::Net.notes << _INTL("The trade with {1} didn't finish on their side. {2} is back with you.", who_now, gave.name)
     end
 
     # the partner's list of trade ids: pending ones it knows are final; the others it doesn't
     # know are undone (a list that is full may have been cut, so it proves nothing)
-    def self.sync(text)
+    def self.sync(text, who_now = partner)
       return unless text =~ /\A(\h{8})*\z/
       theirs = text.scan(/\h{8}/).map { |h| h.to_i(16) }
       book.keys.each do |id|
         e = book[id]
         next unless e.is_a?(Array)
+        next unless e[4] == who_now   # the list of one player says nothing about a trade made with another
         if theirs.include?(id)
-          book[id] = :done if e[4] == partner
+          book[id] = :done
         elsif theirs.length < LIST
-          undo(id)
+          undo(id, who_now)
         end
       end
     end
 
     # Messages from the partner's game (KIF::Net.update)
-    def self.receive(type, msg)
+    # from: the sender's slot (a lobby of three); nil: the one partner. What a message does is bound to its
+    # sender: the trade on now answers only to the player it is with, a list of ids only settles trades made
+    # with the player who sent it.
+    def self.receive(type, msg, from = nil)
       id = msg["id"]
       if $game_temp&.in_battle && (type == "tr_sync" || (type == "tr_no" && book[id].is_a?(Array)))
         l = line[:later]   # the party stays as it is until the battle is over (map_tick)
-        l << [type, msg] if l.length < 8
+        l << [type, msg, from] if l.length < 8
         return
       end
+      sender = name_for(from)
       case type
-      when "tr_sync" then return sync(msg["ids"])
+      when "tr_sync" then return sync(msg["ids"], sender)
       when "tr_done"
-        book[id] = :done if book[id].is_a?(Array) && book[id][4] == partner
+        book[id] = :done if book[id].is_a?(Array) && book[id][4] == sender
         return
       when "tr_no"
-        @asked = nil if @asked == id
-        return undo(id) if book[id].is_a?(Array)   # cancelled after this game swapped: it never did
-        if @st && @st[:id] == id && !@st[:done]
+        @asked = @asked_from = nil if @asked == id && @asked_from == from
+        return undo(id, sender) if book[id].is_a?(Array)   # cancelled after this game swapped: it never did
+        if @st && @st[:id] == id && !@st[:done] && (from.nil? || @st[:with].nil? || @st[:with] == from)
           @st[:why] ||= :them
           changed
         end
@@ -411,9 +453,13 @@ module KIF
         return if book.key?(id)   # an old one, sent again
         if !@st
           return if (m = line[:mute]) && KIF::Net.now < m   # asked and declined too often: a new question waits; the answer to this player's own ask doesn't
+          return post("tr_no", { "id" => id }, from) if @asked && @asked_from != from   # one question at a time (a lobby of three)
           @asked = id
+          @asked_from = from
+        elsif !from.nil? && !@st[:with].nil? && @st[:with] != from   # in a trade with the other player
+          return post("tr_no", { "id" => id }, from)
         elsif @st[:id] == id then @st[:open] = true
-        elsif !@st[:open] && session&.role != :host   # both asked at once: the host's id counts
+        elsif !@st[:open] && !lower_slot?(from)   # both asked at once: the lower slot's id counts (the host is 0)
           @st[:id] = id
           @st[:open] = true
           post("tr_ask", "id" => id)
@@ -423,6 +469,7 @@ module KIF
       end
       st = @st
       return unless st && st[:id] == id && st[:open] && !st[:done] && !st[:why]
+      return unless from.nil? || st[:with].nil? || st[:with] == from   # another player's offer or OK is not for this trade
       return unless allow?(st)
       case type
       when "tr_offer"
@@ -450,6 +497,13 @@ module KIF
     #---------------------------------------------------------------------------
     # Screens
     #---------------------------------------------------------------------------
+    # true when this game is the lower slot of the two (so its trade id counts); a stand-in session: the host
+    def self.lower_slot?(from)
+      s = session
+      return from ? s.my_slot < from : s&.role == :host if s.respond_to?(:my_slot)
+      return s&.role == :host
+    end
+
     def self.menu_label; @asked ? _INTL("Trade: {1} asked", partner) : _INTL("Trade"); end
 
     def self.menu_pick(_scr = nil)
@@ -461,14 +515,15 @@ module KIF
     # during a battle
     def self.map_tick
       l = line[:later]
-      l.shift(l.length).each { |t, m| receive(t, m) } unless l.empty? || $game_temp&.in_battle
+      l.shift(l.length).each { |t, m, f| receive(t, m, f) } unless l.empty? || $game_temp&.in_battle
       return unless @asked && !@st && KIF::Net.quiet?
       id = @asked
+      from = @asked_from
       yes = pbConfirmMessage(_INTL("{1} wants to trade Pokémon. Trade now?", partner))
       return unless @asked == id && session
       return menu_pick if yes
-      @asked = nil
-      post("tr_no", "id" => id)
+      @asked = @asked_from = nil
+      post("tr_no", { "id" => id }, from)
       ln = line   # two No answers: no more questions from this partner for a while
       ln[:declines] += 1
       ln[:mute] = KIF::Net.now + MUTE if ln[:declines] >= 2
@@ -540,8 +595,18 @@ module KIF
       end
     end
 
+    # who a new trade is with: the asker, the only other player, or the one picked in a lobby of three; :none on Back
+    def self.pick_with
+      return @asked_from if @asked
+      s = session
+      return only_peer unless s && s.respond_to?(:peers) && s.peers.length > 1
+      return KIF::Net.pick_peer(_INTL("Trade with who?")) || :none
+    end
+
     def self.run
-      start
+      with = pick_with
+      return if with == :none
+      start(with)
       m = KIF::Net::Menu
       own = m.instance_variable_get(:@scr).nil?
       m.instance_variable_set(:@scr, KIF::Net::Screen.new) if own

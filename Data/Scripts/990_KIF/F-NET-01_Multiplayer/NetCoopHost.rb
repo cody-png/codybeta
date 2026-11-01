@@ -55,7 +55,9 @@ module KIF
       return false if $PokemonGlobal.nil? || $PokemonGlobal.partner
       r = $PokemonTemp.battleRules
       return false if r["noPartner"] || r["birdboss"]
-      return false if r["size"] && !%w[double 2v2 2v1].include?(r["size"])
+      sizes = %w[double 2v2 2v1]
+      sizes += %w[triple 3v3 3v2 3v1] if ready_slots.length >= 2   # a scripted triple battle: three players fight it
+      return false if r["size"] && !sizes.include?(r["size"])
       return false if (pbInSafari? rescue false) || (pbInBugContest? rescue false)
       return false if defined?(KIF::SelfBattle) && KIF::SelfBattle.instance_variable_get(:@active)
       return false if defined?(KIF::Endgame) && KIF::Endgame.challenge_map?   # the challenge maps are 1v1
@@ -83,8 +85,47 @@ module KIF
       return !(pbInSafari? rescue false) && !$PokemonTemp.forceSingleBattle
     end
 
-    def self.host_battle(kind, nfoes)
-      join = invite(kind)
+    # three players on this map: the random encounter has three foes (a triple battle)
+    def self.co_triple?
+      return false unless co_double?
+      return ready_slots.length >= 2
+    end
+
+    # the second ally (a game for three) as PokeBattle_Battle.new takes it, once; PIF's starters hold one partner
+    def self.take_second_ally
+      a = @second_ally or return nil
+      @second_ally = nil
+      t = NPCTrainer.new(a[:name], a[:type])
+      t.id = a[:tid]
+      t.party = a[:party]
+      return [t, a[:party]]
+    end
+
+    # three players fight together on this map: a pair of trainers who spot them is two battles (see pbTrainerBattle)
+    def self.split_tags?; may_host? && ready_slots.length >= 2; end
+
+    # PIF waits for the second of two trainers who spot the player at once and fights both in one battle, unless
+    # there is no other trainer to wait for (the way it already treats a player who can't double). With three
+    # players that is what the pair gets, so each trainer's event battles alone.
+    def self.without_tag_merge
+      return yield unless (split_tags? rescue false)
+      pl = $game_player
+      pl.define_singleton_method(:pbTriggeredTrainerEvents) { |*_a| [] }
+      begin
+        return yield
+      ensure
+        pl.singleton_class.send(:remove_method, :pbTriggeredTrainerEvents)
+      end
+    end
+
+    def self.host_battle(kind, nfoes, ntrainers = 1)
+      joins = invite_all(kind, 2)
+      if joins.length == 2 && ntrainers > 1   # several trainers on the other side: the engine allows two players against them, not three
+        say("co_end", { "id" => joins[1][:id], "d" => { "x" => "late" } }, joins[1][:slot])
+        note(_INTL("{1} sat this battle out: more than one trainer is on the other side.", joins[1][:name]))
+        joins = [joins[0]]
+      end
+      join = joins.first
       @host_id = nil unless join
       if !join && kind == :wild && nfoes == 2 && ($Trainer.able_pokemon_count rescue 2) <= 1 && !$PokemonTemp.battleRules["size"]
         setBattleRule("1v2")   # two foes for a pair, the partner didn't come: one Pokémon here
@@ -92,22 +133,33 @@ module KIF
       return yield unless join
       s = session
       return yield unless s
+      rule = $PokemonTemp.battleRules["size"]
+      if rule && %w[triple 3v3 3v2 3v1].include?(rule) && joins.length != 2   # a triple battle needs both: nobody is left waiting
+        joins.each { |j| say("co_end", { "id" => j[:id], "d" => { "x" => "late" } }, j[:slot]) }
+        @host_id = nil
+        return yield
+      end
       @hosting = true
-      host = Host.new(s, join)
+      hosts = joins.each_with_index.map { |j, k| Host.new(s, j, k + 1) }
+      host = hosts.length > 1 ? HostGroup.new(hosts) : hosts[0]
+      three = joins.length > 1
       old = $PokemonGlobal.partner
-      if !$PokemonTemp.battleRules["size"] && (kind == :trainer || nfoes == 1)
-        setBattleRule("2v1")   # room for the partner; 2v2 once a trainer's party is known
+      if !rule && (kind == :trainer || nfoes == 1)
+        setBattleRule(three ? "3v1" : "2v1")   # room for the partners; 2v2 / 3v2 / 3v3 once a trainer's party is known
         host.mine_size = true
+      elsif three && !rule
+        setBattleRule(nfoes == 2 ? "3v2" : "3v3")
       end
       $PokemonGlobal.partner = [join[:type], join[:name], join[:tid], join[:party]]
+      @second_ally = three ? joins[1] : nil
       @pending_host = host
       @battle_host = host
-      log("battle #{join[:id]} with #{join[:name]} (#{kind})")
+      log("battle #{join[:id]} with #{joins.map { |j| j[:name] }.join(' and ')} (#{kind})")
       begin
-        return with_rules { KIF::Teams.with_mult(2) { yield } }   # the wild Pokémon or trainer team is made inside: with the host's settings; 2 players (3 once the lobby takes a third)
+        return with_rules { KIF::Teams.with_mult(1 + joins.length) { yield } }   # the wild Pokémon or trainer team is made inside: with the host's settings; 2 players, 3 with a lobby's third
       ensure
         $PokemonGlobal.partner = old
-        @pending_host = @battle_host = @host_id = nil
+        @pending_host = @battle_host = @host_id = @second_ally = nil
         @hosting = false
         (host.finish(0, "abort") rescue nil)
       end
@@ -117,14 +169,21 @@ module KIF
     def self.prepare(battle)
       h = @pending_host or return
       @pending_host = nil
-      return unless battle.player && battle.player.length == 2 && battle.pbPartyStarts(0).length == 2
+      n = h.is_a?(HostGroup) ? 3 : 2
+      if n == 3   # PIF's starter set the starts for the one partner it knows: the second ally's team is the last
+        return unless battle.player && battle.player.length == 3
+        total = battle.pbParty(0).length
+        na, nb = h.hosts.map { |x| x.join_size }
+        battle.party1starts = [0, total - na - nb, total - nb]
+      end
+      return unless battle.player && battle.player.length == n && battle.pbPartyStarts(0).length == n
       if h.mine_size
         foes = battle.pbParty(1).count { |p| p && p.able? }
-        battle.setBattleMode(battle.trainerBattle? && foes >= 2 ? "double" : "2v1")
+        battle.setBattleMode(n == 3 ? (battle.trainerBattle? ? (foes >= 3 ? "triple" : foes == 2 ? "3v2" : "3v1") : "3v1") :
+                             (battle.trainerBattle? && foes >= 2 ? "double" : "2v1"))
       end
-      # the partner is named plainly ("Monto sent out ..."), not with a trainer class
-      ally = battle.player[1]
-      ally.define_singleton_method(:full_name) { name } if ally
+      # the partners are named plainly ("Monto sent out ..."), not with a trainer class
+      battle.player[1..-1].each { |ally| ally.define_singleton_method(:full_name) { name } }
       h.attach(battle)
     end
 
@@ -134,11 +193,16 @@ module KIF
     class Host
       attr_reader :id, :name, :battle, :lost, :kills, :caught, :items
       BEAT = 15.0   # seconds of quiet on the line before beat_start's thread says "still here"
-      attr_accessor :mine_size, :own_catch
+      attr_accessor :mine_size, :own_catch, :group
+      attr_reader :slot   # the lobby slot of the player who joined (nil: the one partner of a game for two)
+      attr_reader :owner_no   # which player of the battle this one is: 1, or 2 in a game for three
 
-      def initialize(session, join)
+      def initialize(session, join, owner_no = 1)
         @s = session
+        @owner_no = owner_no
+        @group = nil
         @join = join
+        @slot = join[:slot]
         @id = join[:id]
         @name = join[:name]
         @buf = []
@@ -170,7 +234,7 @@ module KIF
             sleep 1
             next if KIF::Net.now - @tx_at.to_f < BEAT
             begin
-              @s.post("co_int", "id" => @id, "d" => { "t" => @int_t.to_i, "it" => @int_it.to_s })
+              KIF::Net.post_to(@s, "co_int", { "id" => @id, "d" => { "t" => @int_t.to_i, "it" => @int_it.to_s } }, @slot)
               @tx_at = KIF::Net.now
             rescue StandardError
               nil
@@ -178,6 +242,18 @@ module KIF
           end
         end
         @beat.report_on_exception = false
+      end
+
+      # this battle's other players' Hosts share what must be one for all (who ran away, this turn's balls)
+      def share(left, thrown)
+        @left = left
+        @thrown = thrown
+      end
+
+      # the group attaches the battle to every Host and sets itself as the battle's co-op object
+      def attach_to(battle)
+        beat_start
+        @battle = battle
       end
 
       def attach(battle)
@@ -191,7 +267,11 @@ module KIF
       end
 
       def owner(i); @battle.pbGetOwnerIndexFromBattlerIndex(i); end
-      def owner_name(o); o == 0 ? @battle.pbPlayer.name.to_s : @name; end
+      def join_size; @join[:party].length; end
+      def owner_name(o); o == 0 ? @battle.pbPlayer.name.to_s : (@group ? @group.owner_name(o) : @name); end
+      def gpush(type, args); @group ? @group.push(type, args) : push(type, args); end
+      def name_of(_idx); @name; end
+      def owners; [0, @owner_no]; end
 
       #-------------------------------------------------------------------------
       # Names: the partner's ball is thrown in the partner's name
@@ -221,13 +301,14 @@ module KIF
 
       def muted?; @mute > 0; end
 
-      def start; @battle.pbPartyStarts(0)[1]; end
-      def guest_party; @battle.pbParty(0)[start..-1] || []; end
-      def slot?(abs); abs.is_a?(Integer) && abs >= start && abs < @battle.pbParty(0).length; end
+      def start; @battle.pbPartyStarts(0)[@owner_no]; end
+      def stop; @battle.pbPartyStarts(0)[@owner_no + 1] || @battle.pbParty(0).length; end
+      def guest_party; @battle.pbParty(0)[start...stop] || []; end
+      def slot?(abs); abs.is_a?(Integer) && abs >= start && abs < stop; end
 
       def guest?(idx)
         return false unless idx.is_a?(Integer) && @battle && @battle.battlers[idx] && !@battle.opposes?(idx)
-        return @battle.pbGetOwnerIndexFromBattlerIndex(idx) == 1
+        return @battle.pbGetOwnerIndexFromBattlerIndex(idx) == @owner_no
       end
 
       def quiet?; @quiet > 0; end
@@ -242,15 +323,18 @@ module KIF
       def post(type, fields)
         return false unless connected?
         @tx_at = KIF::Net.now
-        @s.post(type, fields.merge("id" => @id))
+        KIF::Net.post_to(@s, type, fields.merge("id" => @id), @slot)
       end
 
       def connected?
         return false if @lost
-        return true if @s.connected?
+        return true if @s.connected? && peer_in?
         lose
         return false
       end
+
+      # false when the player who joined has left the lobby (the connection to the others goes on)
+      def peer_in?; @slot.nil? || !@s.respond_to?(:peers) || @s.peers.any? { |sl, _, _| sl == @slot }; end
 
       def lose
         return if @lost
@@ -313,6 +397,13 @@ module KIF
               "bt" => b.battlers.each_with_index.map { |x, i| x ? [i, x.pokemonIndex] : nil }.compact,
               "cl" => b.canLose ? 1 : 0, "cr" => b.canRun ? 1 : 0, "mg" => b.moneyGain ? 1 : 0, "eg" => b.expGain ? 1 : 0 }
         d["lo"] = 1 if guest_party.any? { |p| p&.instance_variable_get(:@kif_coop_lost) }   # the partner is told why
+        if b.pbPartyStarts(0).length > 2   # a game for three: every player's team and trainer, in the battle's order; this one's place
+          ps = b.pbPartyStarts(0)
+          d["me"] = @owner_no
+          d["pp"] = ps.each_index.map { |o| (b.pbParty(0)[ps[o]...(ps[o + 1] || b.pbParty(0).length)] || []).map { |p| disp(p) } }
+          d["tn"] = b.player.map { |t| trainer_h(t) }
+          d["os"] = [(@s.respond_to?(:my_slot) ? @s.my_slot : 0)] + (@group ? @group.hosts.map { |h| h.slot.to_i } : [@slot.to_i])   # each player's lobby slot, for the other players' looks
+        end
         m = ($game_system.getPlayingBGM rescue nil)   # the battle's music (gym leader, rival...), for the partner's game
         d["bgm"] = [m.name.to_s[0, 80], m.volume.to_i, m.pitch.to_i] if m && !m.name.to_s.empty?
         ev = trainer_event
@@ -402,10 +493,10 @@ module KIF
         # EBDX draws the box under its data boxes: they step aside while it's up
         hide = sc.respond_to?(:pbHideAllDataboxes) && !sc.instance_variable_get(:@dataBoxesHidden)
         sc.pbHideAllDataboxes if hide
-        q = _INTL("Waiting for {1}.", @name)
+        q = _INTL("Waiting for {1}.", wait_who)
         cmds = [[nil, _INTL("Keep waiting")]]
         cmds << [:change, _INTL("Change my choice")] if change
-        cmds << [:let, _INTL("Let the game choose for {1}", @name)]
+        cmds << [:let, _INTL("Let the game choose for {1}", wait_who)]
         i = (quietly { sc.pbShowCommands(q, cmds.map(&:last), 0) } rescue 0)
         return i.is_a?(Integer) && i >= 0 && cmds[i] ? cmds[i][0] : nil
       ensure
@@ -414,11 +505,14 @@ module KIF
 
       def back_name; KIF::Coop.back_name; end
 
+      # who the wait is for: this partner, or in a game for three the ones that have not picked yet
+      def wait_who; @group ? @group.waiting_names : @name; end
+
       def wait_text(left, change = false)
-        return _INTL("You got away. {1} is finishing the battle.", @name) if left?(0)
+        return _INTL("You got away. {1} is finishing the battle.", wait_who) if left?(0)
         # (short: the second line fits PIF's message box)
-        return _INTL("Waiting for {1} to choose... ({2} s)\n{3}: change or let the game pick", @name, left, back_name) if change
-        _INTL("Waiting for {1} to choose... ({2} s)\n{3}: let the game pick", @name, left, back_name)
+        return _INTL("Waiting for {1} to choose... ({2} s)\n{3}: change or let the game pick", wait_who, left, back_name) if change
+        _INTL("Waiting for {1} to choose... ({2} s)\n{3}: let the game pick", wait_who, left, back_name)
       end
 
       # the partner's game is told it was chosen for (its menu closes); the reason is logged
@@ -478,7 +572,7 @@ module KIF
       end
 
       def collect
-        while (r = KIF::Coop.take_host(@id, ["co_act", "co_undo"]))
+        while (r = KIF::Coop.take_host(@id, ["co_act", "co_undo"], @slot))   # (only this player's answers: the other guest's are not for these battlers)
           d = r[1]["d"]
           if d["b"] == -1 && d["a"] == "auto"
             @auto = true   # the partner's game can't show the battle: the AI fights for it
@@ -498,7 +592,8 @@ module KIF
         KIF::Net.update if KIF::Net.session.equal?(@s)   # this player's own menu doesn't read the line
         it = nil
         @pending.each_key { |i| it = @answers[i] && @answers[i]["it"] }
-        KIF::Coop.host_box.each do |t, m|   # not taken yet: the newest says
+        KIF::Coop.host_box.each do |t, m, f|   # not taken yet: the newest says
+          next unless f.nil? || @slot.nil? || f == @slot
           d = m["d"]
           next unless %w[co_act co_undo].include?(t) && m["id"] == @id && d.is_a?(Hash) && @pending[d["b"]] && d["t"] == @pending[d["b"]]
           it = t == "co_act" ? d["it"] : nil
@@ -555,13 +650,27 @@ module KIF
             break if @battle.decision != 0
             send_intent
           end
-          if why != true
-            @pending.each_key { |i| gave_up(why, "turn #{@turn}", { "b" => i, "t" => @pending[i] }) unless @answers[i] || why == :change }
-          end
-          silent(why)
-          # the partner's menu can't take its pick back from here on
-          @pending.each_key { |i| post("co_lock", "d" => { "b" => i, "t" => @pending[i] }) if @answers[i] }
+          after_wait(why)
         end
+        apply_answers
+      end
+
+      def waiting?; !@pending.empty? && connected? && !@auto; end
+      def pending_empty?; @pending.empty?; end
+      def auto?; @auto ? true : false; end
+      def answered?; @pending.keys.all? { |i| @answers[i] }; end
+
+      # what the wait ended with: the turn's unanswered picks are given up, a silent partner is counted
+      def after_wait(why)
+        if why != true
+          @pending.each_key { |i| gave_up(why, "turn #{@turn}", { "b" => i, "t" => @pending[i] }) unless @answers[i] || why == :change }
+        end
+        silent(why)
+        # the partner's menu can't take its pick back from here on
+        @pending.each_key { |i| post("co_lock", "d" => { "b" => i, "t" => @pending[i] }) if @answers[i] }
+      end
+
+      def apply_answers
         @pending.each_key do |i|
           a = @answers[i]
           next unless a
@@ -677,7 +786,7 @@ module KIF
         o = owner(i)
         @left[o] = true
         @battle.instance_variable_set(:@decision, 0)
-        KIF::Coop.log("#{o == 0 ? 'this player' : @name} ran from battle #{@id} alone")
+        KIF::Coop.log("#{o == 0 ? 'this player' : owner_name(o)} ran from battle #{@id} alone")
         @battle.battlers.each do |b|
           next unless b && !@battle.opposes?(b.index) && owner(b.index) == o
           next if b.fainted?
@@ -687,8 +796,8 @@ module KIF
           @battle.pbClearChoice(b.index)
         end
         t = _INTL("{1} got away safely!", owner_name(o))
-        o == 0 ? push("mp", [t]) : @battle.pbDisplayPaused(t)   # this player saw PIF's own line
-        finish(3) if o == 1   # the partner's game ends its battle now, with what it had
+        o == 0 ? gpush("mp", [t]) : @battle.pbDisplayPaused(t)   # this player saw PIF's own line
+        finish(3) if o == @owner_no   # the partner's game ends its battle now, with what it had
       end
 
       #-------------------------------------------------------------------------
@@ -701,23 +810,26 @@ module KIF
       end
 
       # the partner's balls when this player throws one too: [[index, choice]]
+      # (the lowest player's ball goes first; with two guests and no ball from the runner, the second guest's is later)
       def later_balls
         side = @battle.battlers.each_with_index.select { |b, i| b && !@battle.opposes?(i) && ball_choice?(i) }.map(&:last)
-        return [] unless side.any? { |i| owner(i) == 0 } && side.any? { |i| owner(i) == 1 }
-        return side.select { |i| owner(i) == 1 }.map { |i| [i, @battle.choices[i].dup] }
+        return [] if side.map { |i| owner(i) }.uniq.length < 2
+        first = side.map { |i| owner(i) }.min
+        return side.select { |i| owner(i) > first }.map { |i| [i, @battle.choices[i].dup] }
       end
 
       def ball_thrown(user, target)
         @thrown << [owner(user.index), target.is_a?(Integer) && target >= 0 && @battle.opposes?(target) ? target : nil]
       end
 
-      def new_turn; @thrown = []; end
+      def new_turn; @thrown.clear; end
 
       # a ball the partner didn't need: back in its Bag (not counted as used)
       def ball_unused(i, ch, foe)
         @battle.pbReturnUnusedItemToBag(ch[1], i)
         it = GameData::Item.get(ch[1]).name
-        @battle.pbDisplay(_INTL("{1} was already caught by {2}, so {3}'s {4} wasn't used.", foe, owner_name(0), @name, it))
+        first = (@thrown.first || [0])[0]
+        @battle.pbDisplay(_INTL("{1} was already caught by {2}, so {3}'s {4} wasn't used.", foe, owner_name(first), owner_name(owner(i)), it))
       end
 
       # after the balls: the other player's attacks on a Pokémon a ball was thrown at wait
@@ -744,7 +856,7 @@ module KIF
         post("co_sw", "d" => { "b" => idx, "n" => n, "c" => cancel ? 1 : 0, "ord" => order, "pt" => party_state })
         ans = nil
         got = wait(KIF::Coop.sw_wait) do
-          while (r = KIF::Coop.take_host(@id, ["co_swr", "co_act"]))
+          while (r = KIF::Coop.take_host(@id, ["co_swr", "co_act"], @slot))
             if r[0] == "co_act"
               @auto = true if r[1]["d"]["b"] == -1
               next
@@ -774,17 +886,17 @@ module KIF
         @battle.battlers.each do |b|
           next unless b && b.opposes? && b.pokemon && !b.participants.empty? && (b.fainted? || b.captured)
           # all of them, as host party indices: the partner's Exp Share needs a fought foe too
-          @kills << { "s" => b.pokemon.species.to_s, "l" => b.level, "p" => b.participants.first(12), "m" => KIF::Teams.foe_mult(@battle, b) } if @kills.length < 60
+          @kills << { "s" => b.pokemon.species.to_s, "l" => b.level, "p" => b.participants.first(18), "m" => KIF::Teams.foe_mult(@battle, b) } if @kills.length < 60
         end
       end
 
-      def caught_by_guest(list)
+      def caught_by_guest(list, _idx = nil)
         @caught.concat(list)
         KIF::Coop.log("#{@name} caught #{list.map(&:name).join(', ')}") unless list.empty?
       end
 
       # consumed items the partner used (+1) or got back (-1)
-      def item_used(item, n)
+      def item_used(item, n, _idx = nil)
         use = GameData::Item.get(item).battle_use.to_i rescue 0
         @items[item] += n if use.between?(1, 5)
       end
@@ -806,6 +918,156 @@ module KIF
         post("co_end", "d" => d) if connected?
         KIF::Coop.log("battle #{@id} over (#{why || decision})")
       end
+    end
+
+    #---------------------------------------------------------------------------
+    # A battle for three players on the game that runs it: one Host for each guest (the Host works as it does
+    # for one partner, on its own player's battlers and team), and this object as the battle's co-op object. What
+    # the whole battle shares is done here: the log goes to every guest, the picks of both are waited for on one
+    # clock, who ran away, this turn's balls. The hooks and the scene call this as they call a Host.
+    #---------------------------------------------------------------------------
+    class HostGroup
+      attr_reader :hosts
+      attr_accessor :mine_size, :own_catch
+
+      def initialize(hosts)
+        @hosts = hosts
+        @left = {}
+        @thrown = []
+        @quiet = 0
+        @mute = 0
+        @thrower = nil
+        hosts.each { |h| h.group = self; h.share(@left, @thrown) }
+      end
+
+      def primary; @hosts[0]; end
+      def battle; primary.battle; end
+      def id; primary.id; end
+      def owners; [0] + @hosts.map(&:owner_no); end
+      def host_of(o); @hosts.find { |h| h.owner_no == o }; end
+      def host_for(i); @hosts.find { |h| h.guest?(i) }; end
+      def guest?(i); !host_for(i).nil?; end
+      def owner(i); primary.owner(i); end
+      def owner_name(o); o == 0 ? battle.pbPlayer.name.to_s : ((h = host_of(o)) ? h.name : "?"); end
+      def name_of(i); (h = host_for(i)) ? h.name : "?"; end
+      def name; @hosts.map(&:name).join(" and "); end
+      def slot; primary.slot; end
+      def caught; @hosts.flat_map(&:caught); end
+      def lost; @hosts.all?(&:lost); end
+      def done; @hosts.all?(&:done); end
+
+      # the guests still to pick this turn, or all that are being waited for
+      def waiting_names
+        list = @hosts.select { |h| h.waiting? && !h.answered? }
+        list = @hosts.select(&:waiting?) if list.empty?
+        list = @hosts if list.empty?
+        return list.map(&:name).join(" and ")
+      end
+
+      def attach(battle)
+        @hosts.each { |h| h.attach_to(battle) }
+        battle.instance_variable_set(:@kif_coop, self)
+        sc = battle.scene
+        sc.extend(KIF::Coop::Capture)
+        sc.extend(KIF::Coop::IntentShow)
+        sc.instance_variable_set(:@kif_coop, self)
+      end
+
+      def push(type, args); @hosts.each { |h| h.push(type, args) }; end
+      def flush; @hosts.each(&:flush); end
+      def begin_battle; @hosts.each(&:begin_battle); end
+      def finish(decision, why = nil); @hosts.each { |h| h.finish(decision, why) }; end
+      def note_kills; @hosts.each(&:note_kills); end
+      def own_catch=(v); @own_catch = v; @hosts.each { |h| h.own_catch = v }; end
+
+      def ask_commands; @hosts.each(&:ask_commands); end
+
+      # the guests' picks before the AI chooses: every guest is waited for at once (one clock, one hint)
+      def take_commands
+        todo = @hosts.reject { |h| h.pending_empty? }
+        return if todo.empty?
+        live = todo.select(&:waiting?)
+        unless live.empty?
+          live.each { |h| h.flush; h.send_intent }
+          why = nil
+          loop do
+            why = primary.wait(KIF::Coop.cmd_wait, primary.can_change?) { live.map { |h| c = h.collect; c || !h.connected? }.all? }
+            break unless why == :change
+            primary.change_picks
+            break if battle.decision != 0
+            live.each(&:send_intent)
+          end
+          live.each { |h| h.after_wait(why) }
+        end
+        todo.each(&:apply_answers)
+      end
+
+      def partner_intent
+        lines = @hosts.map(&:partner_intent).compact
+        return lines.empty? ? nil : lines.join("  |  ")
+      end
+
+      def send_intent(clear = false); @hosts.each { |h| h.send_intent(clear) }; end
+      def choose_switch(i, lax, cancel); (h = host_for(i)) ? h.choose_switch(i, lax, cancel) : nil; end
+
+      def left?(o); primary.left?(o); end
+      def left_any?; primary.left_any?; end
+      def able_of(o); primary.able_of(o); end
+
+      # a run from battler i leaves only its player: a wild battle some other player is still in
+      def may_leave?(i)
+        b = battle
+        return false unless b && b.wildBattle? && !b.opposes?(i) && !primary.done
+        o = owner(i)
+        return false if left?(o)
+        return false if o > 0 && !host_of(o).connected?
+        return (owners - [o]).any? do |x|
+          next false if left?(x) || able_of(x) <= 0
+          x == 0 || (host_of(x).connected? && !host_of(x).auto?)
+        end
+      end
+
+      def leave(i); (host_for(i) || primary).leave(i); end
+
+      def later_balls; primary.later_balls; end
+      def ball_thrown(user, target); primary.ball_thrown(user, target); end
+      def new_turn; primary.new_turn; end
+      def ball_unused(i, ch, foe); primary.ball_unused(i, ch, foe); end
+      def hold_attacks; primary.hold_attacks; end
+      def item_used(item, n, idx = nil); (h = host_for(idx)) && h.item_used(item, n); end
+      def caught_by_guest(list, idx = nil); (h = host_for(idx)) && h.caught_by_guest(list); end
+
+      def throwing(name)
+        old = @thrower
+        @thrower = name
+        return yield
+      ensure
+        @thrower = old
+      end
+
+      def named(t)
+        return t unless @thrower && t.is_a?(String)
+        me = battle.pbPlayer.name.to_s
+        return t.start_with?(me + " ") ? @thrower + t[me.length..-1] : t
+      end
+
+      def quietly
+        @quiet += 1
+        return yield
+      ensure
+        @quiet -= 1
+      end
+
+      def quiet?; @quiet > 0 || @hosts.any?(&:quiet?); end
+
+      def muted
+        @mute += 1
+        return yield
+      ensure
+        @mute -= 1
+      end
+
+      def muted?; @mute > 0 || @hosts.any?(&:muted?); end
     end
 
     #---------------------------------------------------------------------------
@@ -986,6 +1248,39 @@ end
 #-------------------------------------------------------------------------------
 # Hooks (each is the plain PIF path unless this battle is a co-op one)
 #-------------------------------------------------------------------------------
+# Two trainers who spot three fighting-together players at once, or a scripted double trainer battle: not a 2v2
+# against two trainers (a triple side can't face two trainers) but one triple battle after the other, each against
+# one trainer with a team for three. The second follows at once; nobody sits out.
+# (PIF Hoenn's rematch wrapper and SCOPE-02's copy of it call original_pbTrainerBattle: that is where it is hooked)
+if defined?(original_pbTrainerBattle)
+  alias kif_coop_original_pbTrainerBattle original_pbTrainerBattle unless defined?(kif_coop_original_pbTrainerBattle)
+  def original_pbTrainerBattle(*args, &blk)
+    KIF::Coop.without_tag_merge { kif_coop_original_pbTrainerBattle(*args, &blk) }
+  end
+else
+  alias kif_coop_pbTrainerBattle pbTrainerBattle unless defined?(kif_coop_pbTrainerBattle)
+  def pbTrainerBattle(*args, &blk)
+    KIF::Coop.without_tag_merge { kif_coop_pbTrainerBattle(*args, &blk) }
+  end
+end
+
+alias kif_coop_pbDoubleTrainerBattle pbDoubleTrainerBattle unless defined?(kif_coop_pbDoubleTrainerBattle)
+def pbDoubleTrainerBattle(trainerID1, trainerName1, trainerPartyID1, endSpeech1,
+                          trainerID2, trainerName2, trainerPartyID2 = 0, endSpeech2 = nil,
+                          canLose = false, outcomeVar = 1)
+  unless (KIF::Coop.split_tags? rescue false)
+    return kif_coop_pbDoubleTrainerBattle(trainerID1, trainerName1, trainerPartyID1, endSpeech1,
+                                          trainerID2, trainerName2, trainerPartyID2, endSpeech2, canLose, outcomeVar)
+  end
+  [[trainerID1, trainerName1, trainerPartyID1, endSpeech1], [trainerID2, trainerName2, trainerPartyID2, endSpeech2]].each do |t|
+    setBattleRule("outcomeVar", outcomeVar) if outcomeVar != 1
+    setBattleRule("canLose") if canLose
+    decision = pbTrainerBattleCore(t)
+    return false unless decision == 1   # lost (or drawn): the second trainer does not battle; PIF's own blackout has happened
+  end
+  return true
+end
+
 alias kif_coop_pbWildBattleCore pbWildBattleCore unless defined?(kif_coop_pbWildBattleCore)
 alias kif_coop_pbTrainerBattleCore pbTrainerBattleCore unless defined?(kif_coop_pbTrainerBattleCore)
 alias kif_coop_pbPrepareBattle pbPrepareBattle unless defined?(kif_coop_pbPrepareBattle)
@@ -998,7 +1293,7 @@ end
 
 def pbTrainerBattleCore(*args)
   return kif_coop_pbTrainerBattleCore(*args) unless KIF::Coop.may_host?
-  KIF::Coop.host_battle(:trainer, nil) { kif_coop_pbTrainerBattleCore(*KIF::Teams.extend_waiting(args)) }
+  KIF::Coop.host_battle(:trainer, nil, args.length) { kif_coop_pbTrainerBattleCore(*KIF::Teams.extend_waiting(args)) }
 end
 
 def pbPrepareBattle(battle)
@@ -1099,7 +1394,7 @@ class PokeBattle_Battle
   def pbAbleCount(idxBattler = 0)
     c = @kif_coop
     return kif_coop_pbAbleCount(idxBattler) unless c && c.left_any? && !opposes?(idxBattler)
-    return [0, 1].sum { |o| c.left?(o) ? 0 : c.able_of(o) }
+    return c.owners.sum { |o| c.left?(o) ? 0 : c.able_of(o) }
   end
 
   def pbCanChooseNonActive?(idxBattler)
@@ -1144,20 +1439,20 @@ class PokeBattle_Battle
     c.ball_thrown(userBattler, idxBattler)
     return kif_coop_pbUsePokeBallInBattle(item, idxBattler, userBattler) unless c.guest?(userBattler.index)
     n = @caughtPokemon.length
-    ret = c.throwing(c.name) { kif_coop_pbUsePokeBallInBattle(item, idxBattler, userBattler) }
-    c.caught_by_guest(@caughtPokemon.slice!(n..-1) || [])
+    ret = c.throwing(c.name_of(userBattler.index)) { kif_coop_pbUsePokeBallInBattle(item, idxBattler, userBattler) }
+    c.caught_by_guest(@caughtPokemon.slice!(n..-1) || [], userBattler.index)
     return ret
   end
 
   def pbRegisterItem(idxBattler, item, idxTarget = nil, idxMove = nil)
     c = @kif_coop
-    c.item_used(item, 1) if c && item && c.guest?(idxBattler)
+    c.item_used(item, 1, idxBattler) if c && item && c.guest?(idxBattler)
     return kif_coop_pbRegisterItem(idxBattler, item, idxTarget, idxMove)
   end
 
   def pbReturnUnusedItemToBag(item, idxBattler)
     c = @kif_coop
-    c.item_used(item, -1) if c && item && c.guest?(idxBattler)
+    c.item_used(item, -1, idxBattler) if c && item && c.guest?(idxBattler)
     return kif_coop_pbReturnUnusedItemToBag(item, idxBattler)
   end
 
@@ -1196,5 +1491,56 @@ class PokemonEncounters
   def have_double_wild_battle?
     return true if (KIF::Coop.co_double? rescue false)
     return kif_coop_have_double_wild_battle?
+  end
+end
+
+# Three players on one map: a random wild encounter has three foes. The third is rolled as Battle Format does it
+# (BattleFormat.rb): from the same encounter table.
+alias kif_coop_pbDoubleWildBattle pbDoubleWildBattle unless defined?(kif_coop_pbDoubleWildBattle)
+def pbDoubleWildBattle(species1, level1, species2, level2, *rest)
+  if (KIF::Coop.co_triple? rescue false) && $PokemonTemp.encounterType && !$PokemonTemp.forceSingleBattle && !pbInSafari?
+    enc3 = $PokemonEncounters.choose_wild_pokemon($PokemonTemp.encounterType)
+    enc3 = EncounterModifier.trigger(enc3) if enc3
+    return pbTripleWildBattle(species1, level1, species2, level2, enc3[0], enc3[1], *rest) if enc3
+  end
+  return kif_coop_pbDoubleWildBattle(species1, level1, species2, level2, *rest)
+end
+
+# A game for three: PIF's starters hold one partner ($PokemonGlobal.partner), so the second ally joins here, as the
+# battle is made: its trainer and team are added to the ones the starter passes (pbPrepareBattle then fixes the starts)
+class PokeBattle_Battle
+  alias kif_coop_initialize initialize unless method_defined?(:kif_coop_initialize) || private_method_defined?(:kif_coop_initialize)
+
+  def initialize(scene, p1, p2, player, opponent)
+    if (sec = KIF::Coop.take_second_ally) && player.is_a?(Array) && player.length == 2
+      player = player + [sec[0]]
+      p1 = p1 + sec[1]
+    end
+    kif_coop_initialize(scene, p1, p2, player, opponent)
+  end
+end
+
+# In a game for three the allies are named ("Alex's Pikachu"): "the ally" would not say which
+class PokeBattle_Battler
+  alias kif_coop_pbThis pbThis unless method_defined?(:kif_coop_pbThis)
+
+  def pbThis(lowerCase = false)
+    c = @battle.instance_variable_get(:@kif_coop)
+    if c.is_a?(KIF::Coop::HostGroup) && !opposes? && !pbOwnedByPlayer?
+      return _INTL("{1}'s {2}", c.owner_name(@battle.pbGetOwnerIndexFromBattlerIndex(@index)), name)
+    end
+    return kif_coop_pbThis(lowerCase)
+  end
+end
+
+class PokeBattle_Battle
+  alias kif_coop_pbThisEx pbThisEx unless method_defined?(:kif_coop_pbThisEx)
+
+  def pbThisEx(idxBattler, idxParty)
+    c = @kif_coop
+    if c.is_a?(KIF::Coop::HostGroup) && !opposes?(idxBattler) && !pbOwnedByPlayer?(idxBattler)
+      return _INTL("{1}'s {2}", c.owner_name(pbGetOwnerIndexFromBattlerIndex(idxBattler)), pbParty(idxBattler)[idxParty].name)
+    end
+    return kif_coop_pbThisEx(idxBattler, idxParty)
   end
 end

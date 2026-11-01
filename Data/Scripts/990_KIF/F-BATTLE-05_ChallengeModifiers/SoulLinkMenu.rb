@@ -71,11 +71,12 @@ module KIF
       def not_linked
         s = SoulLink.session
         head = [_INTL("Soul Link"), _INTL("Not linked yet.")]
-        head << (s ? _INTL("Connected to: {1}", s.partner) : _INTL("Not connected"))
+        many = s && s.respond_to?(:peers) && s.peers.length > 1   # a game for three: any two of the players link
+        head << (s ? _INTL("Connected to: {1}", many ? s.peers.map { |_, n, _| n }.join(", ") : s.partner) : _INTL("Not connected"))
         cmds = []
         acts = []
         if s
-          cmds << _INTL("Link with {1}", s.partner)
+          cmds << (many ? _INTL("Link with a player") : _INTL("Link with {1}", s.partner))
           acts << :net
         end
         cmds += [_INTL("Show my link code"), _INTL("Enter partner's link code"), _INTL("Back")]
@@ -85,11 +86,18 @@ module KIF
         return true if r.nil?
         case r < 0 ? :back : acts[r]
         when :net
+          slot = nil
+          name = s.partner
+          if many
+            slot = KIF::Net.pick_peer(_INTL("Link with who?")) or return true
+            name = s.name_of(slot)
+            SoulLink.choose(slot)
+          end
           info = SoulLink.peer_info
-          return say(_INTL("{1}'s game has Soul Link Off, or no Nuzlocke run.", s.partner)) unless info.is_a?(Hash)
+          return say(_INTL("{1}'s game has Soul Link Off, or no Nuzlocke run.", name)) unless info.is_a?(Hash)
           return true unless pairing(info, true)
-          return true if SoulLink.ask_link == :linked
-          wait_partner(s.partner)
+          return true if SoulLink.ask_link(s, slot) == :linked
+          wait_partner(name)
         when :show
           code = SoulLink.link_code
           pbMessage(copy(code) ? _INTL("Your link code is copied. Send it to your partner:\n{1}", code) :

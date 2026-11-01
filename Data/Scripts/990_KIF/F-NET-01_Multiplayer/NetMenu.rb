@@ -12,6 +12,16 @@
 KIF::Options.define(:kif_multiplayer, 0, :global)   # 0 Off, 1 On
 KIF::Options.define(:kif_mp_open_port, 0, :global)  # the port the player opened in the router by hand (0: none)
 KIF::Options.define(:kif_mp_public_ip, "", :global) # their public address, typed when the router doesn't tell it
+KIF::Options.define(:kif_mp_players, 0, :global)    # players in a game you host: 0 = 2, 1 = 3 (you and up to two friends)
+
+KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (015_KIF_SettingsData)
+  next nil if KIF.mobile?
+  EnumOption.new(_INTL("Players"), ["2", "3"],
+                 proc { $PokemonSystem.kif_mp_players },
+                 proc { |value| $PokemonSystem.kif_mp_players = value },
+                 [_INTL("A game you host takes one friend."),
+                  _INTL("A game you host takes up to two friends. They join with the same code. Takes effect the next time you host.")])
+}
 
 KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (015_KIF_SettingsData)
   next nil if KIF.mobile?
@@ -59,10 +69,28 @@ module KIF
 
     def self.version; defined?(KIF::PORT_VERSION) ? KIF::PORT_VERSION : "?"; end
 
+    # players in a game this PC hosts: 2, or 3 (this player and up to two friends)
+    def self.max_players
+      return (($PokemonSystem.kif_mp_players rescue 0) || 0).to_i == 1 ? 3 : 2
+    end
+
     def self.new_session
       stop
       @notes.clear
-      return Session.new(my_name, version)
+      s = Session.new(my_name, version)
+      s.max_peers = max_players - 1 if s.respond_to?(:max_peers=)   # (a stand-in session in the tests has none)
+      return s
+    end
+
+    # the slot of the player an action is for: the only one in, or the one picked; nil when nobody is in or on Back
+    def self.pick_peer(prompt = nil)
+      s = @session or return nil
+      list = s.peers
+      return nil if list.empty?
+      return list[0][0] if list.length == 1
+      names = list.map { |_, n, _| n } + [_INTL("Back")]
+      i = pbMessage(prompt || _INTL("Who?"), names, names.length)
+      return i >= 0 && i < list.length ? list[i][0] : nil
     end
 
     # the clipboard as text that can't raise (bytes that aren't text are dropped)
@@ -79,7 +107,7 @@ module KIF
       @local = PortMap.local_ip
       @pm_thread = Thread.new { PortMap.open(port, local: @local) }
       @pm_thread.report_on_exception = false
-      @lan = LAN.responder(my_name, lan_code) if lan_code
+      @lan = LAN.responder(my_name, lan_code, full: proc { s.lobby? && s.full? }) if lan_code   # a lobby with no place left is not listed
       log("hosting on port #{port}")
       return port
     end
@@ -174,16 +202,20 @@ module KIF
     def self.steam_tags
       mods = mod_names
       { "kif" => "1", "ver" => version, "mode" => game_mode, "diff" => difficulty, "mods" => mods[0, 200],
-        "modh" => Crypto.hex(Crypto.sha256(mods))[0, 8], "name" => my_name[0, 24] }
+        "modh" => Crypto.hex(Crypto.sha256(mods))[0, 8], "name" => my_name[0, 24] }.merge(
+        max_players > 2 ? { "pl" => "1", "mx" => max_players.to_s } : {})   # a game for three: players in now and most (Session#steam_players keeps pl)
     end
 
     # a KIF lobby's tags as shown text, or nil (not KIF, or its data hasn't come)
     def self.lobby_tags(lobby)
       sl = steam
       return nil unless sl.lobby_data(lobby, "kif") == "1"
-      { "ver" => 16, "mode" => 16, "diff" => 8, "mods" => 200, "modh" => 8, "name" => 24 }.to_h do |k, n|
+      t = { "ver" => 16, "mode" => 16, "diff" => 8, "mods" => 200, "modh" => 8, "name" => 24, "pl" => 1, "mx" => 1 }.to_h do |k, n|
         [k, safe_text(sl.lobby_data(lobby, k), n).delete("\n")]
       end
+      t.delete("pl") if t["mx"].empty?   # a game for two has neither
+      t.delete("mx") if t["mx"].empty?
+      return t
     end
 
     # what differs from this game, one line each (empty: nothing)
@@ -293,72 +325,118 @@ module KIF
           log("#{ev[1]} asks to join")
         when :connected
           log("connected to #{ev[1]} (#{s.via})")
-          KIF::SoulLink.on_connect(s) if defined?(KIF::SoulLink)
-          KIF::Presence.on_connect if defined?(KIF::Presence)
-          KIF::Coop.on_connect(s) if defined?(KIF::Coop)
-          begin
-            ModShare.on_connect(s) if defined?(ModShare)
-          rescue StandardError, ScriptError, SystemStackError => e
-            log("mod share failed (#{e.class}: #{e.message})")
-          end
-          KIF::NetSprite.on_connect(s) if defined?(KIF::NetSprite)
-          KIF::Trade.on_connect(s) if defined?(KIF::Trade)
+          joined(s, ev[2])
+        when :peer_joined   # a guest hears of the other guest from the host's roster
+          log("#{ev[2]} joined the lobby")
+          joined(s, ev[1])
+        when :peer_left
+          left(s, ev[1], ev[3], ev[2])
         when :message
+          from = ev[3]   # the sender's slot (0 is the host); nil from a stand-in session: the one partner
           if ev[1] == "wave"
             if s.wave_at.nil? || now - s.wave_at >= WAVE_EVERY   # a partner that keeps waving shows one box in 30 s
               s.wave_at = now
-              t = _INTL("{1} says hello!", s.partner)
+              t = _INTL("{1} says hello!", (from && s.respond_to?(:name_of) && s.name_of(from)) || s.partner)
               @notes << t unless @notes.include?(t)   # shown on the map too: one at a time
             end
           elsif ev[1].start_with?("sl_") && defined?(KIF::SoulLink)
             begin
-              KIF::SoulLink.receive(ev[1], ev[2], s)
+              KIF::SoulLink.receive(ev[1], ev[2], from && s.respond_to?(:peer) ? s.peer(from) : s)
             rescue => e
               log("Soul Link message failed (#{e.class}: #{e.message})")
             end
           elsif ev[1].start_with?("pr_") && defined?(KIF::Presence)
             begin
-              KIF::Presence.receive(ev[1], ev[2])
+              KIF::Presence.receive(ev[1], ev[2], from)
             rescue StandardError, ScriptError, SystemStackError => e   # one bad message doesn't cost the others in this batch
               log("presence message failed (#{e.class}: #{e.message})")
             end
           elsif ev[1].start_with?("mod_") && defined?(ModShare)
             begin
-              ModShare.receive(s, ev[1], ev[2])
+              ModShare.receive(s, ev[1], ev[2], from)
             rescue StandardError, ScriptError, SystemStackError => e
               log("mod share message failed (#{e.class}: #{e.message})")
             end
           elsif ev[1].start_with?("sp_") && defined?(KIF::NetSprite)
             begin
-              KIF::NetSprite.receive(s, ev[1], ev[2])
+              KIF::NetSprite.receive(s, ev[1], ev[2], from)
             rescue => e
               log("sprite message failed (#{e.class}: #{e.message})")
             end
           elsif ev[1].start_with?("tr_") && defined?(KIF::Trade)
             begin
-              KIF::Trade.receive(ev[1], ev[2])
+              KIF::Trade.receive(ev[1], ev[2], from)
             rescue => e
               log("trade message failed (#{e.class}: #{e.message})")
             end
           elsif ev[1].start_with?("co_") && defined?(KIF::Coop)
             begin
-              KIF::Coop.receive(ev[1], ev[2])
+              KIF::Coop.receive(ev[1], ev[2], from)
             rescue => e
               log("co-op message failed (#{e.class}: #{e.message})")
             end
           end
         when :disconnected
+          in_slots(s).clear
           KIF::SoulLink.on_disconnect(s) if defined?(KIF::SoulLink)
           KIF::Presence.on_disconnect if defined?(KIF::Presence)
           KIF::Coop.on_disconnect if defined?(KIF::Coop)
           KIF::Trade.on_disconnect if defined?(KIF::Trade)
-          @notes << (ev[1] == :bye ? _INTL("Your friend disconnected.") : _INTL("Lost the connection to your friend."))
+          @notes << (ev[1] == :removed ? _INTL("The host took you out of the game.") :
+                     ev[1] == :bye ? _INTL("Your friend disconnected.") : _INTL("Lost the connection to your friend."))
           log("disconnected (#{ev[1]})")
         when :failed
           @failed = ev[1]
           log("joining failed (#{ev[1]})")
         end
       end
+    end
+
+    # A player is in. The first one starts every feature fresh; a second one (a lobby of three) is told to
+    # the features one by one (what they sent before is sent again for the newcomer).
+    def self.in_slots(s); s.instance_variable_get(:@kif_in) || s.instance_variable_set(:@kif_in, []); end
+
+    def self.joined(s, slot)
+      here = in_slots(s)
+      first = here.empty?
+      here << slot unless slot.nil? || here.include?(slot)
+      if first
+        KIF::SoulLink.on_connect(slot.nil? ? s : s.peer(slot)) if defined?(KIF::SoulLink)
+        KIF::Presence.on_connect if defined?(KIF::Presence)
+        KIF::Coop.on_connect(s) if defined?(KIF::Coop)
+        begin
+          ModShare.on_connect(s) if defined?(ModShare)
+        rescue StandardError, ScriptError, SystemStackError => e
+          log("mod share failed (#{e.class}: #{e.message})")
+        end
+        KIF::NetSprite.on_connect(s) if defined?(KIF::NetSprite)
+        KIF::Trade.on_connect(s) if defined?(KIF::Trade)
+      else
+        KIF::SoulLink.on_peer_joined(s.peer(slot)) if defined?(KIF::SoulLink) && KIF::SoulLink.respond_to?(:on_peer_joined)
+        KIF::Presence.on_peer_joined(slot) if defined?(KIF::Presence)
+        KIF::Coop.on_peer_joined(slot) if defined?(KIF::Coop)
+        begin
+          ModShare.on_peer_joined(s, slot) if defined?(ModShare)
+        rescue StandardError, ScriptError, SystemStackError => e
+          log("mod share failed (#{e.class}: #{e.message})")
+        end
+        KIF::Trade.on_peer_joined(slot) if defined?(KIF::Trade)
+      end
+    rescue StandardError => e
+      log("a player joining failed in a feature (#{e.class}: #{e.message})")
+    end
+
+    # A player of a lobby is gone (the lobby goes on). The last one leaving also comes as :disconnected.
+    def self.left(s, slot, name, why = nil)
+      in_slots(s).delete(slot)
+      KIF::SoulLink.on_peer_left(s.peer(slot)) if defined?(KIF::SoulLink) && KIF::SoulLink.respond_to?(:on_peer_left)
+      KIF::Presence.on_peer_left(slot) if defined?(KIF::Presence)
+      KIF::Coop.on_peer_left(slot) if defined?(KIF::Coop)
+      KIF::Trade.on_peer_left(slot) if defined?(KIF::Trade)
+      @notes << (why == :removed ? _INTL("{1} was taken out of the game.", name) : _INTL("{1} left the game.", name)) if name
+      log("#{name} left the lobby (#{why})")
+    rescue StandardError => e
+      log("a player leaving failed in a feature (#{e.class}: #{e.message})")
     end
 
     def self.take_failure; f = @failed; @failed = nil; f; end
@@ -373,7 +451,7 @@ module KIF
       return unless s&.asking? && !@asking
       begin
         @asking = true
-        yes = pbConfirmMessage(_INTL("{1} wants to join your game. Let {1} join?", s.partner))
+        yes = pbConfirmMessage(_INTL("{1} wants to join your game. Let {1} join?", s.asking_name || s.partner))
       ensure
         @asking = false
       end
@@ -644,6 +722,7 @@ module KIF
           return connected if s.connected?
           lines = [_INTL("Host on Steam"), s.lobby ? _INTL("Lobby: Friends only") : _INTL("Making a Steam lobby..."),
                    _INTL("Friend joined: Not yet")]
+          lines << _INTL("Players: up to {1}", Net.max_players) if Net.max_players > 2
           cmds = s.lobby ? [_INTL("Invite a Steam friend"), _INTL("Stop hosting")] : [_INTL("Stop hosting")]
           help = Net.notes.shift || _INTL("Invite a Steam friend, or they pick Join a Steam friend.\nWaiting for them to join...")
           r = pick(lines.join("\n"), cmds, help, watch)
@@ -694,7 +773,11 @@ module KIF
         if games.empty?
           return pbMessage(_INTL("None of your Steam friends are hosting KIF right now. Ask them to pick Host on Steam and invite you."))
         end
-        names = games.map { |f, _, t| _INTL("{1} ({2}, KIF {3})", Net.shown_name(sl.name(f)), t["mode"], t["ver"]) } + [_INTL("Back")]
+        names = games.map do |f, _, t|
+          mx = t["mx"].to_i
+          mx >= 3 ? _INTL("{1} ({2}, KIF {3}, {4} of {5})", Net.shown_name(sl.name(f)), t["mode"], t["ver"], t["pl"].to_i, mx)
+                  : _INTL("{1} ({2}, KIF {3})", Net.shown_name(sl.name(f)), t["mode"], t["ver"])
+        end + [_INTL("Back")]
         i = pbMessage(_INTL("Friends hosting KIF:"), names, names.length)
         steam_join(games[i][1], games[i][0], games[i][2]) if i < games.length
       end
@@ -726,6 +809,7 @@ module KIF
         Net.stop
         pbMessage({
           busy: _INTL("Someone else is playing with them right now."),
+          full: _INTL("Their game is full."),
           timeout: _INTL("Their game didn't answer in time (in a battle or a menu?). Try again when they're on the map."),
           declined: _INTL("Your friend didn't let you in (they said no, or didn't answer in time)."),
           host_code: _INTL("That Steam game isn't a KIF game, or it has closed."),
@@ -863,6 +947,7 @@ module KIF
             return join_code
           when :relay
             r2 = ask_relay or next
+            pbMessage(_INTL("A relay game takes one friend.")) if Net.max_players > 2
             Net.start_relay_host(*r2)
           when :stop
             next unless pbConfirmMessage(_INTL("Stop hosting?"))
@@ -998,6 +1083,7 @@ module KIF
             code: _INTL("Their game says the code doesn't match. Ask them for the code again."),
             host_code: _INTL("The game at that address doesn't know this code. Ask your friend for a new one."),
             busy: _INTL("Someone else is joining or playing with them right now."),
+            full: _INTL("Their game is full."),
             wait: _INTL("Too many wrong codes were tried on that game, or from here. Try again in a few minutes."),
             relay: _INTL("The relay didn't accept you. Check the address, or ask your friend to host on it again."),
             relay_busy: _INTL("The relay is busy right now. Try again in a few minutes."),
@@ -1055,14 +1141,17 @@ module KIF
             return
           end
           relay = s.via == :relay
-          lines = [_INTL("Connected"), _INTL("Connected to: {1}", s.partner),
+          peers = s.respond_to?(:peers) ? s.peers : [[nil, s.partner, s.partner_ver]]   # (a stand-in session has one partner)
+          lines = [_INTL("Connected"), _INTL("Connected to: {1}", peers.map { |_, n, _| n }.join(", ")),
                    relay ? _INTL("Connection: Through relay ({1})", s.relay.join(":")) :
                    s.via == :steam ? _INTL("Connection: Steam") : _INTL("Connection: Direct")]
-          if s.partner_ver != Net.version
-            lines << _INTL("{1} has KIF {2}, you have KIF {3}.", s.partner, s.partner_ver, Net.version)
+          peers.each do |_, n, v|
+            lines << _INTL("{1} has KIF {2}, you have KIF {3}.", n, v, Net.version) if v != Net.version
           end
-          where = defined?(KIF::Presence) && KIF::Presence.where_line(s.partner)
-          lines << where if where
+          peers.each do |sl_, n, _|
+            where = defined?(KIF::Presence) && KIF::Presence.where_line(n, sl_)
+            lines << where if where
+          end
           note = Net.notes.shift || note
           help = note ||
                  (relay ? _INTL("Connected through relay.\nPlay works the same, just a bit slower.") :
@@ -1071,6 +1160,9 @@ module KIF
           sl = defined?(KIF::SoulLink) && KIF::SoulLink.awake?
           cmds = [_INTL("Send hello"), _INTL("Disconnect")]
           cmds.unshift(_INTL("Soul Link")) if sl
+          lobby = s.respond_to?(:lobby?) && s.lobby?   # the host of a game for three
+          ad = lobby && !s.full? ? cmds.length.tap { cmds << _INTL("Add a player") } : nil
+          rm = lobby ? cmds.length.tap { cmds << _INTL("Remove a player") } : nil
           tr = defined?(KIF::Trade) ? cmds.length : nil   # after Disconnect, before co-op's row
           cmds << KIF::Trade.menu_label if tr
           pv = defined?(KIF::PvP) ? cmds.length : nil   # after Trade, before co-op's row
@@ -1088,20 +1180,44 @@ module KIF
           next KIF::Coop.menu_pick if co && r == cmds.length - 1
           next KIF::Trade.menu_pick if tr && r == tr
           next KIF::PvP.menu_pick if pv && r == pv
+          next add_player(s) if ad && r == ad
+          next remove_player(s) if rm && r == rm
           r -= 1 if sl
           case r
           when -1
             KIF::SoulLink::Menu.open(@scr) if sl
           when 0
             s.post("wave")
-            Net.notes.unshift(_INTL("Sent hello to {1}.", s.partner))
+            Net.notes.unshift(_INTL("Sent hello to {1}.", peers.map { |_, n, _| n }.join(" and ")))
           when 1
-            next unless pbConfirmMessage(_INTL("Disconnect from {1}?", s.partner))
+            next unless pbConfirmMessage(_INTL("Disconnect from {1}?", peers.map { |_, n, _| n }.join(" and ")))
             Net.stop
             return
           else return
           end
         end
+      end
+
+      # host of a game for three: the places left, and how a friend gets in (the code, or a Steam invite)
+      def add_player(s)
+        return pbMessage(_INTL("Your game is full.")) if s.full?
+        if s.via == :steam
+          return s.lobby ? steam_invite(s.lobby) : nil
+        end
+        code = Net.code
+        return pbMessage(_INTL("The code isn't ready yet. Try again in a moment.")) unless code
+        if Net.copy_code(code)
+          pbMessage(_INTL("Code copied. Your next friend joins with it."))
+        else
+          pbMessage(_INTL("Copying didn't work. Your code is:\n{1}", code))
+        end
+      end
+
+      def remove_player(s)
+        slot = Net.pick_peer(_INTL("Take out which player?")) or return
+        name = s.name_of(slot) or return
+        return unless pbConfirmMessage(_INTL("Take {1} out of the game?", name))
+        s.kick(slot)
       end
     end
   end

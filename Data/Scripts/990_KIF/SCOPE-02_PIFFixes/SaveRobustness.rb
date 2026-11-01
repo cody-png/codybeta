@@ -8,6 +8,8 @@
 #     corrupt.
 #  2. The slot scan at start-up read :player from a save without looking, so
 #     one slot holding an empty or player-less hash stopped the game starting.
+#     (Fixed in 000_Core/009b_KIF_SaveScan.rb, the one get_newest_save_slot: it
+#     skips such slots and keeps the save times.)
 #  3. A save slot that can't be read loads its newest backup; when that one
 #     was damaged too (the same crash or power cut), the loader treated the
 #     backup as a slot, found no backups for it and offered to delete the
@@ -33,34 +35,6 @@ module SaveData
       return false unless save_data.is_a?(Hash)
       return kif_sr_valid?(save_data)
     end
-  end
-
-  # Copy of 6.8.2 MultiSaves.rb:183-208: a slot is skipped when it can't be
-  # read, or reads as something without a player and a save time.
-  def self.get_newest_save_slot
-    newest_time = Time.at(0) # the Epoch
-    newest_slot = nil
-    self.each_slot do |file_slot|
-      full_path = self.get_full_path(file_slot)
-      next if !File.file?(full_path)
-      begin
-        temp_save_data = self.read_from_file(full_path)
-        save_time = temp_save_data[:player].last_time_saved || Time.at(1)
-        newer = save_time > newest_time
-      rescue StandardError
-        next
-      end
-      if newer
-        newest_time = save_time
-        newest_slot = file_slot
-      end
-    end
-    # Port old save
-    if newest_slot.nil? && File.file?(self.get_full_path(OLD_SAVE_SLOT))
-      file_copy(self.get_full_path(OLD_SAVE_SLOT), self.get_full_path(MANUAL_SLOTS[0]))
-      return MANUAL_SLOTS[0]
-    end
-    return newest_slot
   end
 
   # Copy of 6.8.2 MultiSaves.rb:248-269 with the safety copy made by

@@ -29,13 +29,21 @@ module KIF
       @entries << Entry.new(id, label, condition, handler, icon, order)
     end
 
+    # a mod's proc that raises must not take the pause menu down: log it, use the fallback
+    def self.safely(entry, what, fallback)
+      return yield
+    rescue StandardError => e
+      KIF.log("Pause menu: #{what} of #{entry.id} failed (#{e.class}: #{e.message})")
+      return fallback
+    end
+
     def self.active_entries
-      list = @entries.select { |e| (!defined?(KIF::Modules) || KIF::Modules.proc_active?(e.handler)) && (e.condition.nil? || e.condition.call) }
+      list = @entries.select { |e| (!defined?(KIF::Modules) || KIF::Modules.proc_active?(e.handler)) && (e.condition.nil? || safely(e, "condition", false) { e.condition.call }) }
       return list.each_with_index.sort_by { |e, i| [e.order || 100, i] }.map(&:first)
     end
 
     def self.label_for(entry)
-      text = entry.label.is_a?(Proc) ? entry.label.call : entry.label
+      text = entry.label.is_a?(Proc) ? safely(entry, "label", entry.id.to_s) { entry.label.call } : entry.label
       icon = entry.icon || "menuIcons/OPTIONS"
       return "  <icon=#{icon}>  " + _INTL(text)
     end
@@ -99,7 +107,7 @@ module KIF
         return ret if ret < 0 || ret < pos
         return ret - entries.length if ret >= pos + entries.length
         entry = entries[ret - pos]
-        result = entry.handler.call(scene)
+        result = safely(entry, "handler", :stay) { entry.handler.call(scene) }
         return -1 if result == :close
         scene.pbShowMenu
       end

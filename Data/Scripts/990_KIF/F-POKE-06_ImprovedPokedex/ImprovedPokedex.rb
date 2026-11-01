@@ -111,6 +111,15 @@ module PokeBattle_BattleCommon
   end
 end
 
+# PokeBattle_Battle's own wrappers of this method (Soul Link, co-op) are aliases made at load
+# time, before this redefinition, so they kept running PIF's body. Their alias name now reaches
+# the module's current method (and with it any later change to it).
+class PokeBattle_Battle
+  def kif_sl_pbRecordAndStoreCaughtPokemon(*args)
+    return PokeBattle_BattleCommon.instance_method(:pbRecordAndStoreCaughtPokemon).bind_call(self, *args)
+  end
+end
+
 #-------------------------------------------------------------------------------
 # Hatching
 #-------------------------------------------------------------------------------

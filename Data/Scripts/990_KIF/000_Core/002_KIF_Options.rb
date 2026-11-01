@@ -73,6 +73,7 @@ module KIF
       @defaults[key] = default
       @scopes[key] = scope
       ivar = :"@#{key}"
+      klass = default.class
       if PokemonSystem.method_defined?(key) && !PokemonSystem.method_defined?(:"kif_defined_#{key}")
         # the getter below replaces it, so KIF's default does apply when unset
         KIF.verbose("PokemonSystem##{key} is also defined outside KIF; KIF's default (#{default.inspect}) applies when it's unset")
@@ -85,14 +86,33 @@ module KIF
           lock = KIF::Locks.table[key]
           return lock[0] if lock
           val = instance_variable_get(ivar)
-          if val.nil?
-            val = KIF::Options.copy_default(key)
-            instance_variable_set(ivar, val)
-          end
-          val
+          return val if val.class == klass
+          KIF::Options.settle(self, ivar, key, val)
         end
         define_method(:"#{key}=") { |v| instance_variable_set(ivar, v) }
       end
+    end
+
+    # Whether a stored value is the kind of thing the setting holds. An older
+    # build, a mod or a damaged or hand-edited save can hold a String where a
+    # number is read, and the first read of it fails (comparison of String
+    # with 0). Numbers and true/false stand in for each other.
+    def self.sound?(key, v)
+      d = @defaults[key]
+      case d
+      when Integer, Float, true, false then return v.is_a?(Numeric) || v == true || v == false
+      when Hash, Array, String         then return v.is_a?(d.class)
+      end
+      return true
+    end
+
+    # What the getter makes of a value that is nil or not the default's class
+    def self.settle(sys, ivar, key, val)
+      return val if !val.nil? && sound?(key, val)
+      KIF.log("Setting #{key} held #{val.class}: back to its default") unless val.nil?
+      val = copy_default(key)
+      sys.instance_variable_set(ivar, val)
+      return val
     end
 
     # The player's own value (a mod's lock doesn't count): what saves keep
@@ -100,7 +120,9 @@ module KIF
       return nil unless sys
       key = key.to_sym
       ivar = :"@#{key}"
-      return sys.instance_variable_get(ivar) if sys.instance_variable_defined?(ivar) && !sys.instance_variable_get(ivar).nil?
+      if sys.instance_variable_defined?(ivar) && !(v = sys.instance_variable_get(ivar)).nil?
+        return (@defaults.has_key?(key) && !sound?(key, v)) ? copy_default(key) : v
+      end
       return copy_default(key) if @defaults.has_key?(key)
       plain = :"kif_unlocked_#{key}"
       return sys.respond_to?(plain) ? sys.send(plain) : sys.send(key)

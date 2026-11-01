@@ -27,7 +27,9 @@
 #   Then the joiner says hello and the host's player is asked "Let <name>
 #   join?". The host answers with its own hello, or a signed
 #   {"t":"no","why":"declined"} (also after 60 s without an answer). After 3
-#   no's in 10 minutes the host stops asking and says no.
+#   no's in 10 minutes the host stops asking and says no; at most 3 questions
+#   a minute. An address (an IPv6 /64) that was told No waits 10 minutes, and
+#   the join code is new after a join or a No (not after a timeout).
 #   After the proofs (max 64 KB a frame): payload = 32-byte MAC + 8-byte
 #     number + encrypted JSON object {"t":type,...}. Keys come from Ke and
 #     both nonces, one set per direction. The cipher is HMAC-SHA256 in counter
@@ -37,7 +39,10 @@
 #     dropped; a type this version doesn't know is ignored. 5 bad frames close
 #     the line, and so does a number that skips one (a frame cut out on the
 #     way). A line also closes when it sends more than 192 KB a second
-#     (after a 1.5 MB burst) or more than 4 MB sit unread.
+#     (after a 1.5 MB burst) or more than 4 MB sit unread. A line closes too
+#     when its messages would cost the game too long to read: Net.cost counts
+#     a message's values, keys and escapes from its text, before it is parsed,
+#     against a budget that fills 20,000 a second (100,000 saved).
 #   The first signed message each way is "hello" (name, KIF version).
 #   "ping" every 5 s of quiet; 20 s without a byte = lost. "bye" = clean close.
 #   A line whose writes make no progress for 10 s is closed.
@@ -82,6 +87,10 @@ module KIF
     OBJ_ARRAY_MAX = 4096 # a list or table inside an [Object] field (mod data): whatever 8 KB can hold
     OBJ_HASH_MAX  = 2048
     MAX_CONNECTS  = 12   # connections one address (an IPv6 /64 counts as one) may open in 10 s
+    ASK_LIMIT     = 3    # "Let <name> join?" prompts a minute; more visitors are told "wait"
+    DECLINE_WAIT  = 600  # seconds an address that was told No is turned away
+    VALUE_RATE    = 20_000   # what the partner's frames may cost to read, a second (Net.cost units, about 5 microseconds each; a mod at its API limit is 16,400)
+    VALUE_BURST   = 100_000  # the most that may be saved up while the line is quiet
 
     # Message types after the handshake: field => [class, max length] or
     # [Integer, min, max] or [Array, max items] or [Hash, max keys] or [Object]
@@ -101,6 +110,10 @@ module KIF
       "sl_party" => { "ids" => [String, 600] },   # id:species:level:hp:totalhp,...
     }
     NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined }
+
+    # What reading a message will cost the game thread, counted from its text before it is parsed:
+    # one for each place a value starts ([ { , :), a quarter for each backslash escape (slow to unescape).
+    def self.cost(text); text.count("[{,:") + 1 + text.count("\\") / 4; end
 
     # a name from the other game, safe to show in a PIF message (no \ codes)
     def self.shown_name(n); n.to_s.gsub(/[\\<>\x00-\x1f]/, "")[0, 24]; end
@@ -384,6 +397,7 @@ module KIF
 
       def ws; @i = WS.match(@s, @i).end(0); end
 
+
       def value(depth)
         raise "deep" if depth > DEPTH
         raise "many" if (@n += 1) > @max   # the cost of a message is bounded, not only its size
@@ -396,6 +410,7 @@ module KIF
           return (@i += 1; h) if @s[@i] == "}"
           loop do
             ws
+            raise "many" if (@n += 1) > @max   # a key counts like a value
             m = STR.match(@s, @i) or raise "key"
             @i = m.end(0)
             k = unescape(m[1])
@@ -590,12 +605,14 @@ module KIF
         @sock = sock
         @addr = (sock.remote_address.ip_address rescue "?")
         @inbox = Queue.new
+
         @out = Queue.new
         @cap = MAX_PRE
         @ping_every = 5.0
         @mac = @enc = @rx_mac = @rx_enc = nil
         @seq = 0
         @last_rx = @last_tx = Net.now
+
         @closed = false
         @opened = false
         @deadline = nil      # the handshake has to be through by then (the reader sees to it)
@@ -902,6 +919,18 @@ module KIF
         @bad = 0
         @rx_seq = 0
         @gone = false
+        @budget = VALUE_BURST   # what the messages may still cost to read
+        @budget_at = @started
+      end
+
+      # false when the partner's messages cost more than the budget lets them. It fills
+      # with the clock, not with polls: what piled up while the game was busy is only
+      # what the partner sent in that time.
+      def pay(cost)
+        now = Net.now
+        @budget = [@budget + (now - @budget_at) * VALUE_RATE, VALUE_BURST].min - cost
+        @budget_at = now
+        return @budget >= 0
       end
     end
 
@@ -948,6 +977,7 @@ module KIF
         @seen = {}               # address => when it connected (the last 10 s)
         @seen_lock = Mutex.new
         @no_log = []             # when the player said no (the last 10 minutes)
+        @prompts = []            # when the player was asked "Let <name> join?" (the last minute)
         @wrong_logged = 0
         @strangers = 0
         @line = nil              # the partner's line (a joiner's only line)
@@ -976,13 +1006,21 @@ module KIF
         @line.conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
         @state = :connected
         @later << [:connected, @partner]
+        renew_secrets if @via == :direct   # the code is used up: whoever saw it later needs a new one (the host screen shows it)
         return true
       end
 
-      # host: say no (also after answer_timeout); hosting goes on
-      def decline
+      # host: say no (also after answer_timeout); hosting goes on. After a real No
+      # the address (an IPv6 /64) is turned away for DECLINE_WAIT s and the code is
+      # new, as after a join: whoever saw it later can't come back from another
+      # address. Nothing of that after a timeout: nobody was there.
+      def decline(timed_out = false)
         return false unless asking?
         Net.log("said no to #{@partner}")
+        unless timed_out
+          @fails[Net.addr_key(@line.conn.addr)] = [MAX_BAD, Net.now + DECLINE_WAIT] unless @via == :relay
+          renew_secrets if @via == :direct
+        end
         @no_log << Net.now
         @line.conn.send_msg({ "t" => "no", "why" => "declined" })
         drop_line(true)
@@ -1238,7 +1276,8 @@ module KIF
         @hs_log.reject! { |t| now - t > 10 }
         # an address that guessed wrong too often, or too many failed handshakes
         # lately. (Whether the host is busy is only told to someone with the code.)
-        return "wait" if (f && f[0] >= MAX_BAD && now < f[1]) || @hs_log.length >= @hs_limit
+        @prompts.reject! { |t| now - t > 60 }
+        return "wait" if (f && f[0] >= MAX_BAD && now < f[1]) || @hs_log.length >= @hs_limit || @prompts.length >= ASK_LIMIT
         @fails.delete(key) if f && now >= f[1]
         @fails.delete_if { |_, v| now >= v[1] } if @fails.length > 64
         # room for this one: an address with its share loses its oldest line; a full
@@ -1262,8 +1301,14 @@ module KIF
         return line
       end
 
-      # [w, my base^w, inverse of their base^w], once a session
+      # [w, my base^w, inverse of their base^w], once per secret
       def pake; @pake ||= Spake2.setup(@secret, @role == :join); end
+
+      # new join code: the old one was seen by whoever was told it, or shown
+      def renew_secrets
+        @secret = Crypto.random(4)
+        @pake = nil
+      end
 
       def send_hi(line)
         line.my_nonce = Crypto.random(16)
@@ -1387,7 +1432,12 @@ module KIF
           return line_ended(line, :error, out)
         end
         line.rx_seq = seq
-        h = Wire.parse(line.conn.reveal(ct, seq), MAX_VALUES)
+        json = line.conn.reveal(ct, seq)
+        unless line.pay(Net.cost(json))   # a stream of heavy messages: not an honest partner
+          Net.log("the partner's messages cost too much to read")
+          return line_ended(line, :flood, out)
+        end
+        h = Wire.parse(json, MAX_VALUES)
         return bad_frame(line, out, "unreadable") unless h
         type = h["t"]
         return unless TYPES.key?(type)   # a newer version's message: ignored
@@ -1411,6 +1461,7 @@ module KIF
             end
             @state = :asking
             @asking_since = Net.now
+            @prompts << Net.now
             out << [:join_request, @partner]
           else
             @state = :connected
@@ -1515,7 +1566,7 @@ module KIF
           return @via == :relay ? give_up(out, [:failed, :timeout]) : drop_line
         end
         if @state == :asking && now - @asking_since > @answer_timeout
-          decline
+          decline(true)
           return out << [:failed, :declined] if @state == :closed
           return
         end

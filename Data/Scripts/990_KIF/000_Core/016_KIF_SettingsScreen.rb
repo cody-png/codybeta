@@ -950,7 +950,7 @@ class KifSettingsScreen
       q = nil
       hidden { q = pbEnterText(_INTL("Search settings"), 0, 20, @query || "") }
       self.query = q
-      @focus = :list if @query
+      @focus = :list if @query && !opt_rows.empty?
       refresh
     elsif Input.trigger?(Input::BACK) && keys_back.none? { |k| (Input.triggerex?(k) rescue false) }
       stop_search(:keep)

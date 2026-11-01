@@ -80,14 +80,16 @@ class PokeBattle_Battle
     mode = $PokemonSystem.ch_berserker
     return if mode.nil? || mode == 0
     requiredturns = [1, 3, 2, 1, 1]
+    step = requiredturns[mode]
+    return if step.nil?   # a setting past the choices (an older save, a mod)
     @positions.each_with_index do |pos, idxPos|
       battler = @battlers[idxPos]
       next if !pos || !battler || battler.pbOwnedByPlayerSerious?
-      if requiredturns[mode] > 1
+      if step > 1
         # a foe that came in this round is at turn 0, a multiple of every
         # step: it waits its turns like the others (Cody, 2026-10-19)
         next if battler.turnCount == 0
-        next if battler.turnCount % requiredturns[mode] != 0
+        next if battler.turnCount % step != 0
       end
       # Chaos (4): +2 to every stat each turn ("sharply"), so all stats hit +6
       # after 3 turns. KIF's code gave +1 here although the option text says +2.
@@ -133,7 +135,8 @@ class PokeBattle_Battler
       skipletdown = $PokemonSystem.ch_letdownplayer == 1 && !pbOwnedByPlayerSerious?
       if !skipletdown
         letdownprob = [0, 1, 5, 10, 25, 50, 50]
-        if letdownprob[$PokemonSystem.ch_letdown] >= rand(1..100)
+        chance = letdownprob[$PokemonSystem.ch_letdown]
+        if chance && chance >= rand(1..100)
           return PokeBattle_Move.from_pokemon_move(@battle, Pokemon::Move.new(:SPLASH))
         end
       end

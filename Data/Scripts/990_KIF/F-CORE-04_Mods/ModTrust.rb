@@ -30,13 +30,13 @@ module KIF
             "determined attacker. Only install mods you trust. Turn a mod Off or delete its folder to remove it. " \
             "Options > Mods > Mod protection changes how strict KIF is, and you can allow anything for a mod you trust."
 
-    @data = nil
-    @native = nil
-    @first_run = false
-    @reports = {}
-    @pcache = {}
-    @notices = []
-    @lists = nil
+    @data ||= nil
+    @native ||= nil
+    @first_run ||= false
+    @reports ||= {}
+    @pcache ||= {}
+    @notices ||= []
+    @lists ||= nil
 
     def self.about_text; return ABOUT; end
     def self.path; return File.join(KIF.save_dir, FILE); end

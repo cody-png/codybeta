@@ -91,7 +91,7 @@ module KIF
     end
 
     # the commit each GitHub catalog's file list was read at (catalog key => 40 hex)
-    @commits = {}
+    @commits ||= {}
     def self.commit_of(cat); return (@commits ||= {})[cat.key]; end
     def self.pin(cat, sha)
       return unless sha.to_s =~ /\A[0-9a-f]{40}\z/

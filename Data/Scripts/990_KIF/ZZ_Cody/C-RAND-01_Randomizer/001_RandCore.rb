@@ -468,9 +468,17 @@ module KIF
       return Dir.glob("#{preset_dir}/*.txt").map { |f| File.basename(f, ".txt") }.sort
     end
 
+    # the file name a preset gets, or nil when there is none that Windows would take as a file
+    # (a name ending in a dot or space, or a device name such as NUL or COM1)
+    def self.preset_clean(name)
+      clean = name.to_s.gsub(/[\\\/:*?"<>|]/, "").strip.sub(/[. ]+\z/, "")
+      return nil if clean.empty? || clean =~ /\A(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|\z)/i
+      return clean
+    end
+
     def self.save_preset(name)
-      clean = name.to_s.gsub(/[\\\/:*?"<>|]/, "").strip
-      return false if clean.empty?
+      clean = preset_clean(name)
+      return false unless clean
       make_dir(preset_dir)
       File.open("#{preset_dir}/#{clean}.txt", "wb") do |f|
         f.write(settings_code + "\r\n")
@@ -573,7 +581,19 @@ module KIF
       path = Settings::CUSTOM_SPRITES_FILE_PATH
       mtime = File.exist?(path) ? File.mtime(path) : nil
       if !@custom_list || @custom_list[0] != mtime
-        list = getCustomSpeciesList rescue []
+        list = begin
+          # getCustomSpeciesList walks every sprite folder (up to 236,000 files) and then returns the list file's
+          # species instead, as the list is never nil; the walk is skipped, the result is the same
+          online = list_online_custom_sprites(true)
+          if online
+            max = (NB_POKEMON * NB_POKEMON) + NB_POKEMON
+            online.map { |f| getDexNumFromFilename(f) }.select { |n| n && n > 0 && n <= max }
+          else
+            getCustomSpeciesList
+          end
+        rescue
+          []
+        end
         @custom_list = [mtime, list || []]
       end
       return @custom_list[1]

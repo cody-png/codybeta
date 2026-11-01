@@ -668,6 +668,7 @@ module KIF
       # archive files that were never written (not sprites) count as discarded too
       return [t[:moved], t[:conflicts], t[:skipped] + t[:errors], failed.map { |f| File.basename(f) }, @leftovers.to_i + not_written]
     ensure
+      @tally[:placed].clear if @tally   # only needed during a run; a big import leaves hundreds of thousands of paths
       hide_status
     end
 
@@ -912,6 +913,22 @@ module KIF
 
       MAX_ENTRY = 64 * 1024 * 1024
 
+      # the inflated bytes of a Deflate entry, stopping at limit (the size the zip says): a forged entry that
+      # unpacks to gigabytes raises Zlib::DataError instead of filling the memory
+      def inflate_capped(raw, limit)
+        z = Zlib::Inflate.new(-Zlib::MAX_WBITS)
+        out = "".b
+        add = lambda do |chunk|
+          out << chunk
+          raise Zlib::DataError, "more data than the zip says" if out.bytesize > limit
+        end
+        z.inflate(raw, &add)
+        z.finish(&add)
+        return out
+      ensure
+        z.close if z && !z.closed?
+      end
+
       # direct: the import folder the archive came from. Then each sprite goes
       # straight to where the game reads it (no copy in a work folder to move
       # afterwards); archives inside it are still written to `into`.
@@ -990,7 +1007,7 @@ module KIF
             # know (Deflate64, BZip2, LZMA). Before anything is written tar
             # gets the archive (not on phones); after, the entry is skipped -
             # tar would write every sprite again.
-            odd = "over 64 MB" if usize > MAX_ENTRY
+            odd = "over 64 MB" if usize > MAX_ENTRY || csize > MAX_ENTRY
             unless odd
               f.seek(offset)
               h = f.read(30)
@@ -1003,7 +1020,7 @@ module KIF
               data = lambda do
                 f.seek(offset + 30 + nlen + xlen)
                 raw = f.read(csize)
-                method == 8 ? si.timed(:inflate) { Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(raw) } : raw
+                method == 8 ? si.timed(:inflate) { inflate_capped(raw, usize) } : raw
               end
               if direct && dest
                 held = File.join(si.hold_base(direct), KIF::SpriteImport::HOLD_DIR, hold_name, *safe)
@@ -1179,15 +1196,20 @@ module KIF
       conflicts = conflicts.select { |held, _| File.exist?(held) }
       return 0 if conflicts.empty?
       n = conflicts.length
-      pbMessage(_INTL("{1} imported sprites are different from sprites you already have.", n))
+      pbMessage(n == 1 ? _INTL("1 imported sprite is different from a sprite you already have.") :
+                         _INTL("{1} imported sprites are different from sprites you already have.", n))
       cmd = pbMessage(_INTL("Which ones should the game use?"),
                       [_INTL("Keep the ones I have"), _INTL("Use the new ones")], 0)
       done = 0
       conflicts.each do |held, dest|
         begin
           if cmd == 1
-            File.delete(dest) if File.exist?(dest)
-            File.rename(held, dest)
+            begin
+              File.rename(held, dest)   # replaces the installed file in one step, so a failure can't leave neither
+            rescue SystemCallError
+              File.delete(dest) if File.exist?(dest)
+              File.rename(held, dest)
+            end
             done += 1
           else
             File.delete(held)

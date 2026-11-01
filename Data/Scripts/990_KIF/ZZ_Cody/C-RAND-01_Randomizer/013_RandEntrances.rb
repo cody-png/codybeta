@@ -763,7 +763,7 @@ module KIF
       # behind a ledge, an NPC's spot - aren't where a player stands). Worked
       # out once per Randomize now.
       def self.here_strict(d)
-        key = [$game_map.map_id, state.object_id]
+        key = [$game_map.map_id, state.object_id, current_flags(d)]   # the flags too: with no layout the state is nil for every save
         return @here_strict[1] if @here_strict && @here_strict[0] == key
         s = state
         edges = (s.is_a?(Hash) && layout_current?(s)) ? edges_for(d, s[:in], s[:out]) : edges_for(d, {}, {})
@@ -1009,6 +1009,7 @@ module KIF
         Rand.data[:ent_done] = true
         randomize
       rescue => e
+        Rand.progress_done if Rand.respond_to?(:progress_done)   # the progress screen must not stay up
         KIF.log("Entrance layout at intro end failed (#{e.class}: #{e.message})")
       end
 
@@ -1102,6 +1103,7 @@ module KIF
         @handover_msg = [:start, dat[:names][o[:map]]]
         return [o[:to][0], o[:to][1], o[:to][2], o[:to_dir], nil, :start]
       rescue => e
+        Rand.progress_done if Rand.respond_to?(:progress_done)
         KIF.log("Random start hand-over failed (#{e.class}: #{e.message})")
         # doors get shuffled the usual way at this warp instead
         Rand.data[:ent_done] = nil

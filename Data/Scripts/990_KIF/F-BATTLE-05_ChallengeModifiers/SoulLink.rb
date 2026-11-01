@@ -704,6 +704,8 @@ module KIF
       p.original_head = head
       p.original_body = half
       p.species = getFusionSpecies(body.id, p.species).id
+      p.pif_sprite = nil   # the old species' cached sprite (PIF clears it the same way when a Pokemon evolves or unfuses)
+      p.preEvolved_pif_sprite = nil
       p.kif_sl_fused = true
       p.calc_stats
       return true

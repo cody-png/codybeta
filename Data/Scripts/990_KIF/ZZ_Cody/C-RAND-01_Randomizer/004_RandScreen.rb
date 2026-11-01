@@ -369,6 +369,18 @@ module KIF
       end
     end
 
+    def self.ask_save_preset
+      name = pbMessageFreeText(_INTL("Preset name:"), "", false, 30)
+      return unless name && !name.strip.empty?
+      clean = preset_clean(name)
+      if clean && preset_names.any? { |n| n.casecmp(clean) == 0 } &&   # Windows file names ignore case
+         !pbConfirmMessage(_INTL("A preset called {1} already exists. Replace it?", clean))
+        return
+      end
+      ok = save_preset(name)
+      pbMessage(ok ? _INTL("Saved to the {1} folder.", preset_dir) : _INTL("Couldn't save that preset."))
+    end
+
     def self.page_presets
       open_page(_INTL("Presets & sharing"), _INTL("Share or keep your randomizer settings."), nil) {
         [
@@ -390,18 +402,8 @@ module KIF
               pbMessage(_INTL("Loaded. Use Randomize now for them to take effect."))
             end
           }, _INTL("Loads a settings code copied from someone else.")),
-          ButtonOption.new(_INTL("Save as preset"), proc {
-            name = pbMessageFreeText(_INTL("Preset name:"), "", false, 30)
-            if name && !name.strip.empty?
-              clean = name.gsub(/[\\\/:*?"<>|]/, "").strip
-              if KIF::Rand.preset_names.include?(clean) &&
-                 !pbConfirmMessage(_INTL("A preset called {1} already exists. Replace it?", clean))
-                next
-              end
-              ok = KIF::Rand.save_preset(name)
-              pbMessage(ok ? _INTL("Saved to the {1} folder.", KIF::Rand.preset_dir) : _INTL("Couldn't save that preset."))
-            end
-          }, _INTL("Saves these settings as a file you can share.")),
+          ButtonOption.new(_INTL("Save as preset"), proc { KIF::Rand.ask_save_preset },
+                           _INTL("Saves these settings as a file you can share.")),
           ButtonOption.new(_INTL("Built-in presets"), proc {
             list = KIF::Rand::BUILTIN_PRESETS
             i = pbMessage(_INTL("Which preset?"), list.map { |n, _d, _v| _INTL(n) } + [_INTL("Cancel")], list.length + 1)

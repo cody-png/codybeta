@@ -552,6 +552,10 @@ module KIF
       end
       if e["item"].to_s =~ /\ABADGE_(\d+)\z/
         n = $1.to_i
+        unless n.between?(0, 31)   # a hand-edited items.json must not make the badge list huge
+          KIF.log("Archipelago: badge #{e['item'].inspect} (index #{e['index']}) skipped")
+          return true
+        end
         $Trainer.badges[n] = true
         name = e["name"].to_s.empty? ? _INTL("a Badge") : e["name"].to_s
         pbMessage(_INTL("\\me[Badge get]{1}\\wtnp[30]", received_text(name, who, d)))

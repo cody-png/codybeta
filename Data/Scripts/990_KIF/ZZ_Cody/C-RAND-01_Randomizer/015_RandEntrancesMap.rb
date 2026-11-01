@@ -306,9 +306,9 @@ module KIF
         end
 
         def finish
-          pbFadeOutAndHide(@sprites) { update_view }
-          pbDisposeSpriteHash(@sprites)
-          @vp.dispose; @mapvp.dispose; @topvp.dispose
+          pbFadeOutAndHide(@sprites) { update_view } if @sprites && @sprites["sel"]   # a scene that failed to start has nothing to fade
+          pbDisposeSpriteHash(@sprites) if @sprites
+          [@vp, @mapvp, @topvp].each { |v| v.dispose if v && !v.disposed? }
         end
       end
 

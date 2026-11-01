@@ -71,7 +71,7 @@ module KIF
     MAX_PRE    = 1024    # frames before the handshake is done
     MAX_BAD    = 5       # bad frames before the line is closed
     MAX_RATE   = 400     # frames a second before the line is closed
-    PROTO      = 3       # 3: sealed frames, 32-digit picture hashes (sp_get / sp_img)
+    PROTO      = 3       # 3: sealed frames, 32-digit picture hashes, 8-digit trade ids, co-op teams of up to 36 foes (with the Exp split)
     HS_LIMIT   = 10      # failed handshakes a host puts up with in 10 s
     MAX_PENDING   = 4    # handshakes a host runs at once (the oldest makes room)
     MAX_PER_ADDR  = 2    # ... of them from one address

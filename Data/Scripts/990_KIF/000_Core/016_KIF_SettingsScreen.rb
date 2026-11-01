@@ -200,6 +200,8 @@ module KIF
       bits << _INTL("Failed to load (see Logs/KIF_errorlog.txt).") if e.error
       took = mod_takes(e)
       bits << took if took
+      sec = defined?(KIF::ModSecurityUI) ? KIF::ModSecurityUI.describe(e) : nil
+      bits << sec if sec
       who = []
       who << "v#{e.version}" if e.version && !e.version.empty?
       who << _INTL("by {1}", e.author) if e.author && !e.author.empty? && e.author != "Unknown"
@@ -285,6 +287,8 @@ module KIF
             opt.kif_badge = [_INTL("ERROR"), KIF::PixelUI::DOWN]
           elsif !loaded.nil? && (loaded ? true : false) != e.enabled?
             opt.kif_badge = [e.enabled? ? _INTL("ON NEXT START") : _INTL("OFF NEXT START"), KIF::PixelUI::WARN]
+          elsif defined?(KIF::ModSecurityUI) && (sb = KIF::ModSecurityUI.badge(e))
+            opt.kif_badge = sb
           end
           # USE: description, uninstall (KIF's own Mods folder; Mod Manager removes its own)
           rows << Row.new(:opt, opt, :global, e.name.to_s, :mods, "Installed", 0, nil, [:mod_menu, e])
@@ -309,9 +313,15 @@ module KIF
     # USE on an installed mod; true when it was uninstalled
     def mod_menu(e)
       native = e.source.is_a?(KIF::Mods::NativeSource)
-      cmds = [_INTL("Read description")] + (native ? [_INTL("Uninstall")] : []) + [_INTL("Cancel")]
+      extra = defined?(KIF::ModSecurityUI) ? KIF::ModSecurityUI.menu_items(e) : []
+      lead = native ? 2 : 1   # Read description, Uninstall: the safety items follow them
+      cmds = [_INTL("Read description")] + (native ? [_INTL("Uninstall")] : []) + extra.map { |_k, label| label } + [_INTL("Cancel")]
       cmd = pbMessage(KIF::PixelFont.utf8(e.name.to_s), cmds, cmds.length)
       KIF::ModReadme.show_installed(e) if cmd == 0
+      if cmd >= lead && cmd < lead + extra.length
+        KIF::ModSecurityUI.run_item(extra[cmd - lead][0], e)
+        return false
+      end
       return false unless native && cmd == 1
       return false unless pbConfirmMessage(KIF::PixelFont.utf8(_INTL("Remove {1}? Its settings are kept for if you install it again.", e.name)))
       if KIF::Mods.uninstall(e)

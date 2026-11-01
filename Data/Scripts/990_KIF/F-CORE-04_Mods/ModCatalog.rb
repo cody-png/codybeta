@@ -55,7 +55,8 @@ module KIF
     MAX_MOD_FILE   = 64 * 1024 * 1024
     MAX_MOD_BYTES  = 256 * 1024 * 1024
     # KIF's own bookkeeping in a mod folder: a catalog can't ship these
-    RESERVED   = /\A(\.kif_installed|\.installed_assets|.*\.kif_old|.*\.kif_game)\z/i
+    RESERVED   = /\A(\.kif_installed|\.kif_provenance|\.installed_assets|.*\.kif_old|.*\.kif_game)\z/i
+    PROVENANCE = ".kif_provenance"   # where a mod's files came from (repo, commit, every file's hash); written at install
     REPO_RE    = %r{\A[\w.-]+/[\w.-]+\z}
     BRANCH_RE  = %r{\A[\w.-]+(/[\w.-]+)*\z}
     # GitHub trees (by head commit) and mod.json texts (by blob sha) kept
@@ -78,11 +79,23 @@ module KIF
       def tree_url(ref = @branch); return "https://api.github.com/repos/#{@repo}/git/trees/#{ref}?recursive=1"; end
       # tiny answer holding the branch's head commit sha
       def ref_url;  return "https://api.github.com/repos/#{@repo}/git/refs/heads/#{@branch}"; end
-      def raw_base; return "https://raw.githubusercontent.com/#{@repo}/#{@branch}"; end
+      # the branch's name, and the commit it pointed at when the file list was read: the files
+      # come from that commit, so the list and the files cannot be from two different states
+      def branch_base; return "https://raw.githubusercontent.com/#{@repo}/#{@branch}"; end
+      def commit; return KIF::ModCatalog.commit_of(self); end
+      def raw_base; return "https://raw.githubusercontent.com/#{@repo}/#{commit || @branch}"; end
       def base
         return raw_base unless local?
         return KIF::Updater.file_url(@path)
       end
+    end
+
+    # the commit each GitHub catalog's file list was read at (catalog key => 40 hex)
+    @commits = {}
+    def self.commit_of(cat); return (@commits ||= {})[cat.key]; end
+    def self.pin(cat, sha)
+      return unless sha.to_s =~ /\A[0-9a-f]{40}\z/
+      (@commits ||= {})[cat.key] = sha
     end
 
     # Text from a catalog (a mod's name, author...) as plain one-line text:
@@ -121,6 +134,7 @@ module KIF
       end
       def base; return @catalog ? @catalog.base : KIF::ModCatalog.base; end
       def requires_kif; return @json["requires_kif"]; end
+      def commit; return @catalog ? @catalog.commit : nil; end   # the commit its files come from (nil: a local catalog)
       # the catalog's words, as plain short text (mod.json comes from the internet)
       def text(v, max); return KIF::ModCatalog.clean_text(v, max); end
       def id;      return (@json["id"] || @folder).to_s; end   # a matching key, not display text: as written
@@ -375,6 +389,7 @@ module KIF
       head = get(cat.ref_url).to_s[/"object"\s*:\s*\{[^}]*?"sha"\s*:\s*"([0-9a-f]{40})"/, 1]
       # no answer (offline, rate limited): the big list wouldn't come either
       return nil unless head
+      pin(cat, head)
       old = disk[:trees][cat.key]
       if old.is_a?(Array) && old[0] == head && old[1].is_a?(Hash) && old[1].length <= MAX_TREE_FILES
         hit("#{cat.name} file list (#{head[0, 7]})")
@@ -474,12 +489,17 @@ module KIF
       bad = {}
       # GitHub sends this list on one line or spread over many (a new repo
       # got the second), so spaces between the parts don't matter
-      text.scan(/\{\s*"path"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"mode"\s*:\s*"\d+"\s*,\s*"type"\s*:\s*"blob"\s*,\s*"sha"\s*:\s*"([0-9a-f]{40})"\s*,\s*"size"\s*:\s*(\d+)/) do |p, sha, size|
+      text.scan(/\{\s*"path"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"mode"\s*:\s*"(\d+)"\s*,\s*"type"\s*:\s*"blob"\s*,\s*"sha"\s*:\s*"([0-9a-f]{40})"\s*,\s*"size"\s*:\s*(\d+)/) do |p, mode, sha, size|
         if out.length + bad.length >= MAX_TREE_FILES
           log("#{cat.name}: more than #{MAX_TREE_FILES} files listed; the catalog isn't read")
           return nil
         end
         path = unescape(p)
+        # a link (120000) or a submodule (160000) can point out of the mod's folder: the whole mod is left out
+        if mode == "120000" || mode == "160000"
+          bad[unsafe_scope(path)] = path
+          next
+        end
         unless KIF.safe_rel_path?(path)
           bad[unsafe_scope(path)] = path
           next
@@ -513,7 +533,7 @@ module KIF
     # A mod with a file KIF won't write is left out whole: the rest of it would be a broken mod
     def drop_unsafe(cat, out, bad)
       bad.each do |scope, path|
-        log("#{cat.name}: #{scope.inspect[0, 60]} has a file name KIF won't write (#{path.inspect[0, 80]}); left out")
+        log("#{cat.name}: #{scope.inspect[0, 60]} has a file or link KIF won't install (#{path.inspect[0, 80]}); left out")
         out.delete_if { |p, _| p == scope || p.start_with?(scope + "/") } unless scope.empty?
       end
     end
@@ -531,9 +551,10 @@ module KIF
       # nothing was found (2026-10-22)
       Dir.glob(File.join("**", "*"), File::FNM_DOTMATCH, base: dir).each do |rel|
         p = File.join(dir, rel)
-        next unless File.file?(p)
         rel = rel.tr("\\", "/")
         next if rel.split("/").any? { |seg| seg == ".git" }
+        next bad[unsafe_scope(rel)] = rel if File.symlink?(p)   # a link can point out of the mod's folder
+        next unless File.file?(p)
         next bad[unsafe_scope(rel)] = rel unless KIF.safe_rel_path?(rel)
         out[rel] = [updater.sha_ok? ? updater.git_sha(p) : "", File.size(p)]
       end
@@ -731,7 +752,7 @@ module KIF
     # Nothing is left half installed: the files are downloaded into the staging
     # folder first, then moved in all together (move_in puts everything back if
     # one move fails), and no error reaches the screen as a crash.
-    def install(list)
+    def install(list, ask = nil)
       stage = File.join(updater.stage_root, "mods")
       done = []
       failed = []
@@ -775,7 +796,21 @@ module KIF
               next
             end
           end
+          # what is about to be installed is read before it is moved in: nothing of it has run, and a No leaves everything as it was
+          consent = nil
+          if ask && !todo.empty? && defined?(KIF::ModCheck) && File.directory?(File.join(dir, "files"))
+            rep = KIF::ModCheck.scan(File.join(dir, "files"), item.json)
+            consent = ask.call(item, rep)
+            unless consent
+              log("#{item.folder}: not installed, the player said no after the check (#{rep.color})")
+              updater.rm_tree(dir) if File.directory?(dir)
+              mark.call(item, :declined)
+              next
+            end
+          end
           move_in(item, todo, dir)
+          # the player was asked about what it does and said yes: it is not held again at the next start
+          KIF::ModTrust.accept_folder(item.folder) if consent == :accepted && defined?(KIF::ModTrust)
           done << item
           log("#{item.folder} #{item.version} installed (#{todo.length} files)")
         rescue StandardError => e
@@ -885,6 +920,7 @@ module KIF
         put_back(moved, folder, fresh)
         raise
       end
+      write_provenance(item, folder)
       # done: the old copies go, and the files the mod no longer has when they're still as installed
       moved.each { |_dest, aside| (File.delete(aside) rescue nil) if aside }
       old.each do |rel, sha|
@@ -896,6 +932,22 @@ module KIF
       end
       KIF::Mods.sources.each { |s| s.instance_variable_set(:@entries, nil) if s.is_a?(KIF::Mods::NativeSource) }
       @installed_index = nil
+    end
+
+    # Where the mod's files came from, next to the list of what was installed (.kif_provenance):
+    # the catalog, the commit, the date and every file's git hash. The mod check compares them
+    # again at each start; a file that no longer matches reads "Changed since it was installed".
+    def write_provenance(item, folder)
+      cat = item.catalog
+      pr = { "repo" => (cat.nil? ? REPO : (cat.local? ? "local" : cat.repo)), "branch" => (cat && !cat.local? ? cat.branch : ""),
+             "commit" => item.commit.to_s, "installed" => Time.now.strftime("%Y-%m-%d"), "kif" => KIF::ModRules.kif_version,
+             "verified" => updater.sha_ok? ? true : false, "files" => item.files.sort.map { |rel, (sha, _size)| [rel, sha] }.to_h }
+      path = File.join(folder, PROVENANCE)
+      File.open(path + ".tmp", "wb") { |f| f.write(KIF::ModPublish.to_json(pr)) }
+      File.rename(path + ".tmp", path)
+    rescue StandardError => e
+      log("#{item.folder}: provenance not written (#{e.class}: #{e.message})")
+      (File.delete(path + ".tmp") rescue nil)
     end
 
     # undoes the moves of a failed move_in, last first
@@ -974,7 +1026,9 @@ module KIF
           else
             _INTL("Install {1} ({2})?", item.name, KIF::Updater.size_text(bytes))
           end
-      return unless pbConfirmMessage(q)
+      sec = defined?(KIF::ModSecurityUI) ? KIF::ModSecurityUI.catalog_lines(item) : ""
+      q = "#{q} #{sec}" unless sec.empty?
+      return unless pbConfirmMessage(KIF::PixelFont.utf8(q))
       run(list)
     end
 
@@ -1089,9 +1143,19 @@ module KIF
       pbMessage(_INTL("On phones, mods are installed and updated by hand: download the mod and put its folder in the Mods folder."))
     end
 
+    # After the download, before anything is moved in: a mod that does more than it says, is red or
+    # was withdrawn is asked about once (default No). An update asks only about what is new.
+    def review(item, rep)
+      return true unless defined?(KIF::ModSecurityUI) && KIF::ModSecurityUI.active?
+      reasons = KIF::ModSecurityUI.install_reasons(item, rep)
+      return true if reasons.empty?
+      text = _INTL("{1} does more than it says: {2} Install anyway?", item.name, reasons.join(" "))
+      return pbMessage(KIF::PixelFont.utf8(text), [_INTL("No"), _INTL("Install anyway")], 1) == 1 ? :accepted : false
+    end
+
     def run(list)
       return phone_notice(list) if by_hand?
-      done, failed, cancelled = cat.install(list)
+      done, failed, cancelled = cat.install(list, method(:review))
       if cancelled
         pbMessage(_INTL("Stopped. Nothing half-downloaded was installed."))
       elsif !failed.empty?
@@ -1103,6 +1167,7 @@ module KIF
           :write => _INTL("{1} couldn't be installed: KIF couldn't write its files. Nothing was changed."),
           :limits => _INTL("{1} is bigger than a mod can be here, so it isn't installed."),
           :clash => _INTL("{1} would go into a Mods folder that holds a different mod, so it isn't installed."),
+          :declined => _INTL("{1} was not installed, as you chose."),
           :needs => _INTL("{1} needs a mod that couldn't be installed, so it isn't installed.")
         }.each do |key, text|
           names = groups[key]

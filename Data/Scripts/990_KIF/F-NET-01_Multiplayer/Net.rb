@@ -46,7 +46,8 @@ module KIF
     MAX_PRE    = 1024    # frames before the handshake is done
     MAX_BAD    = 5       # bad frames before the line is closed
     MAX_RATE   = 400     # frames a second before the line is closed
-    PROTO      = 2
+    PROTO      = 3
+    POLL_TIME  = 0.01    # seconds of frames one poll works on; the rest waits for the next game frame
     HS_LIMIT   = 10      # handshakes a host starts in 10 s
 
     # Message types after the handshake: field => [class, max length] or
@@ -668,8 +669,10 @@ module KIF
           end
         end
         if @conn
+          t0 = Net.now
           while @conn && (f = (@conn.inbox.pop(true) rescue nil))
             f.is_a?(Array) ? line_ended(f[1] || :closed, out) : frame(f, out)
+            break if Net.now - t0 > POLL_TIME   # big frames can't freeze the game: the rest waits
           end
           check_time(out) if @conn
         end

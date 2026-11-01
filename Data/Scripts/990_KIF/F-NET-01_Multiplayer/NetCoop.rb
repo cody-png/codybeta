@@ -528,11 +528,24 @@ module KIF
 
       module_function
 
-      # a GameData id from a peer string, or nil
+      # a GameData id from a peer string, or nil. Not try_get: that builds a fusion for any
+      # B<n>H<n> or _x_ id whatever class was asked (an "ability" that is a species)
       def sym(v, data)
         return nil unless v.is_a?(String) && v =~ /\A[A-Za-z0-9_]{1,40}\z/
-        d = data.try_get(v.to_sym)
+        if data == GameData::Species && v =~ /\AB([1-9]\d*)H([1-9]\d*)\z/   # a fusion: canonical, both parents real
+          return $1.to_i <= NB_POKEMON && $2.to_i <= NB_POKEMON ? v.to_sym : nil
+        end
+        d = data::DATA[v.to_sym]
         return d ? d.id : nil
+      end
+
+      # a Poke Ball the battle scene, the Summary and the trade scene have pictures for, else
+      # a Poke Ball (a Potion as a ball, or a mod's ball without files, would crash them)
+      def ball(v)
+        b = sym(v, GameData::Item)
+        return :POKEBALL unless b && GameData::Item.get(b).is_poke_ball?
+        files = ["Graphics/Battle animations/ball_#{b}", "Graphics/Battle animations/ball_#{b}_open", "Graphics/Pictures/Summary/icon_ball_#{b}"]
+        return files.all? { |f| pbResolveBitmap(f) } ? b : :POKEBALL
       end
 
       # the other player's trainer type for the battle screen: PIF draws a
@@ -555,7 +568,11 @@ module KIF
         return v.gsub("\r\n", "\n").gsub(/[\\\x00-\x09\x0b-\x1f\x7f]/, "")[0, max]
       end
 
-      def name(v); text(v, 24).delete("\n"); end
+      # a name or a line the game draws through its tag parser: no < > & either (<img=..>,
+      # <icon=..> name files and a missing one ends the game)
+      def plain(v, max = 24); v.is_a?(String) ? text(v.delete("<>&"), max).delete("\n") : ""; end
+
+      def name(v); plain(v, 24); end
 
       def dump(p, full = false)
         h = { "s" => p.species.to_s, "l" => p.level, "n" => p.name.to_s[0, 24], "g" => p.gender.to_i,
@@ -657,7 +674,7 @@ module KIF
         end
         p.instance_variable_set(:@kif_coop_lost, true) if lost
         p.happiness = int(h["ha"], 0, 255, 70)
-        p.poke_ball = sym(h["pb"], GameData::Item) || :POKEBALL
+        p.poke_ball = ball(h["pb"])
         p.personalID = int(h["pid"], 0, 0xffffffff, p.personalID)
         if h["ot"].is_a?(Array) && h["ot"].length == 4
           o = h["ot"]

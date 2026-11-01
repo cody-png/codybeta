@@ -278,12 +278,18 @@ module KIF
       return false
     end
 
-    # Timings are only measured in profile mode (Mod Dev mode, verbose logging)
-    def self.profile?; return @profile; end
+    # Timings are only measured in profile mode (Mod Dev mode, verbose logging).
+    # Looked at again when the player's settings object changes (a new game, a load).
+    def self.profile?
+      refresh_modes! unless $PokemonSystem.equal?(@ps_seen)
+      return @profile
+    end
 
     # Called when a setting that changes the mode may have changed.
     def self.refresh_modes!
+      @ps_seen = $PokemonSystem
       @profile = @profile_force || dev? || KIF.verbose? ? true : false
+      @trace = dev? ? (@trace || []) : nil
       return @profile
     rescue StandardError
       return @profile = @profile_force ? true : false
@@ -435,6 +441,7 @@ module KIF
     end
 
     def self.remove_sub(sub)
+      return Hook.detach(sub) if defined?(KIF::API::Hook) && sub.target.is_a?(Hook::Point)   # a hook, not an event handler
       list = @subs[sub.event]
       return unless list
       arr = list.reject { |s| s.equal?(sub) }

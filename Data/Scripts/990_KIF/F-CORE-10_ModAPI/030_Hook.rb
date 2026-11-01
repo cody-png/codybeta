@@ -479,10 +479,6 @@ module KIF
       return Hook.add(:before, target, id, priority, mod, defer, blk, caller_locations(1, 40))
     end
 
-    # KIF::API.after(target, id = nil, ...) { |call| } - may set call.result
-    def self.after(target, id = nil, priority: 0, mod: nil, defer: false, &blk)
-      return Hook.add(:after, target, id, priority, mod, defer, blk, caller_locations(1, 40))
-    end
 
     # Removes hooks: unhook(subscription) or unhook(target, id). A mod removes only its own.
     def self.unhook(target, id = nil)

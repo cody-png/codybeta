@@ -43,7 +43,9 @@
 #     when its messages would cost the game too long to read: Net.cost counts
 #     a message's values, keys and escapes from its text, before it is parsed,
 #     against a budget that fills 20,000 a second (100,000 saved).
-#   The first signed message each way is "hello" (name, KIF version).
+#   The first signed message each way is "hello" (name, KIF version). Until the
+#   host's player has said yes only a short hello, no, bye or ping is read (the
+#   rest counts as a bad frame, unparsed).
 #   "ping" every 5 s of quiet; 20 s without a byte = lost. "bye" = clean close.
 #   A line whose writes make no progress for 10 s is closed.
 #
@@ -69,7 +71,7 @@ module KIF
     MAX_PRE    = 1024    # frames before the handshake is done
     MAX_BAD    = 5       # bad frames before the line is closed
     MAX_RATE   = 400     # frames a second before the line is closed
-    PROTO      = 3
+    PROTO      = 3       # 3: sealed frames, 32-digit picture hashes (sp_get / sp_img)
     HS_LIMIT   = 10      # failed handshakes a host puts up with in 10 s
     MAX_PENDING   = 4    # handshakes a host runs at once (the oldest makes room)
     MAX_PER_ADDR  = 2    # ... of them from one address
@@ -89,8 +91,14 @@ module KIF
     MAX_CONNECTS  = 12   # connections one address (an IPv6 /64 counts as one) may open in 10 s
     ASK_LIMIT     = 3    # "Let <name> join?" prompts a minute; more visitors are told "wait"
     DECLINE_WAIT  = 600  # seconds an address that was told No is turned away
-    VALUE_RATE    = 20_000   # what the partner's frames may cost to read, a second (Net.cost units, about 5 microseconds each; a mod at its API limit is 16,400)
-    VALUE_BURST   = 100_000  # the most that may be saved up while the line is quiet
+    # The parser's time goes with the number of values in a message (2-5 us each for numbers, long numbers,
+    # floats, texts, escapes and table keys alike), not with its bytes: Net.cost counts them from the text.
+    # An honest message has a few hundred (a co-op start about 150, 24 battle events 750); the biggest the
+    # mod API allows, 8 KB of numbers, about 4100.
+    FRAME_VALUES  = 4_500    # most a message may cost; more is a bad frame, unparsed
+    VALUE_BURST   = 20_000   # most a line may send at once (the mod API's 16500 values at once)...
+    VALUE_RATE    = 5_000    # ...then this many a second (about 2% of the game's thread); counted by when the
+                             # frames arrived, so what piled up while the game was busy is not counted twice
 
     # Message types after the handshake: field => [class, max length] or
     # [Integer, min, max] or [Array, max items] or [Hash, max keys] or [Object]
@@ -114,9 +122,28 @@ module KIF
     # What reading a message will cost the game thread, counted from its text before it is parsed:
     # one for each place a value starts ([ { , :), a quarter for each backslash escape (slow to unescape).
     def self.cost(text); text.count("[{,:") + 1 + text.count("\\") / 4; end
+    # Text from the other game, safe to show in a PIF message or draw: no
+    # backslash (message codes such as \wtnp[99999] or \v[1]), no "<" (a tag such
+    # as <img=file> loads a file; one that is not a picture crashes the game) and
+    # no ">" except in "->", no control characters (a new line stays) and no
+    # text-direction characters.
+    UNSAFE_TEXT = /[\\<\x00-\x09\x0b-\x1f\x7f\u0080-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]|(?<!-)>/
+    def self.safe_text(s, max = 200)
+      return s.to_s.dup.force_encoding("UTF-8").scrub("").gsub("\r\n", "\n").gsub(UNSAFE_TEXT, "")[0, max]
+    end
 
     # a name from the other game, safe to show in a PIF message (no \ codes)
-    def self.shown_name(n); n.to_s.gsub(/[\\<>\x00-\x1f]/, "")[0, 24]; end
+    def self.shown_name(n); safe_text(n, 24).delete("\n>"); end
+
+    # the most JSON bytes a message of this type can take (every character may
+    # be escaped as \uXXXX: 6 bytes, 12 for a pair); a field with no length
+    # ([Object, bytes]) names its own; a list or table may be as big as a frame, else MAX_FRAME. An unknown type gets 256.
+    def self.json_cap(type)
+      spec = TYPES[type] or return 256
+      cap = 128   # braces, "t" and "s"
+      spec.each { |k, (cls, a, _b)| cap += k.length + 8 + (cls == String ? a * 12 : cls == Integer ? 24 : cls == Object ? (a || MAX_FRAME) : MAX_FRAME) }
+      return [cap, MAX_FRAME].min
+    end
 
     # the other game's version text: letters, digits and . + _ - only (it goes
     # through _INTL, where a backslash in an argument is read as a command)
@@ -372,7 +399,7 @@ module KIF
     class Parser
       DEPTH = 16
       WS  = /\G[ \t\r\n]*/
-      NUM = /\G-?(?:0|[1-9]\d{0,17})(?:\.\d{1,17})?(?:[eE][+-]?\d{1,3})?/
+      NUM = /\G-?(?:0|[1-9]\d{0,17})(?:\.\d{1,30})?(?:[eE][+-]?\d{1,3})?/   # Float#to_s writes up to 20 digits after the point
       STR = /\G"((?:[^"\\\x00-\x1f]|\\["\\\/bfnrt]|\\u[0-9a-fA-F]{4})*)"/
       ESC = { "b" => "\b", "f" => "\f", "n" => "\n", "r" => "\r", "t" => "\t" }
 
@@ -598,14 +625,14 @@ module KIF
       PRE  = { burst: 8_192, refill: 2_048, frames: 16, bytes: 16_384 }
       OPEN = { burst: 1_572_864, refill: 196_608, frames: 16_384, bytes: 4_194_304 }
 
-      attr_reader :inbox, :addr, :last_rx
+      attr_reader :inbox, :addr, :last_rx, :arrived
       attr_accessor :cap, :ping_every, :deadline
 
       def initialize(sock)
         @sock = sock
         @addr = (sock.remote_address.ip_address rescue "?")
         @inbox = Queue.new
-
+        @arrivals = Queue.new   # when each frame in @inbox arrived (same order; events have none)
         @out = Queue.new
         @cap = MAX_PRE
         @ping_every = 5.0
@@ -639,7 +666,10 @@ module KIF
       # the next queued frame (a String), or an event ([:error, why], [:closed]), or nil
       def next_frame
         f = (@inbox.pop(true) rescue nil)
-        @taken += f.bytesize if f.is_a?(String)
+        if f.is_a?(String)
+          @taken += f.bytesize
+          @arrived = (@arrivals.pop(true) rescue Net.now)
+        end
         return f
       end
 
@@ -727,6 +757,7 @@ module KIF
               @inbox << [:error, :flood]
               return hard_close
             end
+            @arrivals << now
             @inbox << buf.byteslice(4, n)
             @got += n
             buf = buf.byteslice(4 + n, buf.bytesize - 4 - n)
@@ -780,7 +811,7 @@ module KIF
     class SteamConn
       include Sealed
 
-      attr_reader :inbox, :addr, :last_rx, :peer
+      attr_reader :inbox, :addr, :last_rx, :peer, :arrived
       attr_accessor :cap, :ping_every, :deadline
 
       def initialize(steam, peer)
@@ -788,6 +819,7 @@ module KIF
         @peer = peer
         @addr = "steam:" + Crypto.hex(Crypto.sha256(peer.to_s))[0, 10]   # the wrong-code count's key; logs never show a Steam ID
         @inbox = Queue.new
+        @arrivals = Queue.new
         @out = Queue.new
         @lock = Mutex.new
         @cap = MAX_PRE
@@ -812,7 +844,10 @@ module KIF
       # the next queued frame (a String), or an event ([:error, why], [:closed]), or nil
       def next_frame
         f = (@inbox.pop(true) rescue nil)
-        @taken += f.bytesize if f.is_a?(String)
+        if f.is_a?(String)
+          @taken += f.bytesize
+          @arrived = (@arrivals.pop(true) rescue Net.now)
+        end
         return f
       end
 
@@ -858,6 +893,7 @@ module KIF
         @second = sec
         @count += 1
         return fail_with(:flood) if @tokens < 0 || @count > MAX_RATE || @inbox.size >= lim[:frames] || @got - @taken + n > lim[:bytes]
+        @arrivals << now
         @inbox << data
         @got += n
       end
@@ -923,13 +959,13 @@ module KIF
         @budget_at = @started
       end
 
-      # false when the partner's messages cost more than the budget lets them. It fills
-      # with the clock, not with polls: what piled up while the game was busy is only
-      # what the partner sent in that time.
-      def pay(cost)
-        now = Net.now
-        @budget = [@budget + (now - @budget_at) * VALUE_RATE, VALUE_BURST].min - cost
-        @budget_at = now
+      # false when the partner's messages cost more than the budget lets them. `at` is when
+      # the frame arrived: the budget fills with the clock, not with polls, so what piled up
+      # while the game was busy is only what the partner sent in that time.
+      def pay(cost, at = Net.now)
+        at = @budget_at if at < @budget_at
+        @budget = [@budget + (at - @budget_at) * VALUE_RATE, VALUE_BURST].min - cost
+        @budget_at = at
         return @budget >= 0
       end
     end
@@ -1433,10 +1469,24 @@ module KIF
         end
         line.rx_seq = seq
         json = line.conn.reveal(ct, seq)
-        unless line.pay(Net.cost(json))   # a stream of heavy messages: not an honest partner
-          Net.log("the partner's messages cost too much to read")
-          return line_ended(line, :flood, out)
+        # the writer puts "t" first: the type is read without parsing, and a message longer than its type allows is dropped unparsed
+        type = json[/\A\{"t":"([a-z_0-9]{1,16})"/, 1]
+        cost = Net.cost(json)
+        if type && !TYPES.key?(type)   # a newer version's message: ignored, but not for free
+          afford?(line, cost, out)
+          return
         end
+        # until the player has said yes only a short hello (once), no, bye or ping means anything: the rest is dropped unparsed
+        unless @state == :connected || (json.bytesize <= 1024 &&
+               (type == "hello" ? (@state == :handshake || @state == :waiting) : %w[ping bye no].include?(type)))
+          return bad_frame(line, out, "#{type || 'message'} before the player said yes")
+        end
+        # longer than its type allows: fine as long as it is not made of many values (an extra text field costs the
+        # parser little; thousands of nested or listed values cost it tens of ms a frame)
+        if cost > FRAME_VALUES || (json.bytesize > Net.json_cap(type) && cost > 64)
+          return bad_frame(line, out, "longer than a #{type || 'message'} can be")
+        end
+        return unless afford?(line, cost, out)   # a stream of heavy messages: 62 KB of values take the parser 100-200 ms; the line is cut, not just the frame
         h = Wire.parse(json, MAX_VALUES)
         return bad_frame(line, out, "unreadable") unless h
         type = h["t"]
@@ -1472,6 +1522,14 @@ module KIF
         else
           out << [:message, type, msg] if @state == :connected
         end
+      end
+
+      # false (and the line closed as a flood) when the partner's messages cost more to read than the budget allows
+      def afford?(line, cost, out)
+        return true if line.pay(cost, line.conn.arrived)
+        Net.log("the partner's messages cost too much to read")
+        line_ended(line, :flood, out)
+        return false
       end
 
       def bad_frame(line, out, why)

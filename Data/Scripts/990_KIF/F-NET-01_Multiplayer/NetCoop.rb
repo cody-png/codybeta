@@ -549,10 +549,11 @@ module KIF
       end
 
       # text from the peer for a message window: no control codes (\c[...],
-      # \se[...] would play files), no control characters
+      # \se[...] would play files), no tags (<img=file> loads a file and
+      # crashes on one that is not a picture), no control or direction characters
       def text(v, max = 300)
         return "" unless v.is_a?(String)
-        return v.gsub("\r\n", "\n").gsub(/[\\\x00-\x09\x0b-\x1f\x7f]/, "")[0, max]
+        return KIF::Net.safe_text(v, max)
       end
 
       def name(v); text(v, 24).delete("\n"); end

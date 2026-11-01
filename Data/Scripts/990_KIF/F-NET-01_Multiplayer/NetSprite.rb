@@ -5,10 +5,11 @@
 #   "sp" => [type, head, body, alt, hash]   the sprite the sender's game draws:
 #            type "C" custom / "A" autogen / "B" base, head and body dex
 #            numbers (body 0 for a base sprite), the alt letters, and the
-#            first 16 hex digits of SHA-256 over the 96x96 frame's RGBA pixels
+#            first 32 hex digits of SHA-256 over the 96x96 frame's RGBA pixels
 #   "kc" => { field => value }              KIF shiny colours (F-SHINY-01),
 #            shinies only
-# The receiving game ("Use partners' sprites" On, the default) draws that
+# The receiving game ("Use partners' sprites" On; Off is the default, a
+# partner's picture is shown only to a player who asked for it) draws that
 # Pokémon with the same picture: from its cache of partners' sprites, or its
 # own sprite for the same key when that has the same hash; otherwise it asks
 # the partner for the picture (sp_get {x}) and uses its own pick until the
@@ -20,10 +21,16 @@
 # was asked. Read by the code below, never by Bitmap.new(path); the pixels
 # go into Bitmap.new(96, 96) with raw_data=. Stored only as
 # <save folder>/KIF_PartnerSprites/<hash>.png (+ <hash>.txt: artist credit),
-# never in Graphics/ or the sprite packs. A game only sends pictures it
-# advertised itself (no file names cross the wire).
+# never in Graphics/ or the sprite packs; the file is this game's own PNG
+# encoding of the pixels, not the partner's bytes. A game only sends pictures
+# it advertised itself (no file names cross the wire).
+# Limits: 24 pictures in memory, about 250 files in the folder (trimmed every
+# 25 stores), 32 asks in flight (unanswered ones expire after 30 s), 6 sheet
+# decodes in a burst for keys the partner names and 2 a second after, 6
+# answers per picture and 20 in all per 10 s, the credit text cleaned by
+# KIF::Net.safe_text.
 #===============================================================================
-KIF::Options.define(:kif_mp_partner_sprites, 1, :global)   # 0 Off, 1 On
+KIF::Options.define(:kif_mp_partner_sprites, 0, :global)   # 0 Off (default), 1 On
 
 KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (015_KIF_SettingsData)
   next nil if KIF.mobile?
@@ -38,7 +45,7 @@ module KIF
   module NetSprite
     SIZE    = 96
     MAX_PNG = 40_000     # a 96x96 RGBA frame stored raw is ~37 KB, so any real one fits
-    HASH    = /\A[0-9a-f]{16}\z/
+    HASH    = /\A[0-9a-f]{32}\z/
     ALT     = /\A[a-z]{0,3}\z/
     TYPES   = { "C" => :CUSTOM, "A" => :AUTOGEN, "B" => :BASE }
     SIG     = "\x89PNG\r\n\x1A\n".b
@@ -52,12 +59,20 @@ module KIF
     %w[shinyKRS head_shinykrs body_shinykrs].each { |k| SHINY[k] = [:krs] }
     %w[head_shiny body_shiny].each { |k| SHINY[k] = [:bool] }
 
-    KIF::Net::TYPES["sp_get"] = { "x" => [String, 16] }
-    KIF::Net::TYPES["sp_img"] = { "x" => [String, 16], "png" => [String, 54_000], "c" => [String, 80] }
+    KIF::Net::TYPES["sp_get"] = { "x" => [String, 32] }
+    KIF::Net::TYPES["sp_img"] = { "x" => [String, 32], "png" => [String, 54_000], "c" => [String, 80] }
 
-    @served  = {}   # hash => [raw, credit]: pictures this game advertised (newest 64)
+    MEM_MAX    = 24    # pictures kept in memory (oldest out first); the rest are read from the cache folder
+    DISK_KEEP  = 250   # cache files: the folder is trimmed (to half) past this, checked every TRIM_EVERY stores
+    TRIM_EVERY = 25
+    HASH_MAX   = 256   # sprite keys remembered
+    BUCKET_MAX = 6     # sheet decodes for keys the partner names: a burst, then BUCKET_RATE a second
+    BUCKET_RATE = 2.0
+
+    @served  = {}   # hash => [raw, credit, base64 png or nil, times sent]: pictures this game advertised (newest 64)
     @hashes  = {}   # sprite key => hash or false, for this session
-    @mem     = {}   # hash => raw: partners' pictures read this session
+    @mem     = {}   # hash => raw: partners' pictures read this session (newest MEM_MAX)
+    @bucket  = [BUCKET_MAX.to_f, nil]
     @pending = {}   # hash => time asked
     @sent    = []   # times pictures were sent (rate)
 
@@ -67,13 +82,14 @@ module KIF
 
     def self.on?
       return false if KIF.mobile?
-      return (($PokemonSystem.kif_mp_partner_sprites rescue 1) || 1).to_i == 1
+      return (($PokemonSystem.kif_mp_partner_sprites rescue 0) || 0).to_i == 1
     end
 
     def self.log(msg); KIF::Net.log("sprites: #{msg}"); end
 
     def self.on_connect(_s = nil)
       @pending.clear
+      @mem.clear
       @hashes.clear   # sprite packs may have changed between sessions
     end
 
@@ -90,12 +106,13 @@ module KIF
 
     def self.credit(hash)
       f = path(hash, "txt")
-      return (f && File.file?(f)) ? File.read(f, 200).to_s.strip : nil
+      return nil unless f && File.file?(f)
+      return KIF::Net.safe_text(File.binread(f, 400).to_s.force_encoding("UTF-8").scrub(""), 80).delete("\n").strip
     rescue SystemCallError
       return nil
     end
 
-    def self.digest(raw); Digest::SHA256.hexdigest(raw)[0, 16]; end
+    def self.digest(raw); Digest::SHA256.hexdigest(raw)[0, 32]; end
 
     #---------------------------------------------------------------------------
     # PNG: written and read here, one shape only (96x96, RGBA 8-bit, filter 0)
@@ -229,7 +246,11 @@ module KIF
       ensure
         bmp.dispose
       end
-    rescue StandardError => e
+    rescue *KIF::UnreadableSprites::ERRORS => e   # mkxp-z's SDLError is not a StandardError
+      if (bad = KIF::UnreadableSprites.path_in(e))
+        KIF::UnreadableSprites.mark(bad, e)   # skipped from now on
+        KIF::UnreadableSprites.forget(ps)
+      end
       log("couldn't read a sprite (#{e.class}: #{e.message})")
       return nil
     end
@@ -240,7 +261,22 @@ module KIF
       raw = frame_raw(ps || sprite_of(k))
       h = raw && raw.bytesize == SIZE * SIZE * 4 ? digest(raw) : nil
       @hashes[k] = h || false
+      @hashes.shift while @hashes.length > HASH_MAX
       return h
+    end
+
+    # hash of the picture THIS game has for a key the partner named: from the
+    # memo, else one sheet decode if the budget allows (else nil: the picture
+    # is asked for). Keeps a partner from making this game decode sheets
+    def self.own_hash(k)
+      return @hashes[k] || nil if @hashes.key?(k)
+      now = KIF::Net.now
+      @bucket[0] = BUCKET_MAX.to_f if @hashes.empty?   # nothing remembered: a new connection, a full budget
+      @bucket[0] = [BUCKET_MAX.to_f, @bucket[0] + [now - (@bucket[1] || now), 0].max * BUCKET_RATE].min
+      @bucket[1] = now
+      return nil if @bucket[0] < 1
+      @bucket[0] -= 1
+      return hash_of(k)
     end
 
     #---------------------------------------------------------------------------
@@ -262,7 +298,7 @@ module KIF
         h["sm"] = shiny_modes(p)   # how this game draws its colours (Colours, style, filter)
       end
       return h
-    rescue StandardError => e
+    rescue *KIF::UnreadableSprites::ERRORS => e
       log("no sprite key (#{e.class}: #{e.message})")
       return h
     end
@@ -270,7 +306,7 @@ module KIF
     def self.remember(x, raw, ps)
       return unless raw && raw.bytesize == SIZE * SIZE * 4 && digest(raw) == x
       c = (ps.type == :AUTOGEN ? nil : getSpriteCredits(ps.to_filename(false))) rescue nil
-      @served[x] = [raw, c.to_s.strip[0, 80]]
+      @served[x] = [raw, c.to_s.strip[0, 80], nil, []]
       @served.delete(@served.keys.first) while @served.length > 64
     end
 
@@ -293,6 +329,8 @@ module KIF
     end
 
     def self.load_into(p, h)
+      # a partner's shiny, with or without colours of its own: F-SHINY-01 keeps it out of its disk cache
+      p.instance_variable_set(:@kif_net_kc, true) if p.shiny?
       if p.shiny? && h["kc"].is_a?(Hash)
         m = h["sm"]
         if m.is_a?(Array) && m.length == 3 && m.each_with_index.all? { |v, i| v.is_a?(Integer) && v.between?(0, MODES[i][1]) }
@@ -305,7 +343,7 @@ module KIF
       p.instance_variable_set(:@kif_net_sprite, k)
       want(k)
       return p
-    rescue StandardError => e
+    rescue *KIF::UnreadableSprites::ERRORS => e
       log("sprite key not used (#{e.class}: #{e.message})")
       return p
     end
@@ -314,6 +352,7 @@ module KIF
     def self.forget(p)
       p.remove_instance_variable(:@kif_net_sprite) if p.instance_variable_defined?(:@kif_net_sprite)
       p.remove_instance_variable(:@kif_net_shiny) if p.instance_variable_defined?(:@kif_net_shiny)
+      p.remove_instance_variable(:@kif_net_kc) if p.instance_variable_defined?(:@kif_net_kc)
     end
 
     def self.shiny_dump(p)
@@ -330,11 +369,13 @@ module KIF
       return out.empty? ? nil : out
     end
 
+    KRS_RANGE = [-200..200, 0..4, 0..2]   # what the game rolls for entries 0-2, 3-5 and 6-8 (kurayKRSfunc1-3)
+
     def self.shiny_ok?(k, v)
       a, b = SHINY[k]
       case a
       when :bool then return v == true || v == false
-      when :krs then return v.is_a?(Array) && v.length == 9 && v.all? { |x| x.is_a?(Integer) && x.between?(-200, 200) }
+      when :krs then return v.is_a?(Array) && v.length == 9 && v.each_with_index.all? { |x, i| x.is_a?(Integer) && KRS_RANGE[i / 3].include?(x) }
       else return v.is_a?(Integer) && v.between?(a, b)
       end
     end
@@ -351,27 +392,35 @@ module KIF
     #---------------------------------------------------------------------------
     # pixels for a hash from this session or the cache folder (checked again), or nil
     def self.cached_raw(x)
-      return @mem[x] if @mem.key?(x)
+      return (@mem[x] = @mem.delete(x)) if @mem.key?(x)   # a hit moves to the end
       f = path(x) or return nil
       return nil unless File.file?(f) && File.size(f) <= MAX_PNG
       raw = read_png(File.binread(f))
       raw = nil unless raw && digest(raw) == x
-      @mem[x] = raw if raw
+      mem_put(x, raw) if raw
       return raw
     rescue SystemCallError
       return nil
+    end
+
+    def self.mem_put(x, raw)
+      @mem.delete(x)
+      @mem[x] = raw
+      @mem.shift while @mem.length > MEM_MAX
     end
 
     # :cache, :own, or :asked (or nil: nothing to do)
     def self.want(k, s = nil)
       x = k[4]
       return :cache if cached_raw(x)
-      return :own if hash_of(k[0, 4]) == x
+      return :own if own_hash(k[0, 4]) == x
       return request(s || (KIF::Net.session if KIF::Net.respond_to?(:session)), x) ? :asked : nil
     end
 
     def self.request(s, x)
       return false unless s&.connected? && x =~ HASH
+      now = KIF::Net.now
+      @pending.delete_if { |_, t0| now - t0 >= 30 }   # unanswered asks don't fill the 32 slots for good
       t = @pending[x]
       return true if t && KIF::Net.now - t < 30
       return false if @pending.length >= 32
@@ -386,9 +435,12 @@ module KIF
         e = @served[x] or return
         now = KIF::Net.now
         @sent.reject! { |t| now - t > 10 }
-        return log("too many pictures asked for; one not sent") if @sent.length >= 20
+        e[3] = (e[3] || []).reject { |t| now - t > 10 }
+        return log("too many pictures asked for; one not sent") if @sent.length >= 20 || e[3].length >= 6
         @sent << now
-        s.post("sp_img", "x" => x, "png" => [png(e[0])].pack("m0"), "c" => e[1].to_s)
+        e[3] << now
+        e[2] ||= [png(e[0])].pack("m0")   # encoded once per picture
+        s.post("sp_img", "x" => x, "png" => e[2], "c" => e[1].to_s)
       when "sp_img"
         x = msg["x"]
         return log("a picture this game didn't ask for; ignored") unless @pending.delete(x)
@@ -396,20 +448,23 @@ module KIF
         raw = read_png(bytes)
         return log("a picture that isn't a 96x96 PNG (or over #{MAX_PNG} bytes); ignored") unless raw
         return log("a picture that doesn't match its hash; ignored") unless digest(raw) == x
-        store(x, bytes, msg["c"])
+        store(x, raw, msg["c"])
       end
     end
 
-    def self.store(x, bytes, credit)
-      @mem[x] = read_png(bytes)
+    # raw: pixels that already hashed to x. The file is this game's own
+    # encoding of them, never the partner's bytes (no extra chunks or trailing data)
+    def self.store(x, raw, credit)
+      mem_put(x, raw)
       f = path(x) or return
-      unless @trimmed
+      if !@trimmed || (@since_trim = @since_trim.to_i + 1) >= TRIM_EVERY
         @trimmed = true
-        KIF.trim_cache_dir(dir, 500) if KIF.respond_to?(:trim_cache_dir)
+        @since_trim = 0
+        KIF.trim_cache_dir(dir, DISK_KEEP) if KIF.respond_to?(:trim_cache_dir)
       end
       KIF.mkdir_p(dir)
-      File.binwrite(f, bytes)
-      c = credit.to_s.gsub(/[\x00-\x1f\x7f\\]/, "").strip[0, 80]
+      File.binwrite(f, png(raw))
+      c = KIF::Net.safe_text(credit, 80).delete("\n").strip
       File.write(path(x, "txt"), c) unless c.empty?
     rescue SystemCallError => e
       log("couldn't save a partner's sprite (#{e.class})")
@@ -428,10 +483,10 @@ module KIF
         anim.scale_bitmap(3)   # the sheets' frames are drawn 3x, as the extractors do
         return anim
       end
-      return BattleSpriteLoader.new.load_pif_sprite_directly(sprite_of(k[0, 4])) if hash_of(k[0, 4]) == k[4]
+      return BattleSpriteLoader.new.load_pif_sprite_directly(sprite_of(k[0, 4])) if own_hash(k[0, 4]) == k[4]
       want(k)
       return nil
-    rescue StandardError => e
+    rescue *KIF::UnreadableSprites::ERRORS => e
       log("partner's sprite not drawn (#{e.class}: #{e.message})")
       return nil
     end

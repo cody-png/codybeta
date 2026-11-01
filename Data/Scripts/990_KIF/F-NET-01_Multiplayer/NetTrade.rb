@@ -163,6 +163,7 @@ module KIF
       end
       p = st[:theirs]
       p.obtain_method = 2   # traded, as pbStartTrade marks it
+      KIF::NetSprite.forget(p) if defined?(KIF::NetSprite)   # it is the player's own now: its own sprite picks, not the partner's picture
       $Trainer.pokedex.register(p)
       $Trainer.pokedex.set_owned(p.species)
       $Trainer.stats.incr_nb_trades if $Trainer.respond_to?(:stats) && $Trainer.stats.respond_to?(:incr_nb_trades)

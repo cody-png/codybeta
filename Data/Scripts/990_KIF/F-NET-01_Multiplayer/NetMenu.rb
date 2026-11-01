@@ -285,6 +285,7 @@ module KIF
       elsif @pm[:status] == :closed && PortMap.ip_kind(ext) == :public
         return JoinCode.make(:v4, ip: ext, port: s.port, secret: s.secret)
       elsif @pm[:status] == :closed && opened_by_hand? && (a = typed_address)
+        s.open_ipv6 if a.include?(":")   # an IPv6 code needs a door that listens on IPv6
         return JoinCode.make(a.include?(":") ? :v6 : :v4, ip: a, port: s.port, secret: s.secret)
       end
       return lan_code

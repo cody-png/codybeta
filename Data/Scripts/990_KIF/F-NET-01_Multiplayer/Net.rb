@@ -14,11 +14,14 @@
 #     host -> joiner  {"t":"auth","p":HMAC(Ke, "KIF2 host")}   X, Y, K = g^2xy, w)
 #     The joiner proves first. A wrong proof: {"t":"no","why":"code"} and the
 #     line closes; 5 wrong proofs from one address and it's ignored for 10
-#     minutes; at most 10 failed handshakes in 10 seconds. A host keeps a few
-#     handshakes going at once (4, 2 for one address; the oldest makes room), so
-#     a silent connection can't hold the door. "busy" is only said to someone
-#     with the right code (signed). "wait" and "code" arrive unsigned: the
-#     joiner keeps them as a hint and reports them only if the line then closes.
+#     minutes; at most 10 failed handshakes in 10 seconds (a line that gets the
+#     host's hi and leaves without a proof counts as one). A host keeps a few
+#     handshakes going at once (4, 2 for one address; a full table drops the
+#     oldest line of the address holding the most), so a silent connection
+#     can't hold the door, and one address opens 12 connections in 10 s at most.
+#     "busy" is only said to someone with the right code (signed). "wait" and
+#     "code" arrive unsigned: the joiner keeps them as a hint and reports them
+#     only if the line then closes.
 #   Then the joiner says hello and the host's player is asked "Let <name>
 #   join?". The host answers with its own hello, or a signed
 #   {"t":"no","why":"declined"} (also after 60 s without an answer). After 3
@@ -30,7 +33,8 @@
 #     ciphertext), checked before anything is decrypted or read. A frame with
 #     a wrong MAC, an old number (replay) or fields that don't fit its type is
 #     dropped; a type this version doesn't know is ignored. 5 bad frames close
-#     the line. A line also closes when it sends more than 192 KB a second
+#     the line, and so does a number that skips one (a frame cut out on the
+#     way). A line also closes when it sends more than 192 KB a second
 #     (after a 1.5 MB burst) or more than 4 MB sit unread.
 #   The first signed message each way is "hello" (name, KIF version).
 #   "ping" every 5 s of quiet; 20 s without a byte = lost. "bye" = clean close.
@@ -68,12 +72,14 @@ module KIF
     POLL_BUDGET   = 0.008 # seconds of frame work in one Session#poll (at least one frame)
     MAX_OUT       = 512  # frames waiting to be written before the line is closed
     WRITE_TIMEOUT = 10.0 # seconds a write may make no progress
-    MAX_VALUES    = 4096 # values (numbers, strings, lists...) in one message from the partner
+    MAX_VALUES    = 4200 # values (numbers, strings, lists...) in one message from the partner:
+                         # an 8 KB mod value is at most 4096 of them (0,0,0...), plus the message's own
     PARSE_MAX     = 20_000 # ... and in any other text Wire.parse is asked to read
     ARRAY_MAX     = 256  # a list field without its own limit
     HASH_MAX      = 128  # a table field without its own limit
-    OBJ_ARRAY_MAX = 2048 # a list inside an [Object] field (mod data)
-    OBJ_HASH_MAX  = 512
+    OBJ_ARRAY_MAX = 4096 # a list or table inside an [Object] field (mod data): whatever 8 KB can hold
+    OBJ_HASH_MAX  = 2048
+    MAX_CONNECTS  = 12   # connections one address (an IPv6 /64 counts as one) may open in 10 s
 
     # Message types after the handshake: field => [class, max length] or
     # [Integer, min, max] or [Array, max items] or [Hash, max keys] or [Object]
@@ -100,6 +106,18 @@ module KIF
     # the other game's version text: letters, digits and . + _ - only (it goes
     # through _INTL, where a backslash in an argument is read as a command)
     def self.shown_ver(v); v.to_s.gsub(/[^0-9A-Za-z.+_ -]/, "")[0, 16]; end
+
+    # who a limit is counted for: the address; an IPv6 /64 (one household has
+    # billions of addresses) counts as one, and ::ffff:a.b.c.d as a.b.c.d
+    def self.addr_key(ip)
+      a = ip.to_s.sub(/%.*\z/, "")
+      return a unless a.include?(":")
+      b = Addrinfo.ip(a).to_sockaddr.byteslice(8, 16).bytes
+      return b[12, 4].join(".") if b[0, 10].all?(0) && b[10] == 0xff && b[11] == 0xff
+      return b[0, 8].map { |x| format("%02x", x) }.join + "::/64"
+    rescue StandardError
+      return ip.to_s
+    end
 
     # an address for the log: most of it hidden (the log is sent in bug reports)
     def self.mask_addr(ip)
@@ -271,11 +289,13 @@ module KIF
         return [x, G.pow(x, P) * mine_w % P]
       end
 
-      # K, or nil for an element that isn't allowed
+      # K, or nil for an element that isn't allowed. K is 1 only for someone who
+      # sent +-base^w with the right w (the code's secret): it is used like any
+      # other K. Refusing it would tell a guesser "right" by the host's silence,
+      # with no proof sent and so nothing counted against him.
       def finish(x, theirs, theirs_w_inv)
         return nil unless theirs.is_a?(Integer) && theirs > 1 && theirs < P - 1
-        k = (theirs * theirs_w_inv % P).pow(2 * x, P)
-        return k > 1 ? k : nil
+        return (theirs * theirs_w_inv % P).pow(2 * x, P)
       end
 
       def inverse(a)
@@ -730,7 +750,7 @@ module KIF
     # proof was right as the partner's line.
     #---------------------------------------------------------------------------
     class Line
-      attr_accessor :conn, :hs, :started, :bad, :rx_seq, :ke, :nj, :nh, :my_nonce, :x, :xe, :hint, :gone
+      attr_accessor :conn, :hs, :started, :bad, :rx_seq, :ke, :nj, :nh, :my_nonce, :x, :xe, :hint, :gone, :key
 
       def initialize(conn)
         @conn = conn
@@ -774,6 +794,8 @@ module KIF
         @hs_limit = HS_LIMIT
         @hs_log = []             # when a handshake failed (the last 10 s)
         @fails = {}              # address => [count, until]
+        @seen = {}               # address => when it connected (the last 10 s)
+        @seen_lock = Mutex.new
         @no_log = []             # when the player said no (the last 10 minutes)
         @wrong_logged = 0
         @strangers = 0
@@ -856,6 +878,8 @@ module KIF
       def open_ipv6
         return true if @v6
         return false unless @role == :host && @via == :direct && @port && hosting?
+        return false if @v6_try && Net.now - @v6_try < 5   # asked for on every screen refresh
+        @v6_try = Net.now
         srv = TCPServer.new("::", @port)
         @servers << srv
         @v6 = true
@@ -957,7 +981,7 @@ module KIF
               sleep 0.1   # a visitor that left before we looked, or out of descriptors
               next
             end
-            if @events.size >= MAX_SOCKS   # the game isn't looking: no room for more
+            if !room_for(s) || @events.size >= MAX_SOCKS   # too many from one address, or the game isn't looking
               (s.close rescue nil)
             else
               @events << [:sock, s]
@@ -967,6 +991,21 @@ module KIF
         t.report_on_exception = false
         @threads << t
         @acceptors << t
+      end
+
+      # a connect-and-drop loop can't fill the queue or wear the table out: an
+      # address (an IPv6 /64) opens MAX_CONNECTS connections in 10 s (accept threads)
+      def room_for(sock)
+        key = Net.addr_key(sock.remote_address.ip_address) rescue "?"
+        now = Net.now
+        @seen_lock.synchronize do
+          recent = (@seen[key] ||= [])
+          recent.reject! { |t| now - t > 10 }
+          return false if recent.length >= MAX_CONNECTS
+          recent << now
+          @seen.delete_if { |_, v| now - v.last > 10 } if @seen.length > 64
+        end
+        return true
       end
 
       def connect_out(host, port)
@@ -1009,19 +1048,26 @@ module KIF
         end
         return (sock.close rescue nil) if @state == :closed
         addr = (sock.remote_address.ip_address rescue "?")
+        key = Net.addr_key(addr)
         now = Net.now
-        f = @fails[addr]
+        f = @fails[key]
         @hs_log.reject! { |t| now - t > 10 }
         # an address that guessed wrong too often, or too many failed handshakes
         # lately. (Whether the host is busy is only told to someone with the code.)
         return refuse(sock, "wait") if (f && f[0] >= MAX_BAD && now < f[1]) || @hs_log.length >= @hs_limit
-        @fails.delete(addr) if f && now >= f[1]
+        @fails.delete(key) if f && now >= f[1]
         @fails.delete_if { |_, v| now >= v[1] } if @fails.length > 64
-        # room for this one: the oldest of this address, then the oldest of all, goes
-        mine = @pending.select { |l| l.conn.addr == addr }
+        # room for this one: an address with its share loses its oldest line; a full
+        # table loses the oldest line of the address holding the most, so a few quiet
+        # connections from other addresses can't push a real joiner out
+        mine = @pending.select { |l| l.key == key }
         drop_pending(mine.first) if mine.length >= MAX_PER_ADDR
-        drop_pending(@pending.first) if @pending.length >= MAX_PENDING
+        if @pending.length >= MAX_PENDING
+          held = @pending.group_by(&:key).transform_values(&:length)
+          drop_pending(@pending.find { |l| held[l.key] == held.values.max })
+        end
         line = new_line(sock)
+        line.key = key
         line.hs = :wait_hi
         line.conn.deadline = now + @handshake_timeout
         @pending << line
@@ -1125,7 +1171,7 @@ module KIF
         addr = line.conn.addr
         count = 1
         if @via == :direct
-          f = (@fails[addr] ||= [0, 0])
+          f = (@fails[line.key] ||= [0, 0])
           f[0] += 1
           f[1] = Net.now + 600
           count = f[0]
@@ -1145,7 +1191,11 @@ module KIF
         return unless line.equal?(@line)
         seq, ct = line.conn.verify(payload)
         return bad_frame(line, out, "bad signature") unless seq
-        return bad_frame(line, out, "old or missing number") unless seq > line.rx_seq
+        return bad_frame(line, out, "old number") unless seq > line.rx_seq
+        if seq != line.rx_seq + 1   # numbered 1, 2, 3... on an ordered line: a hole means one was cut out on the way
+          Net.log("a message from the partner is missing")
+          return line_ended(line, :error, out)
+        end
         line.rx_seq = seq
         h = Wire.parse(line.conn.reveal(ct, seq), MAX_VALUES)
         return bad_frame(line, out, "unreadable") unless h
@@ -1226,6 +1276,16 @@ module KIF
         @state = :listening if @role == :host && @via == :direct
       end
 
+      # A line that got the host's hi and went without a proof is a guess nobody
+      # judged. It counts like a wrong proof; a silent connection costs nothing.
+      def unproven(line)
+        return unless line.hs == :wait_auth && line.key
+        @hs_log << Net.now
+        f = (@fails[line.key] ||= [0, 0])
+        f[0] += 1
+        f[1] = Net.now + 600
+      end
+
       def drop_pending(line, gently = false)
         line.gone = true
         gently ? line.conn.finish : line.conn.close(false)
@@ -1235,7 +1295,7 @@ module KIF
       def line_ended(line, why, out)
         return if line.gone
         unless line.equal?(@line)   # a handshake nobody finished: a scan, a stranger
-          @hs_log << Net.now if [:oversized, :flood].include?(why)
+          [:oversized, :flood].include?(why) ? (@hs_log << Net.now) : unproven(line)
           return drop_pending(line)
         end
         was = @state
@@ -1253,7 +1313,11 @@ module KIF
 
       def check_time(out)
         now = Net.now
-        @pending.dup.each { |l| drop_pending(l) if now - l.started > @handshake_timeout }
+        @pending.dup.each do |l|
+          next unless now - l.started > @handshake_timeout
+          unproven(l)
+          drop_pending(l)
+        end
         l = @line or return
         if @state == :handshake && l.hs != :relay_wait && now - l.started > @handshake_timeout
           return give_up(out, [:failed, l.hint || :timeout]) if @role == :join

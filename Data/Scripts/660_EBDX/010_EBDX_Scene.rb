@@ -759,7 +759,7 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
       sprite.zoom_y = baseZoom
 
       # Ensure visible
-      sprite.visible = true if b.hp > 0
+      sprite.visible = true if b.hp > 0 && !(sprite.respond_to?(:hidden) && sprite.hidden)   # a Fly / Dig user stays out of sight
     end
   end
 
@@ -1224,7 +1224,7 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
 
   def pbShowAllDataboxes(side = nil)
     @battlers.each_with_index do |b, i|
-      next if !b || (!side.nil? && i%2 != side)
+      next if !b || b.fainted? || (!side.nil? && i%2 != side)   # a fainted battler's box was hidden on purpose
       @sprites["dataBox_#{i}"].visible = true if @sprites["dataBox_#{i}"]
     end
     @dataBoxesHidden = false
@@ -1361,10 +1361,10 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
     pokemon = battler.displayPokemon rescue battler.pokemon
     return if !pokemon
     begin
-      cry = GameData::Species.cry_filename_from_pokemon(pokemon)
-      pbSEPlay(cry) if cry
+      GameData::Species.play_cry_from_pokemon(pokemon)   # as PIF's send-out: a fusion calls with both its cries
     rescue
-      GameData::Species.play_cry_from_pokemon(pokemon) rescue nil
+      cry = GameData::Species.cry_filename_from_pokemon(pokemon) rescue nil
+      pbSEPlay(cry) if cry
     end
   end
 

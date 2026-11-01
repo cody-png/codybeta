@@ -61,7 +61,9 @@ module KIF
     ID_CHARS  = "abcdefghjkmnpqrstuvwxyz23456789"
     CHUNK     = 60       # events per update code / message
     MAX_TEXT  = 60_000   # an update code's length
-    MAX_JSON  = 200_000  # an update code unpacked
+    MAX_JSON  = 200_000  # an update code unpacked (one the player pastes)
+    LINK_JSON = 4_000    # a link code unpacked (a real one: about 250)
+    NET_JSON  = 40_000   # an update code from the connection unpacked (60 events: about 20,000)
     MAX_EVENTS = 600     # events in one update code
     MAX_LOG    = 600     # the partner's events kept in a save
     MAX_PLACES = 400     # places kept in a save
@@ -128,15 +130,16 @@ module KIF
     end
 
     def self.json(v); KIF::Net::Wire.json(v); end
-    def self.parse(s); KIF::Net::Parser.new(s).run; end
+    # (values: reading them is what costs time; a real link code has 9, 60 events about 1,200)
+    def self.parse(s, values = nil); KIF::Net::Parser.new(s, values).run; end
 
-    def self.inflate(z)
+    def self.inflate(z, max = MAX_JSON)
       zi = Zlib::Inflate.new
       out = +"".b
       # in chunks: a small code that unpacks to megabytes is refused early
-      zi.inflate(z) { |chunk| out << chunk; raise "too big" if out.bytesize > MAX_JSON }
+      zi.inflate(z) { |chunk| out << chunk; raise "too big" if out.bytesize > max }
       out << zi.finish.to_s
-      return out.bytesize <= MAX_JSON ? out : nil
+      return out.bytesize <= max ? out : nil
     rescue StandardError
       return nil
     ensure
@@ -193,7 +196,7 @@ module KIF
       return :typo if bytes.bytesize < 6
       z = bytes[0...-4]
       return :typo unless crypto.sha256(z)[0, 4] == bytes[-4, 4]
-      h = (s = inflate(z)) && parse(s)
+      h = (s = inflate(z, LINK_JSON)) && parse(s, 200)
       return :invalid unless h.is_a?(Hash) && h["v"] == 1 && h["n"].is_a?(String) && h["t"].is_a?(Integer) &&
                              h["h"].is_a?(String) && h["h"] =~ /\A[0-9a-f]{#{KIF::Net::Spake2::HEX}}\z/ && h["set"].is_a?(String) &&
                              [0, 1].include?(h["m"]) && (h["g"].nil? || h["g"].is_a?(String))
@@ -367,9 +370,11 @@ module KIF
     EV_KINDS = %w[c m d o]
     SPECIES_RE = /\A(?!.*_x_)[A-Za-z0-9_]{1,48}\z/   # :NIDORANfE has a small letter; "_x_" ids make PIF's fusion lookup raise
 
+    EV_KEYS = %w[q k r p n s i l t x dbg z]   # what log_event makes; an event is kept in the save as it came, so nothing else may ride along
+
     def self.valid_event?(e)
-      return false unless e.is_a?(Hash) && e["q"].is_a?(Integer) && e["q"] > 0 && EV_KINDS.include?(e["k"]) &&
-                          e["r"].is_a?(String) && e["r"].length <= 8
+      return false unless e.is_a?(Hash) && e.keys.all? { |k| EV_KEYS.include?(k) } && e["q"].is_a?(Integer) && e["q"] > 0 &&
+                          EV_KINDS.include?(e["k"]) && e["r"].is_a?(String) && e["r"].length <= 8
       str = proc { |k, n| e[k].nil? || (e[k].is_a?(String) && e[k].length <= n && e[k] !~ /[\x00-\x1f]/) }
       return false unless str.call("p", 48) && str.call("n", 24) && str.call("s", 48)
       return false if e["s"] && e["s"] !~ SPECIES_RE
@@ -378,20 +383,22 @@ module KIF
       return false if e["l"] && !(e["l"].is_a?(Integer) && e["l"].between?(1, 1000))
       return false if e["t"] && !(e["t"].is_a?(Integer) && e["t"].between?(0, 2**40))
       return false unless e["dbg"].nil? || e["dbg"] == 1
+      return false unless e["x"].nil? || e["x"] == 1
       return false unless e["z"].nil? || (e["z"].is_a?(String) && e["z"].length <= 16)
       return e["k"] == "o" || e["k"] == "d" || e["p"].is_a?(String)
     end
 
-    # Hash {f:, a:, e:} or a Symbol why not: :invalid, :key (not this link / tampered)
-    def self.read_update_code(text)
+    # Hash {f:, a:, e:} or a Symbol why not: :invalid, :key (not this link / tampered).
+    # net: from the connection (one message holds 60 events at most), else one the player pasted (600)
+    def self.read_update_code(text, net = false)
       return :off unless linked?
       bytes = code_bytes("KIFSL", text) or return :invalid
       return :invalid if bytes.bytesize < 12
       z = bytes[0...-8]
       return :key unless crypto.same?(crypto.hmac(crypto.unhex(state[:key]), "KIFSL" + z)[0, 8], bytes[-8, 8])
-      h = (s = inflate(z)) && parse(s)
+      h = (s = inflate(z, net ? NET_JSON : MAX_JSON)) && parse(s, net ? 1_500 : 20_000)
       return :invalid unless h.is_a?(Hash) && h["v"] == 1 && h["l"] == state[:link] && [0, 1].include?(h["f"]) &&
-                             h["a"].is_a?(Integer) && h["e"].is_a?(Array) && h["e"].length <= MAX_EVENTS && h["e"].all? { |e| valid_event?(e) }
+                             h["a"].is_a?(Integer) && h["e"].is_a?(Array) && h["e"].length <= (net ? CHUNK : MAX_EVENTS) && h["e"].all? { |e| valid_event?(e) }
       h["e"].each { |e| %w[p n s].each { |k| e[k] = e[k].gsub(/[\\<>]/, "") if e[k].is_a?(String) } }   # shown in messages: no message codes, no tags
       return h
     end
@@ -618,6 +625,7 @@ module KIF
 
     def self.on_disconnect
       @peer = nil
+      @peer_code = nil
       @peer_info = nil   # (a new partner must not be linked with the last one's code)
       @offer = nil
       @asked = false
@@ -691,7 +699,10 @@ module KIF
     def self.receive(type, msg)
       if type == "sl_hello"   # kept while Off too: linking needs it once Soul Link is turned on
         @peer = msg
-        @peer_info = read_link_code(msg["code"])
+        unless msg["code"] == @peer_code   # (a hello again with the same code: nothing new to read)
+          @peer_code = msg["code"]
+          @peer_info = read_link_code(msg["code"])
+        end
       end
       return unless on?
       st = state
@@ -714,7 +725,7 @@ module KIF
         @peer_info = info
         link_with(info) if @asked && !st[:key]
       when "sl_up"
-        h = read_update_code(msg["code"])
+        h = read_update_code(msg["code"], true)
         return KIF.log("Soul Link: an update from #{partner} didn't fit (#{h})") unless h.is_a?(Hash)
         lines, n = receive_update(h)
         @notes = (@notes || []) + lines

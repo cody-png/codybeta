@@ -512,6 +512,9 @@ module KIF
         if g && !g.begun? && !g.done
           @no_asks_until = KIF::Net.now + 300
           tell(:ask_flood, _INTL("{1} asked you to join a battle that did not start. Their invites are ignored for 5 minutes.", partner))
+        elsif g && g.stopped?   # left because the host went silent or flooded, or the player pressed B: the next invite waits too
+          @no_asks_until = KIF::Net.now + 300
+          tell(:ask_stopped, _INTL("You left {1}'s battle. Their invites are ignored for 5 minutes.", partner))
         end
       end
     end

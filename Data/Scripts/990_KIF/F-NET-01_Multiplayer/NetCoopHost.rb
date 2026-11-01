@@ -132,6 +132,7 @@ module KIF
     #---------------------------------------------------------------------------
     class Host
       attr_reader :id, :name, :battle, :lost, :kills, :caught, :items
+      BEAT = 15.0   # seconds of quiet on the line before beat_start's thread says "still here"
       attr_accessor :mine_size, :own_catch
 
       def initialize(session, join)
@@ -156,9 +157,30 @@ module KIF
         @mute = 0
         @bag = join[:bag].is_a?(Hash) ? join[:bag] : {}   # the battle items the partner listed when it joined: no others
         @silent = 0      # turns in a row the partner gave no answer
+        @tx_at = KIF::Net.now   # when this game last sent the partner a co_ frame
+      end
+
+      # The partner's game leaves a battle whose host says nothing for 90 s. This game's own screens (a nickname, a move
+      # to forget, the Bag, the end of the battle) neither read the line nor send anything, so a thread says "still
+      # here" meanwhile (a co_int, as while this player chooses). It only queues a frame; no game object is touched.
+      def beat_start
+        @beat = Thread.new do
+          until @done || @lost
+            sleep 1
+            next if KIF::Net.now - @tx_at.to_f < BEAT
+            begin
+              @s.post("co_int", "id" => @id, "d" => { "t" => @int_t.to_i, "it" => @int_it.to_s })
+              @tx_at = KIF::Net.now
+            rescue StandardError
+              nil
+            end
+          end
+        end
+        @beat.report_on_exception = false
       end
 
       def attach(battle)
+        beat_start
         @battle = battle
         battle.instance_variable_set(:@kif_coop, self)
         sc = battle.scene
@@ -218,6 +240,7 @@ module KIF
 
       def post(type, fields)
         return false unless connected?
+        @tx_at = KIF::Net.now
         @s.post(type, fields.merge("id" => @id))
       end
 
@@ -494,7 +517,8 @@ module KIF
           end
         end
         @int_at = KIF::Net.now
-        post("co_int", "d" => { "t" => @turn, "it" => it.to_s[0, 60] })
+        @int_t, @int_it = @turn, it.to_s[0, 60]
+        post("co_int", "d" => { "t" => @int_t, "it" => @int_it })
       end
 
       # this player's battlers that picked something it can take back
@@ -766,6 +790,7 @@ module KIF
         return if @done
         flush if @battle
         @done = true
+        (@beat.kill rescue nil) if @beat
         d = { "dc" => decision.to_i }
         if @battle && !why
           d["cl"] = @battle.canLose ? 1 : 0

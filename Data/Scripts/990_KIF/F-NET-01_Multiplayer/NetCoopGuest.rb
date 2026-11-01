@@ -21,6 +21,9 @@ module KIF
       attr_accessor :view
 
       IDLE        = 90.0   # seconds the host may say nothing (while this player isn't choosing) before this game leaves
+      NO_NEWS     = 600.0  # ... and the most it may go on with only "still here" (co_int): no log entry, no request
+      STALL       = 30.0   # after that long without news the player is told B leaves the battle
+      PROGRESS    = %w[co_begin co_cmd co_sw co_end]   # (and a co_ev with an entry): what moves the battle on
       MAX_EVENTS  = 40     # log entries run from one co_ev (a real one holds 25 at most)
       MAX_TOTAL   = 6000   # log entries in one battle
       MAX_PAUSED  = 1500   # messages that wait for a key press in one battle
@@ -46,16 +49,26 @@ module KIF
         @ft_names = nil
         @fought = []    # slots of @party that took part in the battle on this screen
         @down = {}      # slots whose Pokémon the log showed at 0 HP
-        @rx_at = KIF::Net.now
+        @able = @party.each_index.select { |j| @party[j] && !@party[j].egg? && @party[j].hp > 0 }   # slots that could fight when this game joined
+        @picked_slots = []   # slots this player sent in itself (a switch, a replacement)
+        @free = 2       # Pokémon the host's AI may send in that this player did not pick: a forced switch (Roar...), one left to it
+        @rx_at = @news_at = KIF::Net.now
       end
 
       def feed(type, msg)
         return unless msg.is_a?(Hash) && msg["id"] == @id
         @rx_at = KIF::Net.now
+        (@news_at = @rx_at; @stall_shown = nil) if news?(type, msg)
         return abort_battle("too many frames waiting") if @box.to_a.length >= MAX_BOX
         @box << [type, msg]
       end
+
+      # a frame that moves the battle on (not "still here", not a note about a pick)
+      def news?(type, msg)
+        return PROGRESS.include?(type) || (type == "co_ev" && msg["e"].is_a?(Array) && !msg["e"].empty?)
+      end
       def begun?; @begun; end
+      def stopped?; @stopped ? true : false; end   # this game left (the host stopped, flooded, or the player left)
       def lost; @lost = true; end
       def lost?; @lost || !@s.connected?; end
       def session; @s; end
@@ -75,6 +88,7 @@ module KIF
         KIF::Net.update if KIF::Net.session.equal?(@s)   # a Bag or party screen doesn't read the line
         i = skip_at(req) or return false
         @box.delete_at(i)
+        credit   # the host's AI chose for this request
         @view.message(_INTL("{1}'s game chose for you this turn.", @host_name))
         return true
       end
@@ -102,14 +116,14 @@ module KIF
       end
 
       # this game leaves the battle: nothing more is applied, the host's game fights for this player
-      def abort_battle(why)
+      def abort_battle(why, quiet = false)
         return if @done
         KIF::Coop.log("#{@host_name}'s battle left here (#{why})")
-        @aborted = true
+        @aborted = @stopped = true
         @decision = 0
         @done = true
         (@s.post("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" }) rescue nil)
-        (@view.message(_INTL("{1}'s game stopped working with this one. You left the battle.", @host_name)) rescue nil) if @view && @begun
+        (@view.message(_INTL("{1}'s game stopped working with this one. You left the battle.", @host_name)) rescue nil) if @view && @begun && !quiet
       end
 
       # a fight on this screen: this slot of the party (-1: not one of this player's)
@@ -119,6 +133,18 @@ module KIF
         j = slot_of(pk)
         (@fought ||= []) << j if j >= 0 && !@fought.to_a.include?(j)
       end
+
+      # The host decides what happens on its screen, so it must not be able to make the whole team "fight" (and faint)
+      # here: a Pokémon of this player is sent in if it fought already, this player picked it, or the host's AI may
+      # (a forced switch, a pick this player left to it, a request that came too late: a few per battle)
+      def may_fight?(j)
+        return true if @fought.to_a.include?(j) || @picked_slots.to_a.include?(j)
+        return false if @free.to_i <= 0
+        @free -= 1
+        return true
+      end
+
+      def credit; @free = [@free.to_i + 1, 3].min; end   # (at most 3 waiting: a host can't save them up)
 
       def went_down(pk)
         j = slot_of(pk)
@@ -162,8 +188,14 @@ module KIF
 
       # every frame while this player waits on the host's turn
       def wait_frame
-        return unless @awaiting && KIF::Net.now - @awaited_at >= 0.5 && Input.trigger?(Input::BACK)
-        rechoose
+        now = KIF::Net.now
+        if now - @news_at > STALL && !@stall_shown && !@done   # the host's side is slow or stuck: the player can leave
+          @stall_shown = now
+          @view.stalled(_INTL("{1}'s game has not answered for a while.\n{2}: leave the battle", @host_name, KIF::Coop.back_name))
+        end
+        return unless Input.trigger?(Input::BACK)
+        return abort_battle("left by the player", true) if @stall_shown && now - @stall_shown >= 1.0
+        rechoose if @awaiting && now - @awaited_at >= 0.5
       end
       # the battle screen is up
       def started!
@@ -389,7 +421,7 @@ module KIF
         arr = @mirror.pbParty(mi)
         if mi.even? && own?(mp)
           pk = arr[mp]
-          return nil unless pk && !pk.egg?
+          return nil unless pk && !pk.egg? && may_fight?(mp)
           took_part(pk)
         else
           pk = load_mon(e[2]) or return nil
@@ -439,7 +471,8 @@ module KIF
         @mirror.instance_variable_set(:@kif_log_turn, int(d["t"], 0, 9999, 0)) if @mirror   # Battle Log: lines from here on are this turn's
         @turn_req = d
         a = nil
-        if b && mi.even? && own_pk?(b.pokemon)
+        own = b && mi.even? && own_pk?(b.pokemon)
+        if own
           unless again
             sync_party(d)
             sync_moves(b, d["mv"])
@@ -456,7 +489,9 @@ module KIF
           @balls += 1 if (GameData::Item.get(a["i"].to_sym).is_poke_ball? rescue false)
         end
         @last_pick = a
+        credit if own && !a   # left to the host's AI
         a ||= { "a" => "auto" }
+        @picked_slots << a["p"] if a["a"] == "switch" && a["p"].is_a?(Integer)
         it = b && a["a"] != "auto" ? pick_text(b, a) : nil
         a = a.merge("it" => it) if it
         @s.post("co_act", "id" => @id, "d" => a.merge("b" => d["b"], "t" => d["t"]))
@@ -493,11 +528,13 @@ module KIF
         return unless d.is_a?(Hash)
         mi = bat_checked(d["b"])
         p = -2
-        if mi && mi.even? && @mirror && !KIF::Coop.auto_battle?
+        own = mi && mi.even? && @mirror
+        if own && !KIF::Coop.auto_battle?
           sync_party(d)
           p = @view.replacement(mi, d) || -2
         end
         return if take_skip(d) || ended?
+        p >= 0 ? @picked_slots << p : (credit if own && p == -2)
         @s.post("co_swr", "id" => @id, "d" => { "n" => d["n"], "p" => p })
         @view.waiting
       end
@@ -537,16 +574,21 @@ module KIF
       # won together: the trainer is beaten on this save too, when this game has
       # that trainer (the same map and event, a trainer battle whose page turns
       # on self switch A, as PIF's trainers do)
-      TRAINER_CALL = /TrainerBattle\w*\(\s*:(\w+)\s*,\s*"([^"]*)"/
-      EVENT_SCRIPT_OK = /\A\s*(?:pbTrainerBattle\w*|pbTrainerIntro|pbTrainerEnd|pbNoticePlayer|pbTrainerCheck)\b/
+      TRAINER_CALL = /TrainerBattle\w*\(\s*(?::|PBTrainers::)(\w+)\s*,\s*"([^"]*)"/   # (:YOUNGSTER, or PBTrainers::YOUNGSTER,)
+      # the scripts of a trainer's page: its intro and end, the notice, speech bubbles, the battle's backdrop and music
+      EVENT_SCRIPT_OK = /\A\s*(?:pbTrainerBattle\w*|pbTrainerIntro|pbTrainerEnd|(?:Kernel\.)?pbNoticePlayer|pbTrainerCheck|pbCallBub|\$PokemonGlobal\.nextBattle(?:Back|BGM|ME)\s*=)/
       EVENT_CODES_NO  = [121, 122, 125, 126, 127, 128, 129, 134, 135, 136, 137, 138, 201, 202, 203, 339]   # switches, variables, money, items, party, warps, battle calls
 
-      # an event the host points at is marked beaten only when it is a plain trainer fight against a trainer
-      # of this battle: its pages hold nothing that changes the game (a badge, a switch, a variable, money, a warp)
-      def plain_trainer_event?(pages)
-        cmds = pages.flat_map { |pg| pg.list.to_a }
+      # An event the host points at is marked beaten only when its page (the one that starts the fight) is a plain
+      # fight against a trainer of this battle: the page holds nothing that changes the game (a badge, a switch,
+      # a variable, money, a warp), and sets only self switch A. Other pages (a rematch's) are not what runs now.
+      def plain_trainer_event?(page)
+        cmds = page.list.to_a
         return false if cmds.any? { |c| EVENT_CODES_NO.include?(c.code) }
-        scripts = cmds.select { |c| c.code == 355 || c.code == 655 }.map { |c| c.parameters[0].to_s }
+        return false if cmds.any? { |c| (c.code == 123 && c.parameters != ["A", 0]) || (c.code == 111 && c.parameters[0] != 12) }
+        scripts = []   # a script is its 355 line and the 655 lines after it
+        cmds.each { |c| c.code == 355 ? scripts << c.parameters[0].to_s : (scripts[-1] += "\n" + c.parameters[0].to_s if c.code == 655 && !scripts.empty?) }
+        scripts += cmds.select { |c| c.code == 111 }.map { |c| c.parameters[1].to_s }   # the battle is a script condition
         return false unless scripts.all? { |t| t =~ EVENT_SCRIPT_OK }
         return true if @ft_names.nil?   # (no battle set up here: only a game that was never told one gets here)
         calls = scripts.map { |t| t.match(TRAINER_CALL) }.compact.map { |m| [m[1].to_sym, Mon.name(m[2])] }
@@ -558,9 +600,10 @@ module KIF
         return unless $game_map && $game_map.map_id == map && $game_self_switches
         e = $game_map.events[ev] or return
         pages = e.instance_variable_get(:@event).pages rescue []
-        trainer = pages.any? { |pg| pg.list.any? { |c| c.parameters.any? { |x| x.is_a?(String) && x.include?("TrainerBattle") } } }
+        page = e.instance_variable_get(:@page) || pages.first   # the page the event runs now
+        trainer = page && page.list.any? { |c| c.parameters.any? { |x| x.is_a?(String) && x.include?("TrainerBattle") } }
         after = pages.any? { |pg| pg.condition.self_switch_valid && pg.condition.self_switch_ch == "A" }
-        return unless trainer && after && plain_trainer_event?(pages)
+        return unless trainer && after && plain_trainer_event?(page)
         $game_self_switches[[map, ev, "A"]] = true
         $game_map.need_refresh = true
         KIF::Coop.log("#{@host_name}'s trainer (event #{ev}) beaten here too")
@@ -579,10 +622,11 @@ module KIF
         end
       end
 
-      # this screen showed every Pokémon of this player that took part go down
+      # this screen showed every Pokémon of this player that was able at the start fight and go down
+      # (healthy ones that never came out mean the battle was not lost)
       def loss_seen?
         f = @fought.to_a
-        return !f.empty? && f.all? { |j| @down.to_h[j] }
+        return !f.empty? && @able.to_a.all? { |j| f.include?(j) && @down.to_h[j] }
       end
 
       # each foe the host noted: this game's own pbGainExp, one foe at a time
@@ -724,13 +768,14 @@ module KIF
           end
           @view.frame
           KIF::Net.update
-          busy = !@box.empty?
+          busy = @box.any? { |t, m| news?(t, m) }
           step
-          @rx_at = KIF::Net.now if busy   # (a menu or message of this player may have taken a while)
+          @rx_at = @news_at = KIF::Net.now if busy   # (a menu or message of this player may have taken a while)
           wait_frame
-          # the line stays up on pings alone: a host that says nothing for 90 s, or a battle that
-          # goes on for over an hour, is left (the host's game fights for this player)
+          # the line stays up on pings alone: a host that says nothing for 90 s, only says "still here" for 10 minutes,
+          # or a battle that goes on for over an hour, is left (the host's game fights for this player)
           abort_battle("the host said nothing for #{IDLE.to_i} s") if KIF::Net.now - @rx_at > IDLE
+          abort_battle("the host sent no news for #{NO_NEWS.to_i} s") if KIF::Net.now - @news_at > NO_NEWS
           abort_battle("the battle ran over an hour") if KIF::Net.now - t_start > 3600
         end
         @view.finish(@decision || 0)
@@ -784,6 +829,7 @@ module KIF
         call(:pbDisplayMessage, t, true)
       end
       def message(t); call(:pbDisplayPausedMessage, t); end
+      def stalled(t); call(:pbDisplayMessage, t, true); end
       def int(v, lo, hi, d = nil); Mon.int(v, lo, hi, d); end
 
       def frame
@@ -1110,6 +1156,7 @@ module KIF
       def finish(_d); end
       def frame; Graphics.update; Input.update; end
       def waiting(_change = false); end
+      def stalled(t); pbMessage(t); end
       def message(t); pbMessage(t); end
       def show(_ev); end
       def command(_mi, _req); nil; end

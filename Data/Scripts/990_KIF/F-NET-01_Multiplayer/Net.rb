@@ -50,7 +50,9 @@ module KIF
     MAX_QUEUED = 8_000_000   # bytes of frames waiting for the game thread; more and the line closes
     STALL_BYTES = 524_288    # ... or this many while the game thread has not polled for STALL_SECS (a screen that doesn't poll)
     STALL_SECS  = 2.0
-    POLL_WORK  = 30_000  # parse work one poll does (a value, or 100 bytes, is one); the rest waits for the next poll
+    POLL_SECS  = 0.008   # game-thread time for one poll, and again for what Net.update does with its messages; the rest waits for the next frame (the first always runs)
+    MAX_VALUES = 4_000   # values (numbers, strings, lists...) in one message; real ones hold under 1,500; 4,000 take about 30 ms to read
+    BACKLOG    = 64      # events waiting for Net.update: nothing more is read from the line meanwhile
     HS_LIMIT   = 10      # handshakes a host starts in 10 s
 
     # Message types after the handshake: field => [class, max length] or
@@ -65,7 +67,7 @@ module KIF
       "sl_hello" => { "link" => [String, 16], "seen" => [Integer, 0, 1_000_000_000],
                       "acked" => [Integer, 0, 1_000_000_000], "code" => [String, 1500] },
       "sl_link"  => { "code" => [String, 1500] },
-      "sl_up"    => { "code" => [String, 60_000] },
+      "sl_up"    => { "code" => [String, 16_000] },   # (60 events at most: under 10,000)
       "sl_party" => { "ids" => [String, 600] },   # id:species:level:hp:totalhp,...
     }
     NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined }
@@ -91,11 +93,6 @@ module KIF
     end
 
     def self.now; Process.clock_gettime(Process::CLOCK_MONOTONIC); end
-
-    @work = 0
-    class << self
-      attr_accessor :work
-    end
 
     #---------------------------------------------------------------------------
     # HMAC-SHA256 on Digest::SHA256 (the engine has no OpenSSL)
@@ -231,27 +228,24 @@ module KIF
 
       def frame(payload); [payload.bytesize].pack("N") + payload.b; end
 
-      # Hash or nil; never raises
-      def parse(text)
-        pr = Parser.new(text)
-        v = pr.run
-        Net.work += pr.values + text.to_s.bytesize / 100   # what the game thread spent (Session#poll keeps to a budget)
-        return v
+      # Hash or nil; never raises. More than `limit` values (nil: any number): nil, reading them is what costs time
+      def parse(text, limit = nil)
+        return Parser.new(text, limit).run
       end
     end
 
     class Parser
       DEPTH = 16
-      # (no cap on the values in one message: a frame is 64 KB at most; Net.work counts them for Session#poll's budget)
       WS  = /\G[ \t\r\n]*/
       NUM = /\G-?(?:0|[1-9]\d{0,17})(?:\.\d{1,17})?(?:[eE][+-]?\d{1,3})?/
       STR = /\G"((?:[^"\\\x00-\x1f]|\\["\\\/bfnrt]|\\u[0-9a-fA-F]{4})*)"/
       ESC = { "b" => "\b", "f" => "\f", "n" => "\n", "r" => "\r", "t" => "\t" }
 
-      def initialize(text)
+      def initialize(text, limit = nil)
         @s = text.to_s.b
         @i = 0
         @n = 0
+        @limit = limit   # nil: no cap on the values
       end
 
       def values; @n; end
@@ -272,7 +266,8 @@ module KIF
 
       def value(depth)
         raise "deep" if depth > DEPTH
-        @n += 1   # counted: Net.work, the budget of Session#poll
+        @n += 1
+        raise "many" if @limit && @n > @limit
         ws
         case @s[@i]
         when "{"
@@ -707,16 +702,19 @@ module KIF
             @conn.inbox.clear
             line_ended(:flood, out)
           end
-          w0 = Net.work
-          while @conn && (f = (@conn.inbox.pop(true) rescue nil))
+          t0 = Net.now
+          while @conn && out.length < BACKLOG && (f = (@conn.inbox.pop(true) rescue nil))
             @conn.took(f)
             f.is_a?(Array) ? line_ended(f[1] || :closed, out) : frame(f, out)
-            break if Net.work - w0 > POLL_WORK   # the rest next time: a flood of costly frames can't hold the game
+            break if Net.now - t0 > POLL_SECS   # the rest next frame: a flood of costly frames can't hold the game
           end
           check_time(out) if @conn
         end
         return out
       end
+
+      # events Net.update had no time for: first in the next poll
+      def defer(list); @later = list + @later; end
 
       private
 
@@ -852,7 +850,7 @@ module KIF
       def signed(payload, out)
         mac = payload.byteslice(0, 32)
         json = payload.byteslice(32, payload.bytesize - 32).to_s
-        h = Crypto.same?(Crypto.hmac(@rx_key, json), mac) ? Wire.parse(json) : nil
+        h = Crypto.same?(Crypto.hmac(@rx_key, json), mac) ? Wire.parse(json, MAX_VALUES) : nil
         return bad_frame(out, "bad signature") unless h
         seq = h["s"]
         return bad_frame(out, "old or missing number") unless seq.is_a?(Integer) && seq > @rx_seq

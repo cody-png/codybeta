@@ -130,7 +130,13 @@ module KIF
         Thread.new { log("router: the port's lease wasn't renewed") unless PortMap.renew(m) }.report_on_exception = false
       end
       s = @session
-      s.poll.each do |ev|
+      evs = s.poll
+      t0 = now
+      evs.each_with_index do |ev, i|
+        if i > 0 && now - t0 > POLL_SECS   # costly messages (a code to unpack) must not pile up in one frame: the rest comes next frame
+          s.defer(evs[i..-1])
+          break
+        end
         case ev[0]
         when :join_request
           log("#{ev[1]} asks to join")

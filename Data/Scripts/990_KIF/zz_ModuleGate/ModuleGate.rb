@@ -203,6 +203,7 @@ module KIF
           next unless id
           snap = @snapshot[[m, name]]
           next if snap && snap == um
+          next if self_gated?(m, name)
           next if old_code[loc]
           # An alias another layer made of this module's version (e.g.
           # kif_big_pbStartScene -> Gender's pbStartScene) is switched too,

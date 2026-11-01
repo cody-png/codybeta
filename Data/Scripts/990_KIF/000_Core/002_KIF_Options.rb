@@ -270,6 +270,7 @@ module KIF
         return false
       end
       @modules[id] = [st, by, owner]
+      KIF::Modules.gate_changed! if defined?(KIF::Modules) && KIF::Modules.respond_to?(:gate_changed!)
       KIF::Modules.poll if KIF::Modules.respond_to?(:poll) && $PokemonSystem
       return true
     end
@@ -287,11 +288,13 @@ module KIF
     def self.release(owner)
       @table.delete_if { |_k, v| v[2] == owner }
       @modules.delete_if { |_k, v| v[2] == owner }
+      KIF::Modules.gate_changed! if defined?(KIF::Modules) && KIF::Modules.respond_to?(:gate_changed!)
     end
 
     def self.reset!
       @table = {}
       @modules = {}
+      KIF::Modules.gate_changed! if defined?(KIF::Modules) && KIF::Modules.respond_to?(:gate_changed!)
     end
 
     # PIF's own settings (plain attributes): the getter learns about locks

@@ -153,11 +153,52 @@ module KIF
 
     # id: a module (:battles), or a feature folder ("F-BATTLE-08_LevelCaps"):
     # a feature is active while its module is and no mod replaced it
-    def self.active?(id)
-      return true if id.nil?
+    #
+    # Every gated method asks this, hundreds of times a frame. What an id
+    # stands for (the modules a folder is listed in, a mod's lock on each, a
+    # mod replacing the feature) only changes through gate_changed!, so it is
+    # worked out once: false / true, or [module, locked state or nil, ...].
+    # The player's own states are read from the settings every time.
+    @gate = {}
+
+    def self.gate_changed!; @gate.clear if @gate; end
+
+    def self.gate_for(id)
       if id.is_a?(String)
         return false if KIF::Features.replaced?(id)
         ids = KIF::Features.modules_of(id)   # a folder listed in two modules runs while either is on
+        return true if ids.empty?
+      else
+        ids = [id]
+      end
+      flat = []
+      ids.each { |m| flat << m << KIF::Locks.module_state(m) }
+      return flat
+    end
+
+    def self.active?(id)
+      return true if id.nil?
+      g = @gate[id]
+      g = (@gate[id] = gate_for(id)) if g.nil?
+      return g unless g.is_a?(Array)
+      sys = $PokemonSystem
+      h = sys && sys.instance_variable_get(:@kif_modules)
+      return active_slow?(id) unless h.is_a?(Hash)   # no states yet: the long way makes them
+      i = 0
+      n = g.length
+      while i < n
+        st = g[i + 1]
+        st = h[g[i]] if st.nil?
+        return true unless st.nil? || st == OFF
+        i += 2
+      end
+      return false
+    end
+
+    def self.active_slow?(id)
+      if id.is_a?(String)
+        return false if KIF::Features.replaced?(id)
+        ids = KIF::Features.modules_of(id)
         return true if ids.empty?
         return ids.any? { |m| state(m) != OFF }
       end
@@ -210,6 +251,16 @@ module KIF
     @no_gate = {}
     def self.no_gate(mod); @no_gate[mod] = true; end
     def self.no_gate?(mod); return @no_gate[mod] ? true : false; end
+
+    # Single methods that check their module themselves (the gate leaves them
+    # alone): the busiest hooks, where the switch in front would cost more than
+    # the hook does. Only for a hook that hands over to the method it replaced
+    # whenever its own check says Off.
+    @self_gated = {}
+    def self.self_gated(klass, *names)
+      names.each { |n| @self_gated[[klass, n.to_sym]] = true }
+    end
+    def self.self_gated?(klass, name); return @self_gated.key?([klass, name]); end
 
     def self.all_on!
       h = states
@@ -445,6 +496,7 @@ module KIF
         return false
       end
       @replaced[id] = [by.to_s, owner]
+      KIF::Modules.gate_changed!
       KIF.log("#{by} replaces KIF's #{title(id)} (#{id})")
       return true
     end
@@ -452,6 +504,7 @@ module KIF
     # undo what a mod replaced (a mod that failed to load)
     def self.release(owner)
       @replaced.delete_if { |_k, v| v[1] == owner }
+      KIF::Modules.gate_changed!
     end
 
     def self.replaced?(key)
@@ -470,6 +523,7 @@ module KIF
 
     def self.reset!
       @replaced = {}
+      KIF::Modules.gate_changed!
     end
   end
 end

@@ -97,6 +97,10 @@ module KIF
 
     def self.loaded?(map_id); $MapFactory ? $MapFactory.hasMap?(map_id) : false; end
 
+    # The size map characters are drawn at (KIF's Map Zoom: 0.5 at Far); 1.0 without it.
+    # Game_Character#screen_x/y/z already come out in that size: only the pictures need it.
+    def self.zoom; defined?(KIF::MapZoom) ? KIF::MapZoom.scale : 1.0; end
+
     #---------------------------------------------------------------------------
     # One connection: what we send, and the partner's ghost
     #---------------------------------------------------------------------------
@@ -503,6 +507,9 @@ module KIF
       # the screen y of the top of the picture
       def draw_body(g)
         sheet = g.sheet
+        z = Presence.zoom   # like every map character at Map Zoom (the name tag stays readable)
+        @body.zoom_x = z
+        @body.zoom_y = z
         ch = 64
         @head_top = 22   # no picture: where PIF's player head starts in its 80 px frames
         if sheet
@@ -526,7 +533,7 @@ module KIF
         @body.z = g.screen_z(ch)
         @body.opacity = g.opacity
         pbDayNightTint(@body)
-        return @body.y - (sheet ? @body.oy : ch)
+        return (@body.y - (sheet ? @body.oy : ch) * z).round
       end
 
       def draw_base(g)
@@ -545,6 +552,8 @@ module KIF
         @base.x = @body.x
         @base.y = @body.y
         @base.z = @body.z - 1
+        @base.zoom_x = @body.zoom_x   # as Sprite_SurfBase copies the player's size
+        @base.zoom_y = @body.zoom_y
         @base.opacity = @body.opacity
         @base.tone = @body.tone
         @base.visible = true
@@ -560,7 +569,7 @@ module KIF
         @tag.ox = Presence.tag_name_width(@tag_bmp) / 2   # the name stays centred over the head
         @tag.oy = @tag_bmp.height
         @tag.x = @body.x
-        @tag.y = top + @head_top - 8   # just over the top of what is drawn (a tall hat too)
+        @tag.y = top + (@head_top * @body.zoom_y).round - 8   # just over the top of what is drawn (a tall hat too); the tag keeps its size
         @tag.z = TAG_Z
         @tag.opacity = g.opacity
         @tag.visible = true

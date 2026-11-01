@@ -1021,7 +1021,7 @@ module KIF
 
       def find_lan
         t = Net::LAN.find
-        until t.join(0)
+        until (t.join(0) rescue true)   # (a search that died with an error ends the wait; join(0) would raise it here)
           return if pick_once(_INTL("Find on this network\nLooking for games on this network..."), [_INTL("Cancel")], "")   # Cancel or B: the search ends by itself
         end
         list = ((t.value rescue []) || []).select { |_, i| i[:port] >= 1024 }   # no game hosts below that

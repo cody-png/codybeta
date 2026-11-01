@@ -38,6 +38,7 @@ module KIF
       MAX_DATA  = 8_192
       MAX_BYTES = 32_768   # a second, each way
       MAX_MSGS  = 30       # a second, each way
+      RX_BURST  = 10       # seconds of that a game that wasn't looking takes at once
       SHARE_BURST = 16_500 # values ("[{,") the mods may send at once: the mod API's whole second, 4 messages of 8 KB of numbers...
       SHARE_RATE  = 3_500  # ...then this many a second (the line takes 5000; co-op needs the rest)
       MAX_DEPTH = 8
@@ -110,13 +111,24 @@ module KIF
         return BAD
       end
 
+      # A token bucket per direction: [messages left, bytes left, when]; 0 for "when" is a full bucket. What is read
+      # is counted when this game gets to it, which can be long after it arrived (a battle, a menu): the bucket holds
+      # RX_BURST seconds of the sender's limit, so a sender inside its own limit loses nothing to a busy receiver.
       def self.spend(st, dir, bytes)
-        sec = Net.now.floor
+        now = Net.now
         r = st[dir]
-        r[0], r[1], r[2] = sec, 0, 0 if r[0] != sec
-        return false if r[1] + 1 > MAX_MSGS || r[2] + bytes > MAX_BYTES
-        r[1] += 1
-        r[2] += bytes
+        cap = dir == :rx ? RX_BURST : 1
+        if r[2] == 0 || r[2] > now   # (a save from an earlier run: the clock restarted)
+          r[0], r[1] = MAX_MSGS * cap, MAX_BYTES * cap
+        else
+          dt = now - r[2]
+          r[0] = [r[0] + dt * MAX_MSGS, MAX_MSGS * cap].min
+          r[1] = [r[1] + dt * MAX_BYTES, MAX_BYTES * cap].min
+        end
+        r[2] = now
+        return false if r[0] < 1 || r[1] < bytes
+        r[0] -= 1
+        r[1] -= bytes
         return true
       end
 

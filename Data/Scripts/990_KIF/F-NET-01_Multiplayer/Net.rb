@@ -1880,8 +1880,8 @@ module KIF
               name = ip if name.empty?
               found[[ip, gport]] ||= [name, { kind: ip.include?(":") ? :v6 : :v4, ip: ip, port: gport, secret: nil }]
             end
-          rescue SystemCallError, SocketError, IOError
-            nil   # no network: what was found so far (the menu says "no games found")
+          rescue StandardError
+            nil   # no network (ENETUNREACH, no adapter, a refused socket...): what was found so far (the menu says "no games found")
           ensure
             (u.close rescue nil)
           end

@@ -8,6 +8,10 @@
 #   locations; triple fusions send nothing). Milestones (slot
 #   "dex_milestones": [[id, count], ...]) send once that many base species are
 #   registered, a fusion's parts included.
+#   Fusion milestones (apworld 0.8.0, slot "fusion_milestones": [[id, count]],
+#   ids FUSION_MILESTONE_BASE + count) send once that many different fusions
+#   (head/body pairs in PIF's @owned_fusion; triple fusions don't count) are
+#   registered. Such a slot gives Infinite Splicers (give_splicers).
 #   set_owned runs mid-battle, mid-evolution and mid-trade, so the "found"
 #   messages wait for a quiet moment (KIF::AP.grant_pending). Linking and
 #   loading a save scan the Pokedex (owned species and owned fusions' parts)
@@ -24,9 +28,11 @@ module KIF
   module AP
     DEX_BASE = 30_000_000
     DEX_MILESTONE_BASE = 30_100_000
+    FUSION_MILESTONE_BASE = 30_200_000
 
     module Dex
       @have = nil     # registered base dex numbers => true (this save's Pokedex)
+      @fusions = nil  # registered [head, body] pairs => true
       @global = nil   # the $PokemonGlobal @have belongs to
       @queue = []     # [location id, dex number (> 0) or -milestone count] to tell at a quiet moment
       @warned = nil
@@ -82,14 +88,26 @@ module KIF
         return []
       end
 
+      # [head, body] of a (non-triple) fusion, nil for anything else
+      def fusion_pair(species)
+        n = getDexNumberForSpecies(species)
+        return nil unless n.is_a?(Integer) && n > NB_POKEMON && n < Settings::ZAPMOLCUNO_NB
+        body = getBodyID(n)
+        return [getHeadID(n, body), body]
+      rescue StandardError
+        return nil
+      end
+
       # Every base species the Pokedex holds as owned, fusion parts included
-      def registered(dex)
+      # (fusions: filled with the registered [head, body] pairs)
+      def registered(dex, fusions = {})
         have = {}
         (dex.instance_variable_get(:@owned_standard) || []).each_with_index { |v, n| have[n] = true if v && n.between?(1, NB_POKEMON) }
         (dex.instance_variable_get(:@owned_fusion) || []).each_with_index do |row, head|
           next unless row.is_a?(Array) && head.between?(1, NB_POKEMON) && row.include?(true)
           row.each_with_index do |v, body|
             next unless v == true && body.between?(1, NB_POKEMON)
+            fusions[[head, body]] = true
             have[head] = true
             have[body] = true
           end
@@ -109,14 +127,26 @@ module KIF
         @queue = []
         @warned = nil
         @have = {}
+        @fusions = {}
         return 0 unless KIF::AP.on? && slot? && $Trainer
         before = KIF::AP.data[:checked].length
-        registered($Trainer.pokedex).each_key { |n| note(n, false) }
+        registered($Trainer.pokedex, @fusions).each_key { |n| note(n, false) }
         milestones(false)
         return KIF::AP.data[:checked].length - before
       rescue StandardError => e
         KIF.log("Archipelago: Pokedex scan failed (#{e.class}: #{e.message})")
         return 0
+      end
+
+      # Fusion milestones count only species in the apworld's logic, but DNA
+      # Splicers are used up (and only Silph Co. sells them, after Giovanni):
+      # a slot with them gives Infinite Splicers, at link and on load when the
+      # bag has neither kind (not INFINITESPLICERS2: PIF's unfuse deletes it).
+      # True when it gave them.
+      def give_splicers(d = KIF::AP.data)
+        return false if !$PokemonBag || (d[:fusion_milestones] || []).empty?
+        return false if $PokemonBag.pbHasItem?(:INFINITESPLICERS) || $PokemonBag.pbHasItem?(:INFINITESPLICERS2)
+        return $PokemonBag.pbStoreItem(:INFINITESPLICERS, 1)
       end
 
       def note(n, tell)
@@ -130,10 +160,12 @@ module KIF
 
       def milestones(tell)
         d = KIF::AP.data
-        (d[:dex_milestones] || []).each do |id, k|
-          next if @have.length < k || !d[:locations].include?(id) || d[:checked].include?(id)
-          KIF::AP.check!(id)
-          @queue << [id, -k] if tell
+        [[d[:dex_milestones], @have, :species], [d[:fusion_milestones], @fusions, :fusion]].each do |list, got, kind|
+          (list || []).each do |id, k|
+            next if got.length < k || !d[:locations].include?(id) || d[:checked].include?(id)
+            KIF::AP.check!(id)
+            @queue << [id, -k, kind] if tell
+          end
         end
       end
 
@@ -142,6 +174,8 @@ module KIF
         return unless KIF::AP.on? && $Trainer && dex.equal?($Trainer.pokedex) && slot?
         prepare
         parts(species).each { |n| note(n, true) }
+        pair = fusion_pair(species)
+        @fusions[pair] = true if pair
         milestones(true)
       rescue StandardError => e
         KIF.log("Archipelago: Pokedex check failed for #{species.inspect} (#{e.class}: #{e.message})")
@@ -176,9 +210,12 @@ module KIF
           end
         end
         until @queue.empty?
-          id, n = @queue.shift
-          what = n > 0 ? _INTL("{1} was registered in the Pokedex.", GameData::Species.get(n).name) :
-                         _INTL("{1} Pokemon registered in the Pokedex.", -n)
+          id, n, kind = @queue.shift
+          what = if n > 0 then _INTL("{1} was registered in the Pokedex.", GameData::Species.get(n).name)
+                 elsif kind == :fusion && n == -1 then _INTL("1 fusion registered in the Pokedex.")
+                 elsif kind == :fusion then _INTL("{1} different fusions registered in the Pokedex.", -n)
+                 else _INTL("{1} Pokemon registered in the Pokedex.", -n)
+                 end
           pbMessage(_INTL("\\me[Item get]{1} {2}\\wtnp[30]", what, KIF::AP.found_text(id, :given)))
         end
       end

@@ -242,7 +242,7 @@ end
 # become a Hash of the slots that hold text (SparseTable), ~100 KB. The
 # game only reads them through Messages#get / #set / #getCount, which answer
 # as before ("" for a slot with no text; the count is the old length).
-# A cache file made before this (arrays) is made sparse when read, once.
+# A cache file made before this (arrays) is made sparse when it is loaded, once.
 #-------------------------------------------------------------------------------
 module KIF
   module Perf
@@ -302,22 +302,23 @@ module KIF
       end
     end
 
-    module TextCache
-      class << self
-        alias kif_perfmem_read read unless method_defined?(:kif_perfmem_read)
-
-        def read(file, stamp)
-          tables = kif_perfmem_read(file, stamp)
-          write(file, stamp, tables) if tables && KIF::Perf.sparsify_messages(tables) > 0
-          return tables
-        end
-      end
-    end
   end
 end
 
 class Messages
+  alias kif_perfmem_loadMessageFile loadMessageFile unless method_defined?(:kif_perfmem_loadMessageFile)
   alias kif_perfmem_saveMessages saveMessages unless method_defined?(:kif_perfmem_saveMessages)
+
+  # A table cache made before this (arrays) is made sparse here, and saved so
+  # once; a file read in full already came out sparse (compact_messages).
+  def loadMessageFile(*args)
+    ret = kif_perfmem_loadMessageFile(*args)
+    if @messages.is_a?(Array) && KIF::Perf.sparsify_messages(@messages) > 0
+      stamp = @kif_loaded_from && @kif_loaded_from[1]
+      KIF::Perf::TextCache.write(args[0], stamp, @messages) if stamp
+    end
+    return ret
+  end
 
   def getCount(type)
     delayedLoad

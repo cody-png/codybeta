@@ -133,7 +133,7 @@ module KIF
       evs = s.poll
       t0 = now
       evs.each_with_index do |ev, i|
-        if i > 0 && now - t0 > POLL_SECS   # costly messages (a code to unpack) must not pile up in one frame: the rest comes next frame
+        if i > 0 && now - t0 > POLL_TIME   # costly messages (a code to unpack) must not pile up in one frame: the rest comes next frame
           s.defer(evs[i..-1])
           break
         end

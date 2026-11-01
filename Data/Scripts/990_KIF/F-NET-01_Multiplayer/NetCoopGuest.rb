@@ -88,7 +88,6 @@ module KIF
         KIF::Net.update if KIF::Net.session.equal?(@s)   # a Bag or party screen doesn't read the line
         i = skip_at(req) or return false
         @box.delete_at(i)
-        credit   # the host's AI chose for this request
         @view.message(_INTL("{1}'s game chose for you this turn.", @host_name))
         return true
       end
@@ -144,7 +143,12 @@ module KIF
         return true
       end
 
-      def credit; @free = [@free.to_i + 1, 3].min; end   # (at most 3 waiting: a host can't save them up)
+      # one more Pokémon the host's AI may send in (at most 3 waiting: a host can't save them up). skip: its request
+      # came too late for this player; that earns two a battle, however many requests and skips the host sends
+      def credit(skip = false)
+        return if skip && (@skips = @skips.to_i + 1) > 2
+        @free = [@free.to_i + 1, 3].min
+      end
 
       def went_down(pk)
         j = slot_of(pk)
@@ -194,7 +198,10 @@ module KIF
           @view.stalled(_INTL("{1}'s game has not answered for a while.\n{2}: leave the battle", @host_name, KIF::Coop.back_name))
         end
         return unless Input.trigger?(Input::BACK)
-        return abort_battle("left by the player", true) if @stall_shown && now - @stall_shown >= 1.0
+        if @stall_shown && now - @stall_shown >= 1.0
+          return abort_battle("left by the player", true) unless @view.confirm(_INTL("Leave this battle?")) == false
+          return @stall_shown = nil   # (the hint comes again)
+        end
         rechoose if @awaiting && now - @awaited_at >= 0.5
       end
       # the battle screen is up
@@ -420,9 +427,14 @@ module KIF
         mp = party_index(e[1], mi % 2) or return nil
         arr = @mirror.pbParty(mi)
         if mi.even? && own?(mp)
-          pk = arr[mp]
-          return nil unless pk && !pk.egg? && may_fight?(mp)
-          took_part(pk)
+          real = @party[mp]
+          return nil unless real && !real.egg?
+          if may_fight?(mp)
+            arr[mp] = pk = real
+            took_part(pk)
+          else
+            arr[mp] = pk = load_mon(e[2]) || real.clone   # shown as a copy: nothing of this player's own is touched
+          end
         else
           pk = load_mon(e[2]) or return nil
           arr[mp] = pk
@@ -479,7 +491,11 @@ module KIF
           end
           a = @view.command(mi, d) unless KIF::Coop.auto_battle?
         end
-        return if take_skip(d) || ended? || take_lock(d)   # nothing to send: the host went on
+        if take_skip(d)   # the host's AI chose for this request
+          credit(true) if own
+          return
+        end
+        return if ended? || take_lock(d)   # nothing to send: the host went on
         if again && (old = @last_pick) && old["a"] == "item"   # the pick taken back
           @picked[old["i"]] -= 1
           @balls -= 1 if (GameData::Item.get(old["i"].to_sym).is_poke_ball? rescue false)
@@ -489,7 +505,7 @@ module KIF
           @balls += 1 if (GameData::Item.get(a["i"].to_sym).is_poke_ball? rescue false)
         end
         @last_pick = a
-        credit if own && !a   # left to the host's AI
+        credit if own && !a && KIF::Coop.auto_battle?   # this player left the picks to the host's AI
         a ||= { "a" => "auto" }
         @picked_slots << a["p"] if a["a"] == "switch" && a["p"].is_a?(Integer)
         it = b && a["a"] != "auto" ? pick_text(b, a) : nil
@@ -533,8 +549,12 @@ module KIF
           sync_party(d)
           p = @view.replacement(mi, d) || -2
         end
-        return if take_skip(d) || ended?
-        p >= 0 ? @picked_slots << p : (credit if own && p == -2)
+        if take_skip(d)
+          credit(true) if own
+          return
+        end
+        return if ended?
+        p >= 0 ? @picked_slots << p : (credit if own && p == -2 && KIF::Coop.auto_battle?)
         @s.post("co_swr", "id" => @id, "d" => { "n" => d["n"], "p" => p })
         @view.waiting
       end
@@ -830,6 +850,7 @@ module KIF
       end
       def message(t); call(:pbDisplayPausedMessage, t); end
       def stalled(t); call(:pbDisplayMessage, t, true); end
+      def confirm(t); call(:pbDisplayConfirmMessage, t); end   # true, false, or nil when this scene has no question
       def int(v, lo, hi, d = nil); Mon.int(v, lo, hi, d); end
 
       def frame
@@ -1157,6 +1178,7 @@ module KIF
       def frame; Graphics.update; Input.update; end
       def waiting(_change = false); end
       def stalled(t); pbMessage(t); end
+      def confirm(t); pbConfirmMessage(t); end
       def message(t); pbMessage(t); end
       def show(_ev); end
       def command(_mi, _req); nil; end

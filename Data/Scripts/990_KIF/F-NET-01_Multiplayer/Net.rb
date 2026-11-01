@@ -50,8 +50,9 @@ module KIF
     MAX_QUEUED = 8_000_000   # bytes of frames waiting for the game thread; more and the line closes
     STALL_BYTES = 524_288    # ... or this many while the game thread has not polled for STALL_SECS (a screen that doesn't poll)
     STALL_SECS  = 2.0
-    POLL_SECS  = 0.008   # game-thread time for one poll, and again for what Net.update does with its messages; the rest waits for the next frame (the first always runs)
-    MAX_VALUES = 4_000   # values (numbers, strings, lists...) in one message; real ones hold under 1,500; 4,000 take about 30 ms to read
+    POLL_TIME  = 0.01    # game-thread time for one poll, and again for what Net.update does with its messages; the rest waits for the next frame (the first always runs)
+    MAX_VALUES = 4_200   # values (numbers, strings, lists, objects, keys) in one message; real ones hold under 1,500, a mod's 8 KB at most 4,100; 4,200 take about 35 ms to read
+    MAX_ESCAPES = 8_000  # backslashes in one message (each letter outside ASCII is one); a 64 KB string of them takes 50 ms to unescape
     BACKLOG    = 64      # events waiting for Net.update: nothing more is read from the line meanwhile
     HS_LIMIT   = 10      # handshakes a host starts in 10 s
 
@@ -230,6 +231,7 @@ module KIF
 
       # Hash or nil; never raises. More than `limit` values (nil: any number): nil, reading them is what costs time
       def parse(text, limit = nil)
+        return nil if limit && text.to_s.count("\\") > MAX_ESCAPES
         return Parser.new(text, limit).run
       end
     end
@@ -264,10 +266,14 @@ module KIF
 
       def ws; @i = WS.match(@s, @i).end(0); end
 
-      def value(depth)
-        raise "deep" if depth > DEPTH
+      def count
         @n += 1
         raise "many" if @limit && @n > @limit
+      end
+
+      def value(depth)
+        raise "deep" if depth > DEPTH
+        count
         ws
         case @s[@i]
         when "{"
@@ -279,6 +285,7 @@ module KIF
             ws
             m = STR.match(@s, @i) or raise "key"
             @i = m.end(0)
+            count   # (a key costs as much to read as a value)
             k = unescape(m[1])
             ws
             raise "colon" unless @s[@i] == ":"
@@ -706,7 +713,7 @@ module KIF
           while @conn && out.length < BACKLOG && (f = (@conn.inbox.pop(true) rescue nil))
             @conn.took(f)
             f.is_a?(Array) ? line_ended(f[1] || :closed, out) : frame(f, out)
-            break if Net.now - t0 > POLL_SECS   # the rest next frame: a flood of costly frames can't hold the game
+            break if Net.now - t0 > POLL_TIME   # the rest next frame: a flood of costly frames can't hold the game
           end
           check_time(out) if @conn
         end

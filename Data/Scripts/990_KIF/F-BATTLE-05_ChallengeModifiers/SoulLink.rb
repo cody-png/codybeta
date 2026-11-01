@@ -130,7 +130,7 @@ module KIF
     end
 
     def self.json(v); KIF::Net::Wire.json(v); end
-    # (values: reading them is what costs time; a real link code has 9, 60 events about 1,200)
+    # (values and keys: reading them is what costs time; a real link code has 15, 60 events about 1,900)
     def self.parse(s, values = nil); KIF::Net::Parser.new(s, values).run; end
 
     def self.inflate(z, max = MAX_JSON)
@@ -396,7 +396,7 @@ module KIF
       return :invalid if bytes.bytesize < 12
       z = bytes[0...-8]
       return :key unless crypto.same?(crypto.hmac(crypto.unhex(state[:key]), "KIFSL" + z)[0, 8], bytes[-8, 8])
-      h = (s = inflate(z, net ? NET_JSON : MAX_JSON)) && parse(s, net ? 1_500 : 20_000)
+      h = (s = inflate(z, net ? NET_JSON : MAX_JSON)) && parse(s, net ? 2_500 : 24_000)
       return :invalid unless h.is_a?(Hash) && h["v"] == 1 && h["l"] == state[:link] && [0, 1].include?(h["f"]) &&
                              h["a"].is_a?(Integer) && h["e"].is_a?(Array) && h["e"].length <= (net ? CHUNK : MAX_EVENTS) && h["e"].all? { |e| valid_event?(e) }
       h["e"].each { |e| %w[p n s].each { |k| e[k] = e[k].gsub(/[\\<>]/, "") if e[k].is_a?(String) } }   # shown in messages: no message codes, no tags

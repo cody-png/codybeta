@@ -35,8 +35,19 @@ class PokeBattle_Battle
 end
 
 # 3. A Pokémon with no type (pure Fire after Burn Up): PIF's AI looks up the
-#    type chart with nil. Fixed in KIF's own wrapper of that method (the
-#    AI's hottest one): F-BATTLE-06_Mechanics/Mechanics.rb calculate_one.
+#    type chart with nil. The guard sits here, outside any module, so it also
+#    holds with the Battles module Off (Mechanics.rb's wrapper of the same
+#    method is gated).
+module Effectiveness
+  class << self
+    alias kif_bc_calculate_one calculate_one unless method_defined?(:kif_bc_calculate_one)
+
+    def calculate_one(attack_type, defend_type)
+      return NORMAL_EFFECTIVE_ONE if defend_type.nil?
+      return kif_bc_calculate_one(attack_type, defend_type)
+    end
+  end
+end
 
 # 4. PIF's switch AI asks a benched Pokémon (not in battle) for
 #    hasActiveAbility?, which only battlers have. Off the field an ability is

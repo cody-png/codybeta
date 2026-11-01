@@ -85,6 +85,7 @@ module KIF
 
     def self.host_battle(kind, nfoes)
       join = invite(kind)
+      @host_id = nil unless join
       if !join && kind == :wild && nfoes == 2 && ($Trainer.able_pokemon_count rescue 2) <= 1 && !$PokemonTemp.battleRules["size"]
         setBattleRule("1v2")   # two foes for a pair, the partner didn't come: one Pokémon here
       end
@@ -106,7 +107,7 @@ module KIF
         return with_rules { KIF::Teams.with_mult(2) { yield } }   # the wild Pokémon or trainer team is made inside: with the host's settings; 2 players (3 once the lobby takes a third)
       ensure
         $PokemonGlobal.partner = old
-        @pending_host = @battle_host = nil
+        @pending_host = @battle_host = @host_id = nil
         @hosting = false
         (host.finish(0, "abort") rescue nil)
       end
@@ -132,6 +133,7 @@ module KIF
     #---------------------------------------------------------------------------
     class Host
       attr_reader :id, :name, :battle, :lost, :kills, :caught, :items
+      BEAT = 15.0   # seconds of quiet on the line before beat_start's thread says "still here"
       attr_accessor :mine_size, :own_catch
 
       def initialize(session, join)
@@ -154,9 +156,32 @@ module KIF
         @thrown = []     # this turn's balls: [owner, target index or nil]
         @thrower = nil
         @mute = 0
+        @bag = join[:bag].is_a?(Hash) ? join[:bag] : {}   # the battle items the partner listed when it joined: no others
+        @silent = 0      # turns in a row the partner gave no answer
+        @tx_at = KIF::Net.now   # when this game last sent the partner a co_ frame
+      end
+
+      # The partner's game leaves a battle whose host says nothing for 90 s. This game's own screens (a nickname, a move
+      # to forget, the Bag, the end of the battle) neither read the line nor send anything, so a thread says "still
+      # here" meanwhile (a co_int, as while this player chooses). It only queues a frame; no game object is touched.
+      def beat_start
+        @beat = Thread.new do
+          until @done || @lost
+            sleep 1
+            next if KIF::Net.now - @tx_at.to_f < BEAT
+            begin
+              @s.post("co_int", "id" => @id, "d" => { "t" => @int_t.to_i, "it" => @int_it.to_s })
+              @tx_at = KIF::Net.now
+            rescue StandardError
+              nil
+            end
+          end
+        end
+        @beat.report_on_exception = false
       end
 
       def attach(battle)
+        beat_start
         @battle = battle
         battle.instance_variable_set(:@kif_coop, self)
         sc = battle.scene
@@ -216,6 +241,7 @@ module KIF
 
       def post(type, fields)
         return false unless connected?
+        @tx_at = KIF::Net.now
         @s.post(type, fields.merge("id" => @id))
       end
 
@@ -401,6 +427,18 @@ module KIF
         post("co_skip", "d" => d) if why != :lost
       end
 
+      # a partner that never answers (a connected game that only keeps the line alive): after two
+      # waits in a row the game fights for it for the rest of the battle instead of waiting 90 s a turn
+      def silent(why)
+        return @silent = 0 if why == true
+        return if why == :lost || why == :change
+        @silent += 1
+        return if @silent < 2 || @auto
+        @auto = true
+        KIF::Coop.log("#{@name} gave no answer twice in a row: the game fights for them now")
+        (quietly { @battle.pbDisplayPaused(_INTL("{1} is not answering. The game fights for {1}'s Pokemon now.", @name)) } rescue nil)
+      end
+
       #-------------------------------------------------------------------------
       # Turns
       #-------------------------------------------------------------------------
@@ -429,6 +467,7 @@ module KIF
         @answers = {}
         return unless connected? && !@auto
         @turn += 1
+        @int_at = KIF::Net.now
         @battle.battlers.each_with_index do |b, i|
           next unless b && guest?(i)
           next unless @battle.choices[i][0] == :None && @battle.pbCanShowCommands?(i)
@@ -455,6 +494,7 @@ module KIF
       # "" (not chosen yet) or nil (nothing asked of the partner)
       def partner_intent
         return nil if @pending.empty? || @auto || @lost || @done
+        send_intent if @battle && KIF::Net.now - (@int_at ||= KIF::Net.now) > 15   # also tells the partner this game is still here (its watchdog)
         KIF::Net.update if KIF::Net.session.equal?(@s)   # this player's own menu doesn't read the line
         it = nil
         @pending.each_key { |i| it = @answers[i] && @answers[i]["it"] }
@@ -477,7 +517,9 @@ module KIF
             it = t if t
           end
         end
-        post("co_int", "d" => { "t" => @turn, "it" => it.to_s[0, 60] })
+        @int_at = KIF::Net.now
+        @int_t, @int_it = @turn, it.to_s[0, 60]
+        post("co_int", "d" => { "t" => @int_t, "it" => @int_it })
       end
 
       # this player's battlers that picked something it can take back
@@ -515,6 +557,7 @@ module KIF
           if why != true
             @pending.each_key { |i| gave_up(why, "turn #{@turn}", { "b" => i, "t" => @pending[i] }) unless @answers[i] || why == :change }
           end
+          silent(why)
           # the partner's menu can't take its pick back from here on
           @pending.each_key { |i| post("co_lock", "d" => { "b" => i, "t" => @pending[i] }) if @answers[i] }
         end
@@ -566,8 +609,13 @@ module KIF
         return false
       end
 
+      # items that end the whole battle (it is the host's too): a partner leaves with a run
+      FLEE_ITEMS = %i[POKEDOLL FLUFFYTAIL POKETOY]
+
       def apply_item(i, b, a)
         it = KIF::Coop::Mon.sym(a["i"], GameData::Item) or return false
+        return false if FLEE_ITEMS.include?(it)
+        return false unless @bag[it].to_i - @items[it].to_i > 0   # only what the partner listed at join (this game never sees its Bag)
         use = GameData::Item.get(it).battle_use.to_i
         mv = a.key?("mv") ? pick(a["mv"], -1, 3) : -1
         return false unless mv
@@ -704,6 +752,7 @@ module KIF
           ans || @auto
         end
         gave_up(got, "a replacement", { "b" => idx, "n" => n }) if got != true
+        silent(got)
         return nil unless got == true && ans
         p = ans["p"]
         return -1 if cancel && p == -1
@@ -742,6 +791,7 @@ module KIF
         return if @done
         flush if @battle
         @done = true
+        (@beat.kill rescue nil) if @beat
         d = { "dc" => decision.to_i }
         if @battle && !why
           d["cl"] = @battle.canLose ? 1 : 0
@@ -987,6 +1037,7 @@ class PokeBattle_Battle
   alias kif_coop_pbUsePokeBallInBattle pbUsePokeBallInBattle unless method_defined?(:kif_coop_pbUsePokeBallInBattle)
   alias kif_coop_pbRegisterItem pbRegisterItem unless method_defined?(:kif_coop_pbRegisterItem)
   alias kif_coop_pbReturnUnusedItemToBag pbReturnUnusedItemToBag unless method_defined?(:kif_coop_pbReturnUnusedItemToBag)
+  alias kif_coop_pbConsumeItemInBag pbConsumeItemInBag unless method_defined?(:kif_coop_pbConsumeItemInBag)
   alias kif_coop_pbEndOfBattle pbEndOfBattle unless method_defined?(:kif_coop_pbEndOfBattle)
   alias kif_coop_pbAttackPhaseItems pbAttackPhaseItems unless method_defined?(:kif_coop_pbAttackPhaseItems) || private_method_defined?(:kif_coop_pbAttackPhaseItems)
   alias kif_coop_pbRun pbRun unless method_defined?(:kif_coop_pbRun) || private_method_defined?(:kif_coop_pbRun)
@@ -1106,6 +1157,13 @@ class PokeBattle_Battle
     c = @kif_coop
     c.item_used(item, -1) if c && item && c.guest?(idxBattler)
     return kif_coop_pbReturnUnusedItemToBag(item, idxBattler)
+  end
+
+  # the partner's items come off its own Bag in its own game: not an NPC trainer's used items (the Hoenn rematch code reads those)
+  def pbConsumeItemInBag(item, idxBattler)
+    c = @kif_coop
+    return if c && item && c.guest?(idxBattler)
+    return kif_coop_pbConsumeItemInBag(item, idxBattler)
   end
 
   def pbEndOfBattle(*args)

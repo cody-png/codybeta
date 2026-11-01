@@ -260,6 +260,7 @@ module KIF
       return @hashes[k] || nil if @hashes.key?(k)
       raw = frame_raw(ps || sprite_of(k))
       h = raw && raw.bytesize == SIZE * SIZE * 4 ? digest(raw) : nil
+      @hashes.clear if @hashes.length >= 256   # (a partner's endless new keys)
       @hashes[k] = h || false
       @hashes.shift while @hashes.length > HASH_MAX
       return h
@@ -423,6 +424,7 @@ module KIF
       @pending.delete_if { |_, t0| now - t0 >= 30 }   # unanswered asks don't fill the 32 slots for good
       t = @pending[x]
       return true if t && KIF::Net.now - t < 30
+      @pending.reject! { |_x, at| KIF::Net.now - at >= 30 }   # (asked of a partner that never answers)
       return false if @pending.length >= 32
       @pending[x] = KIF::Net.now
       return s.post("sp_get", "x" => x)

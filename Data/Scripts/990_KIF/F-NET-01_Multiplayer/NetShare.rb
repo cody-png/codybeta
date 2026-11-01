@@ -56,7 +56,7 @@ module KIF
         id = mod_id.to_s
         raise ArgumentError, "mod id #{id.inspect}: use 1-32 of A-Z a-z 0-9 _ . -" unless id =~ ID
         raise ArgumentError, "KIF::Net.on_share(#{id}) needs a block" unless blk
-        if @handlers.key?(id)
+        if @handlers.key?(id) && !@handlers[id][0].equal?(blk)   # the same block again (a reload) is fine
           Net.log("mod share #{id}: another mod already uses this id; the second on_share was ignored")
           return nil
         end

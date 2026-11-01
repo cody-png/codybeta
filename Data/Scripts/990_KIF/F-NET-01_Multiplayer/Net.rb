@@ -89,6 +89,8 @@ module KIF
     OBJ_ARRAY_MAX = 4096 # a list or table inside an [Object] field (mod data): whatever 8 KB can hold
     OBJ_HASH_MAX  = 2048
     MAX_CONNECTS  = 12   # connections one address (an IPv6 /64 counts as one) may open in 10 s
+    MAX_ESCAPES   = 8_000 # backslashes in one message (each letter outside ASCII is one); a 64 KB string of them takes 50 ms to unescape
+    BACKLOG       = 64   # events waiting for Net.update: nothing more is read from the line meanwhile
     ASK_LIMIT     = 3    # "Let <name> join?" prompts a minute; more visitors are told "wait"
     DECLINE_WAIT  = 600  # seconds an address that was told No is turned away
     # The parser's time goes with the number of values in a message (2-5 us each for numbers, long numbers,
@@ -112,9 +114,9 @@ module KIF
       "no"    => { "why" => [String, 16] },
       # Soul Link (F-BATTLE-05 SoulLink.rb): codes are checked again there
       "sl_hello" => { "link" => [String, 16], "seen" => [Integer, 0, 1_000_000_000],
-                      "acked" => [Integer, 0, 1_000_000_000], "code" => [String, 600] },
-      "sl_link"  => { "code" => [String, 600] },
-      "sl_up"    => { "code" => [String, 60_000] },
+                      "acked" => [Integer, 0, 1_000_000_000], "code" => [String, 1500] },
+      "sl_link"  => { "code" => [String, 1500] },
+      "sl_up"    => { "code" => [String, 16_000] },   # (60 events at most: under 10,000)
       "sl_party" => { "ids" => [String, 600] },   # id:species:level:hp:totalhp,...
     }
     # Largest signed frame (bytes of JSON) and most values (nodes) a message type may have; a
@@ -406,7 +408,10 @@ module KIF
       def frame(payload); [payload.bytesize].pack("N") + payload.b; end
 
       # Hash or nil; never raises. A message from the partner is read with max = MAX_VALUES.
-      def parse(text, max = PARSE_MAX); Parser.new(text, max).run; end
+      def parse(text, max = PARSE_MAX)
+        return nil if text.to_s.count("\\") > MAX_ESCAPES
+        return Parser.new(text, max).run
+      end
     end
 
     class Parser
@@ -422,6 +427,8 @@ module KIF
         @n = 0
         @max = max
       end
+
+      def values; @n; end
 
       def run
         return nil if @s =~ /[\x80-\xff]/n
@@ -453,6 +460,7 @@ module KIF
             raise "many" if (@n += 1) > @max   # a key counts like a value
             m = STR.match(@s, @i) or raise "key"
             @i = m.end(0)
+
             k = unescape(m[1])
             ws
             raise "colon" unless @s[@i] == ":"
@@ -518,14 +526,15 @@ module KIF
       out = { "t" => type }
       spec.each do |k, (cls, a, b)|
         v = h[k]
+        next if v.nil? && a == :opt   # a field marked [cls, :opt] may be left out
         if cls == String
           return nil unless v.is_a?(String) && v.valid_encoding? && v.length <= a && v !~ /[\x00-\x1f\u007f]/
         elsif cls == Integer
           return nil unless v.is_a?(Integer) && v >= a && v <= b
         elsif cls == Array
-          return nil unless v.is_a?(Array) && v.length <= (a || ARRAY_MAX)
+          return nil unless v.is_a?(Array) && v.length <= (a.is_a?(Integer) ? a : ARRAY_MAX)
         elsif cls == Hash
-          return nil unless v.is_a?(Hash) && v.length <= (a || HASH_MAX)
+          return nil unless v.is_a?(Hash) && v.length <= (a.is_a?(Integer) ? a : HASH_MAX)
         else   # Object: anything, but it has to be there, and a list or table in it stays small
           return nil unless h.key?(k)
           return nil if v.is_a?(Array) && v.length > OBJ_ARRAY_MAX
@@ -789,6 +798,7 @@ module KIF
             if @mac && Net.now - @last_tx >= @ping_every
               item = [:msg, { "t" => "ping" }]
             else
+
               sleep 0.02
               next
             end
@@ -1224,7 +1234,7 @@ module KIF
         stop_at = Net.now + POLL_BUDGET
         catch(:budget) do
           ([@line] + @pending).compact.each do |line|
-            until line.gone
+            until line.gone || out.length >= BACKLOG
               f = line.conn.next_frame or break
               f.is_a?(Array) ? line_ended(line, f[1] || :closed, out) : frame(line, f, out)
               throw :budget if Net.now > stop_at
@@ -1234,6 +1244,9 @@ module KIF
         check_time(out)
         return out
       end
+
+      # events Net.update had no time for: first in the next poll
+      def defer(list); @later = list + @later; end
 
       private
 

@@ -268,7 +268,13 @@ module KIF
         @renew_thread.report_on_exception = false
       end
       s = @session
-      s.poll.each do |ev|
+      evs = s.poll
+      t0 = now
+      evs.each_with_index do |ev, i|
+        if i > 0 && now - t0 > POLL_BUDGET   # costly messages (a code to unpack) must not pile up in one frame: the rest comes next frame
+          s.defer(evs[i..-1])
+          break
+        end
         case ev[0]
         when :join_request
           log("#{ev[1]} asks to join")
@@ -300,7 +306,7 @@ module KIF
           elsif ev[1].start_with?("pr_") && defined?(KIF::Presence)
             begin
               KIF::Presence.receive(ev[1], ev[2])
-            rescue => e
+            rescue StandardError, ScriptError, SystemStackError => e   # one bad message doesn't cost the others in this batch
               log("presence message failed (#{e.class}: #{e.message})")
             end
           elsif ev[1].start_with?("mod_") && defined?(ModShare)

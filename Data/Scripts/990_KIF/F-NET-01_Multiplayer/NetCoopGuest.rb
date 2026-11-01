@@ -210,7 +210,7 @@ module KIF
         @gn = int(d["gn"], 1, 6) or return false
         return false unless @gn == @party.length && d["hp"].is_a?(Array) && d["hp"].length == @hn
         host_party = d["hp"].map { |h| Mon.load(h) }
-        foes = d["fp"].is_a?(Array) && d["fp"].length.between?(1, 18) ? d["fp"].map { |h| Mon.load(h) } : []
+        foes = d["fp"].is_a?(Array) && d["fp"].length.between?(1, 36) ? d["fp"].map { |h| Mon.load(h) } : []
         return false if foes.empty? || host_party.include?(nil) || foes.include?(nil)
         @foes = foes.map { |f| [f.species, f.level] }
         if d["lo"] == 1
@@ -500,6 +500,7 @@ module KIF
           foe.instance_variable_set(:@hp, 0)
           fake = PokeBattle_Battler.new(@mirror, 1)
           fake.pbInitialize(foe, 0)
+          fake.instance_variable_set(:@kif_team_mult, int(k["m"], 1, 3, 1))   # bigger trainer teams: the Exp is split
           fake.participants = parts
           list = Array.new(keep.length)
           keep.each_with_index { |b, i| list[i] = b if b && i.even? }

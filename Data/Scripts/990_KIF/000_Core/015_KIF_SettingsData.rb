@@ -69,7 +69,7 @@ module KIF
         ["Screen", ["Screen Size", "Device"]],
         ["Text", ["Text Speed", "Text Entry"]],
         ["Controls", ["Mouse", "Click to move", "Touch controls", "Tap to move"]],
-        ["Multiplayer", ["Multiplayer", "Use partners' sprites", "Co-op: hold attacks for a ball", "Co-op: second ball"]],
+        ["Multiplayer", ["Multiplayer", "Use partners' sprites", "Co-op: hold attacks for a ball", "Co-op: second ball", "Co-op: bigger trainer teams"]],
         ["Updates and downloads", ["Updates", "Check for Updates", "Update history", "Download data"]],
         ["Test builds", ["Test Code"]],
         ["Speed", ["Frame rate", "Sprite File Cache"]],

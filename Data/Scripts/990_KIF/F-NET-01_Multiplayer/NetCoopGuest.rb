@@ -760,7 +760,7 @@ module KIF
           step
         end
         return if @done && !@mirror
-        Events.onStartBattle.trigger(nil)   # levels before, for the evolution check after
+        start_event
         if @mirror
           wild = @mirror.wildBattle?
           bgm = @bgm || (wild ? pbGetWildBattleBGM(@mirror.pbParty(1)) : pbGetTrainerBattleBGM(@mirror.opponent))
@@ -774,6 +774,10 @@ module KIF
           after_battle
         end
         Input.update
+      end
+
+      def start_event
+        Events.onStartBattle.trigger(nil)   # levels before, for the evolution check after
       end
 
       def play
@@ -1052,14 +1056,20 @@ module KIF
             p = party(mi, true)
             return { "a" => "switch", "p" => p } if p
           when 3
-            if m.trainerBattle?
-              call(:pbDisplayPausedMessage, _INTL("No! There's no running from a Trainer battle!"))
-            elsif req["rn"] != 1
-              call(:pbDisplayPausedMessage, _INTL("You can't escape!"))
-            else
-              return { "a" => "run" }
-            end
+            a = run_choice(m, req)
+            return a if a
           end
+        end
+        return nil
+      end
+
+      def run_choice(m, req)
+        if m.trainerBattle?
+          call(:pbDisplayPausedMessage, _INTL("No! There's no running from a Trainer battle!"))
+        elsif req["rn"] != 1
+          call(:pbDisplayPausedMessage, _INTL("You can't escape!"))
+        else
+          return { "a" => "run" }
         end
         return nil
       end

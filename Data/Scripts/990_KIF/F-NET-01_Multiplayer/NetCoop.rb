@@ -137,6 +137,7 @@ module KIF
 
     # this player's Auto-Battle: the host's AI picks for this player's Pokémon
     def self.auto_battle?
+      return false if defined?(KIF::PvP) && KIF::PvP.running?   # nobody plays for a player in a match
       return false unless defined?(KIF::AutoBattle) && KIF::AutoBattle.on?
       return !defined?(KIF::Modules) || KIF::Modules.active?("F-BATTLE-02_AutoBattle")
     end
@@ -374,6 +375,7 @@ module KIF
       when "co_st" then @their_map = msg["map"]
       when "co_rules" then @rules = read_rules(msg["r"]) unless rules_host?
       when "co_int" then @guest&.intent_from(msg)
+      when "co_vs", "co_vsr" then KIF::PvP.receive(type, msg) if defined?(KIF::PvP)   # a friendly match (NetPvp.rb)
       when "co_ask" then guest_ask(msg)
       when *HOST_TYPES
         # only this game's own battle start or running battle: a stream of these piled up in memory
@@ -422,6 +424,7 @@ module KIF
 
     def self.guest_ask(msg)
       s = session or return
+      return KIF::PvP.got_ask(msg) if msg["kind"] == "pvp" && defined?(KIF::PvP)   # a friendly match has its own checks
       return s.post("co_no", "id" => msg["id"], "why" => "off") unless on?
       # busy, or the last invite from this partner never became a battle (5 minutes of "busy")
       return s.post("co_no", "id" => msg["id"], "why" => "busy") if @guest || @ask || @hosting || $game_temp&.in_battle ||

@@ -1073,18 +1073,21 @@ module KIF
           cmds.unshift(_INTL("Soul Link")) if sl
           tr = defined?(KIF::Trade) ? cmds.length : nil   # after Disconnect, before co-op's row
           cmds << KIF::Trade.menu_label if tr
+          pv = defined?(KIF::PvP) ? cmds.length : nil   # after Trade, before co-op's row
+          cmds << KIF::PvP.menu_label if pv
           co = defined?(KIF::Coop) ? KIF::Coop.menu_label : nil   # last row: the rows above keep their places
           cmds << co if co
           note = KIF::Coop.take_notes.last || note if co
           help = note || help
           r = pick(lines.join("\n"), cmds, help,
-                   proc { [Net.session&.connected?, Net.notes.length, co && KIF::Coop.menu_label, tr && KIF::Trade.menu_label,
+                   proc { [Net.session&.connected?, Net.notes.length, co && KIF::Coop.menu_label, tr && KIF::Trade.menu_label, pv && KIF::PvP.menu_label,
                            defined?(KIF::Presence) && KIF::Presence.ghost&.map_id] })
           next if r.nil?
           note = nil
           return if r < 0
           next KIF::Coop.menu_pick if co && r == cmds.length - 1
           next KIF::Trade.menu_pick if tr && r == tr
+          next KIF::PvP.menu_pick if pv && r == pv
           r -= 1 if sl
           case r
           when -1

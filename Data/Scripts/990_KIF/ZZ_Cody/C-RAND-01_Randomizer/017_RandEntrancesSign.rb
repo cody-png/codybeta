@@ -76,8 +76,9 @@ module KIF
           w.viewport = @viewport
           if mode == 2   # above the door, kept on screen
             dir = $game_player.direction
-            ex = $game_player.screen_x + (dir == 6 ? 32 : dir == 4 ? -32 : 0)
-            ey = $game_player.screen_y - 32 + (dir == 2 ? 32 : dir == 8 ? -32 : 0)
+            t = (Game_Map::TILE_WIDTH * (defined?(KIF::MapZoom) ? KIF::MapZoom.scale : 1.0)).round   # a tile on screen (16 px at Far)
+            ex = $game_player.screen_x + (dir == 6 ? t : dir == 4 ? -t : 0)
+            ey = $game_player.screen_y - t + (dir == 2 ? t : dir == 8 ? -t : 0)
             w.x = [[ex - w.width / 2, 0].max, Graphics.width - w.width].min
             w.y = [ey - w.height - 4, 0].max
           else

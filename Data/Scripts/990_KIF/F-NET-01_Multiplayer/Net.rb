@@ -23,7 +23,11 @@
 #     come from Ke and both nonces. A frame with a wrong MAC, an old
 #     sequence number (replay) or fields that don't fit its type is dropped;
 #     a type this version doesn't know is ignored. 5 bad frames close the line.
-#   The first signed message each way is "hello" (name, KIF version).
+#   The first signed message each way is "hello" (name, KIF version). Until the
+#   host's player has said yes only a short hello, no, bye or ping is read (the
+#   rest counts as a bad frame, unparsed). A frame holds at most 4500 values
+#   ("[{," in it), a line 20000 at once and 5000 a second: the parser's time
+#   goes with them.
 #   "ping" every 5 s of quiet; 20 s without a byte = lost. "bye" = clean close.
 #
 # Peer data is never Marshal-loaded or eval'd: only JSON text (ASCII, nesting
@@ -51,6 +55,12 @@ module KIF
     MAX_QUEUED = 4_194_304   # bytes read but not yet taken by the game thread; more and the line is closed
     POLL_BYTES = 65_536      # one poll() stops after about this many frame bytes...
     POLL_SECS  = 0.004       # ...or this long (the rest stays queued for the next frame), but takes at least one
+    # The parser's time goes with the number of values in a frame (about 3 us each), not with its bytes: "[", "{" and ","
+    # are counted. An honest message has a few hundred (a co-op start about 150, 24 battle events 750); the biggest the
+    # mod API allows, 8 KB of numbers, about 4100.
+    FRAME_VALUES = 4_500     # most a frame may hold; more is a bad frame, unparsed
+    VALUE_BURST  = 20_000    # most a line may send at once (the mod API's 32 KB in a second, all numbers, is 16400)...
+    VALUE_RATE   = 5_000     # ...then this many a second (under 2% of the game's thread); a line that runs dry is closed
     PROTO      = 3       # 3: picture hashes are 32 hex digits (sp_get / sp_img)
     HS_LIMIT   = 10      # handshakes a host starts in 10 s
 
@@ -775,6 +785,8 @@ module KIF
         @state = :handshake
         @bad = 0
         @rx_seq = 0
+        @values = VALUE_BURST.to_f
+        @values_at = Net.now
       end
 
       # [w, my base^w, inverse of their base^w], once a session
@@ -860,10 +872,23 @@ module KIF
         # the writer puts "t" first: the type is read without parsing, and a message longer than its type allows is dropped unparsed
         type = json[/\A\{"t":"([a-z_0-9]{1,16})"/, 1]
         return if type && !TYPES.key?(type)   # a newer version's message: ignored
+        # until the player has said yes only a short hello (once), no, bye or ping means anything: the rest is dropped unparsed
+        unless @state == :connected || (json.bytesize <= 1024 &&
+               (type == "hello" ? (@state == :handshake || @state == :waiting) : %w[ping bye no].include?(type)))
+          return bad_frame(out, "#{type || 'message'} before the player said yes")
+        end
         # longer than its type allows: fine as long as it is not made of many values (an extra text field costs the
         # parser little; thousands of nested or listed values cost it tens of ms a frame)
-        if json.bytesize > Net.json_cap(type) && json.count("[{,") > 64
+        values = json.count("[{,")
+        if values > FRAME_VALUES || (json.bytesize > Net.json_cap(type) && values > 64)
           return bad_frame(out, "longer than a #{type || 'message'} can be")
+        end
+        now = Net.now
+        @values = [VALUE_BURST.to_f, @values + (now - @values_at) * VALUE_RATE].min - values
+        @values_at = now
+        if @values < 0   # 62 KB of values take the parser 100-200 ms: the line is cut, not just the frame
+          Net.log("partner sent too many values at once; line closed")
+          return line_ended(:flood, out)
         end
         h = Wire.parse(json)
         return bad_frame(out, "bad signature") unless h

@@ -256,9 +256,11 @@ module KIF
     end
 
     # hash of a key's picture in this game (once a session), or nil
-    def self.hash_of(k, ps = nil)
+    # keep: an Array that gets the decoded frame (so the caller that needs it too does not decode the sheet again)
+    def self.hash_of(k, ps = nil, keep = nil)
       return @hashes[k] || nil if @hashes.key?(k)
       raw = frame_raw(ps || sprite_of(k))
+      keep << raw if keep
       h = raw && raw.bytesize == SIZE * SIZE * 4 ? digest(raw) : nil
       @hashes.clear if @hashes.length >= 256   # (a partner's endless new keys)
       @hashes[k] = h || false
@@ -287,10 +289,11 @@ module KIF
       ps = pick(p)
       k = ps && key(ps)
       if k
-        x = hash_of(k, ps)
+        raw = []
+        x = hash_of(k, ps, raw)
         if x
           h["sp"] = k + [x]
-          remember(x, frame_raw(ps), ps) unless @served.key?(x)
+          remember(x, raw[0] || frame_raw(ps), ps) unless @served.key?(x)   # a sheet is decoded once, not once for the hash and once to serve
         end
       end
       kc = shiny_dump(p)

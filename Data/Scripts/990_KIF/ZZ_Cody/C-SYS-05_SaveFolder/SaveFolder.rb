@@ -184,7 +184,9 @@ module KIF
         q += " " + _INTL("They fill all {1} save slots, so a new game would have to save over one.", SaveData::MANUAL_SLOTS.length) if full?(old_dir)
         if pbConfirmMessage(q)
           n = import
-          pbMessage(_INTL("Copied {1} saves. Your old KIF keeps its own copies, and the old save backups stay in the old folder.", n) + full_note(new_dir))
+          msg = _INTL("Copied {1} saves. Your old KIF keeps its own copies, and the old save backups stay in the old folder.", n)
+          msg += " " + _INTL("These could not be copied: {1}.", failed.join(", ")) unless failed.empty?
+          pbMessage(msg + full_note(new_dir))
           KIF.log("Save folder: copied #{n} saves from #{old_dir}")
           show_copied_saves if n > 0
         else

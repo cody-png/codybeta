@@ -143,7 +143,8 @@ module KIF
     # text-direction characters.
     UNSAFE_TEXT = /[\\<\x00-\x09\x0b-\x1f\x7f\u0080-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]|(?<!-)>/
     def self.safe_text(s, max = 200)
-      return s.to_s.dup.force_encoding("UTF-8").scrub("").gsub("\r\n", "\n").gsub(UNSAFE_TEXT, "")[0, max]
+      # "{2}" in a name would be filled in by _INTL with its next argument: the brace goes
+      return s.to_s.dup.force_encoding("UTF-8").scrub("").gsub("\r\n", "\n").gsub(UNSAFE_TEXT, "").gsub(/\{(?=\d)/, "(")[0, max]
     end
 
     # a name from the other game, safe to show in a PIF message (no \ codes)
@@ -213,7 +214,14 @@ module KIF
     end
 
     # a computer on this network or this one (what a LAN answer may come from)
-    def self.near?(ip); [:loopback, :private, :linklocal].include?(addr_kind(ip)); end
+    # mine: the host's own IPv4 address; with it only this PC and the /16 it sits in count (a spoofed
+    # asker from another private network gets nothing)
+    def self.near?(ip, mine = nil)
+      k = addr_kind(ip)
+      return false unless [:loopback, :private, :linklocal].include?(k)
+      return true if mine.nil? || k == :loopback || !ip.to_s.match?(/\A\d+\.\d+\./)
+      return ip.to_s.split(".")[0, 2] == mine.to_s.split(".")[0, 2]
+    end
 
     def self.available?
       return @available unless @available.nil?
@@ -1834,7 +1842,7 @@ module KIF
               sleep 0.05   # an answer that bounced (Windows reports it here)
               next
             end
-            next unless data == ASK && from && Net.near?(from[3])
+            next unless data == ASK && from && Net.near?(from[3], info[:kind] == :v4 ? info[:ip] : nil)
             now = Net.now
             next if seen[from[3]] && now - seen[from[3]] < 1.0
             recent.reject! { |x| now - x > 1.0 }

@@ -55,6 +55,8 @@ module KIF
               "hat" => 1..9999, "hat_x" => -999..999, "hat_y" => -999..999,
               "hat_mirrored_horizontal" => :bool, "hat_mirrored_vertical" => :bool }
 
+    KIF::Net::TYPE_MAX["tr_offer"] = MAX_OFFER + 256   # the offer and the frame's id, type and number
+
     @st = nil      # the trade on now
     @asked = nil   # the partner's ask not answered yet
     @line = nil    # per line (one session): No answers, the mute, undo work held back during a battle

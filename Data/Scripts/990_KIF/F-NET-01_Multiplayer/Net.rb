@@ -65,6 +65,10 @@ module KIF
       "sl_up"    => { "code" => [String, 60_000] },
       "sl_party" => { "ids" => [String, 600] },   # id:species:level:hp:totalhp,...
     }
+    # Largest signed frame (bytes of JSON) a message type may have, checked before the frame is
+    # parsed (a parse costs the game thread ~6 ms per KB). Types add theirs; the type is read from
+    # where every sender writes it, first. Others are limited by MAX_FRAME and check_fields.
+    TYPE_MAX = {}
     NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined }
 
     # a name from the other game, safe to show in a PIF message (no \ codes)
@@ -813,7 +817,10 @@ module KIF
       def signed(payload, out)
         mac = payload.byteslice(0, 32)
         json = payload.byteslice(32, payload.bytesize - 32).to_s
-        h = Crypto.same?(Crypto.hmac(@rx_key, json), mac) ? Wire.parse(json) : nil
+        signed_ok = Crypto.same?(Crypto.hmac(@rx_key, json), mac)
+        cap = signed_ok && TYPE_MAX[json[/\A\{"t":"(\w+)"/, 1]]
+        return bad_frame(out, "too long") if cap && json.bytesize > cap
+        h = signed_ok ? Wire.parse(json) : nil
         return bad_frame(out, "bad signature") unless h
         seq = h["s"]
         return bad_frame(out, "old or missing number") unless seq.is_a?(Integer) && seq > @rx_seq

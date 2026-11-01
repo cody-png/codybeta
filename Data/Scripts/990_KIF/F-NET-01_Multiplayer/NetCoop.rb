@@ -69,7 +69,7 @@ module KIF
       "co_ask"   => { "id" => [Integer, 1, 1_000_000_000], "map" => [Integer, 0, 99_999], "kind" => [String, 8],
                       "max" => [Integer, 0, 6] },
       "co_join"  => { "id" => [Integer, 1, 1_000_000_000], "name" => [String, 24], "type" => [String, 48],
-                      "tid" => [Integer, 0, 0xffffffff], "party" => [Array] },
+                      "tid" => [Integer, 0, 0xffffffff], "party" => [Array], "items" => [Hash, :opt] },
       "co_no"    => { "id" => [Integer, 1, 1_000_000_000], "why" => [String, 16] },
       "co_begin" => { "id" => [Integer, 1, 1_000_000_000], "d" => [Hash] },
       "co_ev"    => { "id" => [Integer, 1, 1_000_000_000], "e" => [Array] },
@@ -106,9 +106,16 @@ module KIF
     @their = false       # the partner did
     @host_box = []
     @notes = []
+    @host_id = nil       # the battle this game started or is hosting: only its replies are kept (HOST_TYPES)
+
+    # said before the player agrees: the partner's game runs the battle and tells this one what happened
+    def self.trust_line
+      _INTL("Their game decides what happens to your Pokemon in these battles. Only agree with a friend you trust.")
+    end
 
     class << self
       attr_accessor :ask_wait, :quiet_wait, :begin_wait, :cmd_wait, :sw_wait
+      attr_reader :host_id
       attr_accessor :guest        # the guest battle running in this game
       attr_reader :want, :their, :their_map, :host_box, :notes
     end
@@ -137,6 +144,7 @@ module KIF
     def self.on_connect(_s = nil)
       @want = @their = @ask_pact = false
       @their_map = @sent_map = @ask = @rules = @rules_sent = nil
+      @host_id = @pact_after = @no_asks_until = nil
       @told = {}
       @host_box.clear
     end
@@ -212,20 +220,42 @@ module KIF
       r = @rules
       return yield if rules_host? || !r || r.empty? || !$PokemonSystem
       old = {}
+      live = {}
       r.each do |k, v|
         if RULE_SWITCHES[k]
           c = Object.const_get(RULE_SWITCHES[k]) rescue next
           old[k] = $game_switches[c]
           $game_switches[c] = v == 1
+          live[k] = v == 1
         elsif $PokemonSystem.respond_to?(:"#{k}=")
           old[k] = $PokemonSystem.send(k)
           $PokemonSystem.send(:"#{k}=", v)
+          live[k] = v
         end
       end
+      @rules_swap = [old, live]
       begin
         return yield
       ensure
-        old.each { |k, v| RULE_SWITCHES[k] ? ($game_switches[Object.const_get(RULE_SWITCHES[k])] = v) : $PokemonSystem.send(:"#{k}=", v) }
+        @rules_swap = nil
+        put_rules(old)
+      end
+    end
+
+    def self.put_rules(h)
+      h.each { |k, v| RULE_SWITCHES[k] ? ($game_switches[Object.const_get(RULE_SWITCHES[k])] = v) : $PokemonSystem.send(:"#{k}=", v) }
+    end
+
+    # a save made while the host's settings are live (an autosave on a win or a catch)
+    # holds this player's own
+    def self.saving
+      sw = @rules_swap
+      return yield unless sw
+      put_rules(sw[0])
+      begin
+        return yield
+      ensure
+        put_rules(sw[1]) if @rules_swap.equal?(sw)
       end
     end
 
@@ -297,23 +327,32 @@ module KIF
       if @want
         return unless pbConfirmMessage(_INTL("Stop fighting together with {1}?", partner))
         set_want(false)
-        @notes << _INTL("You stopped fighting together.")
+        note(_INTL("You stopped fighting together."))
         return
       end
       pbMessage(_INTL("Fighting together: a battle either of you starts while the other is on the same map becomes a double battle. Each of you uses your own Pokémon."))
+      pbMessage(trust_line)
       return unless pbConfirmMessage(@their ? _INTL("{1} asked to fight together. OK?", partner) : _INTL("Ask {1} to fight together?", partner))
       set_want(true)
-      @notes << (on? ? _INTL("You now fight together with {1}.", partner) : _INTL("Asked {1}. They need to say yes.", partner))
+      note(on? ? _INTL("You now fight together with {1}.", partner) : _INTL("Asked {1}. They need to say yes.", partner))
     end
 
     # the partner asked: a question at a quiet moment on the map
     def self.ask_pact
       @ask_pact = false
       return if @want || !@their
+      pbMessage(trust_line)
       yes = pbConfirmMessage(_INTL("{1} wants to fight together: battles either of you starts on the same map become double battles. OK?", partner))
       return unless session && @their
+      @pact_after = KIF::Net.now + 120 unless yes   # no new question for 2 minutes
       set_want(yes)
-      @notes << _INTL("You now fight together with {1}.", partner) if yes
+      note(_INTL("You now fight together with {1}.", partner)) if yes
+    end
+
+    # a note for the Multiplayer screen / the map (the oldest go when nobody reads them)
+    def self.note(text)
+      @notes << text
+      @notes.shift while @notes.length > 20
     end
 
     #---------------------------------------------------------------------------
@@ -324,15 +363,21 @@ module KIF
       when "co_pact"
         was = @their
         @their = msg["on"] == 1
-        @ask_pact = @their && !@want
-        @notes << _INTL("{1} stopped fighting together.", partner) if was && !@their && @want
-        @notes << _INTL("You now fight together with {1}.", partner) if !was && @their && @want   # the answer to this player's ask
+        # the question comes back no sooner than 2 minutes after a No (a partner flipping this at 400 a second)
+        @ask_pact = @their && !@want && KIF::Net.now >= (@pact_after || 0)
+        note(_INTL("{1} stopped fighting together.", partner)) if was && !@their && @want
+        note(_INTL("You now fight together with {1}.", partner)) if !was && @their && @want   # the answer to this player's ask
         send_status if @their
       when "co_st" then @their_map = msg["map"]
       when "co_rules" then @rules = read_rules(msg["r"]) unless rules_host?
       when "co_int" then @guest&.intent_from(msg)
       when "co_ask" then guest_ask(msg)
-      when *HOST_TYPES then @host_box << [type, msg]
+      when *HOST_TYPES
+        # only this game's own battle start or running battle: a stream of these piled up in memory
+        if @host_id && msg["id"] == @host_id
+          @host_box << [type, msg]
+          @host_box.shift while @host_box.length > 32
+        end
       when *GUEST_TYPES
         if @guest
           @guest.feed(type, msg)
@@ -363,10 +408,21 @@ module KIF
     #---------------------------------------------------------------------------
     # Guest: the partner's battle starts; join when this game is free
     #---------------------------------------------------------------------------
+    # the states in which this game does not join a battle (the ones that stop it hosting one too)
+    def self.cannot_join?
+      return true if $PokemonGlobal.nil? || $PokemonGlobal.partner
+      return true if (pbInSafari? rescue false) || (pbInBugContest? rescue false)
+      return true if defined?(KIF::SelfBattle) && KIF::SelfBattle.instance_variable_get(:@active)
+      return true if ($game_switches[SWITCH_TRIPLE_BOSS_BATTLE] rescue false)
+      return false
+    end
+
     def self.guest_ask(msg)
       s = session or return
       return s.post("co_no", "id" => msg["id"], "why" => "off") unless on?
-      return s.post("co_no", "id" => msg["id"], "why" => "busy") if @guest || @ask || @hosting || $game_temp&.in_battle
+      # busy, or the last invite from this partner never became a battle (5 minutes of "busy")
+      return s.post("co_no", "id" => msg["id"], "why" => "busy") if @guest || @ask || @hosting || $game_temp&.in_battle ||
+                                                                 cannot_join? || KIF::Net.now < (@no_asks_until || 0)
       @ask = msg
       @ask_at = KIF::Net.now
     end
@@ -380,6 +436,7 @@ module KIF
         ask = @ask
         why = if !on? then "off"
               elsif ask["map"] != $game_map.map_id then "map"
+              elsif cannot_join? then "busy"
               elsif ($Trainer.able_pokemon_count rescue 0) == 0 then "fainted"
               end
         if why
@@ -416,9 +473,26 @@ module KIF
       return trainer.party.select { |p| p && p.able? }.first(max)
     end
 
-    def self.join_data(id, trainer, max = 0)
+    def self.join_data(id, trainer, max = 0, bag = nil)
       return { "id" => id, "name" => trainer.name.to_s[0, 24], "type" => trainer.trainer_type.to_s[0, 48],
-               "tid" => trainer.id.to_i & 0xffffffff, "party" => join_party(trainer, max).map { |p| Mon.dump(p, true) } }
+               "tid" => trainer.id.to_i & 0xffffffff, "party" => join_party(trainer, max).map { |p| Mon.dump(p, true) },
+               "items" => bag_list(bag || $PokemonBag) }
+    end
+
+    # the battle items this player has (name => count): the host lets it use no others
+    def self.bag_list(bag)
+      out = {}
+      (bag ? bag.pockets : []).each do |pocket|
+        next unless pocket.is_a?(Array)
+        pocket.each do |it|
+          next unless it.is_a?(Array) && it.length == 2 && out.length < 60
+          d = GameData::Item.try_get(it[0])
+          out[d.id.to_s] = [out[d.id.to_s].to_i + it[1].to_i, 999].min if d && d.battle_use.to_i.between?(1, 10)
+        end
+      end
+      return out
+    rescue StandardError
+      return {}
     end
 
     def self.join_battle(s, ask)
@@ -429,11 +503,16 @@ module KIF
       @guest = g
       begin
         g.run
-      rescue StandardError => e
+      rescue StandardError, SystemStackError => e
         log("guest battle failed (#{e.class}: #{e.message})")
         (s.post("co_act", "id" => ask["id"], "d" => { "a" => "auto", "b" => -1 }) rescue nil)
       ensure
         @guest = nil
+        # an invite that never became a battle: the next ones from this partner wait 5 minutes
+        if g && !g.begun? && !g.done
+          @no_asks_until = KIF::Net.now + 300
+          tell(:ask_flood, _INTL("{1} asked you to join a battle that did not start. Their invites are ignored for 5 minutes.", partner))
+        end
       end
     end
 
@@ -448,6 +527,7 @@ module KIF
       @next_id = 1 if @next_id == 0
       id = @next_id
       @host_box.clear
+      @host_id = id
       max = team_limit
       s.post("co_ask", "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => kind.to_s, "max" => max)
       reply = nil
@@ -497,7 +577,18 @@ module KIF
         tell(:lost, _INTL("Some of {1}'s Pokémon have moves, Abilities or items this game doesn't have (a mod's, or another KIF's). Here they fight without them.", partner))
       end
       type = Mon.partner_type(msg["type"])
-      return { party: party, name: KIF::Net.shown_name(msg["name"]), type: type, tid: msg["tid"] }
+      return { party: party, name: KIF::Net.shown_name(msg["name"]), type: type, tid: msg["tid"], bag: read_bag(msg["items"]) }
+    end
+
+    # the partner's battle items: real items with counts, at most 60 (none: it uses none)
+    def self.read_bag(h)
+      out = {}
+      return out unless h.is_a?(Hash)
+      h.first(60).each do |k, v|
+        it = Mon.sym(k, GameData::Item)
+        out[it] = v.clamp(1, 999) if it && v.is_a?(Integer) && v > 0
+      end
+      return out
     end
 
     # the first message of these types for this battle (older ones are dropped)
@@ -528,10 +619,17 @@ module KIF
 
       module_function
 
-      # a GameData id from a peer string, or nil
+      # a GameData id from a peer string, or nil. Only a real key of the data, or (Species
+      # only) a fusion "B<body>H<head>" of two real Pokémon: GameData's own try_get
+      # makes a fusion of any B#H# or "_x_" id for every class, and get() on
+      # such an id of another class recurses until SystemStackError.
       def sym(v, data)
         return nil unless v.is_a?(String) && v =~ /\A[A-Za-z0-9_]{1,40}\z/
-        d = data.try_get(v.to_sym)
+        k = v.to_sym
+        return k if data::DATA.key?(k)
+        return nil unless data == GameData::Species && v =~ /\AB([1-9]\d{0,2})H([1-9]\d{0,2})\z/ &&
+                          $1.to_i <= NB_POKEMON && $2.to_i <= NB_POKEMON
+        d = data.try_get(k)
         return d ? d.id : nil
       end
 
@@ -549,10 +647,11 @@ module KIF
       end
 
       # text from the peer for a message window: no control codes (\c[...],
-      # \se[...] would play files), no control characters
+      # \se[...] would play files), no "<" (it opens <icon=>, <img=>, <fs=>: tags the
+      # window draws, and a missing file raises), no control characters
       def text(v, max = 300)
         return "" unless v.is_a?(String)
-        return v.gsub("\r\n", "\n").gsub(/[\\\x00-\x09\x0b-\x1f\x7f]/, "")[0, max]
+        return v.gsub("\r\n", "\n").gsub(/[\\<\x00-\x09\x0b-\x1f\x7f]/, "")[0, max]
       end
 
       def name(v); text(v, 24).delete("\n"); end
@@ -586,7 +685,7 @@ module KIF
       # A Pokémon from checked fields, or nil. full: every battle field (a
       # partner's party, a catch); otherwise what a battle screen shows (HP
       # and the total come from the other game as they are).
-      def load(h, full = false)
+      def load(h, full = false, spr = true)
         return nil unless h.is_a?(Hash)
         sp = sym(h["s"], GameData::Species) or return nil
         lv = int(h["l"], 1, GameData::GrowthRate.max_level) or return nil
@@ -607,9 +706,9 @@ module KIF
         p.instance_variable_set(:@totalhp, th) if th && !full
         p.instance_variable_set(:@hp, int(h["hp"], 0, p.totalhp, p.totalhp))
         p.instance_variable_set(:@status, p.hp > 0 ? st : :NONE)
-        KIF::NetSprite.load_into(p, h) if defined?(KIF::NetSprite)
+        KIF::NetSprite.load_into(p, h) if spr && defined?(KIF::NetSprite)
         return p
-      rescue StandardError => e
+      rescue StandardError, SystemStackError => e
         KIF::Coop.log("a Pokémon didn't fit (#{e.class}: #{e.message})")
         return nil
       end
@@ -861,6 +960,18 @@ module PokemonSelection
     def restore(*args)
       KIF::Coop.picked(nil)
       return kif_coop_restore(*args)
+    end
+  end
+end
+
+# an autosave (a win, a catch) inside a shared battle saves this player's own settings,
+# not the Multiplayer host's that are live for the battle
+module Kernel
+  class << self
+    alias kif_coop_tryAutosave tryAutosave unless method_defined?(:kif_coop_tryAutosave)
+
+    def tryAutosave(*args)
+      return KIF::Coop.saving { kif_coop_tryAutosave(*args) }
     end
   end
 end

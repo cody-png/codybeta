@@ -20,6 +20,12 @@ module KIF
       attr_reader :id, :mirror, :decision, :host_name, :party, :caught, :done
       attr_accessor :view
 
+      IDLE        = 90.0   # seconds the host may say nothing (while this player isn't choosing) before this game leaves
+      MAX_EVENTS  = 40     # log entries run from one co_ev (a real one holds 25 at most)
+      MAX_TOTAL   = 6000   # log entries in one battle
+      MAX_PAUSED  = 1500   # messages that wait for a key press in one battle
+      MAX_BOX     = 300    # frames waiting for this game's thread
+
       def initialize(session, id, trainer, view = nil, bag: nil, max: 0)
         @s = session
         @id = id
@@ -37,9 +43,19 @@ module KIF
         @picked = Hash.new(0)
         @balls = 0
         @foes = []
+        @ft_names = nil
+        @fought = []    # slots of @party that took part in the battle on this screen
+        @down = {}      # slots whose Pokémon the log showed at 0 HP
+        @rx_at = KIF::Net.now
       end
 
-      def feed(type, msg); @box << [type, msg] if msg.is_a?(Hash) && msg["id"] == @id; end
+      def feed(type, msg)
+        return unless msg.is_a?(Hash) && msg["id"] == @id
+        @rx_at = KIF::Net.now
+        return abort_battle("too many frames waiting") if @box.to_a.length >= MAX_BOX
+        @box << [type, msg]
+      end
+      def begun?; @begun; end
       def lost; @lost = true; end
       def lost?; @lost || !@s.connected?; end
       def session; @s; end
@@ -82,7 +98,49 @@ module KIF
         d = msg["d"]
         return unless msg["id"] == @id && d.is_a?(Hash) && d["t"].is_a?(Integer) && d["it"].is_a?(String)
         @intent = [d["t"], d["it"]]
+        @rx_at = KIF::Net.now   # (the host also sends this while its own player chooses)
       end
+
+      # this game leaves the battle: nothing more is applied, the host's game fights for this player
+      def abort_battle(why)
+        return if @done
+        KIF::Coop.log("#{@host_name}'s battle left here (#{why})")
+        @aborted = true
+        @decision = 0
+        @done = true
+        (@s.post("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" }) rescue nil)
+        (@view.message(_INTL("{1}'s game stopped working with this one. You left the battle.", @host_name)) rescue nil) if @view && @begun
+      end
+
+      # a fight on this screen: this slot of the party (-1: not one of this player's)
+      def slot_of(pk); @party.index { |x| x.equal?(pk) } || -1; end
+
+      def took_part(pk)
+        j = slot_of(pk)
+        (@fought ||= []) << j if j >= 0 && !@fought.to_a.include?(j)
+      end
+
+      def went_down(pk)
+        j = slot_of(pk)
+        (@down ||= {})[j] = true if j >= 0
+      end
+
+      # the host's word on one of this player's Pokémon (HP, status): one that took no part only
+      # gets better (an item); one that did follows the host, but a faint has to be on the screen first
+      def take_state(j, pk, hp, st)
+        fought = @fought.to_a.include?(j)
+        if fought
+          hp = pk.hp if hp == 0 && pk.hp > 0 && !@down.to_h[j]
+        else
+          hp = pk.hp if hp < pk.hp
+        end
+        pk.hp = hp if pk.hp != hp
+        st = pk.status if st && st != :NONE && !fought
+        pk.instance_variable_set(:@status, st) if st && pk.hp > 0
+        return fought
+      end
+
+      def load_mon(h); Mon.load(h, false, @view.respond_to?(:spr_ok?) ? @view.spr_ok? : true); end
 
       # "Monto: Water Gun -> Pidgey" for this player's menus this turn, or nil
       def intent
@@ -149,7 +207,7 @@ module KIF
           type, msg = @box.shift
           begin
             handle(type, msg)
-          rescue StandardError => e
+          rescue StandardError, SystemStackError => e
             KIF::Coop.log("partner step failed on #{type} (#{e.class}: #{e.message})")
             reply_auto(type, msg)   # the host never waits on a failure here
           end
@@ -159,7 +217,7 @@ module KIF
       def handle(type, msg)
         case type
         when "co_begin" then begin_battle(msg["d"]) unless @begun
-        when "co_ev"    then (msg["e"] || []).each { |ev| @view.show(ev) if ev.is_a?(Array) }
+        when "co_ev"    then run_events(msg["e"])
         when "co_cmd"   then answer_command(msg["d"])
         when "co_sw"    then answer_switch(msg["d"])
         when "co_skip"  then @view.message(_INTL("{1}'s game chose for you this turn.", @host_name))   # this player's pick came too late
@@ -177,6 +235,15 @@ module KIF
         end
       end
 
+      # the host's log entries (a real co_ev holds 25 at most; the rest are dropped, a flood ends the battle here)
+      def run_events(list)
+        list = list.is_a?(Array) ? list.first(MAX_EVENTS) : []
+        @events_seen = @events_seen.to_i + list.length
+        @paused_seen = @paused_seen.to_i + list.count { |ev| ev.is_a?(Array) && ev[0] == "mp" }
+        return abort_battle("too many log entries") if @events_seen > MAX_TOTAL || @paused_seen > MAX_PAUSED
+        list.each { |ev| @view.show(ev) if ev.is_a?(Array) && !@done }
+      end
+
       def begin_battle(d)
         @begun = true
         return if build(d)
@@ -190,8 +257,9 @@ module KIF
       def battle_bgm(v)
         return nil unless v.is_a?(Array) && v.length == 3 && v[0].is_a?(String)
         n = v[0]
-        return nil unless n =~ /\A[^\\\/:*?"<>|\x00-\x1f]{1,80}\z/ && !n.include?("..")
-        return nil unless (FileTest.audio_exist?("Audio/BGM/" + n) rescue false)
+        # a plain music name (letters, digits, a few marks; no Windows device name: NUL, CON, COM1...) that is an audio file, not a folder
+        return nil unless n =~ /\A[\p{L}\p{N}_ !'(),\-]{1,60}\z/ && n !~ /\A\s|\s\z/ && n !~ /\A(?:CON|PRN|AUX|NUL|COM\d|LPT\d)\z/i
+        return nil unless (FileTest.audio_exist?("Audio/BGM/" + n) rescue false) && !File.directory?("Audio/BGM/" + n)
         return RPG::AudioFile.new(n, int(v[1], 0, 100, 100), int(v[2], 50, 150, 100))
       end
 
@@ -206,11 +274,15 @@ module KIF
         return false unless d.is_a?(Hash)
         sz = d["sz"]
         return false unless sz.is_a?(Array) && sz.length == 2 && sz[0] == 2 && sz[1].is_a?(Integer) && sz[1].between?(1, 3)
+        @top_level = @party.map { |p| p.level.to_i }.max   # (Exp and prizes are held to this team as it is now)
         @hn = int(d["gs"], 1, 6) or return false
         @gn = int(d["gn"], 1, 6) or return false
         return false unless @gn == @party.length && d["hp"].is_a?(Array) && d["hp"].length == @hn
-        host_party = d["hp"].map { |h| Mon.load(h) }
-        foes = d["fp"].is_a?(Array) && d["fp"].length.between?(1, 18) ? d["fp"].map { |h| Mon.load(h) } : []
+        host_party = d["hp"].map { |h| load_mon(h) }
+        # a wild battle has as many foes as its side has places; a trainer team has six at most
+        fp = d["fp"].is_a?(Array) ? d["fp"].first(18) : []
+        fp = fp.first(sz[1]) if d["w"] == 1
+        foes = fp.empty? ? [] : fp.map { |h| load_mon(h) }
         return false if foes.empty? || host_party.include?(nil) || foes.include?(nil)
         @foes = foes.map { |f| [f.species, f.level] }
         if d["lo"] == 1
@@ -228,11 +300,13 @@ module KIF
           return false unless d["ft"].is_a?(Array) && d["ft"].length.between?(1, 3)
           opp = d["ft"].map { |t| trainer_from(t) }
           return false if opp.include?(nil)
+          @ft_names = d["ft"].map { |t| [Mon.sym(t["ty"], GameData::TrainerType), Mon.name(t["n"])] }
         end
         fs = d["fs"]
         ok = fs.is_a?(Array) && fs.length == (opp ? opp.length : 1) && fs.all? { |x| x.is_a?(Integer) } &&
              fs[0] == 0 && fs.each_cons(2).all? { |a, b| a <= b } && fs.last < foes.length
         fs = [0] unless ok
+        return false if opp && fs.each_with_index.any? { |a, i| (fs[i + 1] || foes.length) - a > 6 }   # a team has six at most
         opp&.each_with_index { |t, i| t.party = foes[(fs[i] || 0)...(fs[i + 1] || foes.length)] }
         @view.make_scene if @view.respond_to?(:make_scene)
         m = PokeBattle_Battle.new(@view.scene, @party + host_party, foes, [@trainer, host], opp)
@@ -260,6 +334,7 @@ module KIF
           pk = m.pbParty(mi)[mp]
           next unless pk && !pk.egg? && m.battlers[mi].nil?
           m.pbCreateBattler(mi, pk, mp)
+          took_part(pk)
         end
         return false unless m.battlers[0] && own?(m.battlers[0].pokemonIndex)
         m.battlers.each { |b| m.pbSetSeen(b) if b && b.opposes? }
@@ -290,6 +365,8 @@ module KIF
           pk = b.pokemon or next
           hp = int(e[1], 0, 99_999) or next
           if own_pk?(pk)
+            took_part(pk)
+            went_down(pk) if hp == 0
             pk.hp = hp if pk.hp != hp   # this game's own rules apply (No reviving)
           else
             th = int(e[2], 1, 99_999, b.totalhp)
@@ -313,8 +390,9 @@ module KIF
         if mi.even? && own?(mp)
           pk = arr[mp]
           return nil unless pk && !pk.egg?
+          took_part(pk)
         else
-          pk = Mon.load(e[2]) or return nil
+          pk = load_mon(e[2]) or return nil
           arr[mp] = pk
         end
         if @mirror.battlers[mi]
@@ -331,9 +409,7 @@ module KIF
           pk = @party[j]
           next unless pk && x.is_a?(Array) && !@mirror.battlers.any? { |b| b && b.pokemon.equal?(pk) }
           hp = int(x[0], 0, pk.totalhp) or next
-          pk.hp = hp if pk.hp != hp
-          st = Mon.sym(x[1], GameData::Status)
-          pk.instance_variable_set(:@status, st) if st && pk.hp > 0
+          take_state(j, pk, hp, Mon.sym(x[1], GameData::Status))
         end
         o = d["ord"]
         if o.is_a?(Array) && o.length == @gn && o.sort == (0...@gn).to_a
@@ -443,6 +519,12 @@ module KIF
           end
           return
         end
+        # a loss or a draw counts when this screen showed every Pokémon of this player that fought go down
+        if (@decision == 2 || @decision == 5) && !loss_seen?
+          KIF::Coop.log("#{@host_name} says the battle was lost; this screen never showed it, so it counts as stopped")
+          @decision = 0
+          @aborted = true
+        end
         apply_final(d["pt"])
         return unless @mirror
         award_exp(d["k"]) if @mirror.expGain
@@ -455,6 +537,22 @@ module KIF
       # won together: the trainer is beaten on this save too, when this game has
       # that trainer (the same map and event, a trainer battle whose page turns
       # on self switch A, as PIF's trainers do)
+      TRAINER_CALL = /TrainerBattle\w*\(\s*:(\w+)\s*,\s*"([^"]*)"/
+      EVENT_SCRIPT_OK = /\A\s*(?:pbTrainerBattle\w*|pbTrainerIntro|pbTrainerEnd|pbNoticePlayer|pbTrainerCheck)\b/
+      EVENT_CODES_NO  = [121, 122, 125, 126, 127, 128, 129, 134, 135, 136, 137, 138, 201, 202, 203, 339]   # switches, variables, money, items, party, warps, battle calls
+
+      # an event the host points at is marked beaten only when it is a plain trainer fight against a trainer
+      # of this battle: its pages hold nothing that changes the game (a badge, a switch, a variable, money, a warp)
+      def plain_trainer_event?(pages)
+        cmds = pages.flat_map { |pg| pg.list.to_a }
+        return false if cmds.any? { |c| EVENT_CODES_NO.include?(c.code) }
+        scripts = cmds.select { |c| c.code == 355 || c.code == 655 }.map { |c| c.parameters[0].to_s }
+        return false unless scripts.all? { |t| t =~ EVENT_SCRIPT_OK }
+        return true if @ft_names.nil?   # (no battle set up here: only a game that was never told one gets here)
+        calls = scripts.map { |t| t.match(TRAINER_CALL) }.compact.map { |m| [m[1].to_sym, Mon.name(m[2])] }
+        return calls.any? { |c| @ft_names.include?(c) }
+      end
+
       def trainer_beaten
         map, ev = @tev
         return unless $game_map && $game_map.map_id == map && $game_self_switches
@@ -462,7 +560,7 @@ module KIF
         pages = e.instance_variable_get(:@event).pages rescue []
         trainer = pages.any? { |pg| pg.list.any? { |c| c.parameters.any? { |x| x.is_a?(String) && x.include?("TrainerBattle") } } }
         after = pages.any? { |pg| pg.condition.self_switch_valid && pg.condition.self_switch_ch == "A" }
-        return unless trainer && after
+        return unless trainer && after && plain_trainer_event?(pages)
         $game_self_switches[[map, ev, "A"]] = true
         $game_map.need_refresh = true
         KIF::Coop.log("#{@host_name}'s trainer (event #{ev}) beaten here too")
@@ -475,12 +573,16 @@ module KIF
           pk = @party[j]
           next unless pk && x.is_a?(Array) && x.length == 4 && !pk.egg?
           hp = int(x[0], 0, pk.totalhp) or next
-          pk.hp = hp if pk.hp != hp
-          st = pk.hp > 0 ? (Mon.sym(x[1], GameData::Status) || :NONE) : :NONE
-          pk.instance_variable_set(:@status, st)
+          next unless take_state(j, pk, hp, Mon.sym(x[1], GameData::Status) || :NONE)   # (one that took no part only gets better)
           pk.statusCount = int(x[2], 0, 255, 0)
-          (x[3].is_a?(Array) ? x[3] : []).each_with_index { |pp, k| pk.moves[k].pp = int(pp, 0, 999, pk.moves[k].pp) if pk.moves[k] }
+          (x[3].is_a?(Array) ? x[3] : []).each_with_index { |pp, k| pk.moves[k].pp = int(pp, 0, pk.moves[k].total_pp, pk.moves[k].pp) if pk.moves[k] }
         end
+      end
+
+      # this screen showed every Pokémon of this player that took part go down
+      def loss_seen?
+        f = @fought.to_a
+        return !f.empty? && f.all? { |j| @down.to_h[j] }
       end
 
       # each foe the host noted: this game's own pbGainExp, one foe at a time
@@ -494,6 +596,7 @@ module KIF
           lv = int(k["l"], 1, GameData::GrowthRate.max_level) or next
           i = left.index([sp, lv]) or next
           left.delete_at(i)
+          lv = [lv, level_cap].min   # the host names the foes: they pay as if no more than 10 levels over this team
           parts = (k["p"].is_a?(Array) ? k["p"] : []).map { |pi| party_index(pi, 0) }.compact.uniq
           next if parts.empty?
           foe = Pokemon.new(sp, lv, nil, false, false)
@@ -515,8 +618,16 @@ module KIF
         end
       end
 
+      # the highest level this team's foes count at for Exp and prize money (the host names the foes)
+      def level_cap
+        [(@top_level || @party.map { |p| p.level.to_i }.max || 1) + 10, GameData::GrowthRate.max_level].min
+      end
+
       def money
         if @decision == 1 && @mirror.trainerBattle?
+          cap = level_cap * 100
+          calc = @mirror.method(:calculateMoneyGain)
+          @mirror.define_singleton_method(:calculateMoneyGain) { |*a| [calc.call(*a).to_i, cap].min }
           @mirror.pbGainMoney
         elsif @decision == 2 || @decision == 5
           @mirror.pbLoseMoney
@@ -604,6 +715,8 @@ module KIF
           @view.start
         end
         started!
+        @rx_at = KIF::Net.now
+        t_start = @rx_at
         until @done
           if lost?
             @view.message(_INTL("Lost the connection to {1}. Your Pokémon keep the HP they had.", @host_name))
@@ -611,8 +724,14 @@ module KIF
           end
           @view.frame
           KIF::Net.update
+          busy = !@box.empty?
           step
+          @rx_at = KIF::Net.now if busy   # (a menu or message of this player may have taken a while)
           wait_frame
+          # the line stays up on pings alone: a host that says nothing for 90 s, or a battle that
+          # goes on for over an hour, is left (the host's game fights for this player)
+          abort_battle("the host said nothing for #{IDLE.to_i} s") if KIF::Net.now - @rx_at > IDLE
+          abort_battle("the battle ran over an hour") if KIF::Net.now - t_start > 3600
         end
         @view.finish(@decision || 0)
       end
@@ -641,6 +760,16 @@ module KIF
       end
 
       def make_scene; @scene ||= pbNewBattleScene; end
+
+      # a sprite lookup (a disk read and a request) for a Pokémon the host shows: 30 at once, then 6 a second
+      def spr_ok?
+        now = KIF::Net.now
+        @spr_n = [(@spr_n || 30.0) + (now - (@spr_at || now)) * 6.0, 30.0].min
+        @spr_at = now
+        return false if @spr_n < 1
+        @spr_n -= 1
+        return true
+      end
 
       def start
         @scene.extend(MenuWatch) unless @scene.is_a?(MenuWatch)
@@ -672,7 +801,7 @@ module KIF
         prm = @scene.method(m).parameters
         args = args.first(prm.count { |t, _| t == :req || t == :opt }) unless prm.any? { |t, _| t == :rest }
         return @scene.send(m, *args, &blk)
-      rescue StandardError => e
+      rescue StandardError, SystemStackError => e
         KIF::Coop.log("couldn't show #{m} (#{e.class}: #{e.message})") unless @warned[m]
         @warned[m] = true
         return nil
@@ -738,7 +867,11 @@ module KIF
             b ? [b, int(x[1], 0, 99_999, b.hp), int(x[2], 0, 16, 0)] : nil
           end.compact
           call(:pbHitAndHPLossAnimation, t) unless t.empty?
-        when "fa" then (b = g.battler(args[0])) && call(:pbFaintBattler, b)
+        when "fa"
+          if (b = g.battler(args[0]))
+            g.went_down(b.pokemon) if g.own_pk?(b.pokemon)
+            call(:pbFaintBattler, b)
+          end
         when "an"
           mv = Mon.sym(args[0], GameData::Move)
           u = g.battler(args[1])
@@ -753,7 +886,7 @@ module KIF
             ability(b, args[1] == 1, Mon.name(args[2]))
           end
         when "abh" then (b = g.battler(args[0])) && call(:pbHideAbilitySplash, b)
-        when "ch"  then (b = g.battler(args[0])) && (pk = Mon.load(args[1])) && call(:pbChangePokemon, b.index, pk)
+        when "ch"  then (b = g.battler(args[0])) && (pk = Mon.load(args[1], false, spr_ok?)) && call(:pbChangePokemon, b.index, pk)
         when "rf"  then call(:pbRefresh)
         when "r1"  then (b = g.battler(args[0])) && call(:pbRefreshOne, b.index)
         when "op"  then call(:pbShowOpponent, int(args[0], 0, 2, 0))

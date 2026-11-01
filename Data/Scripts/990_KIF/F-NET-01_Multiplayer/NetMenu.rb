@@ -153,9 +153,17 @@ module KIF
               log("Soul Link message failed (#{e.class}: #{e.message})")
             end
           elsif ev[1].start_with?("pr_") && defined?(KIF::Presence)
-            KIF::Presence.receive(ev[1], ev[2])
+            begin
+              KIF::Presence.receive(ev[1], ev[2])
+            rescue StandardError, ScriptError, SystemStackError => e   # one bad message doesn't cost the others in this batch
+              log("presence message failed (#{e.class}: #{e.message})")
+            end
           elsif ev[1].start_with?("mod_") && defined?(ModShare)
-            ModShare.receive(s, ev[1], ev[2])
+            begin
+              ModShare.receive(s, ev[1], ev[2])
+            rescue StandardError, ScriptError, SystemStackError => e
+              log("mod message failed (#{e.class}: #{e.message})")
+            end
           elsif ev[1].start_with?("sp_") && defined?(KIF::NetSprite)
             begin
               KIF::NetSprite.receive(s, ev[1], ev[2])

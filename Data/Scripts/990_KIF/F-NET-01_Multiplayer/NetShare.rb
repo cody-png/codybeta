@@ -47,6 +47,11 @@ module KIF
         id = mod_id.to_s
         raise ArgumentError, "mod id #{id.inspect}: use 1-32 of A-Z a-z 0-9 _ . -" unless id =~ ID
         raise ArgumentError, "KIF::Net.on_share(#{id}) needs a block" unless blk
+        # a second mod with the same id doesn't take over the first one's messages
+        if @handlers[id] && !@handlers[id][0].equal?(blk)
+          note(id, "already registered by another mod; the first one keeps it")
+          return id
+        end
         @handlers[id] = [blk, host_only ? true : false]
         s = Net.session if Net.respond_to?(:session)
         announce(s) if s&.connected?
@@ -148,7 +153,7 @@ module KIF
           return note(id, "partner over the rate limit; dropped") unless spend(st, :rx, size)
           begin
             h[0].call(Net.shown_name(s.partner), msg["k"], d)
-          rescue StandardError => e
+          rescue StandardError, ScriptError, SystemStackError => e   # (NotImplementedError is a ScriptError)
             Net.log("mod share #{id}: its handler failed (#{e.class}: #{e.message})")
           end
         end

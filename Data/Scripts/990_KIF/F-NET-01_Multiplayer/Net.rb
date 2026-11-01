@@ -46,7 +46,11 @@ module KIF
     MAX_PRE    = 1024    # frames before the handshake is done
     MAX_BAD    = 5       # bad frames before the line is closed
     MAX_RATE   = 400     # frames a second before the line is closed
-    PROTO      = 2
+    PROTO      = 3
+    MAX_QUEUED = 8_000_000   # bytes of frames waiting for the game thread; more and the line closes
+    STALL_BYTES = 524_288    # ... or this many while the game thread has not polled for STALL_SECS (a screen that doesn't poll)
+    STALL_SECS  = 2.0
+    POLL_WORK  = 30_000  # parse work one poll does (a value, or 100 bytes, is one); the rest waits for the next poll
     HS_LIMIT   = 10      # handshakes a host starts in 10 s
 
     # Message types after the handshake: field => [class, max length] or
@@ -59,8 +63,8 @@ module KIF
       "no"    => { "why" => [String, 16] },
       # Soul Link (F-BATTLE-05 SoulLink.rb): codes are checked again there
       "sl_hello" => { "link" => [String, 16], "seen" => [Integer, 0, 1_000_000_000],
-                      "acked" => [Integer, 0, 1_000_000_000], "code" => [String, 600] },
-      "sl_link"  => { "code" => [String, 600] },
+                      "acked" => [Integer, 0, 1_000_000_000], "code" => [String, 1500] },
+      "sl_link"  => { "code" => [String, 1500] },
       "sl_up"    => { "code" => [String, 60_000] },
       "sl_party" => { "ids" => [String, 600] },   # id:species:level:hp:totalhp,...
     }
@@ -87,6 +91,11 @@ module KIF
     end
 
     def self.now; Process.clock_gettime(Process::CLOCK_MONOTONIC); end
+
+    @work = 0
+    class << self
+      attr_accessor :work
+    end
 
     #---------------------------------------------------------------------------
     # HMAC-SHA256 on Digest::SHA256 (the engine has no OpenSSL)
@@ -223,11 +232,17 @@ module KIF
       def frame(payload); [payload.bytesize].pack("N") + payload.b; end
 
       # Hash or nil; never raises
-      def parse(text); Parser.new(text).run; end
+      def parse(text)
+        pr = Parser.new(text)
+        v = pr.run
+        Net.work += pr.values + text.to_s.bytesize / 100   # what the game thread spent (Session#poll keeps to a budget)
+        return v
+      end
     end
 
     class Parser
       DEPTH = 16
+      # (no cap on the values in one message: a frame is 64 KB at most; Net.work counts them for Session#poll's budget)
       WS  = /\G[ \t\r\n]*/
       NUM = /\G-?(?:0|[1-9]\d{0,17})(?:\.\d{1,17})?(?:[eE][+-]?\d{1,3})?/
       STR = /\G"((?:[^"\\\x00-\x1f]|\\["\\\/bfnrt]|\\u[0-9a-fA-F]{4})*)"/
@@ -236,7 +251,10 @@ module KIF
       def initialize(text)
         @s = text.to_s.b
         @i = 0
+        @n = 0
       end
+
+      def values; @n; end
 
       def run
         return nil if @s =~ /[\x80-\xff]/n
@@ -254,6 +272,7 @@ module KIF
 
       def value(depth)
         raise "deep" if depth > DEPTH
+        @n += 1   # counted: Net.work, the budget of Session#poll
         ws
         case @s[@i]
         when "{"
@@ -327,6 +346,7 @@ module KIF
       out = { "t" => type }
       spec.each do |k, (cls, a, b)|
         v = h[k]
+        next if v.nil? && a == :opt   # a field marked [cls, :opt] may be left out
         if cls == String
           return nil unless v.is_a?(String) && v.valid_encoding? && v.length <= a && v !~ /[\x00-\x1f\u007f]/
         elsif cls == Integer
@@ -409,6 +429,8 @@ module KIF
         @sock = sock
         @addr = (sock.remote_address.ip_address rescue "?")
         @inbox = Queue.new
+        @got = @took = 0   # bytes queued by the reader thread / taken out by the game thread (each written by one only)
+        @poll_at = Net.now
         @out = Queue.new
         @cap = MAX_PRE
         @ping_every = 5.0
@@ -422,6 +444,9 @@ module KIF
       end
 
       def closed?; @closed; end
+      def flooded?; @flooded ? true : false; end
+      def polled; @poll_at = Net.now; end   # game thread, each poll
+      def took(frame); @took += frame.bytesize if frame.is_a?(String); end   # game thread
 
       # from now on every message is signed with this key (writer thread signs)
       def sign_with(key); @key = key; end
@@ -468,6 +493,11 @@ module KIF
             end
             break if buf.bytesize < 4 + n
             @inbox << buf.byteslice(4, n)
+            @got += n
+            if @got - @took > MAX_QUEUED
+              @flooded = true
+              return hard_close
+            end
             buf = buf.byteslice(4 + n, buf.bytesize - 4 - n)
             sec = Net.now.floor
             count = 0 if sec != second
@@ -491,6 +521,10 @@ module KIF
             if @key && Net.now - @last_tx >= @ping_every
               item = [:msg, { "t" => "ping" }]
             else
+              if @got - @took > STALL_BYTES && Net.now - @poll_at > STALL_SECS   # a lot unread and nobody reading
+                @flooded = true
+                return hard_close
+              end
               sleep 0.02
               next
             end
@@ -668,8 +702,16 @@ module KIF
           end
         end
         if @conn
+          @conn.polled
+          if @conn.flooded?   # more waiting than the game can read: what is queued is dropped with the line
+            @conn.inbox.clear
+            line_ended(:flood, out)
+          end
+          w0 = Net.work
           while @conn && (f = (@conn.inbox.pop(true) rescue nil))
+            @conn.took(f)
             f.is_a?(Array) ? line_ended(f[1] || :closed, out) : frame(f, out)
+            break if Net.work - w0 > POLL_WORK   # the rest next time: a flood of costly frames can't hold the game
           end
           check_time(out) if @conn
         end

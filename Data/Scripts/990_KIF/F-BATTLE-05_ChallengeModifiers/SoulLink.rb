@@ -62,6 +62,9 @@ module KIF
     CHUNK     = 60       # events per update code / message
     MAX_TEXT  = 60_000   # an update code's length
     MAX_JSON  = 200_000  # an update code unpacked
+    MAX_EVENTS = 600     # events in one update code
+    MAX_LOG    = 600     # the partner's events kept in a save
+    MAX_PLACES = 400     # places kept in a save
 
     class << self
       attr_accessor :applying   # true: a death caused by the link (marked x); :log: already in my log
@@ -167,7 +170,16 @@ module KIF
     #---------------------------------------------------------------------------
     # Linking
     #---------------------------------------------------------------------------
-    def self.my_half; state[:half] ||= crypto.hex(crypto.random(16)); end
+    # My half of a link: a public value g^x in the group of Net.rb's Spake2 (x stays in this save). The two
+    # link codes are often pasted into a chat; the key needs x or the partner's, which those codes don't give.
+    def self.my_half
+      sp = KIF::Net::Spake2
+      h = state[:half]
+      return h if h.is_a?(String) && h.length == sp::HEX && (state[:sk] || state[:key])
+      x = crypto.random(32).unpack1("H*").to_i(16) | 1
+      state[:sk] = x.to_s(16)
+      return state[:half] = sp.hex(sp::G.pow(x, sp::P))
+    end
 
     def self.link_code
       z = Zlib::Deflate.deflate(json({ "v" => 1, "n" => my_name, "t" => my_tid, "h" => my_half,
@@ -183,7 +195,7 @@ module KIF
       return :typo unless crypto.sha256(z)[0, 4] == bytes[-4, 4]
       h = (s = inflate(z)) && parse(s)
       return :invalid unless h.is_a?(Hash) && h["v"] == 1 && h["n"].is_a?(String) && h["t"].is_a?(Integer) &&
-                             h["h"].is_a?(String) && h["h"] =~ /\A[0-9a-f]{32}\z/ && h["set"].is_a?(String) &&
+                             h["h"].is_a?(String) && h["h"] =~ /\A[0-9a-f]{#{KIF::Net::Spake2::HEX}}\z/ && h["set"].is_a?(String) &&
                              [0, 1].include?(h["m"]) && (h["g"].nil? || h["g"].is_a?(String))
       h["n"] = KIF::Net.shown_name(h["n"])
       return h
@@ -193,11 +205,20 @@ module KIF
     def self.link_with(info)
       half = my_half
       return false if info["h"] == half
+      sp = KIF::Net::Spake2
+      y = sp.read(info["h"])
+      x = state[:sk].to_i(16)
+      if y && y > 1 && y < sp::P - 1 && y.pow(sp::Q, sp::P) == 1   # an element of the group, not a small one
+        shared = sp.hex(y.pow(x, sp::P))
+      else
+        shared = sp.hex(x)   # not a half a partner's game makes: the key is this save's alone (nobody can sign for it)
+      end
       lo, hi = [half, info["h"]].sort
-      key = crypto.sha256("KIF SL key " + lo + hi)
+      key = crypto.sha256("KIF SL key 2 " + lo + hi + shared)
       state.replace(half: half, key: crypto.hex(key), link: crypto.hex(crypto.sha256("KIF SL id " + key))[0, 16],
                     side: half == lo ? 0 : 1, partner_name: info["n"], partner_tid: info["t"],
-                    my_seq: 0, their_seq: 0, acked: 0, my_log: [], their_log: [], places: {}, pending: [])
+                    my_seq: 0, their_seq: 0, acked: 0, my_log: [], their_log: [], places: {}, pending: [],
+                    self_key: crypto.hex(crypto.random(16)))
       KIF.log("Soul Link: linked with #{info['n']}")
       @offer = nil
       @asked = false
@@ -232,10 +253,23 @@ module KIF
       st[:my_seq] += 1
       ev = h.merge("q" => st[:my_seq], "r" => new_id[0, 4], "t" => Time.now.to_i)
       ev["dbg"] = 1 if $DEBUG   # shown in both players' Soul Link log
+      ev["z"] = own_mac(ev)
       st[:my_log] << ev
       KIF.log("Soul Link: event #{ev['k']} #{ev['p'] || ev['n']}")
       push
       return ev
+    end
+
+    # Each event this save makes carries a MAC with a key that stays in this save (never sent). The partner has
+    # the link key and can forge any update code; the events it sends back as "yours" count only with this MAC.
+    def self.own_mac(e)
+      key = crypto.unhex(state[:self_key] ||= crypto.hex(crypto.random(16)))
+      body = e.reject { |k, _| k == "q" || k == "z" }.sort_by { |k, _| k }.map { |k, v| [k, v] }   # (not q: a moved event is numbered again)
+      return crypto.hex(crypto.hmac(key, "KIFSL own" + json(body)))[0, 16]
+    end
+
+    def self.own_mac?(e)
+      return e["z"].is_a?(String) && crypto.same?(e["z"], own_mac(e))
     end
 
     def self.place_entry(place); (state[:places][place] ||= {}); end
@@ -327,7 +361,7 @@ module KIF
 
     # my events the partner hasn't confirmed (the paste code holds them all)
     def self.my_update_code
-      return update_code(state[:my_log].select { |e| e["q"] > state[:acked] })
+      return update_code(state[:my_log].select { |e| e["q"] > state[:acked] }.first(MAX_EVENTS))
     end
 
     EV_KINDS = %w[c m d o]
@@ -344,6 +378,7 @@ module KIF
       return false if e["l"] && !(e["l"].is_a?(Integer) && e["l"].between?(1, 1000))
       return false if e["t"] && !(e["t"].is_a?(Integer) && e["t"].between?(0, 2**40))
       return false unless e["dbg"].nil? || e["dbg"] == 1
+      return false unless e["z"].nil? || (e["z"].is_a?(String) && e["z"].length <= 16)
       return e["k"] == "o" || e["k"] == "d" || e["p"].is_a?(String)
     end
 
@@ -356,7 +391,8 @@ module KIF
       return :key unless crypto.same?(crypto.hmac(crypto.unhex(state[:key]), "KIFSL" + z)[0, 8], bytes[-8, 8])
       h = (s = inflate(z)) && parse(s)
       return :invalid unless h.is_a?(Hash) && h["v"] == 1 && h["l"] == state[:link] && [0, 1].include?(h["f"]) &&
-                             h["a"].is_a?(Integer) && h["e"].is_a?(Array) && h["e"].all? { |e| valid_event?(e) }
+                             h["a"].is_a?(Integer) && h["e"].is_a?(Array) && h["e"].length <= MAX_EVENTS && h["e"].all? { |e| valid_event?(e) }
+      h["e"].each { |e| %w[p n s].each { |k| e[k] = e[k].gsub(/[\\<>]/, "") if e[k].is_a?(String) } }   # shown in messages: no message codes, no tags
       return h
     end
 
@@ -375,6 +411,8 @@ module KIF
       events.each do |e|
         next if e["q"] <= st[:their_seq]
         break if e["q"] != st[:their_seq] + 1   # a gap: wait for the rest
+        break if st[:their_log].length >= MAX_LOG   # (a save holds no more than that)
+        break if %w[c m].include?(e["k"]) && !st[:places].key?(e["p"]) && st[:places].length >= MAX_PLACES
         st[:their_seq] = e["q"]
         st[:their_log] << e
         n += 1
@@ -432,6 +470,7 @@ module KIF
       lines = []
       n = 0
       moved = []
+      events = events.select { |e| own_mac?(e) }   # only what this save made: the partner can forge the rest
       events.each do |e|
         local = st[:my_log].find { |x| x["q"] == e["q"] }
         next if local && local["r"] == e["r"]
@@ -635,6 +674,19 @@ module KIF
       @sent = st[:my_seq]
     end
 
+    # A hello is answered with the whole log, so a partner repeating it is not answered every time:
+    # four in a row, then one every 30 seconds
+    def self.hello_ok?(st)
+      now = KIF::Net.now
+      b = (st[:hello_budget] ||= [4.0, now])
+      b[0] = 4.0 if b[1] > now   # (a save from an earlier run: the clock restarted)
+      b[0] = [b[0] + (now - b[1]) / 30.0, 4.0].min
+      b[1] = now
+      return false if b[0] < 1
+      b[0] -= 1
+      return true
+    end
+
     # a message from the partner's game (KIF::Net.update)
     def self.receive(type, msg)
       if type == "sl_hello"   # kept while Off too: linking needs it once Soul Link is turned on
@@ -646,8 +698,9 @@ module KIF
       case type
       when "sl_hello"
         return unless st[:key] && msg["link"] == st[:link]
+        s = session or return
+        return unless hello_ok?(st)   # every answer is this save's whole log
         st[:acked] = [msg["seen"], st[:my_seq]].min
-        s = session
         mine = st[:my_log].select { |e| e["q"] > msg["seen"] }
         mine.each_slice(CHUNK) { |part| s.post("sl_up", "code" => update_code(part)) }
         @sent = st[:my_seq]

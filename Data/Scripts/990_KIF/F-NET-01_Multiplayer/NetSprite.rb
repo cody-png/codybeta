@@ -239,6 +239,7 @@ module KIF
       return @hashes[k] || nil if @hashes.key?(k)
       raw = frame_raw(ps || sprite_of(k))
       h = raw && raw.bytesize == SIZE * SIZE * 4 ? digest(raw) : nil
+      @hashes.clear if @hashes.length >= 256   # (a partner's endless new keys)
       @hashes[k] = h || false
       return h
     end
@@ -356,10 +357,16 @@ module KIF
       return nil unless File.file?(f) && File.size(f) <= MAX_PNG
       raw = read_png(File.binread(f))
       raw = nil unless raw && digest(raw) == x
-      @mem[x] = raw if raw
+      keep_mem(x, raw) if raw
       return raw
     rescue SystemCallError
       return nil
+    end
+
+    # pictures read this session: the last 200 (36 KB each)
+    def self.keep_mem(x, raw)
+      @mem[x] = raw
+      @mem.shift while @mem.length > 200
     end
 
     # :cache, :own, or :asked (or nil: nothing to do)
@@ -374,6 +381,7 @@ module KIF
       return false unless s&.connected? && x =~ HASH
       t = @pending[x]
       return true if t && KIF::Net.now - t < 30
+      @pending.reject! { |_x, at| KIF::Net.now - at >= 30 }   # (asked of a partner that never answers)
       return false if @pending.length >= 32
       @pending[x] = KIF::Net.now
       return s.post("sp_get", "x" => x)
@@ -401,9 +409,10 @@ module KIF
     end
 
     def self.store(x, bytes, credit)
-      @mem[x] = read_png(bytes)
+      keep_mem(x, read_png(bytes))
       f = path(x) or return
-      unless @trimmed
+      @stores = @stores.to_i + 1
+      if !@trimmed || @stores % 50 == 0   # the first time, then every 50 pictures: a partner can't grow the folder without limit
         @trimmed = true
         KIF.trim_cache_dir(dir, 500) if KIF.respond_to?(:trim_cache_dir)
       end

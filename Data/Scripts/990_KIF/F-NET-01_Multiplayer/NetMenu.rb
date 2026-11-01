@@ -182,7 +182,7 @@ module KIF
       sl = steam
       return nil unless sl.lobby_data(lobby, "kif") == "1"
       { "ver" => 16, "mode" => 16, "diff" => 8, "mods" => 200, "modh" => 8, "name" => 24 }.to_h do |k, n|
-        [k, sl.lobby_data(lobby, k).to_s.gsub(/[\\<>\x00-\x1f\u007f]/, "")[0, n]]
+        [k, safe_text(sl.lobby_data(lobby, k), n).delete("\n")]
       end
     end
 

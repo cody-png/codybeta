@@ -29,13 +29,28 @@ module KIF
       @entries << Entry.new(id, label, condition, handler, icon, order)
     end
 
+    # A row of a mod that raises is logged once and skipped; the menu goes on
+    # (F-CORE-10, 2026-11-01).
+    def self.guarded(entry, what, fallback)
+      return yield
+    rescue StandardError => e
+      @bad ||= {}
+      unless @bad["#{entry.id}:#{what}"]
+        @bad["#{entry.id}:#{what}"] = true
+        src = (entry.handler.source_location[0] rescue nil)
+        mod = (defined?(KIF::ModContract) && src) ? KIF::ModContract.owner_of_path(src) : nil
+        KIF.log("Pause menu entry #{entry.id} (#{mod || 'KIF'}): #{what} raised #{e.class}: #{e.message}")
+      end
+      return fallback
+    end
+
     def self.active_entries
-      list = @entries.select { |e| (!defined?(KIF::Modules) || KIF::Modules.proc_active?(e.handler)) && (e.condition.nil? || e.condition.call) }
+      list = @entries.select { |e| (!defined?(KIF::Modules) || KIF::Modules.proc_active?(e.handler)) && (e.condition.nil? || guarded(e, :condition, false) { e.condition.call }) }
       return list.each_with_index.sort_by { |e, i| [e.order || 100, i] }.map(&:first)
     end
 
     def self.label_for(entry)
-      text = entry.label.is_a?(Proc) ? entry.label.call : entry.label
+      text = entry.label.is_a?(Proc) ? guarded(entry, :label, entry.id.to_s) { entry.label.call } : entry.label
       icon = entry.icon || "menuIcons/OPTIONS"
       return "  <icon=#{icon}>  " + _INTL(text)
     end
@@ -99,7 +114,7 @@ module KIF
         return ret if ret < 0 || ret < pos
         return ret - entries.length if ret >= pos + entries.length
         entry = entries[ret - pos]
-        result = entry.handler.call(scene)
+        result = guarded(entry, :handler, :stay) { entry.handler.call(scene) }
         return -1 if result == :close
         scene.pbShowMenu
       end

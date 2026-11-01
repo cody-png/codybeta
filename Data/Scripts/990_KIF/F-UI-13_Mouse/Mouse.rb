@@ -151,7 +151,7 @@ module KIF
     # JoiPlay reports taps in the window the engine started with (640x480),
     # not in the game's own size after PIF resizes it (512x384): a tap there
     # landed 25% too far right and down. The PC engine already converts.
-    START_SIZE = [(Graphics.width rescue 0), (Graphics.height rescue 0)]
+    START_SIZE = [(Graphics.width rescue 0), (Graphics.height rescue 0)] unless const_defined?(:START_SIZE)   # a soft reset re-runs this file after PIF resized the screen
 
     # the engine is a phone's: KIF.mobile? without PIF's Device: Mobile
     # option, which a save brought over from a phone keeps on a PC (there the

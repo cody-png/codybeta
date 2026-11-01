@@ -99,6 +99,17 @@ class PokeBattle_Scene
   end
 end
 
+# EBDX's scene replaces pbStartBattle without calling PIF's, so the flag of the last classic battle would stay on
+if defined?(PokeBattle_SceneEBDX)
+  class PokeBattle_SceneEBDX
+    alias kif_cam_ebdx_pbStartBattle pbStartBattle unless method_defined?(:kif_cam_ebdx_pbStartBattle) || private_method_defined?(:kif_cam_ebdx_pbStartBattle)
+    def pbStartBattle(battle)
+      KIF::BattleCamera.on = false
+      kif_cam_ebdx_pbStartBattle(battle)
+    end
+  end
+end
+
 class PokemonBattlerSprite
   alias kif_cam_setPokemonBitmap setPokemonBitmap unless method_defined?(:kif_cam_setPokemonBitmap) || private_method_defined?(:kif_cam_setPokemonBitmap)
   def setPokemonBitmap(pkmn, back = false, *rest)

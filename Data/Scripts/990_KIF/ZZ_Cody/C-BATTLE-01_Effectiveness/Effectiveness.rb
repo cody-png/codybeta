@@ -194,6 +194,8 @@ class FightMenuDisplay
   end
 
   def cody_eff_move_info(move)
+    # the three-foe layout hid the icon directly; PIF only sets @visibility when a move is shown
+    @typeIcon.visible = true if @typeIcon && !@typeIcon.disposed? && @visible && @visibility && @visibility["typeIcon"]
     return unless USE_GRAPHICS && move && KIF::MoveEffect.on? && @battler
     foes = KIF::MoveEffect.foes(@battler)
     return if foes.empty? || move.statusMove?

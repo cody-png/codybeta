@@ -1361,9 +1361,10 @@ class DataBoxEBDX  <  SpriteWrapper
   #  animate HP
   #-----------------------------------------------------------------------------
   def animateHP(oldhp, newhp)
-    @starthp = oldhp.to_f
-    @currenthp = oldhp.to_f
-    @endhp = newhp.to_f
+    tot = [(@battler ? @battler.totalhp : [oldhp, newhp].max), 1].max   # a Substitute hit reports more than the battler's HP
+    @starthp = oldhp.to_f.clamp(0.0, tot.to_f)
+    @currenthp = @starthp
+    @endhp = newhp.to_f.clamp(0.0, tot.to_f)
     @animatingHP = true
   end
   #-----------------------------------------------------------------------------

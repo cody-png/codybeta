@@ -118,7 +118,7 @@ class RandomizerOptionsScene
     r = KIF::Rand
     btn = r::DynButton.new(proc { "#{_INTL("Entrances")} (#{r.page_state(:entrances)})" },
                            proc { r.page_entrances; kif_refresh },
-                           _INTL("Shuffle the doors of Kanto; every layout stays beatable."))
+                           _INTL("Shuffle the doors between maps; every layout stays beatable."))
     # before "Randomize now" when that button is there
     idx = options.index { |o| o.is_a?(r::DynButton) && o.name.to_s.start_with?(_INTL("Randomize now")) }
     idx ? options.insert(idx, btn) : options.push(btn)

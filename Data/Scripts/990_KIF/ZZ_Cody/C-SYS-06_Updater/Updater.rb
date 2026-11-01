@@ -549,7 +549,7 @@ module KIF
         buf = "\0" * 2048
         n = api("kernel32", "GetModuleFileNameW", %w[L p L], "L").call(0, buf, 1024)
         return nil if n <= 0
-        return buf[0, n * 2].force_encoding("UTF-16LE").encode("UTF-8")
+        return buf.byteslice(0, n * 2).force_encoding("UTF-16LE").encode("UTF-8")   # bytes: some UTF-16 text reads as multi-byte UTF-8
       rescue StandardError, NameError
         return nil
       end
@@ -763,7 +763,8 @@ module KIF
       lines << "if %waited% GEQ 10 timeout /t 1 /nobreak >nul"
       lines << "goto wait"
       lines << ":go"
-      lines << "robocopy \"#{s}\\files\" \"#{r}\" /E /MOVE /R:10 /W:1 /NFL /NDL /NJH /NJS /NP >nul"
+      dest = r.end_with?("\\") ? r + "." : r   # a drive root ends in a backslash, which would escape the closing quote
+      lines << "robocopy \"#{s}\\files\" \"#{dest}\" /E /MOVE /R:10 /W:1 /NFL /NDL /NJH /NJS /NP >nul"
       lines << "if errorlevel 8 goto fail"
       lines << "if exist \"#{s}\\#{STAGED_MANIFEST}\" copy /y \"#{s}\\#{STAGED_MANIFEST}\" \"#{r}\\#{m}\" >nul"
       lines << "if exist \"#{s}\\remove.txt\" for /f \"usebackq delims=\" %%f in (\"#{s}\\remove.txt\") do if exist \"#{r}\\%%f\" del /f /q \"#{r}\\%%f\""
@@ -797,14 +798,17 @@ module KIF
       list = KIF::UpdateFinish.staged_files(files)
       title = _INTL("Installing KIF {1}", File.basename(dir))
       last = 0
-      list.each_with_index do |rel, i|
-        if Time.now.to_f - last > 0.25
-          last = Time.now.to_f
-          status(title, _INTL("{1} of {2} files", i + 1, list.length), (i + 1).to_f / list.length, _INTL("Don't close the game."))
+      begin
+        list.each_with_index do |rel, i|
+          if Time.now.to_f - last > 0.25
+            last = Time.now.to_f
+            status(title, _INTL("{1} of {2} files", i + 1, list.length), (i + 1).to_f / list.length, _INTL("Don't close the game."))
+          end
+          KIF::UpdateFinish.move(File.join(files, rel), File.join(root, rel))
         end
-        KIF::UpdateFinish.move(File.join(files, rel), File.join(root, rel))
+      ensure
+        hide_status   # the progress screen must not stay up when a move fails
       end
-      hide_status
       moved = list.length
       man = File.join(dir, STAGED_MANIFEST)
       KIF::UpdateFinish.move(man, File.join(root, MANIFEST)) if File.file?(man)
@@ -890,7 +894,7 @@ module KIF
         pbMessage(_INTL("Your files already match KIF {1}.", version))
         return false
       end
-      msg = _INTL("{1} files to download ({2}).", n, size_text(plan[:bytes]))
+      msg = n == 1 ? _INTL("1 file to download ({1}).", size_text(plan[:bytes])) : _INTL("{1} files to download ({2}).", n, size_text(plan[:bytes]))
       # every platform closes the game once the update is moved in (Windows and Wine start it again, phones don't)
       msg += " " + _INTL("Any progress since your last save will be lost when the game closes for the update.") if in_game
       return false unless pbConfirmMessage(msg + " " + _INTL("Update now?"))
@@ -912,7 +916,8 @@ module KIF
       unless result.empty?
         log("#{result.length} files failed: #{result.first(5).join(', ')}")
         return test_code_refused if code_refused?(base)   # nothing is moved in: the game stays as it was
-        pbMessage(_INTL("{1} files couldn't be downloaded. Check your connection and try again later.", result.length))
+        pbMessage(result.length == 1 ? _INTL("1 file couldn't be downloaded. Check your connection and try again later.") :
+                                      _INTL("{1} files couldn't be downloaded. Check your connection and try again later.", result.length))
         return false
       end
       # the list the plan was made from: kept beside files/ and moved in only
@@ -954,7 +959,7 @@ module KIF
       text = base ? fetch(url_for(base, NOTES)) : nil
       text = text.byteslice(0, 1 << 20) if text && text.bytesize > (1 << 20)   # notes are a few KB
       text = File.binread(File.join(root, NOTES)) if text.nil? && File.file?(File.join(root, NOTES))
-      lines = text.to_s.force_encoding("UTF-8").split(/\r?\n/).map(&:strip).reject(&:empty?)
+      lines = text.to_s.dup.force_encoding("UTF-8").split(/\r?\n/).map(&:strip).reject(&:empty?)   # nil.to_s is frozen
       if lines.empty?
         pbMessage(_INTL("No notes for this version."))
         return

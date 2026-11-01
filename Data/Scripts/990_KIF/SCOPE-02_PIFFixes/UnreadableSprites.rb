@@ -17,7 +17,22 @@ module KIF
 
     module_function
 
-    def bad?(path); !path.nil? && @bad[path.to_s.downcase] == true; end
+    # a marked file is tried again once it has changed (the player replaced it)
+    def sig_of(path)
+      st = File.stat(path.to_s)
+      return [st.mtime.to_f, st.size]
+    rescue SystemCallError
+      return nil
+    end
+
+    def bad?(path)
+      return false if path.nil?
+      k = path.to_s.downcase
+      return false unless @bad.has_key?(k)
+      return true if @bad[k] == sig_of(path)
+      @bad.delete(k)
+      return false
+    end
 
     # the file named in the engine's message, if it is a player's local sprite
     def path_in(e)
@@ -27,7 +42,7 @@ module KIF
 
     def mark(path, e)
       return if bad?(path)
-      @bad[path.to_s.downcase] = true
+      @bad[path.to_s.downcase] = sig_of(path)
       KIF.log("Picture file can't be read, skipped (delete or replace it): #{path} (#{e.message.to_s[0, 160]})")
     end
 

@@ -120,9 +120,11 @@ module EliteBattle
     # applies conditional environment/terrain data
     processes = EliteBattle.get(:procData)
     for key in processes.keys
-      if key.call(terrain, environ)
-        for k in processes[key][:BACKDROP].keys
-          data[k] = processes[key][:BACKDROP][k]
+      bd = processes[key][:BACKDROP]
+      next unless bd.is_a?(Hash)   # an entry registered for something else
+      if (key.call(terrain, environ) rescue false)
+        for k in bd.keys
+          data[k] = bd[k]
         end
       end
     end
@@ -729,7 +731,8 @@ class BattleSceneRoom
   #-----------------------------------------------------------------------------
   def updateSky
     return if !@data.try_key?("sky", "outdoor")
-    minutes = Time.now.hour*60 + Time.now.min
+    now = pbGetTimeNow   # the game's clock (UnrealTime), the one PBDayNight reads for the branch below
+    minutes = now.hour*60 + now.min
     # animates twinkling stars
     for i in 0...24
       break if !(PBDayNight.isNight? && @data.try_key?("outdoor"))

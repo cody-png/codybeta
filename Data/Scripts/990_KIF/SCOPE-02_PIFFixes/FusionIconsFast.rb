@@ -41,6 +41,7 @@ module KIF
     # offset) over it - what PIF's pixel loop made
     def build(head_file, body_file, out_path)
       head = AnimatedBitmap.new(head_file)
+      return head if (@unsaved ||= {})[out_path]   # saving failed before (read-only folder): same fallback, no rebuild and no new log line
       body = AnimatedBitmap.new(body_file)
       fused = Bitmap.new(head.width, head.height)
       fused.blt(0, 0, head.bitmap, Rect.new(0, 0, head.width, head.height))
@@ -63,6 +64,7 @@ module KIF
         # an engine that can't write pictures (some phone players) or a folder
         # it can't write to: the head's own icon instead of a crash
         KIF.log("Fusion icon not saved (#{e.class}: #{e.message}); using the head's icon") if defined?(KIF.log)
+        @unsaved[out_path] = true
         fused.dispose
         body.dispose
         return head

@@ -96,21 +96,30 @@ module KIF
     # Whether a stored value is the kind of thing the setting holds. An older
     # build, a mod or a damaged or hand-edited save can hold a String where a
     # number is read, and the first read of it fails (comparison of String
-    # with 0). Numbers and true/false stand in for each other.
+    # with 0, to_i of true). A number setting holds a whole number or a finite
+    # decimal; an On/Off setting also takes a number.
     def self.sound?(key, v)
       d = @defaults[key]
       case d
-      when Integer, Float, true, false then return v.is_a?(Numeric) || v == true || v == false
-      when Hash, Array, String         then return v.is_a?(d.class)
+      when Integer, Float      then return v.is_a?(Integer) || (v.is_a?(Float) && v.finite?)
+      when true, false         then return v.is_a?(Numeric) || v == true || v == false
+      when Hash, Array, String then return v.is_a?(d.class)
       end
       return true
+    end
+
+    # What a value that is not sound becomes: true/false in a whole-number
+    # setting is 1/0 (an On/Off written as a boolean), anything else the default
+    def self.mend(key, v)
+      return (v ? 1 : 0) if @defaults[key].is_a?(Integer) && (v == true || v == false)
+      return copy_default(key)
     end
 
     # What the getter makes of a value that is nil or not the default's class
     def self.settle(sys, ivar, key, val)
       return val if !val.nil? && sound?(key, val)
       KIF.log("Setting #{key} held #{val.class}: back to its default") unless val.nil?
-      val = copy_default(key)
+      val = mend(key, val)
       sys.instance_variable_set(ivar, val)
       return val
     end
@@ -121,7 +130,7 @@ module KIF
       key = key.to_sym
       ivar = :"@#{key}"
       if sys.instance_variable_defined?(ivar) && !(v = sys.instance_variable_get(ivar)).nil?
-        return (@defaults.has_key?(key) && !sound?(key, v)) ? copy_default(key) : v
+        return (@defaults.has_key?(key) && !sound?(key, v)) ? mend(key, v) : v
       end
       return copy_default(key) if @defaults.has_key?(key)
       plain = :"kif_unlocked_#{key}"

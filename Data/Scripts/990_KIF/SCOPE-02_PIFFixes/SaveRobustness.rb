@@ -16,13 +16,14 @@
 #     to the saves on every read, failed (and called the save corrupt) when
 #     that copy couldn't be written, and rewrote the save in place. The copy
 #     is best effort and written once per content, the rewrite goes through a
-#     temp file and a rename, and neither can stop the save from loading.
+#     temp file and a rename (SaveData.read_from_file, in F-CORE-02_SaveCompat/
+#     000_ReadFromFile.rb: the old-save import wraps it, so it has to load first),
+#     and neither can stop the save from loading.
 #  5. The emergency save (a script hangs) copied the slot file first with no
 #     rescue: a missing file or a full disk skipped the save it exists for.
 #===============================================================================
 KIF.guard_base("052_InfiniteFusion/System/MultiSaves.rb", 381334228,
                "SaveData.get_newest_save_slot, run_conversions, PokemonLoadScreen#try_load_backup, pbEmergencySave")
-KIF.guard_base("002_Save data/001_SaveData.rb", 1717219762, "SaveData.read_from_file")
 
 module SaveData
   class << self
@@ -92,23 +93,6 @@ module SaveData
     KIF::SaveBackups.write_file(self.get_backup_file_path, raw)
   rescue StandardError => e
     KIF.log("Save copy before conversions not written (#{e.class}: #{e.message.to_s[0, 160]})")
-  end
-
-  # Copy of 6.8.2 001_SaveData.rb:42-50: the converted save is written through
-  # a temp file and a rename, and a failure to write it keeps the converted
-  # data in memory (the file is converted again on the next read).
-  def self.read_from_file(file_path)
-    validate file_path => String
-    save_data = get_data_from_file(file_path)
-    save_data = to_hash_format(save_data) if save_data.is_a?(Array)
-    if !save_data.empty? && run_conversions(save_data)
-      begin
-        KIF::SaveBackups.write_file(file_path, Marshal.dump(save_data))
-      rescue StandardError => e
-        KIF.log("Converted save not written back (#{e.class}: #{e.message.to_s[0, 160]})")
-      end
-    end
-    return save_data
   end
 end
 

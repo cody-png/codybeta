@@ -677,7 +677,15 @@ module KIF
       (Dir.mkdir(FOLDER) rescue nil) unless File.directory?(FOLDER)   # a read-only game folder still loads its mods
       KIF::ModSettings.install(FOLDER) if defined?(KIF::ModSettings)
       KIF::ModCatalog.migrate_copied_assets(FOLDER) if defined?(KIF::ModCatalog)   # once: files older KIF copied into the game
-      load_dir(File.join(".", FOLDER), extra_folders)
+      # The collector ran for a quarter of the time the mods' scripts took to
+      # load (garbage nothing needs yet); it waits until they're all in. Not
+      # on a phone, where memory is the tighter one.
+      gc_paused = !KIF.mobile? && GC.disable == false
+      begin
+        load_dir(File.join(".", FOLDER), extra_folders)
+      ensure
+        GC.enable if gc_paused
+      end
       KIF::ModAssets.build(@loaded_dirs || []) if defined?(KIF::ModAssets)
       KIF::ModCompat.after_mods_loaded if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:after_mods_loaded)
       KIF::AbilityText.install if defined?(KIF::AbilityText)   # outside mods' own ability-text aliases

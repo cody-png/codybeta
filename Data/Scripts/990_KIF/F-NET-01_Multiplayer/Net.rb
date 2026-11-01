@@ -117,6 +117,17 @@ module KIF
       "sl_up"    => { "code" => [String, 60_000] },
       "sl_party" => { "ids" => [String, 600] },   # id:species:level:hp:totalhp,...
     }
+    # Largest signed frame (bytes of JSON) and most values (nodes) a message type may have; a
+    # parse costs the game thread a few microseconds a node. The type is read from where every
+    # sender writes it, first: a frame without it is dropped, one of a type this game doesn't
+    # know is not read at all. A type with only text and number fields gets both limits from its
+    # fields (frame_limits); one with a Hash or an Array field gets MAX_FRAME bytes and FREE_NODES
+    # values unless it adds its own here (a full co-op frame has about 1,100 values, a mod's 8 KB
+    # of numbers about 4,000); those frames still cost up to FREE_NODES values of parsing each.
+    TYPE_MAX = {}
+    TYPE_NODES = {}
+    FRAME_SLACK = 256   # bytes (and 32 nodes) a newer version's extra field may need
+    FREE_NODES = MAX_VALUES
     NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined }
 
     # What reading a message will cost the game thread, counted from its text before it is parsed:
@@ -135,14 +146,16 @@ module KIF
     # a name from the other game, safe to show in a PIF message (no \ codes)
     def self.shown_name(n); safe_text(n, 24).delete("\n>"); end
 
-    # the most JSON bytes a message of this type can take (every character may
-    # be escaped as \uXXXX: 6 bytes, 12 for a pair); a field with no length
-    # ([Object, bytes]) names its own; a list or table may be as big as a frame, else MAX_FRAME. An unknown type gets 256.
-    def self.json_cap(type)
-      spec = TYPES[type] or return 256
-      cap = 128   # braces, "t" and "s"
-      spec.each { |k, (cls, a, _b)| cap += k.length + 8 + (cls == String ? a * 12 : cls == Integer ? 24 : cls == Object ? (a || MAX_FRAME) : MAX_FRAME) }
-      return [cap, MAX_FRAME].min
+    # [bytes, nodes]: the most JSON bytes and values a signed frame of this known type may have. A type
+    # with only text and number fields gets both from its fields (a character may be escaped as \uXXXX: 6
+    # bytes, 12 for a pair); an [Object, bytes] field names its own size; one with a list or table gets
+    # MAX_FRAME bytes and FREE_NODES values unless TYPE_MAX / TYPE_NODES say less.
+    def self.frame_limits(type)
+      spec = TYPES[type]
+      plain = spec.values.all? { |cls,| cls == String || cls == Integer }
+      big = spec.values.any? { |cls, a| cls == Array || cls == Hash || (cls == Object && a.nil?) }
+      bytes = TYPE_MAX[type] || (big ? MAX_FRAME : FRAME_SLACK + spec.sum { |k, (cls, a)| k.length + 16 + (cls == String ? a * 12 : cls == Object ? a : 24) })
+      return [[bytes, MAX_FRAME].min, TYPE_NODES[type] || (plain ? spec.size + 32 : FREE_NODES)]
     end
 
     # the other game's version text: letters, digits and . + _ - only (it goes
@@ -683,6 +696,7 @@ module KIF
       def send_raw(hash); put([:raw, Wire.json(hash)]); end
       def send_msg(hash); put([:msg, hash]); end
       def send_bytes(bytes); put([:bytes, bytes]); end   # tests only
+      def send_json(text); put([:json, text]); end       # tests only: this exact JSON text, sealed with the next number
 
       # closes once what's queued is written (at most 1 s later)
       def finish
@@ -783,6 +797,9 @@ module KIF
           when :close then return hard_close
           when :raw   then write(Wire.frame(item[1]))
           when :bytes then write(item[1])
+          when :json
+            @seq += 1
+            write(Wire.frame(seal(item[1], @seq)))
           when :msg
             @seq += 1
             json = Wire.json({ "t" => item[1]["t"] }.merge(item[1]))
@@ -1469,28 +1486,25 @@ module KIF
         end
         line.rx_seq = seq
         json = line.conn.reveal(ct, seq)
-        # the writer puts "t" first: the type is read without parsing, and a message longer than its type allows is dropped unparsed
-        type = json[/\A\{"t":"([a-z_0-9]{1,16})"/, 1]
+        # every sender writes "t" first: the type is read without parsing, and a frame that doesn't start
+        # with one is bad. A message longer than its type allows is dropped unparsed.
+        type = json[/\A\{"t":"(\w{1,24})"/, 1] or return bad_frame(line, out, "no type first")
         cost = Net.cost(json)
-        if type && !TYPES.key?(type)   # a newer version's message: ignored, but not for free
+        unless TYPES.key?(type)   # a newer version's message: ignored, but not for free
           afford?(line, cost, out)
           return
         end
         # until the player has said yes only a short hello (once), no, bye or ping means anything: the rest is dropped unparsed
         unless @state == :connected || (json.bytesize <= 1024 &&
                (type == "hello" ? (@state == :handshake || @state == :waiting) : %w[ping bye no].include?(type)))
-          return bad_frame(line, out, "#{type || 'message'} before the player said yes")
+          return bad_frame(line, out, "#{type} before the player said yes")
         end
-        # longer than its type allows: fine as long as it is not made of many values (an extra text field costs the
-        # parser little; thousands of nested or listed values cost it tens of ms a frame)
-        if cost > FRAME_VALUES || (json.bytesize > Net.json_cap(type) && cost > 64)
-          return bad_frame(line, out, "longer than a #{type || 'message'} can be")
-        end
+        bytes, nodes = Net.frame_limits(type)
+        return bad_frame(line, out, "longer than a #{type} can be") if json.bytesize > bytes || cost > FRAME_VALUES
         return unless afford?(line, cost, out)   # a stream of heavy messages: 62 KB of values take the parser 100-200 ms; the line is cut, not just the frame
-        h = Wire.parse(json, MAX_VALUES)
+        h = Wire.parse(json, [nodes, MAX_VALUES].min)
         return bad_frame(line, out, "unreadable") unless h
-        type = h["t"]
-        return unless TYPES.key?(type)   # a newer version's message: ignored
+        return bad_frame(line, out, "two types") unless h["t"] == type
         msg = Net.check_fields(type, h) or return bad_frame(line, out, "#{type} doesn't fit")
         case type
         when "ping" then nil

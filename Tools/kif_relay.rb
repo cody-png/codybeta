@@ -1,11 +1,16 @@
 # KIF relay: passes messages between two KIF games that can't reach each
 # other directly (for example when both internet providers share one address).
 #
-#   ruby kif_relay.rb [port] [bind]
+#   ruby kif_relay.rb [port] [bind] [share]
 #       port  default 52413
 #       bind  default 0.0.0.0 (IPv4, every network card). Give one address to
 #             listen on that card only (127.0.0.1 = this machine only). Give ::
 #             to listen on IPv6 (Linux then takes IPv4 too, Windows does not).
+#       share default 1. How many players may come from one address: the three
+#             per-address limits below are multiplied by it. Behind a tunnel or
+#             proxy every player arrives from the proxy's address, so the limits
+#             then apply to the whole relay: give 1000 to switch them off (the
+#             totals still apply).
 #
 # Needs only a normal Ruby (2.7 or newer). Players type this machine's address in
 # Multiplayer > Use a relay. Each game sends one short line saying which room
@@ -28,8 +33,12 @@
 #  * It keeps nothing on disk and writes no addresses to its log. Limits per
 #    address and in total are the constants below. Many players share one address
 #    on mobile and shared home internet, so keep the per-address limits loose.
+#    Behind a tunnel or proxy all players share the proxy's address: use [share].
 #  * Also put a firewall rate limit in front (for example iptables connlimit or
 #    hashlimit). This script cannot stop a flood that comes from many addresses.
+#    Counting IPv6: a /64 is one machine and a /48 is one site (it holds 65536
+#    /64s), so a site is held to WIDE times the limits. Anyone with an IPv6
+#    prefix can still use many sites, so limit per /48 in the firewall too.
 #  * If it stops, restart it. Do not run other programs on the same machine's
 #    open ports.
 require "socket"
@@ -46,6 +55,7 @@ class KIFRelay
   MAX_PER_IP = 16           # open sockets from one address (one IPv6 /64 counts as one)
   MAX_WAITING_PER_IP = 4    # waiting rooms from one address
   HELLOS_PER_MIN = 30       # rooms one address may open or join per minute
+  WIDE       = 4            # an IPv6 /48 (one site: it holds 65536 /64s) gets this many times the three limits
   IDLE_MAX   = 120          # seconds without a byte either way (the games ping every 5)
   PAIR_MAX   = 6 * 3600     # longest session
   WRITE_WAIT = 15           # seconds a player may refuse to read before the line is cut
@@ -57,12 +67,13 @@ class KIFRelay
 
   attr_reader :port
 
-  def initialize(port = 52413, bind = "0.0.0.0", log: $stdout)
+  def initialize(port = 52413, bind = "0.0.0.0", share = 1, log: $stdout)
     @port = port
     @bind = bind
+    @share = [share.to_i, 1].max   # players per address: scales the three per-address limits
     @log = log
     @rooms = {}   # room => { "host" or "join" => [sock, time] }: one waiting player
-    @conns = {}   # every open socket => its address key
+    @conns = {}   # every open socket => its address keys [[key, scale], ...]
     @per_ip = Hash.new(0)
     @hellos = {}  # address key => times of its accepted hellos in the last minute
     @pairs = 0
@@ -122,12 +133,12 @@ class KIFRelay
 
   def admit(c)
     (c.setsockopt(Socket::SOL_SOCKET, Socket::SO_KEEPALIVE, true)) rescue nil
-    key = key_of(c)
+    keys = keys_of(c)
     ok = @lock.synchronize do
-      if @conns.length >= MAX_CONNS || @per_ip[key] >= MAX_PER_IP then false
+      if @conns.length >= MAX_CONNS || over?(keys, MAX_PER_IP) { |k| @per_ip[k] } then false
       else
-        @conns[c] = key
-        @per_ip[key] += 1
+        @conns[c] = keys
+        keys.each { |k, _| @per_ip[k] += 1 }
         true
       end
     end
@@ -135,19 +146,27 @@ class KIFRelay
     Thread.new(c) { |s| handle(s) }
   end
 
-  # who counts as the same player machine: the IPv4 address or the IPv6 /64
-  def key_of(sock)
+  # who counts as the same player machine: the IPv4 address, or for IPv6 both its
+  # /64 and (with looser limits) its /48, because one site holds many /64s.
+  # Returns [[key, scale of the limits], ...]
+  def keys_of(sock)
     ip = sock.remote_address.ip_address.sub(/%.*\z/, "").sub(/\A::ffff:/i, "")
-    ip.include?(":") ? IPAddr.new(ip).mask(64).to_s : ip
+    return [[ip, 1]] unless ip.include?(":")
+    a = IPAddr.new(ip)
+    [["#{a.mask(64)}/64", 1], ["#{a.mask(48)}/48", WIDE]]
   rescue StandardError
-    "?"   # the peer already reset the line
+    [["?", 1]]   # the peer already reset the line
+  end
+
+  # lock held. True when any of the keys is at its share of the limit
+  def over?(keys, limit)
+    keys.any? { |k, scale| yield(k) >= limit * scale * @share }
   end
 
   # the only way a socket is closed, so the counts stay right
   def drop(sock)
     @lock.synchronize do
-      key = @conns.delete(sock)
-      @per_ip.delete(key) if key && (@per_ip[key] -= 1) <= 0
+      @conns.delete(sock)&.each { |k, _| @per_ip.delete(k) if (@per_ip[k] -= 1) <= 0 }
     end
     (sock.close rescue nil)
   end
@@ -197,18 +216,25 @@ class KIFRelay
     drop(sock)
   end
 
+  # lock held. Rooms whose waiting player counts under this address key
+  def waiting(key)
+    @rooms.each_value.count { |w| @conns[w.values[0][0]]&.any? { |k, _| k == key } }
+  end
+
   # lock held. Returns [why it was refused, nil] or [nil, the waiting player to pair with]
   def join_room(sock, room, role)
     t = mono
-    key = @conns[sock] or return ["busy", nil]
+    keys = @conns[sock] or return ["busy", nil]
     r = @rooms[room]
-    l = (@hellos[key] ||= [])
-    l.shift while l.first && t - l.first > 60
+    keys.each do |k, _|
+      l = (@hellos[k] ||= [])
+      l.shift while l.first && t - l.first > 60
+    end
     return ["taken", nil] if r && r[role]
-    return ["busy", nil] if l.length >= HELLOS_PER_MIN
+    return ["busy", nil] if over?(keys, HELLOS_PER_MIN) { |k| @hellos[k].length }
     return ["full", nil] if r ? @pairs >= MAX_PAIRS : @rooms.length >= MAX_ROOMS
-    return ["busy", nil] if !r && @rooms.each_value.count { |w| @conns[w.values[0][0]] == key } >= MAX_WAITING_PER_IP
-    l << t
+    return ["busy", nil] if !r && over?(keys, MAX_WAITING_PER_IP) { |k| waiting(k) }
+    keys.each { |k, _| @hellos[k] << t }
     r ||= (@rooms[room] = {})
     r[role] = [sock, t]
     other = r[role == "host" ? "join" : "host"]
@@ -284,8 +310,9 @@ end
 if $PROGRAM_NAME == __FILE__
   port = (ARGV[0] || 52413).to_i
   bind = ARGV[1] || "0.0.0.0"
+  $stdout.sync = true   # under systemd or a pipe the log would otherwise arrive late
   begin
-    KIFRelay.new(port, bind).run
+    KIFRelay.new(port, bind, ARGV[2] || 1).run
   rescue SystemCallError, SocketError => e
     abort "kif_relay: can't listen on #{bind} port #{port}: #{e.message}"
   end

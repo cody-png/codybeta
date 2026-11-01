@@ -442,6 +442,8 @@ module KIF
             why = Net.take_failure
             if why == :code
               pbMessage(_INTL("Someone tried your relay room with a wrong code, so it closed. Host on the relay again for a new code."))
+            elsif why == :relay_busy
+              pbMessage(_INTL("The relay is busy right now. Try again in a few minutes."))
             elsif why && s&.via == :relay
               pbMessage(_INTL("Couldn't reach the relay, or it closed the line. Check the address and try again."))
             end
@@ -645,6 +647,7 @@ module KIF
             busy: _INTL("Someone else is joining or playing with them right now."),
             wait: _INTL("Too many wrong codes were tried from here. Try again in 10 minutes."),
             relay: _INTL("The relay didn't accept you. Check the address, or ask your friend to host on it again."),
+            relay_busy: _INTL("The relay is busy right now. Try again in a few minutes."),
             timeout: _INTL("Their game didn't answer in time (in a battle or a menu?). Try again when they're on the map."),
             declined: _INTL("Your friend didn't let you in (they said no, or didn't answer in time).")
           }[why] || _INTL("Their router may be closed, or the code is old (codes change sometimes).")

@@ -752,7 +752,10 @@ module KIF
         end
         case @hs_state
         when :relay_wait
-          return give_up(out, [:failed, :relay]) unless h["t"] == "relay_ok"
+          unless h["t"] == "relay_ok"
+            busy = h["t"] == "relay_no" && %w[busy full].include?(h["why"])   # a limit, not a wrong address
+            return give_up(out, [:failed, busy ? :relay_busy : :relay])
+          end
           @hs_started = Net.now
           @role == :join ? send_hi : (@hs_state = :wait_hi)
         when :wait_hi

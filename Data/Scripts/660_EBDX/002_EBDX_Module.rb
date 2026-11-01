@@ -71,8 +71,8 @@ module EliteBattle
   @messageDarkShadow = Color.new(32, 32, 32)
   # logger
   @logger = (ErrorLogger.new("errorlogEBDX.txt") rescue nil)
-  # cache move animations at game load
-  @moveAnimations = (load_data("Data/PkmnAnimations.rxdata") rescue [])
+  # (a second copy of Data/PkmnAnimations.rxdata, 12.8 MB, was loaded here at
+  # start-up and never read: the game's own pbLoadBattleAnimations holds it)
   # ensure compiling
   @compiled = false
   @cachedData = []

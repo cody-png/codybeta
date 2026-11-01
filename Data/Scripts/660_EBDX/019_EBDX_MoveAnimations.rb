@@ -1,3 +1,4 @@
+EliteBattle.lazy_move_animations(<<'KIF_EBDX_MOVE_ANIMATIONS_END')
 #===== FILE: ABSORB.rb =====#
 #-------------------------------------------------------------------------------
 #  Giga Drain
@@ -40209,3 +40210,4 @@ EliteBattle.defineMoveAnimation(:ZENHEADBUTT) do
   @vector.reset if !@multiHit
 end
 
+KIF_EBDX_MOVE_ANIMATIONS_END

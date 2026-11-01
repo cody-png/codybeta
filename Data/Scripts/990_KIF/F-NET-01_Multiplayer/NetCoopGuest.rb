@@ -490,7 +490,9 @@ module KIF
             sync_party(d)
             sync_moves(b, d["mv"])
           end
+          @retracted = (again && @last_pick && @last_pick["a"] == "item") ? @last_pick["i"] : nil   # a pick being changed is free again in the Bag
           a = @view.command(mi, d) unless KIF::Coop.auto_battle?
+          @retracted = nil
         end
         if take_skip(d)   # the host's AI chose for this request
           credit(true) if own
@@ -674,11 +676,15 @@ module KIF
           keep.each_with_index { |b, i| list[i] = b if b && i.even? }
           list[1] = fake
           @mirror.instance_variable_set(:@battlers, list)
+          # a Pokémon that fainted later in the battle still earns its kill: it is counted as able while the Exp is paid
+          down = parts.map { |pi| @party[pi] }.select { |pk| pk && !pk.egg? && pk.hp == 0 }
+          down.each { |pk| pk.instance_variable_set(:@hp, 1) }
           begin
             @mirror.pbGainExp
           rescue StandardError => e
             KIF::Coop.log("Exp not given (#{e.class}: #{e.message})")
           ensure
+            down.each { |pk| pk.instance_variable_set(:@hp, 0) }
             @mirror.instance_variable_set(:@battlers, keep)
           end
         end
@@ -718,6 +724,13 @@ module KIF
         @mirror.pbRecordAndStoreCaughtPokemon
       rescue StandardError => e
         KIF::Coop.log("catch not stored (#{e.class}: #{e.message})")
+      end
+
+      # How many of this item the Bag can still give in this battle. The Bag is debited when the battle ends, so
+      # what was already picked counts here (a pick being changed does not).
+      def item_left(item)
+        id = GameData::Item.get(item).id
+        return (@bag || $PokemonBag).pbQuantity(id) - @picked[id.to_s] + (@retracted == id.to_s ? 1 : 0)
       end
 
       def use_items(list)
@@ -920,7 +933,7 @@ module KIF
         type, args, snap = ev
         return unless type.is_a?(String) && args.is_a?(Array)
         g = @g
-        g.apply_snap(snap)
+        g.apply_snap(snap) unless type == "so"   # the host's numbers are the incoming Pokémon's: they go on after the send-in below
         case type
         when "m", "mp"
           t = mine(args[0])
@@ -928,6 +941,7 @@ module KIF
           type == "m" ? call(:pbDisplayMessage, t, args[1] == 1) : call(:pbDisplayPausedMessage, t)
         when "so"
           list = (args[0].is_a?(Array) ? args[0] : []).map { |e| g.send_in(e) }.compact
+          g.apply_snap(snap)
           call(:pbSendOutBattlers, list, args[1] == 1) unless list.empty?
         when "rc" then (b = g.battler(args[0])) && call(:pbRecall, b.index)
         when "hp" then (b = g.battler(args[0])) && call(:pbHPChanged, b, int(args[1], 0, 99_999, b.hp), args[2] == 1)
@@ -1077,6 +1091,10 @@ module KIF
         ret = nil
         call(:pbItemMenu, mi, true) do |item, use, ip, im, isc|
           next false unless item
+          if (1..5).include?(use) && @g.item_left(item) <= 0   # used up in this battle (the flutes, 6-10, are never used up)
+            (isc.pbDisplay(_INTL("You have none of those left for this battle.")) rescue nil)
+            next false
+          end
           pk = bt = nil
           case use
           when 1, 2, 6, 7

@@ -525,7 +525,7 @@ module KIF
       # this player's battlers that picked something it can take back
       def can_change?
         return @battle.battlers.each_with_index.any? do |b, i|
-          b && !@battle.opposes?(i) && owner(i) == 0 && !b.fainted? && @battle.choices[i] &&
+          b && !@battle.opposes?(i) && owner(i) == 0 && !b.fainted? && @battle.choices[i] && @battle.pbCanShowCommands?(i) &&
             ![:None, :Run].include?(@battle.choices[i][0])
         end
       end
@@ -534,6 +534,7 @@ module KIF
       def change_picks
         @battle.battlers.each_with_index do |b, i|
           next unless b && !@battle.opposes?(i) && owner(i) == 0 && @battle.choices[i] && @battle.choices[i][0] != :None
+          next unless @battle.pbCanShowCommands?(i)   # a move locked in from last turn (Outrage, Fly, Hyper Beam) was not picked now: it stays
           @battle.pbCancelChoice(i)
         end
         send_intent(true)
@@ -724,6 +725,7 @@ module KIF
         return if @thrown.empty? || KIF::Coop.rule(:kif_coop_hold) != 1
         @battle.battlers.each_with_index do |b, i|
           next unless b && !b.fainted? && !@battle.opposes?(i)
+          next unless @battle.pbCanShowCommands?(i)   # a locked move (Outrage, Fly, Hyper Beam) can't be put off without losing it
           ch = @battle.choices[i]
           next unless ch && ch[0] == :UseMove && ch[2] && ch[2].damagingMove?
           t = ch[3].to_i

@@ -247,15 +247,18 @@ module KIF
     end
 
     # a save made while the host's settings are live (an autosave on a win or a catch)
-    # holds this player's own
+    # holds this player's own settings, and the friend's team stays out of the file
     def self.saving
+      g = $PokemonGlobal
+      friend = g.partner if g && @hosting   # the friend's team is there for the battle only: not in the file
+      g.partner = nil if friend
       sw = @rules_swap
-      return yield unless sw
-      put_rules(sw[0])
+      put_rules(sw[0]) if sw
       begin
         return yield
       ensure
-        put_rules(sw[1]) if @rules_swap.equal?(sw)
+        put_rules(sw[1]) if sw && @rules_swap.equal?(sw)
+        g.partner = friend if friend
       end
     end
 

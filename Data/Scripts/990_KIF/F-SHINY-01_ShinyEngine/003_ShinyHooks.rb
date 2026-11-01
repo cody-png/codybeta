@@ -157,6 +157,13 @@ if defined?(PokeBattle_SceneEBDX)
   class PokeBattle_SceneEBDX
     alias kif_shiny_ebdx_startSceneAnimation startSceneAnimation unless method_defined?(:kif_shiny_ebdx_startSceneAnimation) || private_method_defined?(:kif_shiny_ebdx_startSceneAnimation)
     alias kif_shiny_ebdx_pbSendOutBattlers pbSendOutBattlers unless method_defined?(:kif_shiny_ebdx_pbSendOutBattlers) || private_method_defined?(:kif_shiny_ebdx_pbSendOutBattlers)
+    alias kif_shiny_ebdx_pbCommonAnimation pbCommonAnimation unless method_defined?(:kif_shiny_ebdx_pbCommonAnimation) || private_method_defined?(:kif_shiny_ebdx_pbCommonAnimation)
+
+    # EBDX's override never reaches PIF's, where "Shiny Animation: Off" is checked
+    def pbCommonAnimation(animName, user = nil, target = nil)
+      return if animName == "Shiny" && $PokemonSystem && $PokemonSystem.kurayshinyanim == 1
+      kif_shiny_ebdx_pbCommonAnimation(animName, user, target)
+    end
 
     def startSceneAnimation(*args)
       ret = kif_shiny_ebdx_startSceneAnimation(*args)

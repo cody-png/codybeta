@@ -794,7 +794,8 @@ alias pbAddEgg pbGenerateEgg
 alias pbGenEgg pbGenerateEgg
 
 def pbStartOver(*args)
-  KIF::AP.death_out if KIF::AP.on?
+  # only a wiped team is a death: the Debugger item, a Game Over event and the secret base exit call this too
+  KIF::AP.death_out if KIF::AP.on? && $Trainer && $Trainer.able_pokemon_count == 0
   return kif_ap_pbStartOver(*args)
 end
 

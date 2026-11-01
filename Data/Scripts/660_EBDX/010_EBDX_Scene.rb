@@ -277,6 +277,18 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
   #=============================================================================
   #  Initialize sprites (using KIF's native PokemonBattlerSprite)
   #=============================================================================
+  # foe trainer picture: same sources as PIF's pbCreateTrainerFrontSprite (sprite override,
+  # Type Expert / Adventurer outfits, custom appearance)
+  def pbEBDXAddTrainerSprite(t, i)
+    trfile = GameData::TrainerType.front_sprite_filename(t.trainer_type)
+    trfile = t.sprite_override if t.respond_to?(:sprite_override) && t.sprite_override
+    sp = pbAddSprite("trainer_#{i}", 0, 0, trfile, @viewport)
+    ov = setTrainerSpriteOverrides(t.trainer_type)
+    sp.bitmap = ov if ov
+    sp.bitmap = generate_front_trainer_sprite_bitmap_from_appearance(t.custom_appearance, false).bitmap if t.respond_to?(:custom_appearance) && t.custom_appearance
+    return sp
+  end
+
   def initializeSprites
     # Player back sprites
     @battle.player.each_with_index do |pl, i|
@@ -295,8 +307,7 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
     # Trainer front sprites (using basic Sprite for KIF compatibility)
     if @battle.opponent
       @battle.opponent.each_with_index do |t, i|
-        trfile = GameData::TrainerType.front_sprite_filename(t.trainer_type)
-        pbAddSprite("trainer_#{i}", 0, 0, trfile, @viewport)
+        pbEBDXAddTrainerSprite(t, i)
         @sprites["trainer_#{i}"].z = 100
         # Set anchor to bottom-center (same as vanilla) so EBDX positioning works correctly
         if @sprites["trainer_#{i}"].bitmap
@@ -769,8 +780,9 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
       end
       @animations.compact! if shouldCompact
     end
-    # Update backdrop
-    @sprites["battlebg"].update if @sprites["battlebg"] && @sprites["battlebg"].respond_to?(:update)
+    # Update backdrop (animateScene already stepped it this frame when it ran first)
+    @sprites["battlebg"].update if !@ebdx_bg_ticked && @sprites["battlebg"] && @sprites["battlebg"].respond_to?(:update)
+    @ebdx_bg_ticked = false
     # Update vector
     @vector.update if @vector
     Graphics.update
@@ -904,7 +916,10 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
     end
 
     # Update backdrop
-    @sprites["battlebg"].update if @sprites["battlebg"] && @sprites["battlebg"].respond_to?(:update)
+    if @sprites["battlebg"] && @sprites["battlebg"].respond_to?(:update)
+      @sprites["battlebg"].update
+      @ebdx_bg_ticked = true
+    end
 
     # trainer_Anim - ONLY for trainer battles with minorAnimation
     # For wild battles this sprite doesn't exist (nil), so no blue rectangle
@@ -1043,6 +1058,12 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
     @briefMessage = false
   end
 
+  # Auto-Battle confirms battle text, but only while its module is on (same gate as the classic scene)
+  def ebdxAutoConfirm?
+    return false unless defined?(KIF::AutoBattle) && KIF::AutoBattle.on?
+    return !defined?(KIF::Modules) || KIF::Modules.active?("F-BATTLE-02_AutoBattle")
+  end
+
   def pbDisplayMessage(msg, brief = false)
     pbWaitMessage
     pbShowWindow(MESSAGE_BOX)
@@ -1069,7 +1090,7 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
         end
         i += 1
       end
-      if Input.trigger?(Input::BACK) || Input.trigger?(Input::USE) || @abortable || ($PokemonSystem && $PokemonSystem.respond_to?(:autobattler) && $PokemonSystem.autobattler && $PokemonSystem.autobattler != 0)
+      if Input.trigger?(Input::BACK) || Input.trigger?(Input::USE) || @abortable || ebdxAutoConfirm?
         if cw.busy?
           pbPlayDecisionSE if cw.pausing? && !@abortable
           cw.skipAhead
@@ -1107,7 +1128,7 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
           i += 1
         end
       end
-      if Input.trigger?(Input::BACK) || Input.trigger?(Input::USE) || @abortable || ($PokemonSystem && $PokemonSystem.respond_to?(:autobattler) && $PokemonSystem.autobattler && $PokemonSystem.autobattler != 0)
+      if Input.trigger?(Input::BACK) || Input.trigger?(Input::USE) || @abortable || ebdxAutoConfirm?
         if cw.busy?
           pbPlayDecisionSE if cw.pausing? && !@abortable
           cw.skipAhead
@@ -2467,7 +2488,7 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
 
   def pbLevelUp(*args)
     pbMEPlay("Evolution start") rescue nil
-    pbWait(Graphics.frame_rate) rescue nil
+    self.wait(Graphics.frame_rate, true)   # not pbWait: that runs the map scene under the battle
   end
 
   #=============================================================================
@@ -2477,7 +2498,9 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
   ABILITY_LINGER_FRAMES = 120  # ~3s visible
   ABILITY_FADE_FRAMES   = 10
 
-  def pbShowAbilitySplash(battler, delay = false, logTrigger = true, abilityName = nil)
+  # PIF's Battle calls (battler, false, abilityName); older callers pass (battler, delay, logTrigger, abilityName)
+  def pbShowAbilitySplash(battler, *args)
+    abilityName = args.find { |a| a.is_a?(String) }
     return if !battler || !battler.abilityActive?
     spr = @sprites["abilityMessage"]
     return if !spr || !spr.bitmap

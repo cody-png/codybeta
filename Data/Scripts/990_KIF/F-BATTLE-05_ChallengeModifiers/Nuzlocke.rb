@@ -351,6 +351,7 @@ module KIF
                 { :name => p.name, :species => p.species, :level => p.level, :place => place_name($game_map.map_id), :pokemon => p }
         (state[:graveyard] ||= []) << entry if fate == FAINTED_GRAVEYARD
         $Trainer.party.delete(p)
+        picked_rest.delete(p) if picked_rest   # the pick's saved party would bring it back
       end
       @to_bury = []
       names = gone.map(&:name).join(", ")
@@ -401,6 +402,7 @@ module KIF
         rescue => e
           KIF.log("Nuzlocke: the locked save couldn't be written (#{e.class}: #{e.message})")
         end
+        SaveData.mark_values_as_unloaded   # like Scene_Map's return to title, or the next load keeps this run's data
         $scene = pbCallTitle
         return :title
       end
@@ -412,8 +414,20 @@ module KIF
     end
 
     # Whiteout. Returns :title when the game goes back to the title screen.
+    # a gym pick (PokemonSelection) leaves only the chosen few in the party: the rest still count
+    def self.picked_rest
+      return $PokemonGlobal ? $PokemonGlobal.pokemonSelectionOriginalParty : nil
+    end
+
+    def self.any_able?
+      rest = picked_rest
+      return $Trainer.party.any? { |p| able?(p) } || (rest ? rest.any? { |p| able?(p) } : false)
+    end
+
     def self.whiteout
-      return nil if $Trainer.party.any? { |p| able?(p) }
+      return nil if any_able?
+      # nobody left in the real party: take the pick back before the PC rescue below, or its Pokémon is lost
+      PokemonSelection.restore if picked_rest && defined?(PokemonSelection)
       case $PokemonSystem.ch_nz_whiteout
       when WHITEOUT_LOCK then return end_run(true)
       when WHITEOUT_KEEP then return end_run(false)
@@ -479,9 +493,21 @@ class KifGraveyardScreen < PokemonStorageScreen
       pokemon = @storage[selected[0], selected[1]]
       next unless pokemon
       cmd = pbShowCommands(KIF::Nuzlocke.death_text(pokemon), [_INTL("Summary"), _INTL("Cancel")])
-      pbSummary(selected, nil) if cmd == 0
+      pbLook(selected) if cmd == 0
     end
     @scene.pbCloseBox
+  end
+
+  # The Summary as a look-only screen (is_player false: no Give item, Take item, Hat or Pokédex
+  # from its menu; in the Graveyard those would act on a dead team's copies or on a missing bag)
+  def pbLook(selected)
+    sprites = @scene.instance_variable_get(:@sprites)
+    oldsprites = pbFadeOutAndHide(sprites)
+    screen = PokemonSummaryScreen.new(PokemonSummary_Scene.new)
+    sel = screen.pbStartScreen(@storage.boxes[selected[0]], selected[1], false)
+    @scene.pbSetArrow(sprites["arrow"], sel)
+    @scene.pbUpdateOverlay(sel)
+    pbFadeInAndShow(sprites, oldsprites)
   end
 
   [:pbHold, :pbPlace, :pbSwap, :pbRelease, :pbStore, :pbWithdraw, :quickSwap, :pbBoxCommands,
@@ -584,7 +610,7 @@ class PokemonSystem
   alias kif_nz_no_reviving no_reviving unless method_defined?(:kif_nz_no_reviving)
 
   def no_reviving
-    return true if KIF::Nuzlocke.on? && !KIF::Nuzlocke.lifted
+    return true if KIF::Nuzlocke.on? && KIF::Nuzlocke.started? && !KIF::Nuzlocke.lifted
     return kif_nz_no_reviving
   end
 
@@ -594,7 +620,7 @@ class PokemonSystem
   alias kif_nz_set_no_reviving no_reviving= unless method_defined?(:kif_nz_set_no_reviving)
 
   def no_reviving=(value)
-    return if KIF::Nuzlocke.on? && !KIF::Nuzlocke.lifted
+    return if KIF::Nuzlocke.on? && KIF::Nuzlocke.started? && !KIF::Nuzlocke.lifted
     self.kif_nz_set_no_reviving(value)
   end
 end
@@ -652,6 +678,9 @@ module ItemHandlers
 
     def triggerCanUseInBattle(item, pkmn, battler, move, firstAction, battle, scene, showMessages = true)
       verdict = battle.respond_to?(:kif_nz) ? battle.kif_nz : nil
+      # the first catch of a double or triple wild battle uses the place up
+      caught = battle.instance_variable_get(:@caughtPokemon)
+      verdict = :used if verdict == :first && caught && !caught.empty?
       if [:used, :dupe].include?(verdict) && GameData::Item.get(item).is_poke_ball?
         if showMessages
           # two lines at most: PIF's battle message box shows two
@@ -820,7 +849,7 @@ def pbAfterBattle(decision, canLose)
   ret = kif_nz_pbAfterBattle(decision, canLose)
   if nz && KIF::Nuzlocke.on?
     begin
-      if $Trainer.party.any? { |p| KIF::Nuzlocke.able?(p) }
+      if KIF::Nuzlocke.any_able?
         KIF::Nuzlocke.move_dead_out
       elsif !KIF::Nuzlocke.started_over
         KIF::Nuzlocke.whiteout

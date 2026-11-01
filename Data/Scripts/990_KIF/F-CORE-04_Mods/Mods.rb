@@ -92,6 +92,8 @@ module KIF
       return false unless roots.any? { |root| path.start_with?(root + "/") } && File.exist?(path)
       KIF::ModSettings.stash(e.id) if defined?(KIF::ModSettings) && KIF::ModSettings.active?
       File.directory?(path) ? KIF.rm_tree(path) : File.delete(path)
+      # its pictures and sounds must not stay in the lookup, or the next one that uses them fails to open
+      KIF::ModAssets.build(loaded_dirs.reject { |d| File.expand_path(d.to_s) == path }) if defined?(KIF::ModAssets)
       set_disabled(e.id, false) if disabled.include?(e.id)
       e.source.instance_variable_set(:@entries, nil)
       KIF::ModCatalog.instance_variable_set(:@installed_index, nil) if defined?(KIF::ModCatalog)
@@ -398,9 +400,10 @@ module KIF
           raise "too many files in the zip (#{list.length})" if list.length > ZIP_MAX_FILES
           names = list.map { |e| zip_parts(e[0]) }
           files = names.each_with_index.reject { |n, i| n.empty? || list[i][0].end_with?("/") }
-          # one folder around everything: drop it
+          files.reject! { |n, _| n[0] == "__MACOSX" || n[-1].start_with?("._") }   # Finder's extras
+          # one folder around everything: drop it (not Graphics / Audio / Fonts: those are the mod's own)
           tops = files.map { |n, _| n.length > 1 ? n[0] : nil }.uniq
-          strip = (tops.length == 1 && tops[0]) ? 1 : 0
+          strip = (tops.length == 1 && tops[0] && KIF::ModAssets::DIRS.none? { |d| d.casecmp?(tops[0]) }) ? 1 : 0
           files.each do |parts, i|
             rel = parts[strip..-1]
             next if rel.nil? || rel.empty?

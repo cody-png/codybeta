@@ -835,3 +835,9 @@ KIF::BoxCommands.add(:import_random, proc { |_s| KIF::PokeIO.import_allowed? ? _
 
 KIF::MultiCommands.add(:export, proc { |_s, _b| KIF::PokeIO.allowed? ? _INTL("Export") : nil },
   proc { |s, box| KIF::PokeIO.export_selected(s, box) }, order: 20)
+
+# KIF 0.20.7's Pokemon#imported? (FusionRules and LevelCaps ask for it): a Pokemon this
+# importer brought in counts as the player's own. Saves from before it have no @imported.
+class Pokemon
+  def imported?; return @imported ? true : false; end unless method_defined?(:imported?)
+end

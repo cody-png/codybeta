@@ -1757,6 +1757,9 @@ EliteBattle.defineCommonAnimation(:SHINY) do
   @scene.wait(16, true) if @scene.afterAnim
   fp = {}; k = -1
   factor = @targetSprite.zoom_x
+  # Pokemon#superShiny? does not exist in PIF: only tint when a mod defines it
+  pk = @battlers[@targetIndex].pokemon
+  sup = pk.respond_to?(:superShiny?) && pk.superShiny?
   #-----------------------------------------------------------------------------
   #  set up sprites
   for i in 0...16
@@ -1765,7 +1768,7 @@ EliteBattle.defineCommonAnimation(:SHINY) do
     str = "Graphics/EBDX/Animations/Moves/ebShiny1"
     str = "Graphics/EBDX/Animations/Moves/ebShiny2" if i >= 8
     fp["#{i}"].bitmap = pbBitmap(str).clone
-    fp["#{i}"].bitmap.hue_change(180) if i < 8 && @battlers[@targetIndex].pokemon.superShiny?
+    fp["#{i}"].bitmap.hue_change(180) if i < 8 && sup
     fp["#{i}"].center!
     fp["#{i}"].x = cx
     fp["#{i}"].y = cy
@@ -1777,7 +1780,7 @@ EliteBattle.defineCommonAnimation(:SHINY) do
   for j in 0...8
     fp["s#{j}"] = Sprite.new(@viewport)
     fp["s#{j}"].bitmap = pbBitmap("Graphics/EBDX/Animations/Moves/ebShiny3").clone
-    fp["s#{j}"].bitmap.hue_change(180) if @battlers[@targetIndex].pokemon.superShiny?
+    fp["s#{j}"].bitmap.hue_change(180) if sup
     fp["s#{j}"].center!
     fp["s#{j}"].opacity = 0
     z = [1,0.75,1.25,0.5][rand(4)]*factor

@@ -181,7 +181,7 @@ class PokeBattle_Battle
   # The AI looks at the new foe and may switch your Pokémon out for free
   def kif_auto_free_switch(idx)
     b = @battlers[idx]
-    return if !b || b.fainted? || !pbCanSwitch?(idx)
+    return if !b || b.fainted? || !pbCanShowCommands?(idx) || !pbCanSwitch?(idx)   # a forced move (Rollout, Fly...) keeps its stored choice
     pbClearChoice(idx)
     begin
       @battleAI.pbEnemyShouldWithdraw?(idx)

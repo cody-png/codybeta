@@ -451,8 +451,13 @@ module KIF
       return nil
     end
 
+    # one folder per KIF release: pictures made by older shiny code are never served again
+    def self.cache_folder
+      return KIF::PORT_VERSION.to_s
+    end
+
     def self.disk_path(key)
-      return "#{cache_dir}/#{Settings::GAME_VERSION_NUMBER}/#{key}.png"
+      return "#{cache_dir}/#{cache_folder}/#{key}.png"
     end
 
     def self.cache_get(key)
@@ -490,11 +495,11 @@ module KIF
       if cache_mode == 0
         begin
           top = cache_dir
-          dir = "#{top}/#{Settings::GAME_VERSION_NUMBER}"
+          dir = "#{top}/#{cache_folder}"
           KIF.mkdir_p(dir)   # "Cache" itself may not exist on a fresh install
           unless @disk_trimmed   # once a session: older game versions' folders go, this one is capped
             @disk_trimmed = true
-            Dir.children(top).each { |c| KIF.rm_tree(File.join(top, c)) if c != Settings::GAME_VERSION_NUMBER.to_s && File.directory?(File.join(top, c)) }
+            Dir.children(top).each { |c| KIF.rm_tree(File.join(top, c)) if c != cache_folder && File.directory?(File.join(top, c)) }
             KIF.trim_cache_dir(dir, KIF.mobile? ? 2_000 : 20_000)   # phones: less storage
           end
           bmp.save_to_png(disk_path(key)) unless File.exist?(disk_path(key))

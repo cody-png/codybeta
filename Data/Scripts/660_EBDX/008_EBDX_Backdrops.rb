@@ -448,7 +448,7 @@ class BattleSceneRoom
       # for trainer sprites
       if @battle.opponent
         for t in 0...@battle.opponent.length
-          next if !@scene.sprites["trainer_#{t}"]
+          next if !@scene.sprites["trainer_#{t}"] || !@scene.sprites["trainer_#{t}"].respond_to?(:noshadow=)
           @scene.sprites["trainer_#{t}"].noshadow = true
         end
       end

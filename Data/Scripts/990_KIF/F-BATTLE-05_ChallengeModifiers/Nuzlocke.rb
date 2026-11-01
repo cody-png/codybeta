@@ -401,6 +401,7 @@ module KIF
         rescue => e
           KIF.log("Nuzlocke: the locked save couldn't be written (#{e.class}: #{e.message})")
         end
+        SaveData.mark_values_as_unloaded   # like Scene_Map's return to title, or the next load keeps this run's data
         $scene = pbCallTitle
         return :title
       end

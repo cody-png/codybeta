@@ -618,7 +618,9 @@ class BagWindowEBDX
     # set up variables
     @scene = scene
     @battle = scene.battle
-    $lastUsed = 0 if $lastUsed.nil?; @lastUsed = $lastUsed
+    # a stale global (last copy used, item sold, other save loaded) must not show as the last-used item
+    $lastUsed = 0 unless $lastUsed.is_a?(Symbol) && $PokemonBag && $PokemonBag.pbQuantity($lastUsed) > 0
+    @lastUsed = $lastUsed
     @index = 0; @oldindex = -1; @item = 0; @olditem = -1
     @finished = false
     @disposed = true
@@ -756,7 +758,7 @@ class BagWindowEBDX
     @pages = @pocket.length/6
     @pages += 1 if @pocket.length%6 > 0
     @page = 0; @item = 0; @olditem = 0
-    @back = false
+    @back = false; @oldback = false
     @selPocket = pocket
     # dispose sprites if already existing
     pbDisposeSpriteHash(@items)
@@ -879,8 +881,8 @@ class BagWindowEBDX
       @back = false; @doubleback = true
     end
     # refresh selected values if index has changed
-    if @item != @olditem
-      @olditem = @item
+    if @item != @olditem || @back != @oldback
+      @olditem = @item; @oldback = @back
       pbSEPlay("EBDX/SE_Select1")
       @sprites["sel"].target(@back ? @sprites["pocket5"] : @items["#{@item}"])
       @items["#{@item}"].src_rect.y -= 6 if !@back

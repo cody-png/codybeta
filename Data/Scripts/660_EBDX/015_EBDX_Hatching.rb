@@ -277,8 +277,26 @@ class PokemonEggHatchSceneEBDX
       @pokemon.name = nickname if nickname != ""
       @nicknamed = true
     end
+    pbRegisterHatched
     @sprites["msgwindow"].text = ""
     @sprites["msgwindow"].visible = false
+  end
+  #-----------------------------------------------------------------------------
+  # Pokedex entry and egg counter: PIF's PokemonEggHatch_Scene#pbMain does this, this scene does not inherit from it
+  #-----------------------------------------------------------------------------
+  def pbRegisterHatched
+    if !$Trainer.pokedex.owned?(@pokemon.species)
+      $Trainer.pokedex.register(@pokemon)
+      $Trainer.pokedex.set_owned(@pokemon.species)
+      pbMessageDisplay(@sprites["msgwindow"], _INTL("{1}'s data was added to the Pokédex", @pokemon.name)) { self.update }
+      pbShowPokedex(@pokemon)
+    end
+    if KIF.respond_to?(:unfused_dex_names)
+      KIF.unfused_dex_names(@pokemon).each do |name|
+        pbMessageDisplay(@sprites["msgwindow"], _INTL("{1}'s data was added to the Pokédex", name)) { self.update }
+      end
+    end
+    pbSet(VAR_NB_EGGS_HATCHED, pbGet(VAR_NB_EGGS_HATCHED) + 1)
   end
   #-----------------------------------------------------------------------------
   # frame wait function

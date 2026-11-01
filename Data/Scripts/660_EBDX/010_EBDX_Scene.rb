@@ -2501,7 +2501,7 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
   # PIF's Battle calls (battler, false, abilityName); older callers pass (battler, delay, logTrigger, abilityName)
   def pbShowAbilitySplash(battler, *args)
     abilityName = args.find { |a| a.is_a?(String) }
-    return if !battler || !battler.abilityActive?
+    return if !battler   # PIF's scene has no abilityActive? check: Aftermath, Gastro Acid and the like still show their pop-up
     spr = @sprites["abilityMessage"]
     return if !spr || !spr.bitmap
     # Redraw: background + border + text

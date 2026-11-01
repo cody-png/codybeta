@@ -92,6 +92,13 @@ module KIF
       return s.length > max ? s[0, max - 3] + "..." : s
     end
 
+    # an id is compared with other ids, never shown as it is: one with a control character,
+    # a backslash or a hundred characters isn't an honest one
+    def self.plain_id?(id)
+      s = id.to_s
+      return !s.empty? && s.length <= 100 && s !~ /[\x00-\x1f\x7f\\]/
+    end
+
     # "owner/repo" and a branch that can only name a branch on GitHub (no "..", no odd characters)
     def self.valid_repo?(repo)
       s = repo.to_s
@@ -116,7 +123,7 @@ module KIF
       def requires_kif; return @json["requires_kif"]; end
       # the catalog's words, as plain short text (mod.json comes from the internet)
       def text(v, max); return KIF::ModCatalog.clean_text(v, max); end
-      def id;      t = text(@json["id"], 64); return t.empty? ? @folder.to_s : t; end
+      def id;      return (@json["id"] || @folder).to_s; end   # a matching key, not display text: as written
       def name;    t = text(@json["name"], 60); return t.empty? ? text(@folder, 60) : t; end
       def version; return text(@json["version"], 32); end
       def author;  return text(@json["author"], 60); end
@@ -369,9 +376,9 @@ module KIF
       # no answer (offline, rate limited): the big list wouldn't come either
       return nil unless head
       old = disk[:trees][cat.key]
-      if old.is_a?(Array) && old[0] == head && old[1].is_a?(Hash)
+      if old.is_a?(Array) && old[0] == head && old[1].is_a?(Hash) && old[1].length <= MAX_TREE_FILES
         hit("#{cat.name} file list (#{head[0, 7]})")
-        files = old[1]
+        files = filter_tree(cat, old[1])   # saved by an older KIF: its file names are checked now
       else
         files = remote_tree(cat, cat.tree_url(head))
         return nil unless files
@@ -429,6 +436,7 @@ module KIF
         json = text ? (KIF::Mods::MiniJSON.parse(KIF::PixelFont.utf8(text).sub(/\A﻿/, "")) rescue nil) : nil
         next log("#{cat.name}: #{f}/mod.json unreadable") unless json.is_a?(Hash)
         it = Item.new(f, json, by_folder[f], cat)
+        next log("#{cat.name}: #{f}/mod.json has an id KIF won't use; skipped") unless plain_id?(it.id)
         if (twin = (before + out).find { |o| o.id == it.id || o.folder == it.folder })
           log("#{cat.name}: #{it.id} is also in #{twin.catalog ? twin.catalog.name : 'KIF-Mods'} - that one is used")
           next
@@ -484,6 +492,16 @@ module KIF
       end
       drop_unsafe(cat, out, bad)
       return out.empty? ? nil : out
+    end
+
+    # a file list without the mods that have a file name KIF won't write
+    def filter_tree(cat, files)
+      bad = {}
+      files.each_key { |p| bad[unsafe_scope(p)] = p unless KIF.safe_rel_path?(p) }
+      return files if bad.empty?
+      out = files.dup
+      drop_unsafe(cat, out, bad)
+      return out
     end
 
     # the mod (or modpack) an unsafe path belongs to
@@ -935,7 +953,7 @@ module KIF
         return
       end
       if (big = list.find { |it| cat.too_big?(it) })
-        pbMessage(_INTL("{1} has more files than a mod can have here, so it isn't installed.", big.name))
+        pbMessage(_INTL("{1} is bigger than a mod can be here, so it isn't installed.", big.name))
         return
       end
       if (other = list.find { |it| cat.clash?(it) })
@@ -1083,7 +1101,7 @@ module KIF
           :net => _INTL("{1} couldn't be downloaded. Check the internet connection and try again."),
           :space => _INTL("{1} couldn't be installed: there isn't enough free space. Nothing was changed."),
           :write => _INTL("{1} couldn't be installed: KIF couldn't write its files. Nothing was changed."),
-          :limits => _INTL("{1} has more files than a mod can have here, so it isn't installed."),
+          :limits => _INTL("{1} is bigger than a mod can be here, so it isn't installed."),
           :clash => _INTL("{1} would go into a Mods folder that holds a different mod, so it isn't installed."),
           :needs => _INTL("{1} needs a mod that couldn't be installed, so it isn't installed.")
         }.each do |key, text|

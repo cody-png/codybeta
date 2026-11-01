@@ -128,7 +128,7 @@ module KIF
         size = Wire.json(d).bytesize
         return note(id, "data over #{MAX_DATA} bytes (#{size})") if size > MAX_DATA
         return note(id, "over #{MAX_MSGS} messages or #{MAX_BYTES} bytes a second; dropped") unless spend(state(s), :tx, size)
-        return s.post("mod_sh", "m" => id, "k" => k, "d" => d)
+        return s.post("mod_sh", "m" => id, "k" => k, "d" => d) || note(id, "the message was refused; nothing sent")
       end
 
       def self.receive(s, type, msg)

@@ -8,13 +8,20 @@
 #
 # Wire: every frame is a 4-byte big-endian length + payload.
 #   Handshake (plain JSON, max 1 KB a frame), SPAKE2 (module Spake2 below):
-#     joiner -> host  {"t":"hi","v":2,"n":nJ,"x":X}    nJ, nH: 16 random bytes
-#     host -> joiner  {"t":"hi","v":2,"n":nH,"y":Y}    X = g^x M^w, Y = g^y N^w
+#     joiner -> host  {"t":"hi","v":3,"n":nJ,"x":X}    nJ, nH: 16 random bytes
+#                     ("k":"l" too when the secret is a LAN secret, below)
+#     host -> joiner  {"t":"hi","v":3,"n":nH,"y":Y}    X = g^x M^w, Y = g^y N^w
 #     joiner -> host  {"t":"auth","p":HMAC(Ke, "KIF2 join")}   Ke = SHA-256(nJ, nH,
 #     host -> joiner  {"t":"auth","p":HMAC(Ke, "KIF2 host")}   X, Y, K = g^2xy, w)
 #     The joiner proves first. A wrong proof: {"t":"no","why":"code"} and the
 #     line closes; 5 wrong proofs from one address and it's ignored for 10
 #     minutes; at most 10 handshakes start in 10 seconds.
+#     Two secrets: the code that goes over the internet holds the secret
+#     (lowest bit of its first byte 0); the code "Find on this network" gives
+#     out holds the LAN secret (that bit 1, Session#lan_secret). A joiner whose
+#     secret has the bit set says "k":"l" and the host uses its LAN secret, from
+#     a private address only: what any neighbour can ask for is no key to the
+#     internet code. After a join was accepted both secrets are new.
 #   Then the joiner says hello and the host's player is asked "Let <name>
 #   join?". The host answers with its own hello, or a signed
 #   {"t":"no","why":"declined"} (also after 60 s without an answer).
@@ -46,8 +53,13 @@ module KIF
     MAX_PRE    = 1024    # frames before the handshake is done
     MAX_BAD    = 5       # bad frames before the line is closed
     MAX_RATE   = 400     # frames a second before the line is closed
-    PROTO      = 2
+    PROTO      = 3
     HS_LIMIT   = 10      # handshakes a host starts in 10 s
+    MAX_INBOX  = 512     # frames waiting for the game before the line is closed
+    POLL_TIME  = 0.01    # seconds one poll works on frames; the rest waits for the next poll
+    ASK_LIMIT  = 3       # "Let <name> join?" prompts a minute
+    DECLINE_WAIT = 600   # seconds an address that was told no is turned away
+    MAX_VALUES = 2500    # values (numbers, strings, lists, objects) in one signed message (honest ones hold about 150)
 
     # Message types after the handshake: field => [class, max length] or
     # [Integer, min, max]. Later features (Soul Link, trading) add theirs.
@@ -68,6 +80,17 @@ module KIF
 
     # a name from the other game, safe to show in a PIF message (no \ codes)
     def self.shown_name(n); n.to_s.gsub(/[\\<>\x00-\x1f]/, "")[0, 24]; end
+
+    # a version text from the other game: letters, digits and . _ + - space only
+    # (it goes into _INTL, where a backslash in an argument is a replacement code)
+    def self.shown_ver(v); v.to_s.gsub(/[^A-Za-z0-9._+ \-]/, "")[0, 16]; end
+
+    # 4 random bytes for a join code; a LAN secret has the lowest bit of byte 0 set
+    def self.new_secret(lan)
+      s = Crypto.random(4)
+      s.setbyte(0, lan ? s.getbyte(0) | 1 : s.getbyte(0) & 0xfe)
+      return s
+    end
 
     def self.available?
       return @available unless @available.nil?
@@ -222,8 +245,9 @@ module KIF
 
       def frame(payload); [payload.bytesize].pack("N") + payload.b; end
 
-      # Hash or nil; never raises
-      def parse(text); Parser.new(text).run; end
+      # Hash or nil; never raises. max: the most values (numbers, strings, lists,
+      # objects) it reads; more is refused after reading that many
+      def parse(text, max = nil); Parser.new(text, max).run; end
     end
 
     class Parser
@@ -233,9 +257,11 @@ module KIF
       STR = /\G"((?:[^"\\\x00-\x1f]|\\["\\\/bfnrt]|\\u[0-9a-fA-F]{4})*)"/
       ESC = { "b" => "\b", "f" => "\f", "n" => "\n", "r" => "\r", "t" => "\t" }
 
-      def initialize(text)
+      def initialize(text, max = nil)
         @s = text.to_s.b
         @i = 0
+        @n = 0
+        @max = max
       end
 
       def run
@@ -254,6 +280,7 @@ module KIF
 
       def value(depth)
         raise "deep" if depth > DEPTH
+        raise "big" if @max && (@n += 1) > @max   # a 64 KB message of 0s would otherwise cost the game thread tens of ms
         ws
         case @s[@i]
         when "{"
@@ -467,6 +494,10 @@ module KIF
               return hard_close
             end
             break if buf.bytesize < 4 + n
+            if @inbox.size >= MAX_INBOX   # the game isn't taking them: not an honest partner
+              @inbox << [:error, :flood]
+              return hard_close
+            end
             @inbox << buf.byteslice(4, n)
             buf = buf.byteslice(4 + n, buf.bytesize - 4 - n)
             sec = Net.now.floor
@@ -530,7 +561,7 @@ module KIF
     # player is asked), :waiting (joiner: for the answer), :connected, :closed
     #---------------------------------------------------------------------------
     class Session
-      attr_reader :state, :role, :partner, :partner_ver, :port, :via, :ports, :secret, :room, :conn, :relay
+      attr_reader :state, :role, :partner, :partner_ver, :port, :via, :ports, :secret, :lan_secret, :room, :conn, :relay
       attr_accessor :ping_every, :timeout, :handshake_timeout, :answer_timeout, :hs_limit, :name, :ver
 
       def initialize(name, ver)
@@ -545,7 +576,9 @@ module KIF
         @answer_timeout = 60.0
         @hs_limit = HS_LIMIT
         @hs_log = []
-        @fails = {}              # address => [count, until]
+        @fails = {}              # address => [count, until] (wrong proofs; also an address told no)
+        @asks = []               # when the host's player was asked
+        @pakes = {}              # secret => SPAKE2 setup
         @servers = []
         @threads = []
       end
@@ -560,13 +593,26 @@ module KIF
         @conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
         @state = :connected
         @later << [:connected, @partner]
+        if @via == :direct   # the code is used up: whoever saw it later needs a new one (the host screen shows it)
+          @secret = Net.new_secret(false)
+          @lan_secret = Net.new_secret(true) if @lan_secret
+          @pakes = {}
+        end
         return true
       end
 
-      # host: say no (also after answer_timeout); hosting goes on
-      def decline
+      # The secret for "Find on this network", made on first use. It lets a
+      # joiner in from a private address only (see the header).
+      def enable_lan
+        return @lan_secret ||= Net.new_secret(true)
+      end
+
+      # host: say no (also after answer_timeout); hosting goes on. The address is
+      # turned away for DECLINE_WAIT s (not after a timeout: nobody was there).
+      def decline(timed_out = false)
         return false unless asking?
         Net.log("said no to #{@partner}")
+        @fails[@conn.addr] = [MAX_BAD, Net.now + DECLINE_WAIT] unless timed_out
         @conn.send_msg({ "t" => "no", "why" => "declined" })
         drop_line(true)
         @partner = nil
@@ -668,8 +714,10 @@ module KIF
           end
         end
         if @conn
+          t0 = Net.now
           while @conn && (f = (@conn.inbox.pop(true) rescue nil))
             f.is_a?(Array) ? line_ended(f[1] || :closed, out) : frame(f, out)
+            break if Net.now - t0 > POLL_TIME   # the rest waits for the next poll: a flood can't hold the game
           end
           check_time(out) if @conn
         end
@@ -705,10 +753,11 @@ module KIF
         addr = (sock.remote_address.ip_address rescue "?")
         f = @fails[addr]
         @hs_log.reject! { |t| Net.now - t > 10 }
+        @asks.reject! { |t| Net.now - t > 60 }
         # the same address again while its handshake hasn't finished: a retry (its
         # first try gave up while this game wasn't polling, e.g. in a battle)
         again = @conn && @state == :handshake && @conn.addr == addr
-        why = if (f && f[0] >= MAX_BAD && Net.now < f[1]) || @hs_log.length >= @hs_limit then "wait"
+        why = if (f && f[0] >= MAX_BAD && Net.now < f[1]) || @hs_log.length >= @hs_limit || @asks.length >= ASK_LIMIT then "wait"
               elsif @conn && !again then "busy"
               end
         if why
@@ -731,13 +780,19 @@ module KIF
         @rx_seq = 0
       end
 
-      # [w, my base^w, inverse of their base^w], once a session
-      def pake; @pake ||= Spake2.setup(@secret, @role == :join); end
+      # [w, my base^w, inverse of their base^w], once per secret: a host whose
+      # joiner said "k":"l" (and is on a private address) uses its LAN secret
+      def pake
+        s = @role == :host && @pk == :lan ? @lan_secret : @secret
+        return @pakes[s] ||= Spake2.setup(s, @role == :join)
+      end
 
       def send_hi
         @my_nonce = Crypto.random(16)
         @x, @xe = Spake2.start(pake[1])
-        @conn.send_raw({ "t" => "hi", "v" => PROTO, "n" => Crypto.hex(@my_nonce), "x" => Spake2.hex(@xe) })
+        hi = { "t" => "hi", "v" => PROTO, "n" => Crypto.hex(@my_nonce), "x" => Spake2.hex(@xe) }
+        hi["k"] = "l" if @via == :direct && @secret.getbyte(0).to_i & 1 == 1   # a LAN secret (not on the wire)
+        @conn.send_raw(hi)
         @hs_state = :wait_hi
       end
 
@@ -760,6 +815,7 @@ module KIF
           return bad_hs(out, :closed) unless h["t"] == "hi" && h["v"] == PROTO && n && n.bytesize == 16
           theirs = Spake2.read(h[@role == :host ? "x" : "y"])
           if @role == :host
+            @pk = (h["k"] == "l" && @lan_secret && @via == :direct && PortMap.ip_kind(@conn.addr.to_s.sub(/\A::ffff:/i, "")) == :private) ? :lan : :net
             @nj = n
             @nh = Crypto.random(16)
             y, ye = Spake2.start(pake[1])
@@ -810,7 +866,7 @@ module KIF
       def signed(payload, out)
         mac = payload.byteslice(0, 32)
         json = payload.byteslice(32, payload.bytesize - 32).to_s
-        h = Crypto.same?(Crypto.hmac(@rx_key, json), mac) ? Wire.parse(json) : nil
+        h = Crypto.same?(Crypto.hmac(@rx_key, json), mac) ? Wire.parse(json, MAX_VALUES) : nil
         return bad_frame(out, "bad signature") unless h
         seq = h["s"]
         return bad_frame(out, "old or missing number") unless seq.is_a?(Integer) && seq > @rx_seq
@@ -824,10 +880,11 @@ module KIF
         when "hello"
           return unless @state == :handshake || @state == :waiting
           @partner = Net.shown_name(msg["name"])
-          @partner_ver = msg["ver"]
+          @partner_ver = Net.shown_ver(msg["ver"])
           if @role == :host
             @state = :asking
             @asking_since = Net.now
+            @asks << Net.now
             out << [:join_request, @partner]
           else
             @state = :connected
@@ -882,7 +939,7 @@ module KIF
           return @role == :join || @via == :relay ? give_up(out, [:failed, :timeout]) : drop_line
         end
         if @state == :asking && Net.now - @asking_since > @answer_timeout
-          decline
+          decline(true)
           return out << [:failed, :declined] if @state == :closed
           return
         end
@@ -893,28 +950,67 @@ module KIF
 
     #---------------------------------------------------------------------------
     # "Find on this network": UDP broadcast on LAN_PORT
+    # The answer carries the code for this network (its own LAN secret, not the
+    # one of the internet code). Anyone on the network can ask, so: only
+    # private addresses of the host's own network are answered (never a public
+    # one), never more bytes than the question had (a forged source address
+    # can't use the host as a mirror), one answer a second to each asker and
+    # 4 a second in all. The list on the asking side is short and only holds
+    # a host whose code names the address it answered from.
     #---------------------------------------------------------------------------
     module LAN
-      ASK = "KIF-FIND 1"
+      ASK = "KIF-FIND 2".ljust(64, ".")
+      MAX_FOUND = 8
 
       module_function
 
-      # Host: answers askers with its name and its code for this network.
-      # The code holds the secret, so anyone on the same network can join
-      # while a place is free (as with LAN games).
+      # a private address (or this PC) in the /16 of the host's own address
+      def near?(ip, mine)
+        return false unless PortMap.ip_kind(ip) == :private
+        return true if ip.start_with?("127.") || mine.nil?
+        return ip.split(".")[0, 2] == mine.split(".")[0, 2]
+      end
+
+      # {"name":..,"code":..} no longer than ASK (the name is cut to fit), or nil
+      def answer(name, code)
+        room = ASK.bytesize - Wire.json({ "name" => "", "code" => code }).bytesize
+        return nil if room < 0
+        text = Wire.json({ "name" => name[0, room], "code" => code })
+        return text.bytesize <= ASK.bytesize ? text : nil
+      end
+
+      # Host: answers askers with its name and its code for this network (code:
+      # the text, or a proc that gives it when asked: the code changes after a
+      # join). No SO_REUSEADDR: nobody else can share the port.
       def responder(name, code, port: LAN_PORT)
         u = UDPSocket.new
-        u.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, true)
         u.bind("0.0.0.0", port)
-        reply = Wire.json({ "t" => "kif_host", "name" => name.to_s[0, 24], "code" => code })
+        shown = name.to_s.gsub(/[^A-Za-z0-9 _.\-]/, "")
+        last = {}   # asker => time of the last answer
+        sent = []   # times of the last answers
         t = Thread.new do
           loop do
-            data, from = u.recvfrom(64)
-            next unless data == ASK
-            (u.send(reply, 0, from[3], from[1]) rescue nil)
+            begin
+              data, from = u.recvfrom(ASK.bytesize + 1)
+              ip = from[3]
+              next unless data == ASK
+              c = code.respond_to?(:call) ? code.call : code
+              info = JoinCode.read(c)
+              next unless info.is_a?(Hash) && near?(ip, info[:kind] == :v4 ? info[:ip] : nil)
+              now = Net.now
+              sent.reject! { |x| now - x > 1.0 }
+              next if sent.length >= 4 || (last[ip] && now - last[ip] < 1.0)
+              reply = answer(shown, c) or next
+              last.clear if last.size > 64
+              last[ip] = now
+              sent << now
+              u.send(reply, 0, ip, from[1])
+            rescue IOError
+              break   # closed
+            rescue StandardError
+              sleep 0.05   # one bad datagram or a reset (Windows) doesn't end discovery
+            end
           end
-        rescue StandardError
-          nil
         end
         t.report_on_exception = false
         return u
@@ -922,7 +1018,8 @@ module KIF
         return nil
       end
 
-      # Joiner: a Thread whose value is [[name, code_info], ...]
+      # Joiner: a Thread whose value is [[name, code_info], ...], at most
+      # MAX_FOUND, one per address that answered; a code must name that address
       def find(to: "255.255.255.255", port: LAN_PORT, wait: 1.5)
         t = Thread.new do
           found = {}
@@ -931,13 +1028,19 @@ module KIF
             u.setsockopt(Socket::SOL_SOCKET, Socket::SO_BROADCAST, true)
             u.send(ASK, 0, to, port)
             stop = Net.now + wait
-            while (left = stop - Net.now) > 0
+            while (left = stop - Net.now) > 0 && found.length < MAX_FOUND
               next unless IO.select([u], nil, nil, left)
-              data, = (u.recvfrom(512) rescue nil)
-              h = Parser.new(data).run if data
-              next unless h && h["t"] == "kif_host" && h["name"].is_a?(String) && h["code"].is_a?(String)
+              data, from = (u.recvfrom(512) rescue nil)
+              next unless data && from
+              src = from[3]
+              next if found.key?(src) || PortMap.ip_kind(src) != :private
+              h = Parser.new(data).run
+              next unless h && (h["t"].nil? || h["t"] == "kif_host") && h["name"].is_a?(String) && h["code"].is_a?(String)
               info = JoinCode.read(h["code"])
-              found[h["code"]] = [Net.shown_name(h["name"]), info] if info.is_a?(Hash) && info[:kind] != :relay
+              next unless info.is_a?(Hash) && info[:kind] == :v4
+              # the code names the address it came from (a program on this PC may name this PC's network address)
+              next unless info[:ip] == src || (src.start_with?("127.") && PortMap.ip_kind(info[:ip]) == :private && !info[:ip].start_with?("127."))
+              found[src] = [Net.shown_name(h["name"]), info]
             end
           ensure
             u.close

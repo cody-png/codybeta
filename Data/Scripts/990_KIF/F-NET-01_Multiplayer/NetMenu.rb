@@ -34,10 +34,16 @@ module KIF
     @lan = nil
     @notes = []
     @cleanup = []
+    @renew_thread = nil
+    @wave_at = nil
+    @clip_code = nil
+    @pm_lock = Mutex.new   # a renewal and a removal of the mapping never overlap
 
     class << self
       attr_reader :session, :pm, :notes
     end
+
+    WAVE_EVERY = 30   # seconds between two "says hello" boxes from the partner
 
     def self.menu_on?
       return false if KIF.mobile?
@@ -54,18 +60,19 @@ module KIF
     def self.new_session
       stop
       @notes.clear
+      @wave_at = nil
       return Session.new(my_name, version)
     end
 
     # Host directly: listen, then open the router in the background
     def self.start_hosting
       s = new_session
-      port = s.host(Crypto.random(4)) or return nil
+      port = s.host(new_secret(false)) or return nil
       @session = s
       @local = PortMap.local_ip
       @pm_thread = Thread.new { PortMap.open(port, local: @local) }
       @pm_thread.report_on_exception = false
-      @lan = LAN.responder(my_name, lan_code) if lan_code
+      @lan = LAN.responder(my_name, proc { lan_code }) if lan_code   # asked again for each question: the code changes after a join
       log("hosting on port #{port}")
       return port
     end
@@ -97,11 +104,16 @@ module KIF
       @session = nil
       (@lan.close rescue nil) if @lan
       @lan = nil
+      @cleanup.reject! { |c| !c.alive? }
+      rt = @renew_thread
+      @renew_thread = nil
+      rt[:kif_stop] = true if rt
       if @pm_thread
         t = @pm_thread
+        t[:kif_stop] = true   # the opening ends at its next step (it may be waiting for a router)
         @cleanup << Thread.new {
           m = (t.value rescue nil)
-          PortMap.close(m[:mapping]) if m && m[:mapping]
+          @pm_lock.synchronize { PortMap.close(m[:mapping]) } if m && m[:mapping]
         }
         @cleanup.last.report_on_exception = false
       end
@@ -118,6 +130,7 @@ module KIF
 
     # every frame on the map and in the screens below; never waits
     def self.update
+      clear_copied_code
       return unless @session
       if @pm.nil? && @pm_thread && !@pm_thread.alive?
         @pm = (@pm_thread.value rescue nil) || { status: :closed }
@@ -127,7 +140,11 @@ module KIF
       if @pm && @pm[:mapping] && now > @renew_at
         @renew_at = now + 3600
         m = @pm[:mapping]
-        Thread.new { log("router: the port's lease wasn't renewed") unless PortMap.renew(m) }.report_on_exception = false
+        @renew_thread = Thread.new do
+          ok = @pm_lock.synchronize { Thread.current[:kif_stop] ? true : PortMap.renew(m) }
+          log("router: the port's lease wasn't renewed") unless ok
+        end
+        @renew_thread.report_on_exception = false
       end
       s = @session
       s.poll.each do |ev|
@@ -145,7 +162,10 @@ module KIF
         when :message
           if ev[1] == "wave"
             t = _INTL("{1} says hello!", s.partner)
-            @notes << t unless @notes.include?(t)   # shown on the map too: one at a time, however many come
+            if @wave_at.nil? || now - @wave_at >= WAVE_EVERY   # a partner that keeps waving shows one box in 30 s
+              @wave_at = now
+              @notes << t unless @notes.include?(t)   # shown on the map too: one at a time, however many come
+            end
           elsif ev[1].start_with?("sl_") && defined?(KIF::SoulLink)
             begin
               KIF::SoulLink.receive(ev[1], ev[2])
@@ -222,15 +242,45 @@ module KIF
 
     # every frame on the map
     def self.map_update
+      clear_copied_code
       return unless @session
       update
       ask_join if @session&.asking? && quiet?
       pbMessage(@notes.shift) if !@notes.empty? && quiet?   # "<name> says hello!", a disconnect
     end
 
+    # The code for this network holds its own secret (Session#lan_secret), not
+    # the one in the code that goes over the internet: anyone on the network
+    # can ask for it (Find on this network). Only a PC whose address is private.
     def self.lan_code
-      return nil unless @session && @session.via == :direct && @local && PortMap.ip_kind(@local) != :invalid
-      return JoinCode.make(:v4, ip: @local, port: @session.port, secret: @session.secret)
+      return nil unless @session && @session.via == :direct && @session.respond_to?(:enable_lan) &&
+                        @local && PortMap.ip_kind(@local) == :private
+      return JoinCode.make(:v4, ip: @local, port: @session.port, secret: @session.lan_secret || @session.enable_lan)
+    end
+
+    # the code goes on the clipboard and is taken off again after a minute
+    # (clipboard history and cloud clipboards keep what is on it)
+    def self.copy_code(code)
+      Input.clipboard = code
+      @clip_code = code
+      @clip_at = now
+      return true
+    rescue StandardError
+      @clip_code = nil
+      return false
+    end
+
+    def self.clear_copied_code
+      return unless @clip_code && now - @clip_at >= 60
+      forget_copied_code
+    end
+
+    def self.forget_copied_code
+      c = @clip_code
+      @clip_code = nil
+      (Input.clipboard = "") if c && (Input.clipboard rescue nil) == c
+    rescue StandardError
+      nil
     end
 
     def self.v6_code
@@ -454,8 +504,8 @@ module KIF
           code = Net.code
           by_hand = !relay && pm && pm[:status] == :closed && Net.opened_by_hand?
           no_address = by_hand && Net.lan_only?   # the router doesn't tell it and none was typed
-          # a relay code (41 characters) doesn't fit on one line: Copy / Show
-          lines = [_INTL("Host a game"), _INTL("Your code: {1}", relay ? _INTL("ready (Copy or Show)") : code || "...")]
+          # the code stays off the screen (a stream or a screenshot would show it): Copy / Show
+          lines = [_INTL("Host a game"), _INTL("Your code: {1}", relay || code ? _INTL("ready (Copy or Show)") : "...")]
           if relay
             lines << _INTL("Relay: {1}", s.relay.join(":"))
             lines << (s.state == :connecting ? _INTL("Connecting to the relay...") : _INTL("Friend joined: Not yet"))
@@ -470,7 +520,7 @@ module KIF
             help = if !relay && pm.nil? then _INTL("Opening your router...\nThis takes a few seconds.")
                    elsif no_address then _INTL("Your router doesn't tell the game your public address. Type it so your code holds it.")
                    elsif copied then _INTL("Code copied. Waiting for them to join...")
-                   else _INTL("Ready. Send this code to your friend.\nWaiting for them to join...")
+                   else _INTL("Ready. Send the code to your friend only.\nWaiting for them to join...")
                    end
             if code && !no_address
               add.call(_INTL("Copy code"), :copy)
@@ -508,11 +558,11 @@ module KIF
           return if r < 0
           case acts[r]
           when :copy
-            copied = (Input.clipboard = code rescue nil) ? true : false
+            copied = Net.copy_code(code)
             pbMessage(_INTL("Copying didn't work. Your code is:\n{1}", code)) unless copied
           when :v6
             c = Net.v6_code
-            pbMessage(_INTL("This code works if your friend also has IPv6:\n{1}", c)) unless (Input.clipboard = c rescue nil)
+            pbMessage(_INTL("This code works if your friend also has IPv6:\n{1}", c)) unless Net.copy_code(c)
           when :big
             pbMessage(_INTL("Your code:\n{1}", code))
           when :how then how_to_open(s.port)
@@ -581,7 +631,7 @@ module KIF
       # Joining (MP5a, MP5b, MP5c)
       #-------------------------------------------------------------------------
       def join_code(address = nil)
-        clip = (Input.clipboard.to_s rescue "").strip
+        clip = (Input.clipboard.to_s rescue "").strip[0, 60]   # as long as the Paste button takes
         text = Net::JoinCode.read(clip).is_a?(Hash) ? clip : ""
         loop do
           st = text.empty? ? nil : Net::JoinCode.read(text)

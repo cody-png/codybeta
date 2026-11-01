@@ -10,6 +10,17 @@
 # Plain Ruby on the engine's socket library, short timeouts, run in a
 # background thread (KIF::Net.start_hosting). Every address can be passed
 # in, so the kit tests it against fake routers on localhost.
+#
+# Any device on the network can answer a search, so who is believed:
+# - only a device in this PC's own /24 network (or a program on this PC);
+#   the router at x.x.x.1 is waited for and, once it answered, it is asked
+#   first; one answer per device; a plain, short LOCATION path
+# - NAT-PMP only to that router, never to whoever answered the search
+# - a 2-hour lease, never a permanent mapping, on a random external port
+#   (the port the game listens on, 52411-52415, stays inside the router)
+# - at most 4 services per device and 10 s for the whole opening; replies are
+#   cut at 64 KB (description) and 32 KB (SOAP) and read without backtracking
+# - Net.stop ends it early: it sets Thread[:kif_stop] on the opening thread
 #===============================================================================
 module KIF
   module Net
@@ -17,6 +28,12 @@ module KIF
       SSDP = ["239.255.255.250", 1900]
       NATPMP_PORT = 5351
       LEASE = 7200
+      OPEN_TIME = 10.0       # seconds the whole opening may take (after the search)
+      MAX_DEVICES = 8        # devices that answered the search and are kept
+      MAX_SERVICES = 4       # WAN services tried on one device
+      MAX_DESC = 65_536      # bytes of a description
+      MAX_SOAP = 32_768      # bytes of a SOAP answer
+      PLAIN_PATH = %r{\A/[\w.\-/~]*(?:\?[\w.\-=&%]*)?\z}
       DESC = "KIF"
       TARGETS = ["urn:schemas-upnp-org:device:InternetGatewayDevice:1",
                  "urn:schemas-upnp-org:service:WANIPConnection:1",
@@ -32,41 +49,58 @@ module KIF
         if local && ip_kind(local) == :public   # no router in the way
           return res.merge(status: :open, via: :none, external_ip: local)
         end
-        gws = []
-        discover(ssdp, wait).each do |location, from|
-          gws << from
+        ext_port = external_port_for(port)
+        gw = gateway_guess(local)
+        shared = nil   # a private or CGNAT address a device named (kept; the router's own word ends the search)
+        found = discover(ssdp, wait, local, gw)
+        Thread.current[:pm_deadline] = Net.now + OPEN_TIME
+        found.each do |location, from|
+          break if over?
           services(location).each do |svc|
-            ext = soap(svc, "GetExternalIPAddress")["NewExternalIPAddress"]
+            break if over?
+            ans = soap(svc, "GetExternalIPAddress")
+            break if ans[:status] == 0   # this device doesn't answer: its other services won't either
+            ext = ans["NewExternalIPAddress"]
             next if ip_kind(ext) == :invalid   # none, "" or 0.0.0.0 (WAN down, IPv6-only): no address for a code
             res[:external_ip] ||= ext
-            return res.merge(status: :shared, external_ip: ext, via: :upnp) if shared?(ext)
-            if add_upnp(svc, port, svc[:local] || local)
-              return res.merge(status: :open, via: :upnp, external_ip: ext, gateway: from,
-                               mapping: [:upnp, svc, port])
+            if shared?(ext)
+              return res.merge(status: :shared, external_ip: ext, via: :upnp) if from == gw
+              shared ||= [ext, :upnp]
+              next
+            end
+            if add_upnp(svc, port, ext_port, svc[:local] || local)
+              return res.merge(status: :open, via: :upnp, external_ip: ext, external_port: ext_port, gateway: from,
+                               mapping: [:upnp, svc, ext_port, port])
             end
           end
         end
-        gws += gateways || [gateway_guess(local)]
-        gws.compact.uniq.each do |gw|
-          ext = natpmp_external(gw, natpmp_port)
+        (gateways || [gw]).compact.uniq.each do |g|
+          break if over?
+          ext = natpmp_external(g, natpmp_port)
           next if ip_kind(ext) == :invalid
           res[:external_ip] ||= ext
           return res.merge(status: :shared, external_ip: ext, via: :natpmp) if shared?(ext)
-          eport = natpmp_map(gw, natpmp_port, port, port, LEASE) or next
-          return res.merge(status: :open, via: :natpmp, external_ip: ext, external_port: eport, gateway: gw,
-                           mapping: [:natpmp, gw, natpmp_port, port])
+          eport = natpmp_map(g, natpmp_port, port, ext_port, LEASE) or next
+          return res.merge(status: :open, via: :natpmp, external_ip: ext, external_port: eport, gateway: g,
+                           mapping: [:natpmp, g, natpmp_port, port, eport])
         end
+        return res.merge(status: :shared, external_ip: shared[0], via: shared[1]) if shared
         return res
       rescue StandardError => e
         Net.log("port opening stopped: #{e.class}: #{e.message}")
         return res || { status: :closed }
+      ensure
+        Thread.current[:pm_deadline] = nil
       end
 
-      # the mapping again (lease renewal)
+      # the mapping again (lease renewal); never a longer lease than LEASE
       def renew(mapping)
         case mapping[0]
-        when :upnp   then add_upnp(mapping[1], mapping[2], mapping[1][:local])
-        when :natpmp then natpmp_map(mapping[1], mapping[2], mapping[3], mapping[3], LEASE)
+        when :upnp then add_upnp(mapping[1], mapping[3], mapping[2], mapping[1][:local])
+        when :natpmp
+          eport = natpmp_map(mapping[1], mapping[2], mapping[3], mapping[4], LEASE)
+          mapping[4] = eport if eport && eport > 0   # the router may give another port: the next renewal asks for that one
+          eport
         end
       rescue StandardError
         nil
@@ -81,6 +115,19 @@ module KIF
         end
       rescue StandardError
         nil
+      end
+
+      # The port the router listens on for this game. The listening port is one
+      # of five that a scan of the internet looks for, so those get a random
+      # port in 49152-65535; any other port is its own.
+      def external_port_for(port)
+        known = (Net::PORT...Net::PORT + Net::PORT_TRIES).to_a
+        known += known.map { |x| x - 10_000 }
+        return port unless known.include?(port)
+        loop do
+          p = 49_152 + Crypto.random(2).unpack1("n") % 16_384
+          return p unless known.include?(p)
+        end
       end
 
       def ip_kind(ip)
@@ -127,59 +174,109 @@ module KIF
         return nil
       end
 
+      # the same /24 network (a UDP source can be forged, so this only narrows who is asked)
+      def same_net?(a, b)
+        return false unless ip_kind(a) != :invalid && ip_kind(b) != :invalid
+        return a.split(".")[0, 3] == b.split(".")[0, 3]
+      end
+
+      # a device whose answer to the search is believed: on this PC's network, or a
+      # program on this PC (a router is never 127.x; shortcut: loopback is trusted
+      # unless this PC's own address is loopback too, which only the kit uses)
+      def trusted_device?(ip, local)
+        return true if local && same_net?(ip, local)
+        return ip.to_s.start_with?("127.") && !local.to_s.start_with?("127.")
+      end
+
+      # http://host[:port]/short/plain/path (no "..", no odd characters)
+      def plain_url?(url)
+        path = url.to_s[%r{\Ahttp://[^/]+(/.*)?\z}i, 1] || "/"
+        return path.length <= 128 && path =~ PLAIN_PATH && !path.include?("..") ? true : false
+      end
+
+      # the stop flag Net.stop sets, or the opening's time is up
+      def over?
+        return true if Thread.current[:kif_stop]
+        d = Thread.current[:pm_deadline]
+        return d ? Net.now > d : false
+      end
+
       #-------------------------------------------------------------------------
       # UPnP
       #-------------------------------------------------------------------------
-      # [[location, responder address], ...]; a LOCATION must be on the
-      # device that answered
-      def discover(ssdp, wait)
-        found = []
+      # [[location, responder address], ...], the router (gw) first. A LOCATION
+      # must be on the device that answered; the first answer of a device counts;
+      # the search ends when the router answered (or after wait seconds), so
+      # a device that answers four times first can't push the router out.
+      def discover(ssdp, wait, local = nil, gw = nil)
+        found = {}
         u = UDPSocket.new
         TARGETS.each do |st|
           msg = "M-SEARCH * HTTP/1.1\r\nHOST: #{SSDP.join(':')}\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: #{st}\r\n\r\n"
           u.send(msg, 0, ssdp[0], ssdp[1])
         end
         stop = Net.now + wait
-        while (left = stop - Net.now) > 0
-          next unless IO.select([u], nil, nil, left)
+        while (left = stop - Net.now) > 0 && !over?
+          next unless IO.select([u], nil, nil, [left, 0.2].min)
           data, from = (u.recvfrom(2048) rescue nil)
           next unless data
+          ip = from[3]
           loc = data[/^location:\s*(\S+)/i, 1]
-          next unless loc && url_host(loc) == from[3]
-          found << [loc, from[3]] unless found.any? { |l, _| l == loc }
-          break if found.length >= 4
+          next unless loc && url_host(loc) == ip && plain_url?(loc) && trusted_device?(ip, local)
+          next if found.key?(ip) || (found.length >= MAX_DEVICES && ip != gw)
+          found[ip] = loc
+          break if ip == gw
         end
-        return found
+        list = found.map { |ip, loc| [loc, ip] }
+        return list.select { |_, ip| ip == gw } + list.reject { |_, ip| ip == gw }
       ensure
         u&.close
       end
 
-      # WANIPConnection / WANPPPConnection services in a description
+      # WANIPConnection / WANPPPConnection services in a description (at most
+      # MAX_SERVICES; plain string searches, nothing that can backtrack)
       def services(location)
         st, body, = http(location)
         return [] unless st == 200
-        base = body[%r{<URLBase>\s*(.*?)\s*</URLBase>}m, 1] || location
-        list = body.scan(%r{<service>(.*?)</service>}m).map do |(svc)|
-          type = svc[%r{<serviceType>\s*(.*?)\s*</serviceType>}m, 1].to_s
-          ctl = svc[%r{<controlURL>\s*(.*?)\s*</controlURL>}m, 1]
-          next nil unless type =~ /\Aurn:schemas-upnp-org:service:WAN(IP|PPP)Connection:\d\z/ && ctl
+        base = tag_text(body, "URLBase") || location
+        list = []
+        each_tag(body, "service", 32) do |svc|
+          type = tag_text(svc, "serviceType").to_s
+          ctl = tag_text(svc, "controlURL")
+          next unless type =~ /\Aurn:schemas-upnp-org:service:WAN(IP|PPP)Connection:\d\z/ && ctl
           url = join_url(base, ctl)
-          next nil unless url && url_host(url) == url_host(location)
-          { type: type, control: url }
+          next unless url && url_host(url) == url_host(location) && plain_url?(url)
+          list << { type: type, control: url }
         end
-        return list.compact.sort_by { |s| s[:type].include?("WANIP") ? 0 : 1 }
+        return list.sort_by.with_index { |s, i| [s[:type].include?("WANIP") ? 0 : 1, i] }.first(MAX_SERVICES)
       end
 
-      def add_upnp(svc, port, client)
-        [LEASE, 0].each do |lease|   # 0: routers that only take permanent mappings (error 725)
-          r = soap(svc, "AddPortMapping",
-                   "NewRemoteHost" => "", "NewExternalPort" => port, "NewProtocol" => "TCP",
-                   "NewInternalPort" => port, "NewInternalClient" => client, "NewEnabled" => 1,
-                   "NewPortMappingDescription" => DESC, "NewLeaseDuration" => lease)
-          return true if r[:status] == 200
-          return false unless r["errorCode"] == "725"
+      # the text inside the first <name>...</name>, stripped, or nil
+      def tag_text(text, name)
+        a = text.index("<#{name}>") or return nil
+        a += name.length + 2
+        b = text.index("</#{name}>", a) or return nil
+        return text[a...b].strip
+      end
+
+      # yields the inside of each <name>...</name> (at most max of them)
+      def each_tag(text, name, max)
+        i = 0
+        max.times do
+          a = text.index("<#{name}>", i) or break
+          a += name.length + 2
+          b = text.index("</#{name}>", a) or break
+          yield text[a...b]
+          i = b + name.length + 3
         end
-        return false
+      end
+
+      def add_upnp(svc, port, ext_port, client)   # a routers that only takes permanent mappings (error 725) is left alone
+        r = soap(svc, "AddPortMapping",
+                 "NewRemoteHost" => "", "NewExternalPort" => ext_port, "NewProtocol" => "TCP",
+                 "NewInternalPort" => port, "NewInternalClient" => client, "NewEnabled" => 1,
+                 "NewPortMappingDescription" => DESC, "NewLeaseDuration" => LEASE)
+        return r[:status] == 200
       end
 
       # {status:, "NewX" => value, "errorCode" => ...}; remembers this PC's
@@ -193,7 +290,8 @@ module KIF
                                                    "SOAPAction" => %("#{svc[:type]}##{action}") })
         svc[:local] ||= local
         out = { status: st }
-        res.to_s.scan(%r{<(New\w+|errorCode)>\s*([^<]*?)\s*</\1>}) { |k, v| out[k] = v }
+        # [^<]*+ never gives text back, so a tag that never closes costs one pass
+        res.to_s.scan(%r{<(New\w+|errorCode)>([^<]*+)</\1>}) { |k, v| out[k] = v.strip }
         return out
       end
 
@@ -205,9 +303,19 @@ module KIF
         return origin + (path.start_with?("/") ? path : "/" + path)
       end
 
-      # [status, body, this PC's address] or [0, "", nil]
+      # [status, body, this PC's address] or [0, "", nil]. Stops with the opening
+      # (Thread[:kif_stop], PortMap.open's deadline) unless it is an AddPortMapping
+      # (one that was sent is waited for, so its mapping can be removed). The
+      # answer is cut at MAX_SOAP bytes for a POST, MAX_DESC for a GET.
       def http(url, body = nil, headers = {}, timeout: 3.0)
+        max = body ? MAX_SOAP : MAX_DESC
+        abortable = !body.to_s.include?("<u:AddPortMapping")
         m = url.to_s.match(%r{\Ahttp://(\[[0-9a-fA-F:.]+\]|[^/:]+)(?::(\d+))?(/\S*)?\z}i) or return [0, "", nil]
+        if (d = Thread.current[:pm_deadline])
+          timeout = [timeout, d - Net.now].min
+          return [0, "", nil] if timeout <= 0
+        end
+        return [0, "", nil] if abortable && Thread.current[:kif_stop]
         host = m[1].delete("[]")
         sock = TCPSocket.new(host, (m[2] || 80).to_i, connect_timeout: timeout)
         req = +"#{body ? 'POST' : 'GET'} #{m[3] || '/'} HTTP/1.0\r\nHost: #{m[1]}#{m[2] ? ":#{m[2]}" : ''}\r\nConnection: close\r\n"
@@ -216,15 +324,16 @@ module KIF
         sock.write(req + "\r\n" + body.to_s)
         data = +"".b
         stop = Net.now + timeout
-        while (left = stop - Net.now) > 0 && data.bytesize < 262_144
-          break unless IO.select([sock], nil, nil, left)
+        while (left = stop - Net.now) > 0 && data.bytesize < max && !(abortable && Thread.current[:kif_stop])
+          next unless IO.select([sock], nil, nil, [left, 0.2].min)
           chunk = (sock.readpartial(16_384) rescue nil) or break
           data << chunk
         end
+        data = data.byteslice(0, max + 1_024)   # the head and the first max bytes of the body
         head, rest = data.split("\r\n\r\n", 2)
         status = head.to_s[%r{\AHTTP/\d\.\d (\d+)}, 1].to_i
         rest = dechunk(rest.to_s) if head.to_s =~ /^transfer-encoding:\s*chunked/i
-        return [status, rest.to_s.force_encoding("UTF-8").scrub, (sock.local_address.ip_address rescue nil)]
+        return [status, rest.to_s.byteslice(0, max).to_s.force_encoding("UTF-8").scrub, (sock.local_address.ip_address rescue nil)]
       rescue StandardError
         return [0, "", nil]
       ensure
@@ -250,10 +359,11 @@ module KIF
         u = UDPSocket.new
         u.connect(gw, port)
         [0.25, 0.5, 1.0].each do |t|
+          break if over?
           u.send(req, 0)
           next unless IO.select([u], nil, nil, t)
           data = (u.recv(64) rescue nil)
-          return data if data && data.bytesize >= size && data.getbyte(1) == req.getbyte(1) + 128 &&
+          return data if data && data.bytesize >= size && data.getbyte(0) == 0 && data.getbyte(1) == req.getbyte(1) + 128 &&
                          data.unpack1("@2n") == 0
         end
         return nil
@@ -268,10 +378,14 @@ module KIF
         return d && d.byteslice(8, 4).unpack("C4").join(".")
       end
 
-      # the external port, or nil; lifetime 0 removes it
+      # the external port the router gave (0 for a removed mapping), or nil when
+      # the answer isn't for this request: the reply must name our internal port,
+      # a port 1-65535 and a lifetime above 0 (a map) or 0 (lifetime 0 removes it)
       def natpmp_map(gw, port, internal, external, life)
         d = natpmp(gw, port, [0, 2, 0, internal, external, life].pack("CCnnnN"), 16)
-        return d && d.unpack1("@10n")
+        return nil unless d && d.unpack1("@8n") == internal
+        got, lifetime = d.unpack("@10nN")
+        return life == 0 ? (lifetime == 0 ? 0 : nil) : (got.between?(1, 65_535) && lifetime > 0 ? got : nil)
       end
     end
   end

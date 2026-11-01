@@ -838,6 +838,7 @@ never stopped. A mod that does not hold the permission:
 - A stop raises `KIF::ModGuard::Denied` (an ordinary `StandardError`) with a plain message: `KIF stopped mod "X": it tried to start a program. Options > Mods > X to allow it.` ("Options > Mods" is KIF Settings > Mods.) The first stop of a session also shows a message on the map.
 - What a mod holds: its `permissions`; for an older mod, what its code was found to do; plus what the player added; or everything if the player chose
   "Allow anything" for that mod in KIF Settings > Mods.
+- The Mod protection setting is read from `KIF_ModTrust.json` (the Options row writes it there), not from the player's settings object, and the guard's own switches, the trust table and the list of mod folders refuse to be changed or read by a mod's code. Only code that gets around the check with Ruby reflection can reach them (section 12).
 - A mod's own folder and its data folder (`KIF::Safe.mod_dir`) are always free to read and write. A program file (.exe, .bat ...) may not be written anywhere.
 - A door that was bypassed or redefined is found when a mod finishes loading (the mod is marked TAMPERED) and again every 30 seconds (logged).
 
@@ -855,7 +856,7 @@ link in a catalog (git mode 120000 or 160000) or in a zip refuses the whole mod.
 start the mod's files are compared with it and a changed or extra file reads "Changed since it was installed". After the download and before anything is moved in, the files are scanned: a red
 mod, a mod that does more than it says, or a withdrawn mod is asked about once (default No), and an update asks only about what is new. A Yes means the mod is not held at the next start.
 
-**Reviewed and withdrawn lists.** A catalog repository may hold two optional files at its root, read at most once a day from the branch head and kept in the save folder:
+**Reviewed and withdrawn lists.** A catalog repository may hold two optional files at its root, read at most once a day from the branch head and kept in the save folder. Only the KIF catalogs (cody-png/kif-mods and cody-png/kif-discord-mods) and a folder the player named are read for them; a catalog a mod adds through its own `catalog` key cannot call its own mod reviewed or another mod withdrawn. A mod that is installed and then appears on the withdrawn list is held from the next start and the player is told:
 
 `reviewed.json`: `{ "format": 1, "mods": { "<mod id>": { "fingerprint": "<40 hex>", "version": "1.2.0", "reviewed": "2026-11-01", "result": "green", "note": "short text" } } }`
 

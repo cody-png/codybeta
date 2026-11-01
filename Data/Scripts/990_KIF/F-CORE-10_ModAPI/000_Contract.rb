@@ -40,12 +40,21 @@ module KIF
     def self.norm(path); return File.expand_path(path.to_s).tr("\\", "/").downcase; end
 
     # id: the mod's key (folder name; see Entry#id). path: its folder or its .rb file.
+    # the roots decide who is blamed for a call: a mod may not change them
+    def self.deny_mod!(what)
+      o = caller_owner(caller_locations(2, 40))
+      return unless o
+      klass = defined?(KIF::ModGuard::Denied) ? KIF::ModGuard::Denied : RuntimeError
+      raise klass, "KIF stopped mod \"#{o}\": it tried to change KIF's protection (#{what})."
+    end
+
     def self.register_root(id, path)
+      deny_mod!("register a folder")
       p = norm(path)
       if File.directory?(path.to_s) then @roots[p + "/"] = id.to_s else @files[p] = id.to_s end
     end
 
-    def self.forget_roots; @roots.clear; @files.clear; end
+    def self.forget_roots; deny_mod!("forget the folders"); @roots.clear; @files.clear; end
     def self.roots; return @roots.dup; end
 
     # Register every mod KIF lists (the Mods list reads the disk, cheap and idempotent).

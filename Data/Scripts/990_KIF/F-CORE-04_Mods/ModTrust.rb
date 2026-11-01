@@ -18,6 +18,7 @@
 #===============================================================================
 module KIF
   module ModTrust
+    THIS_FILE    = __FILE__ unless const_defined?(:THIS_FILE)
     FILE         = "KIF_ModTrust.json"
     LISTS_FILE   = "KIF_ModRevoked.json"   # the catalogs' reviewed and revoked lists, as last read
     PROVENANCE   = ".kif_provenance"
@@ -44,7 +45,8 @@ module KIF
 
     # Mutators (approve, allow anything, grant) are for the player's menu: a mod that calls one is stopped
     def self.deny_mod_caller!(what, locs)
-      owner = KIF::ModContract.caller_owner(locs) if defined?(KIF::ModContract)
+      # frames of this file do not count; the guard's own door frames are KIF's, so a mod's call that the guard checks is not blamed for the guard's reading
+      owner = defined?(KIF::ModContract) ? KIF::ModContract.caller_owner(locs.reject { |l| l.path == THIS_FILE }) : nil
       return unless owner
       KIF::ModGuard.deny_call!(owner, what)
     end
@@ -53,6 +55,7 @@ module KIF
     # The file
     #---------------------------------------------------------------------------
     def self.reset!
+      deny_mod_caller!("reset", caller_locations(1, 40))
       @data = nil
       @native = nil
       @first_run = false
@@ -60,6 +63,7 @@ module KIF
       @pcache = {}
       @notices = []
       @lists = nil
+      @protection = nil
       @dirty = false
     end
 
@@ -80,7 +84,9 @@ module KIF
       return nil
     end
 
+    # the live table: not for mods (a copy comes from record)
     def self.data
+      deny_mod_caller!("read the trust file", caller_locations(1, 40))
       @data ||= fresh_data
       return @data
     end
@@ -89,6 +95,7 @@ module KIF
 
     # one read of the file per start; native: the Mods folder source
     def self.begin_session(native = nil)
+      deny_mod_caller!("start", caller_locations(1, 40))
       @native = native
       @reports = {}
       @pcache = {}
@@ -97,10 +104,12 @@ module KIF
       h = read_file
       @first_run = h.nil? && !File.file?(path)
       @data = h || fresh_data
+      @protection = @data["protection"].is_a?(Integer) ? @data["protection"] : nil
       @dirty = false
     end
 
     def self.save!
+      deny_mod_caller!("save", caller_locations(1, 40))
       return unless @dirty
       p = path
       KIF.mkdir_p(File.dirname(p))
@@ -112,17 +121,19 @@ module KIF
       File.rename(p + ".tmp", p)
       @dirty = false
     rescue StandardError => e
+      raise if defined?(KIF::ModGuard::Denied) && e.is_a?(KIF::ModGuard::Denied)   # a mod that calls this is stopped, not forgiven
       KIF.log("Mod trust: #{FILE} not saved (#{e.class}: #{e.message})")
     end
 
     def self.dirty!; @dirty = true; end
 
     # the Mod protection setting, kept here too: mods load before the player's settings do
-    def self.protection; v = data["protection"]; return v.is_a?(Integer) ? v : nil; end
+    def self.protection; return @protection; end
 
     def self.set_protection(v)
       deny_mod_caller!("protection", caller_locations(1, 40))
       data["protection"] = v.to_i
+      @protection = v.to_i
       dirty!
       save!
     end
@@ -142,8 +153,11 @@ module KIF
       return KIF::Mods.read_json(File.join(e.path.to_s, "mod.json"))
     end
 
+    # what decides whether a mod has changed: its code and manifest. A mod that writes a settings file into its own folder
+    # (which the guard allows) does not look changed at every start.
     def self.sig_of(list)
-      return KIF::ModCheck.sha1_hex(list.map { |rel, _f, lst| "#{rel}:#{lst.size}:#{lst.mtime.to_i}" }.join("|"))
+      code = list.select { |rel, _f, _l| rel =~ /\.rb\z/i || rel == "mod.json" }
+      return KIF::ModCheck.sha1_hex(code.map { |rel, _f, lst| "#{rel}:#{lst.size}:#{lst.mtime.to_i}" }.join("|"))
     end
 
     # nil to let the mod load, or the plain-words reason it is held. With Mod protection on Off or Warn only nothing is
@@ -195,6 +209,7 @@ module KIF
       nrec["scan"] = summary(rep)
       nrec["seen"] = today
       nrec["prov"] = provenance_text(e, rep)
+      nrec["rfp"] = review_fingerprint(e, rep)
       mods[id] = nrec
       dirty!
       @pcache.delete(id)
@@ -262,7 +277,18 @@ module KIF
     # Reports and permissions
     #---------------------------------------------------------------------------
     def self.state(id); return (mods[id] || {})["state"]; end
-    def self.record(id); return mods[id]; end
+
+    # a frozen copy of what is known about a mod
+    def self.record(id); r = mods[id]; return r && frozen_copy(r); end
+
+    def self.frozen_copy(v)
+      case v
+      when Hash then return v.each_with_object({}) { |(k, x), h| h[k.to_s.dup.freeze] = frozen_copy(x) }.freeze
+      when Array then return v.map { |x| frozen_copy(x) }.freeze
+      when String then return v.dup.freeze
+      end
+      return v
+    end
 
     # the scan of a mod: this session's, the saved one, or one made now
     def self.report_for(id)
@@ -280,7 +306,9 @@ module KIF
         rec["color"] = rep.color.to_s
         rec["scan"] = summary(rep)
         rec["prov"] = provenance_text(e, rep)
+        rec["rfp"] = review_fingerprint(e, rep)
         dirty!
+        save!
       end
       return rep
     end
@@ -328,6 +356,7 @@ module KIF
       rec["color"] = rep.color.to_s
       rec["scan"] = summary(rep)
       rec["prov"] = provenance_text(e, rep)
+      rec["rfp"] = review_fingerprint(e, rep)
       rec.delete("reason")
       @reports[id] = rep
       @pcache.delete(id)
@@ -388,7 +417,7 @@ module KIF
       files = pr["files"].is_a?(Hash) ? pr["files"] : {}
       return "unverified:#{pr['repo']}" unless pr["verified"] == true && files.any?
       mine = rep && !rep.files.empty? ? rep.files : KIF::ModCheck.fingerprint(e.path.to_s)[1]
-      diff = (files.keys | mine.keys).count { |rel| files[rel] != mine[rel] }
+      diff = (files.keys | mine.keys).count { |rel| files[rel] != mine[rel] && (files.key?(rel) || rel =~ /\.rb\z/i) }
       return "changed:#{diff}" if diff > 0
       return pr["commit"].to_s.empty? ? "local" : "catalog:#{pr['repo']} #{pr['commit'].to_s[0, 7]}"
     rescue StandardError
@@ -396,6 +425,13 @@ module KIF
     end
 
     # plain words for the mod's page
+    # the fingerprint a reviewer sees: the catalog's files only when the mod came from one, so the mod's own settings files do not matter
+    def self.review_fingerprint(e, rep)
+      pr = provenance_record(e)
+      return rep.fingerprint unless pr && pr["files"].is_a?(Hash) && !pr["files"].empty?
+      return KIF::ModCheck.fingerprint_of(rep.files.select { |rel, _| pr["files"].key?(rel) })
+    end
+
     def self.provenance_line(id)
       rec = mods[id] || {}
       if rec["prov"].nil? && (e = entry_for(id))
@@ -417,7 +453,10 @@ module KIF
     # revoked.json (do not run these). Optional files at the root of a catalog;
     # nothing breaks when they are missing.
     #---------------------------------------------------------------------------
-    def self.lists
+    # the lists as a frozen copy
+    def self.lists; return frozen_copy(live_lists); end
+
+    def self.live_lists
       return @lists if @lists
       @lists = { "revoked" => [], "reviewed" => {}, "fetched" => 0 }
       p = File.join(KIF.save_dir, LISTS_FILE)
@@ -469,13 +508,22 @@ module KIF
     # Reads the lists from the catalogs (a folder catalog is read directly, a GitHub one from the
     # branch's head), at most once a day, and keeps the answer in the save folder. A failed read
     # keeps the old lists. fetch: a proc url -> text or nil (tests); nil uses the game's updater.
+    # A catalog added by a mod (its own "catalog" key) must not be able to call its own mod reviewed or another mod withdrawn.
+    TRUSTED_REPOS = %w[cody-png/kif-discord-mods cody-png/kif-mods].freeze unless const_defined?(:TRUSTED_REPOS)
+
+    def self.list_source?(cat)
+      return true if cat.local?
+      return TRUSTED_REPOS.include?(cat.repo.to_s.downcase)
+    end
+
     def self.refresh_lists(force = false, fetch = nil)
       return false unless defined?(KIF::ModCatalog)
-      return false if !force && Time.now.to_i - lists["fetched"].to_i < LIST_TIME
+      return false if !force && Time.now.to_i - live_lists["fetched"].to_i < LIST_TIME
       revoked = []
       reviewed = {}
       got = false
       KIF::ModCatalog.catalogs.each do |cat|
+        next unless list_source?(cat)
         { "revoked.json" => :revoked, "reviewed.json" => :reviewed }.each do |name, kind|
           body = if cat.local?
                    f = File.join(cat.path, name)
@@ -497,10 +545,36 @@ module KIF
       @lists = { "revoked" => revoked, "reviewed" => reviewed, "fetched" => Time.now.to_i }
       File.write(File.join(KIF.save_dir, LISTS_FILE) + ".tmp", KIF::ModPublish.to_json(@lists), mode: "wb")
       File.rename(File.join(KIF.save_dir, LISTS_FILE) + ".tmp", File.join(KIF.save_dir, LISTS_FILE))
+      flag_revoked
       return true
     rescue StandardError => e
       KIF.log("Mod trust: lists not refreshed (#{e.class}: #{e.message})")
       return false
+    end
+
+    # a mod that is installed and now on the withdrawn list: held from the next start, and the player is told
+    def self.flag_revoked
+      (@native ? @native.entries : []).each do |e|
+        rec = mods[e.id]
+        next unless rec && rec["fingerprint"] && rec["state"] != "revoked"
+        r = revoked_match(e, rec)
+        next unless r
+        rec["state"] = "revoked"
+        rec["reason"] = r["reason"].to_s.empty? ? "it was withdrawn by its catalog" : r["reason"]
+        @notices << [e.id, _INTL("{1} was withdrawn: {2}. It will not start next time.", e.name, rec["reason"])]
+        dirty!
+      end
+      save!
+    end
+
+    def self.revoked_match(e, rec)
+      id = json_id(e)
+      return live_lists["revoked"].find do |r|
+        next false unless r["id"] == id || r["id"] == e.id
+        next [rec["fingerprint"], rec["rfp"]].include?(r["fingerprint"]) if r["fingerprint"]
+        next KIF::ModRules.version_ok?(r["versions"], e.version.to_s) if r["versions"] && e.version
+        true
+      end
     end
 
     def self.json_id(e)
@@ -511,7 +585,7 @@ module KIF
     # the revoked entry that matches this mod, or nil. id plus fingerprint when it gives one, else id plus version test.
     def self.revoked_entry(e, rep)
       id = json_id(e)
-      return lists["revoked"].find do |r|
+      return live_lists["revoked"].find do |r|
         next false unless r["id"] == id || r["id"] == e.id
         next r["fingerprint"] == rep.fingerprint if r["fingerprint"]
         next KIF::ModRules.version_ok?(r["versions"], e.version.to_s) if r["versions"] && e.version
@@ -527,7 +601,7 @@ module KIF
 
     # a catalog item (not installed): is it revoked? item needs id, version
     def self.revoked_item(id, version, fingerprint = nil)
-      return lists["revoked"].find do |r|
+      return live_lists["revoked"].find do |r|
         next false unless r["id"] == id
         next r["fingerprint"] == fingerprint if r["fingerprint"] && fingerprint
         next false if r["fingerprint"]
@@ -541,10 +615,15 @@ module KIF
       e = entry_for(id)
       rec = mods[id]
       return nil unless e && rec && rec["fingerprint"]
-      r = lists["reviewed"][json_id(e)] || lists["reviewed"][id]
+      r = live_lists["reviewed"][json_id(e)] || live_lists["reviewed"][id]
       return nil unless r
-      return _INTL("Reviewed {1}.", r["reviewed"]) if r["fingerprint"] == rec["fingerprint"]
+      return _INTL("Reviewed {1}.", r["reviewed"]) if r["fingerprint"] == (rec["rfp"] || rec["fingerprint"]) || r["fingerprint"] == rec["fingerprint"]
       return _INTL("Changed since it was reviewed.")
+    end
+
+    # the live table is for this file only (a copy comes from record and lists)
+    class << self
+      private :data, :mods, :rec_for, :dirty!, :live_lists
     end
 
     # fingerprint of an install that is not on disk yet (a catalog item's file list: path => [sha, size])
@@ -555,3 +634,4 @@ module KIF
     end
   end
 end
+

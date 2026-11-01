@@ -50,6 +50,7 @@ module KIF
 
     THIS_FILE = __FILE__ unless const_defined?(:THIS_FILE)
     @doors ||= {}
+    @busy ||= {}.compare_by_identity   # thread => true while the guard is working (not readable from a thread's own variables)
     @events ||= []
     @counts ||= Hash.new(0)
     @logged ||= Hash.new(0)
@@ -71,8 +72,8 @@ module KIF
       #-------------------------------------------------------------------------
       def mode
         return @mode if @mode
-        v = ($PokemonSystem.kif_mod_guard rescue nil)
-        v = KIF::ModTrust.protection if v.nil? && defined?(KIF::ModTrust)
+        # the setting lives in the trust file (the Options row writes it there): a plain assignment to the player's settings object changes nothing
+        v = defined?(KIF::ModTrust) ? KIF::ModTrust.protection : nil
         return MODES[v] || :normal if v.is_a?(Integer)
         return :normal
       end
@@ -103,6 +104,7 @@ module KIF
       def count(mod); return @counts[mod]; end
 
       def clear_events
+        deny_if_mod!("clear the record", caller_locations(1, 40))
         @events = []
         @counts = Hash.new(0)
         @logged = Hash.new(0)
@@ -158,8 +160,14 @@ module KIF
         c = @pc[path]
         return c unless c.nil?
         # the guard's own frames (a door's super call, with a block running below it) never decide who is calling
-        c = (path == THIS_FILE || KIF::ModContract.transparent?(path)) ? :t : (KIF::ModContract.owner_of_path(path) || false)
+        c = (path == THIS_FILE || own_file?(path) || KIF::ModContract.transparent?(path)) ? :t : (KIF::ModContract.owner_of_path(path) || false)
         return @pc[path] = c
+      end
+
+      # ModGuard.rb and ModTrust.rb never decide who is calling
+      def own_file?(path)
+        return false unless path.is_a?(String) && path.end_with?("/ModTrust.rb")
+        return File.dirname(path) == File.dirname(THIS_FILE)
       end
 
       def walk(locs)
@@ -175,8 +183,9 @@ module KIF
       # The check behind every door
       #-------------------------------------------------------------------------
       def check(kind, name, args, kw, blk, loc, cls)
-        return if Thread.current[:kif_guard_busy]
-        Thread.current[:kif_guard_busy] = true
+        t = Thread.current
+        return if @busy[t]
+        @busy[t] = true
         begin
           mod = cls.is_a?(String) ? cls : walk(caller_locations(2, 40))
           return unless mod
@@ -184,7 +193,7 @@ module KIF
           return unless perm
           judge(mod, perm, detail, host)
         ensure
-          Thread.current[:kif_guard_busy] = false
+          @busy.delete(t)
         end
       end
 
@@ -195,7 +204,7 @@ module KIF
         ok = held == :all || held.include?(perm)
         ok = false if ok && perm == "network" && host && held != :all && !host_allowed?(mod, host)
         if ok
-          note(mod, perm, detail, false) if held == :all && KIF::ModTrust.allow_all?(mod) && m != :off && @logged[[mod, perm]] < 3
+          note(mod, perm, detail, false) if held == :all && @logged[[mod, perm]] < 3
           return
         end
         block = case m
@@ -494,6 +503,7 @@ module KIF
       end
 
       def arm!
+        deny_if_mod!("arm", caller_locations(1, 40))
         install_doors
         @want_armed = true
         @game_dir = nil
@@ -515,6 +525,7 @@ module KIF
       end
 
       def disarm!
+        deny_if_mod!("switch off", caller_locations(1, 40))
         @armed = false
         @want_armed = false
       end

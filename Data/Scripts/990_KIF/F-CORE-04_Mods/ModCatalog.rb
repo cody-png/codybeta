@@ -1111,6 +1111,7 @@ module KIF
     # nothing when Updates is Off or the catalogs don't answer
     def startup_check
       return false unless cat.available? && KIF::Updater.channel != 2
+      KIF::ModTrust.refresh_lists if defined?(KIF::ModTrust)   # reviewed and withdrawn mods, at most once a day
       ups = cat.startup_updates
       return false if ups.empty?
       cat.log("updates at start-up: #{ups.map { |it| "#{it.id} #{it.version}" }.join(', ')}")

@@ -65,11 +65,24 @@ module KIF
       "sl_up"    => { "code" => [String, 60_000] },
       "sl_party" => { "ids" => [String, 600] },   # id:species:level:hp:totalhp,...
     }
-    # Largest signed frame (bytes of JSON) a message type may have, checked before the frame is
-    # parsed (a parse costs the game thread ~6 ms per KB). Types add theirs; the type is read from
-    # where every sender writes it, first. Others are limited by MAX_FRAME and check_fields.
+    # Largest signed frame (bytes of JSON) and most values (nodes) a message type may have; a
+    # parse costs the game thread a few microseconds a node. The type is read from where every
+    # sender writes it, first: a frame without it is dropped, one of a type this game doesn't
+    # know is not read at all. A type with only text and number fields gets both limits from its
+    # fields (frame_limits); one with a Hash or an Array field is limited by MAX_FRAME unless it
+    # adds its own here.
     TYPE_MAX = {}
+    TYPE_NODES = {}
+    FRAME_SLACK = 256   # bytes (and 32 nodes) a newer version's extra field may need
     NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined }
+
+    # [bytes, nodes or nil] a signed frame of this known type may have
+    def self.frame_limits(type)
+      spec = TYPES[type]
+      plain = spec.values.all? { |cls,| cls == String || cls == Integer }
+      bytes = TYPE_MAX[type] || (plain ? FRAME_SLACK + spec.sum { |k, (cls, a)| k.length + 16 + (cls == String ? a * 12 : 24) } : MAX_FRAME)   # 12: an escaped emoji
+      return [[bytes, MAX_FRAME].min, TYPE_NODES[type] || (plain ? spec.size + 32 : nil)]
+    end
 
     # a name from the other game, safe to show in a PIF message (no \ codes)
     def self.shown_name(n); n.to_s.gsub(/[\\<>\x00-\x1f]/, "")[0, 24]; end
@@ -238,9 +251,11 @@ module KIF
       STR = /\G"((?:[^"\\\x00-\x1f]|\\["\\\/bfnrt]|\\u[0-9a-fA-F]{4})*)"/
       ESC = { "b" => "\b", "f" => "\f", "n" => "\n", "r" => "\r", "t" => "\t" }
 
-      def initialize(text)
+      # nodes: most values the text may hold (nil: any number); more is nil from #run
+      def initialize(text, nodes = nil)
         @s = text.to_s.b
         @i = 0
+        @nodes = nodes
       end
 
       def run
@@ -259,6 +274,7 @@ module KIF
 
       def value(depth)
         raise "deep" if depth > DEPTH
+        raise "big" if @nodes && (@nodes -= 1) < 0
         ws
         case @s[@i]
         when "{"
@@ -817,16 +833,16 @@ module KIF
       def signed(payload, out)
         mac = payload.byteslice(0, 32)
         json = payload.byteslice(32, payload.bytesize - 32).to_s
-        signed_ok = Crypto.same?(Crypto.hmac(@rx_key, json), mac)
-        cap = signed_ok && TYPE_MAX[json[/\A\{"t":"(\w+)"/, 1]]
-        return bad_frame(out, "too long") if cap && json.bytesize > cap
-        h = signed_ok ? Wire.parse(json) : nil
-        return bad_frame(out, "bad signature") unless h
+        return bad_frame(out, "bad signature") unless Crypto.same?(Crypto.hmac(@rx_key, json), mac)
+        type = json[/\A\{"t":"(\w+)"/, 1] or return bad_frame(out, "no type first")   # every sender writes it first
+        return unless TYPES.key?(type)   # a newer version's message: ignored, not read
+        bytes, nodes = Net.frame_limits(type)
+        return bad_frame(out, "too long") if json.bytesize > bytes
+        h = Parser.new(json, nodes).run or return bad_frame(out, "doesn't parse")
+        return bad_frame(out, "two types") unless h["t"] == type
         seq = h["s"]
         return bad_frame(out, "old or missing number") unless seq.is_a?(Integer) && seq > @rx_seq
         @rx_seq = seq
-        type = h["t"]
-        return unless TYPES.key?(type)   # a newer version's message: ignored
         msg = Net.check_fields(type, h) or return bad_frame(out, "#{type} doesn't fit")
         case type
         when "ping" then nil

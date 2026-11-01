@@ -52,10 +52,12 @@ module KIF
               "exp_gained_since_fused" => 2**31, "head_original_ability_index" => 5, "body_original_ability_index" => 5,
               "head_shiny" => :bool, "body_shiny" => :bool, "natural_shiny" => :bool, "glitter" => :bool,
               "cool" => 255, "beauty" => 255, "cute" => 255, "smart" => 255, "tough" => 255, "sheen" => 255,
+              "timeEggHatched" => 2**32, "hatched_map" => 99_999,   # obtain_method 1 (hatched) shows them in the Summary
               "hat" => 1..9999, "hat_x" => -999..999, "hat_y" => -999..999,
               "hat_mirrored_horizontal" => :bool, "hat_mirrored_vertical" => :bool }
 
     KIF::Net::TYPE_MAX["tr_offer"] = MAX_OFFER + 256   # the offer and the frame's id, type and number
+    KIF::Net::TYPE_NODES["tr_offer"] = 1_000           # values: a fusion with both halves, 60 ribbons each, has ~490
 
     @st = nil      # the trade on now
     @asked = nil   # the partner's ask not answered yet
@@ -137,6 +139,8 @@ module KIF
         ok = m == :bool ? (v == true || v == false) : (v.is_a?(Integer) && (m.is_a?(Range) ? m : (0..m)).cover?(v))
         p.instance_variable_set(:"@#{k}", v) if ok
       end
+      # a hatched Pokémon without its time (an offer that left it out) would break the Summary's memo
+      p.instance_variable_set(:@timeEggHatched, 0) if p.obtain_method == 1 && !p.instance_variable_get(:@timeEggHatched).is_a?(Integer)
       p.obtain_text = KIF::Coop::Mon.plain(x["ot_t"], 60) if x["ot_t"].is_a?(String)
       fm = x["fm"].is_a?(Array) ? x["fm"].first(20).map { |m| KIF::Coop::Mon.sym(m, GameData::Move) }.compact : []
       p.first_moves = fm unless fm.empty?
@@ -403,8 +407,9 @@ module KIF
         return
       when "tr_ask"
         return if book.key?(id)   # an old one, sent again
-        return if (m = line[:mute]) && KIF::Net.now < m   # asked and declined too often
-        if !@st then @asked = id
+        if !@st
+          return if (m = line[:mute]) && KIF::Net.now < m   # asked and declined too often: a new question waits; the answer to this player's own ask doesn't
+          @asked = id
         elsif @st[:id] == id then @st[:open] = true
         elsif !@st[:open] && session&.role != :host   # both asked at once: the host's id counts
           @st[:id] = id

@@ -493,9 +493,21 @@ class KifGraveyardScreen < PokemonStorageScreen
       pokemon = @storage[selected[0], selected[1]]
       next unless pokemon
       cmd = pbShowCommands(KIF::Nuzlocke.death_text(pokemon), [_INTL("Summary"), _INTL("Cancel")])
-      pbSummary(selected, nil) if cmd == 0
+      pbLook(selected) if cmd == 0
     end
     @scene.pbCloseBox
+  end
+
+  # The Summary as a look-only screen (is_player false: no Give item, Take item, Hat or Pokédex
+  # from its menu; in the Graveyard those would act on a dead team's copies or on a missing bag)
+  def pbLook(selected)
+    sprites = @scene.instance_variable_get(:@sprites)
+    oldsprites = pbFadeOutAndHide(sprites)
+    screen = PokemonSummaryScreen.new(PokemonSummary_Scene.new)
+    sel = screen.pbStartScreen(@storage.boxes[selected[0]], selected[1], false)
+    @scene.pbSetArrow(sprites["arrow"], sel)
+    @scene.pbUpdateOverlay(sel)
+    pbFadeInAndShow(sprites, oldsprites)
   end
 
   [:pbHold, :pbPlace, :pbSwap, :pbRelease, :pbStore, :pbWithdraw, :quickSwap, :pbBoxCommands,

@@ -732,7 +732,14 @@ class KifSettingsScreen
     # the list
     n = opt_rows.length
     if n == 0
-      @focus = :side unless @query
+      if @query && Input.trigger?(Input::BACK)   # a search with no results: Back clears it (the footer says so)
+        pbPlayCancelSE
+        self.query = nil
+        @focus = :side
+        refresh
+      else
+        @focus = :side unless @query
+      end
       return nil
     end
     if Input.repeat?(Input::DOWN) || Input.repeat?(Input::UP)

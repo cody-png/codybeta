@@ -74,9 +74,9 @@ module KIF
     # The item is known: register its move without scanning the Bag (port –
     # KIF rescanned the whole Bag twice per purchase / received item). A
     # non-machine item still gets the full watch (randomized TM balls).
-    def self.watch_item(item)
+    def self.watch_item(item, diff = true)
       data = GameData::Item.try_get(item) rescue nil
-      return watch_bag { yield } unless data && data.is_machine?
+      return (diff ? watch_bag { yield } : yield) unless data && data.is_machine?
       ret = yield
       begin
         pbTutorNetAdd(data.move) if data.move && ret   # false = the Bag refused it
@@ -1103,6 +1103,10 @@ def pbItemBall(*args)
 end
 
 def pbReceiveItem(item, *args)
+  # the randomizer may swap the item (a TM for another TM): then only the Bag shows what came
+  sw = $game_switches
+  swapped = sw && sw[SWITCH_RANDOM_ITEMS_GENERAL] && (sw[SWITCH_RANDOM_GIVEN_TMS] || sw[SWITCH_RANDOM_GIVEN_ITEMS])
+  return KIF::TutorNet.watch_bag { kif_tn_pbReceiveItem(item, *args) } if swapped
   return KIF::TutorNet.watch_item(item) { kif_tn_pbReceiveItem(item, *args) }
 end
 
@@ -1120,7 +1124,8 @@ class PokemonMartAdapter
   alias kif_tn_addItem addItem unless method_defined?(:kif_tn_addItem)
 
   def addItem(item)
-    return KIF::TutorNet.watch_item(item) { kif_tn_addItem(item) }
+    # the Mart stores exactly this item (its stock was randomized before): no Bag scan per unit bought
+    return KIF::TutorNet.watch_item(item, false) { kif_tn_addItem(item) }
   end
 end
 

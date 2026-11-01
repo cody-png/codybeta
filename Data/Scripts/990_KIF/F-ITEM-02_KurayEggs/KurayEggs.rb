@@ -144,6 +144,8 @@ module KIF
           next KIF::KurayEggs.use(effect, it)
         })
       end
+      # bought, not found: the item randomizers must neither hide them in the world nor hand them out
+      INVALID_ITEMS.concat(definitions.map { |d| d[0] } - INVALID_ITEMS) if defined?(INVALID_ITEMS)
       @pools = {}
     end
 
@@ -394,6 +396,7 @@ module KIF
 
       def prepare
         stock = kif_eggs_prepare
+        return stock if defined?(KIF::Modules) && !KIF::Modules.active?("F-ITEM-02_KurayEggs")   # K-Eggs Off: nothing of them is sold
         KIF::KurayEggs.shop_stock.each do |sym|
           next unless GameData::Item.exists?(sym)
           stock << sym unless stock.include?(sym)

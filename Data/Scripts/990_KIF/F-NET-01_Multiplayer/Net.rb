@@ -69,19 +69,21 @@ module KIF
     # parse costs the game thread a few microseconds a node. The type is read from where every
     # sender writes it, first: a frame without it is dropped, one of a type this game doesn't
     # know is not read at all. A type with only text and number fields gets both limits from its
-    # fields (frame_limits); one with a Hash or an Array field is limited by MAX_FRAME unless it
-    # adds its own here.
+    # fields (frame_limits); one with a Hash or an Array field gets MAX_FRAME bytes and FREE_NODES
+    # values unless it adds its own here (a full co-op frame has about 1,100 values, a mod's 8 KB
+    # of numbers about 4,000); those frames still cost up to FREE_NODES values of parsing each.
     TYPE_MAX = {}
     TYPE_NODES = {}
     FRAME_SLACK = 256   # bytes (and 32 nodes) a newer version's extra field may need
+    FREE_NODES = 4500
     NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined }
 
-    # [bytes, nodes or nil] a signed frame of this known type may have
+    # [bytes, nodes] a signed frame of this known type may have
     def self.frame_limits(type)
       spec = TYPES[type]
       plain = spec.values.all? { |cls,| cls == String || cls == Integer }
       bytes = TYPE_MAX[type] || (plain ? FRAME_SLACK + spec.sum { |k, (cls, a)| k.length + 16 + (cls == String ? a * 12 : 24) } : MAX_FRAME)   # 12: an escaped emoji
-      return [[bytes, MAX_FRAME].min, TYPE_NODES[type] || (plain ? spec.size + 32 : nil)]
+      return [[bytes, MAX_FRAME].min, TYPE_NODES[type] || (plain ? spec.size + 32 : FREE_NODES)]
     end
 
     # a name from the other game, safe to show in a PIF message (no \ codes)
@@ -240,8 +242,8 @@ module KIF
 
       def frame(payload); [payload.bytesize].pack("N") + payload.b; end
 
-      # Hash or nil; never raises
-      def parse(text); Parser.new(text).run; end
+      # Hash or nil (also when it has more than `nodes` values); never raises
+      def parse(text, nodes = nil); Parser.new(text, nodes).run; end
     end
 
     class Parser
@@ -692,7 +694,7 @@ module KIF
           t0 = Net.now
           while @conn && (f = (@conn.inbox.pop(true) rescue nil))
             f.is_a?(Array) ? line_ended(f[1] || :closed, out) : frame(f, out)
-            break if Net.now - t0 > POLL_TIME   # big frames can't freeze the game: the rest waits
+            break if Net.now - t0 > POLL_TIME   # many frames can't freeze the game: the rest waits (one frame's cost is bounded by frame_limits)
           end
           check_time(out) if @conn
         end

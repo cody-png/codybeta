@@ -146,6 +146,12 @@ module KIF
       others = {}
       items.each { |it| others[it.folder] = it.id }
       errs, warns = KIF::ModCheck.check(path, folder, others)
+      # what players will be told about the mod: the scan's colour and lines, and a nudge to list what it needs
+      if KIF::ModCheck.respond_to?(:scan)
+        rep = KIF::ModCheck.scan(path, json)
+        rep.lines(5).each { |l| warns << "scan is #{rep.color}: #{l}" }
+        warns << "list what the mod needs in mod.json \"permissions\" (now: #{rep.inferred.join(', ')}) so players see it before they install" if rep.declared.nil? && !(rep.inferred - %w[eval objectspace]).empty?
+      end
       if old && KIF::ModRules.compare(json["version"], old.version) <= 0
         errs << "\"version\" must be higher than the catalog's #{old.version} for players to get the update"
       end

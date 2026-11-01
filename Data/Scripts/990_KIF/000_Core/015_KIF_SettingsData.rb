@@ -75,6 +75,7 @@ module KIF
         ["Speed", ["Frame rate", "Sprite File Cache"]],
         ["Start-up", ["Skip intro", "Title screen"]],
         ["Files", ["Imported Archives"]],
+        ["Mod safety", ["Mod protection", "About mod safety", "Mod Dev mode", "Mod tools"]],
         ["Advanced", ["Increment Slider by", "Debug Exclusive", "DEBUG"]]]],
       [:modules, "Modules", [180, 120, 90], []],
       [:mods, "Mods", [90, 140, 210], []],

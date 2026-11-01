@@ -1398,7 +1398,10 @@ module KIF
         end
         case line.hs
         when :relay_wait
-          return give_up(out, [:failed, :relay]) unless h["t"] == "relay_ok"
+          unless h["t"] == "relay_ok"
+            busy = h["t"] == "relay_no" && %w[busy full].include?(h["why"])   # a limit, not a wrong address
+            return give_up(out, [:failed, busy ? :relay_busy : :relay])
+          end
           line.started = Net.now
           line.conn.deadline = Net.now + @handshake_timeout
           @role == :join ? send_hi(line) : (line.hs = :wait_hi)

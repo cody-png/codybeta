@@ -55,7 +55,7 @@ module KIF
     MAX_RATE   = 400     # frames a second before the line is closed
     PROTO      = 3
     HS_LIMIT   = 10      # handshakes a host starts in 10 s
-    MAX_INBOX  = 512     # frames waiting for the game before the line is closed
+    MAX_INBOX  = 16 * 1024 * 1024   # bytes of frames waiting for the game before the line is closed (the game polls on the map and in the screens only)
     POLL_TIME  = 0.01    # seconds one poll works on frames; the rest waits for the next poll
     ASK_LIMIT  = 3       # "Let <name> join?" prompts a minute
     DECLINE_WAIT = 600   # seconds an address that was told no is turned away
@@ -436,6 +436,8 @@ module KIF
         @sock = sock
         @addr = (sock.remote_address.ip_address rescue "?")
         @inbox = Queue.new
+        @inbox_bytes = 0
+        @inbox_lock = Mutex.new
         @out = Queue.new
         @cap = MAX_PRE
         @ping_every = 5.0
@@ -449,6 +451,11 @@ module KIF
       end
 
       def closed?; @closed; end
+
+      # the game took this frame from the inbox
+      def took(frame)
+        @inbox_lock.synchronize { @inbox_bytes -= frame.bytesize } if frame.is_a?(String)
+      end
 
       # from now on every message is signed with this key (writer thread signs)
       def sign_with(key); @key = key; end
@@ -494,10 +501,11 @@ module KIF
               return hard_close
             end
             break if buf.bytesize < 4 + n
-            if @inbox.size >= MAX_INBOX   # the game isn't taking them: not an honest partner
+            if @inbox_bytes + n > MAX_INBOX   # the game isn't taking them: not an honest partner
               @inbox << [:error, :flood]
               return hard_close
             end
+            @inbox_lock.synchronize { @inbox_bytes += n }
             @inbox << buf.byteslice(4, n)
             buf = buf.byteslice(4 + n, buf.bytesize - 4 - n)
             sec = Net.now.floor
@@ -716,6 +724,7 @@ module KIF
         if @conn
           t0 = Net.now
           while @conn && (f = (@conn.inbox.pop(true) rescue nil))
+            @conn.took(f)
             f.is_a?(Array) ? line_ended(f[1] || :closed, out) : frame(f, out)
             break if Net.now - t0 > POLL_TIME   # the rest waits for the next poll: a flood can't hold the game
           end

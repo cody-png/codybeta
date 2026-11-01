@@ -565,9 +565,11 @@ module KIF
         end
         head, cmds, acts = view
         drawn = ready? ? digest : nil   # the pair on screen: a Confirm press counts for this one only
+        v0 = st[:v]
         r = m.pick(head, cmds, "", proc { [@st && @st[:v], session.nil?] })
         next if r.nil?
         a = r < 0 ? :cancel : acts[r]
+        next if a != :confirm && a != :cancel && (@st.nil? || @st[:v] != v0 || @st[:done] || @st[:why])   # a press that came with a change is for a screen that is gone: draw it again
         case a
         when :offer then choose
         when :summary

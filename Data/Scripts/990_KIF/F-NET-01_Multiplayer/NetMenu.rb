@@ -104,6 +104,19 @@ module KIF
       return nil
     end
 
+    # A relay address the player typed or was given: :refuse (a port no relay uses, or an address nobody can be at),
+    # :ask (this PC or a private network: fine for a relay at home, but say so first) or nil
+    def self.relay_problem(host, port)
+      return :refuse if port.nil? || port < 1024
+      h = host.to_s.downcase
+      return :ask if h == "localhost" || h.end_with?(".localhost")
+      case addr_kind(host)   # a name is :invalid here, and is the resolver's to judge
+      when :unspecified, :multicast, :linklocal then return :refuse
+      when :loopback, :private then return :ask
+      end
+      return nil
+    end
+
     # info: a read join code; address: [host, port] typed by the player
     def self.start_join(info, relay: nil, address: nil)
       s = new_session
@@ -462,6 +475,7 @@ module KIF
     # "host:port", "[v6]:port", "v6" or "host"
     def self.parse_address(text, default_port)
       t = text.to_s.strip
+      return nil if t =~ /\AKIF[6R]?(-[0-9A-Z]{1,4}){3,}\z/i   # a join code left on the clipboard is not a host name (it would go to the resolver)
       m = t.match(/\A\[([0-9a-fA-F:.]+)\](?::(\d{1,5}))?\z/) ||
           (t.count(":") >= 2 ? t.match(/\A([0-9a-fA-F:.]+)()\z/) : t.match(/\A([A-Za-z0-9.\-]+)(?::(\d{1,5}))?\z/))
       return nil unless m
@@ -891,8 +905,18 @@ module KIF
           when 1 then text = Net.clipboard_text[0, 80]
           when 2
             addr = Net.parse_address(text, Net::RELAY_PORT)
-            return addr if addr
-            pbMessage(_INTL("That isn't an address. It looks like relay.example.net or 203.0.113.5:52413."))
+            unless addr
+              pbMessage(_INTL("That isn't an address. It looks like relay.example.net or 203.0.113.5:52413."))
+              next
+            end
+            case Net.relay_problem(*addr)
+            when :refuse
+              pbMessage(_INTL("A relay doesn't run at that address. Ask your friend for the relay's address again."))
+              next
+            when :ask
+              next unless pbConfirmMessage(_INTL("That relay is on this PC or on your own network. Use it anyway?"))
+            end
+            return addr
           else return nil
           end
         end

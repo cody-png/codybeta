@@ -89,6 +89,7 @@ module KIF
     OBJ_ARRAY_MAX = 4096 # a list or table inside an [Object] field (mod data): whatever 8 KB can hold
     OBJ_HASH_MAX  = 2048
     MAX_CONNECTS  = 12   # connections one address (an IPv6 /64 counts as one) may open in 10 s
+    RELAY_WAIT    = 120  # seconds a joiner waits for a relay to pair it (the relay answers at once when the host is there)
     MAX_ESCAPES   = 8_000 # backslashes in one message (each letter outside ASCII is one); a 64 KB string of them takes 50 ms to unescape
     BACKLOG       = 64   # events waiting for Net.update: nothing more is read from the line meanwhile
     ASK_LIMIT     = 3    # "Let <name> join?" prompts a minute; more visitors are told "wait"
@@ -1648,6 +1649,8 @@ module KIF
           drop_pending(l)
         end
         l = @line or return
+        # a relay that takes the connection and never answers (a joiner waits for the room's other player at most RELAY_WAIT; a host may wait longer)
+        return give_up(out, [:failed, :relay]) if @state == :handshake && l.hs == :relay_wait && @role == :join && now - l.started > RELAY_WAIT
         if @state == :handshake && l.hs != :relay_wait && now - l.started > @handshake_timeout
           return give_up(out, [:failed, l.hint || :timeout]) if @role == :join
           return stranger_left(l, out) if @via == :relay && l.hs != :done

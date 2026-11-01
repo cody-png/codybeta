@@ -257,7 +257,7 @@ module KIF
           enum(:stats, _INTL("Base stats"), [_INTL("Same"), _INTL("Shuffle"), _INTL("Total"), _INTL("Chaos")],
                [_INTL("Base stats stay the same."),
                 _INTL("Same numbers in a new order (the same order for the whole family)."),
-                _INTL("Random spread with the same total."),
+                _INTL("Random spread with the same total (no stat very low or very high)."),
                 _INTL("Every stat rolled from 1 to 255.")]),
           enum(:chaos_safety, _INTL("Chaos safety"), [_INTL("Off"), _INTL("Total"), _INTL("Each stat")],
                [_INTL("Chaos: an evolution can be weaker."),

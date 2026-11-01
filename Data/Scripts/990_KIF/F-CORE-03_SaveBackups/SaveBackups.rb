@@ -103,6 +103,42 @@ module KIF
       write_file(file_path, Marshal.dump(SaveData.compile_save_hash))
     end
 
+    # Game.save. A named backup is a copy of the save just written. A save that
+    # fails leaves the game as it was (PIF changed the slot, the save time and
+    # the count before writing and put back only the count, and only for a
+    # disk error): anything the write raises is a failed save.
+    def self.game_save(slot, auto, safe)
+      keep = save_state
+      begin
+        ret = Game.kif_bk_save(slot, auto, safe: safe)
+      rescue StandardError => e
+        KIF.log("Save failed (#{e.class}: #{e.message.to_s[0, 160]})")
+        ret = false
+      end
+      restore_state(keep) unless ret
+      name = next_name
+      if ret && name && !auto
+        slot ||= $Trainer.save_slot
+        copy(SaveData.get_full_path(slot), slot, name) if slot
+        self.next_name = nil
+      end
+      return ret
+    end
+
+    # what Game.save changes before it writes
+    def self.save_state
+      return nil unless $Trainer && $game_system && $PokemonGlobal
+      return [$Trainer.save_slot, $Trainer.last_time_saved, $game_system.save_count,
+              $game_system.magic_number, $PokemonGlobal.safesave]
+    end
+
+    def self.restore_state(s)
+      return unless s && $Trainer && $game_system && $PokemonGlobal
+      $Trainer.save_slot, $Trainer.last_time_saved = s[0], s[1]
+      $game_system.save_count, $game_system.magic_number = s[2], s[3]
+      $PokemonGlobal.safesave = s[4]
+    end
+
     def self.copy(save_path, slot, name = nil)
       return unless File.exist?(save_path)
       clean = name.to_s.gsub(/[\\\/:*?"<>|]/, "").strip
@@ -214,16 +250,8 @@ module Game
       KIF::SaveBackups.trim(save_path, slot, auto) if auto || !KIF::SaveBackups.infinite?
     end
 
-    # A named backup is a copy of the save just written (KIF)
     def save(slot = nil, auto = false, safe: false)
-      ret = kif_bk_save(slot, auto, safe: safe)
-      name = KIF::SaveBackups.next_name
-      if ret && name && !auto
-        slot ||= $Trainer.save_slot
-        KIF::SaveBackups.copy(SaveData.get_full_path(slot), slot, name) if slot
-        KIF::SaveBackups.next_name = nil
-      end
-      return ret
+      return KIF::SaveBackups.game_save(slot, auto, safe)
     end
   end
 end

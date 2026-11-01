@@ -38,6 +38,7 @@ module KIF
     SEND_EVERY = 0.25    # seconds between pr_at while something changes
     MAX_PATH   = 24
     LOOK_AGAIN = 30.0    # seconds: the look goes again with a pr_at (and with every map change)
+    LOOK_EVERY = 1.0     # seconds: a partner's new look is taken this often at most
     HURRY_AT   = 2       # steps queued: walk one speed faster
     SNAP_AT    = 16      # steps queued: appear at the newest place
     MAX_PEERS  = 2       # partners drawn at once (2 or 3 players, never 4)
@@ -199,6 +200,8 @@ module KIF
         @speed = 3.0
         @want_dir = 2
         @look = nil
+        @look_next = nil
+        @look_at = 0.0
         @sheets = {}
         @hidden = false
         @opacity = 0
@@ -210,14 +213,28 @@ module KIF
       def surfing?; @action == "surf" || @action == "dive"; end
       def surf_shape; (@look || DEFAULT_LOOK)["surf"]; end
 
+      # A partner's look is taken once a second at most (the newest of the
+      # looks that came meanwhile): every new look makes a new sheet.
       def look=(l)
+        @look_next = nil if l == @look
         return if l == @look
+        if @look.nil? || KIF::Net.now - @look_at >= LOOK_EVERY
+          take_look(l)
+        else
+          @look_next = l
+        end
+      end
+
+      def take_look(l)
         retire
         @look = l
+        @look_next = nil
+        @look_at = KIF::Net.now
       end
 
       # this action's sheet, made once a look
       def sheet
+        take_look(@look_next) if @look_next && KIF::Net.now - @look_at >= LOOK_EVERY
         return @sheets[@action] if @sheets.key?(@action)
         return @sheets[@action] = Presence.build_sheet(@look, @action)
       end

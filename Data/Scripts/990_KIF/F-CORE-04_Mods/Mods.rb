@@ -181,18 +181,29 @@ module KIF
     module MiniJSON
       module_function
 
+      MAX_DEPTH = 64   # a mod.json is flat; "[[[[..." could end the game with a stack overflow
+
       def parse(text)
         @s = text.to_s.sub(/\A\xEF\xBB\xBF/, "")
         @i = 0
+        @depth = 0
         v = value
         return v
-      rescue StandardError
+      rescue StandardError, SystemStackError
         return nil
       end
 
       def ws; @i += 1 while @i < @s.length && @s[@i] =~ /\s/; end
 
       def value
+        @depth += 1
+        raise "nested too deep" if @depth > MAX_DEPTH
+        return raw_value
+      ensure
+        @depth -= 1
+      end
+
+      def raw_value
         ws
         c = @s[@i]
         case c
@@ -297,8 +308,10 @@ module KIF
           KIF.log("Mod zip #{c}: Mods/#{name} already exists - the zip is left alone (delete one of them)")
           next
         end
+        made = false
         begin
           n = unzip(zip, into)
+          made = true
           if done_list
             File.open(done_list, "ab") { |f| f.write(key + "\n") }
             KIF.log("Mod zip #{c}: #{n} files unpacked into #{into} (its Mods folder can't be written)")
@@ -315,41 +328,96 @@ module KIF
         rescue StandardError => e
           KIF.log("Mod zip #{c} couldn't be unpacked (#{e.class}: #{e.message})")
           @failed << c
-          (rm_tree(into) rescue nil)
+          (rm_tree(into) rescue nil) if made   # unzip cleans up after itself; this is a failed move to Imported
         end
       end
     end
 
+    # What a mod .zip may hold: scripts and pictures, not a whole game. A
+    # bigger or odder one is refused whole (nothing is left half unpacked).
+    ZIP_MAX_FILES = 10_000
+    ZIP_MAX_FILE  = 64 * 1024 * 1024
+    ZIP_MAX_TOTAL = 512 * 1024 * 1024
+    ZIP_SLICE     = 4096   # compressed bytes inflated at a time: a bomb is stopped after one slice, not after it fills memory
+
+    # The path parts of a zip entry's name ("\" read as "/", "" and "." parts
+    # dropped). A name that is absolute or has a ".." or drive part, control
+    # characters, a device name... is not skipped: the whole zip is refused.
+    def self.zip_parts(name)
+      n = name.to_s.tr("\\", "/")
+      parts = n.split("/").reject { |p| p.empty? || p == "." }
+      ok = !n.start_with?("/") && (parts.empty? || KIF.safe_rel_path?(parts.join("/")))
+      raise "unsafe file name in the zip: #{name.to_s.inspect[0, 80]}" unless ok
+      return parts
+    end
+
+    # the bytes of one entry, never more than ZIP_MAX_FILE and checked against the zip's own CRC
+    def self.zip_data(f, entry)
+      name, method, csize, offset, _usize, crc = entry
+      raise "unsupported packing (method #{method})" unless method == 0 || method == 8
+      raise "#{name.to_s.inspect[0, 80]} is too big (#{csize} bytes packed)" if csize > ZIP_MAX_FILE
+      f.seek(offset)
+      h = f.read(30)
+      raise "damaged entry #{name.to_s.inspect[0, 80]}" unless h && h[0, 4] == "PK\x03\x04".b
+      nlen, xlen = h[26, 4].unpack("vv")
+      f.seek(offset + 30 + nlen + xlen)
+      raw = f.read(csize)
+      raise "damaged entry #{name.to_s.inspect[0, 80]}" unless raw && raw.bytesize == csize
+      if method == 8 && !raw.empty?
+        z = Zlib::Inflate.new(-Zlib::MAX_WBITS)
+        data = "".b
+        begin
+          0.step(raw.bytesize - 1, ZIP_SLICE) do |pos|
+            data << z.inflate(raw.byteslice(pos, ZIP_SLICE))
+            raise "#{name.to_s.inspect[0, 80]} is too big (over #{ZIP_MAX_FILE} bytes unpacked)" if data.bytesize > ZIP_MAX_FILE
+          end
+          data << z.finish
+        ensure
+          z.close
+        end
+      else
+        data = raw
+      end
+      raise "#{name.to_s.inspect[0, 80]} is too big (over #{ZIP_MAX_FILE} bytes unpacked)" if data.bytesize > ZIP_MAX_FILE
+      raise "damaged entry #{name.to_s.inspect[0, 80]}" if crc && Zlib.crc32(data) != crc
+      return data
+    end
+
+    # Unpacked beside `into` in a hidden folder, moved to `into` only when
+    # every entry is in: a refused or broken zip leaves nothing behind.
     def self.unzip(zip, into)
       require "zlib"
       raise "no zip reader" unless defined?(KIF::SpriteImport::Zip)
       written = 0
-      File.open(zip, "rb") do |f|
-        list = KIF::SpriteImport::Zip.entries(f)
-        names = list.map { |e| e[0].tr("\\", "/").split("/").reject { |p| p.empty? || p == "." || p == ".." } }
-        files = names.each_with_index.reject { |n, i| n.empty? || list[i][0].end_with?("/") }
-        # one folder around everything: drop it
-        tops = files.map { |n, _| n.length > 1 ? n[0] : nil }.uniq
-        strip = (tops.length == 1 && tops[0]) ? 1 : 0
-        files.each do |parts, i|
-          _name, method, csize, offset = list[i]
-          rel = parts[strip..-1]
-          next if rel.nil? || rel.empty?
-          raise "unsupported packing (method #{method})" unless method == 0 || method == 8
-          f.seek(offset)
-          h = f.read(30)
-          raise "damaged entry #{parts.join('/')}" unless h && h[0, 4] == "PK\x03\x04".b
-          nlen, xlen = h[26, 4].unpack("vv")
-          f.seek(offset + 30 + nlen + xlen)
-          data = f.read(csize)
-          data = Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(data) if method == 8
-          dest = File.join(into, *rel)
-          mkdir_p(File.dirname(dest))
-          File.open(dest, "wb") { |o| o.write(data) }
-          written += 1
+      total = 0
+      tmp = File.join(File.dirname(into), ".#{File.basename(into)}.kif_unpack")
+      rm_tree(tmp)
+      begin
+        File.open(zip, "rb") do |f|
+          list = KIF::SpriteImport::Zip.entries(f)
+          raise "too many files in the zip (#{list.length})" if list.length > ZIP_MAX_FILES
+          names = list.map { |e| zip_parts(e[0]) }
+          files = names.each_with_index.reject { |n, i| n.empty? || list[i][0].end_with?("/") }
+          # one folder around everything: drop it
+          tops = files.map { |n, _| n.length > 1 ? n[0] : nil }.uniq
+          strip = (tops.length == 1 && tops[0]) ? 1 : 0
+          files.each do |parts, i|
+            rel = parts[strip..-1]
+            next if rel.nil? || rel.empty?
+            data = zip_data(f, list[i])
+            total += data.bytesize
+            raise "the zip unpacks to more than #{ZIP_MAX_TOTAL} bytes" if total > ZIP_MAX_TOTAL
+            dest = File.join(tmp, *rel)
+            mkdir_p(File.dirname(dest))
+            File.open(dest, "wb") { |o| o.write(data) }
+            written += 1
+          end
         end
+        mkdir_p(tmp)
+        File.rename(tmp, into)
+      ensure
+        rm_tree(tmp)   # still there only when something above failed
       end
-      mkdir_p(into)
       return written
     end
 

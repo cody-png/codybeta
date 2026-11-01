@@ -133,8 +133,9 @@ module KIF
       end
       # the mod's own catalog: Browse lists it, its updates come from there
       if json["catalog"].is_a?(String) && defined?(KIF::ModCatalog)
+        # only a GitHub repository: a folder named by a downloaded mod.json would be walked and read
         c = KIF::ModCatalog.parse_catalog(json["catalog"])
-        KIF::ModCatalog.add_catalog(c.local? ? c.path : c.repo, :branch => c.branch, :name => name) if c
+        KIF::ModCatalog.add_catalog(c.repo, :branch => c.branch, :name => name) if c && !c.local?
       end
     end
 

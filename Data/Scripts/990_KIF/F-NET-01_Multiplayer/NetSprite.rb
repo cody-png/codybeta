@@ -8,7 +8,8 @@
 #            first 32 hex digits of SHA-256 over the 96x96 frame's RGBA pixels
 #   "kc" => { field => value }              KIF shiny colours (F-SHINY-01),
 #            shinies only
-# The receiving game ("Use partners' sprites" On, the default) draws that
+# The receiving game ("Use partners' sprites" On; Off is the default, a
+# partner's picture is shown only to a player who asked for it) draws that
 # Pokémon with the same picture: from its cache of partners' sprites, or its
 # own sprite for the same key when that has the same hash; otherwise it asks
 # the partner for the picture (sp_get {x}) and uses its own pick until the
@@ -29,7 +30,7 @@
 # answers per picture and 20 in all per 10 s, the credit text cleaned by
 # KIF::Net.safe_text.
 #===============================================================================
-KIF::Options.define(:kif_mp_partner_sprites, 1, :global)   # 0 Off, 1 On
+KIF::Options.define(:kif_mp_partner_sprites, 0, :global)   # 0 Off (default), 1 On
 
 KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (015_KIF_SettingsData)
   next nil if KIF.mobile?
@@ -81,7 +82,7 @@ module KIF
 
     def self.on?
       return false if KIF.mobile?
-      return (($PokemonSystem.kif_mp_partner_sprites rescue 1) || 1).to_i == 1
+      return (($PokemonSystem.kif_mp_partner_sprites rescue 0) || 0).to_i == 1
     end
 
     def self.log(msg); KIF::Net.log("sprites: #{msg}"); end
@@ -328,6 +329,8 @@ module KIF
     end
 
     def self.load_into(p, h)
+      # a partner's shiny, with or without colours of its own: F-SHINY-01 keeps it out of its disk cache
+      p.instance_variable_set(:@kif_net_kc, true) if p.shiny?
       if p.shiny? && h["kc"].is_a?(Hash)
         m = h["sm"]
         if m.is_a?(Array) && m.length == 3 && m.each_with_index.all? { |v, i| v.is_a?(Integer) && v.between?(0, MODES[i][1]) }
@@ -378,7 +381,6 @@ module KIF
     end
 
     def self.shiny_load(p, h)
-      p.instance_variable_set(:@kif_net_kc, true)   # a partner's colours: F-SHINY-01 keeps them out of its disk cache
       SHINY.each_key do |k|
         v = h[k]
         p.instance_variable_set(:"@#{k}", v.is_a?(Array) ? v.dup : v) if shiny_ok?(k, v)

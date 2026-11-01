@@ -38,7 +38,7 @@ module KIF
         @scr = scr || KIF::Net::Screen.new
         begin
           SoulLink.apply_pending
-          loop { break unless SoulLink.on? && (SoulLink.linked? ? linked : not_linked) }
+          loop { break unless SoulLink.awake? && (SoulLink.linked? ? linked : not_linked) }
         ensure
           @scr.dispose unless scr
           @scr = nil
@@ -127,7 +127,11 @@ module KIF
           r = pick(head.join("\n"), [_INTL("Link"), _INTL("Cancel")], help)
           next if r.nil?
           return false unless r == 0
-          return true if match || pbConfirmMessage(_INTL("Your settings differ. Link with {1} anyway?", info["n"]))
+          if match || pbConfirmMessage(_INTL("Your settings differ. Link with {1} anyway?", info["n"]))
+            used = (KIF::Nuzlocke.state[:places] || {}).length
+            say(_INTL("{1} places are already used, so Pokémon from them won't be linked.", used)) if used > 0
+            return true
+          end
         end
       end
 
@@ -146,25 +150,25 @@ module KIF
       def linked
         name = SoulLink.partner
         n = SoulLink.unsent
+        st = SoulLink.state
         head = [SoulLink.connected? ? _INTL("Soul Link: {1} (connected)", name) : _INTL("Soul Link: {1} (not connected)", name)]
-        head << (SoulLink.connected? ? _INTL("Your events go to {1} as they happen.", name) :
+        head << (st[:left] ? _INTL("{1} isn't linked with you now.", name) :
+                 SoulLink.connected? ? _INTL("Your events go to {1} as they happen.", name) :
                                        _INTL("Events {1} doesn't have yet: {2}", name, n))
-        head += SoulLink.warnings
-        help = SoulLink.take_notes.map { |l| l.reject(&:empty?).join(": ") }.first ||
-               _INTL("No connection? Send updates as text.")
+        head << _INTL("Your run is over. Updates still go to {1}.", name) if SoulLink.run_ended?
+        head += SoulLink.warnings + SoulLink.differences
+        notes = SoulLink.take_notes.map { |l| l.reject(&:empty?).join(": ") }
+        help = notes.empty? ? _INTL("No connection? Send updates as text.") :
+               notes[0] + (notes.length > 1 ? " " + _INTL("({1} more in the log.)", notes.length - 1) : "")
         r = pick(head.join("\n"), [_INTL("Share update code"), _INTL("Paste partner's code"), _INTL("Pairs"),
                                    _INTL("Soul Link log"), _INTL("Unlink"), _INTL("Back")],
-                 help, proc { [SoulLink.connected?, SoulLink.unsent, SoulLink.pending?] })
+                 help, proc { [SoulLink.connected?, SoulLink.unsent, SoulLink.pending?, SoulLink.state[:left]] })
         if r.nil?
           SoulLink.apply_pending
           return true
         end
         case r
-        when 0
-          code = SoulLink.my_update_code
-          ok = copy(code)
-          pbMessage(ok ? _INTL("Copied. Paste it to {1} in Discord.\nIt holds your {2} new events.", name, n) :
-                         _INTL("Your update code ({1} new events):\n{2}", n, code))
+        when 0 then share_codes(SoulLink.state, name, n)
         when 1 then paste(name)
         when 2 then pairs_list(name)
         when 3 then log_list(name)
@@ -174,6 +178,18 @@ module KIF
         else return false
         end
         return true
+      end
+
+      # Update codes for the partner, copied one at a time (each fits a Discord message); st: the link's state
+      def share_codes(st, name, n)
+        codes = SoulLink.my_update_codes(st)
+        codes.each_with_index do |code, i|
+          ok = copy(code)
+          part = codes.length > 1 ? _INTL("Part {1} of {2}", i + 1, codes.length) : nil
+          pbMessage(ok ? (part ? _INTL("{3} copied. Paste it to {1} in Discord, then pick OK for the next.", name, n, part) :
+                                 _INTL("Copied. Paste it to {1} in Discord.\nIt holds your {2} new events.", name, n)) :
+                         _INTL("Your update code ({1} new events{2}):\n{3}", n, part ? ", " + part.downcase : "", code))
+        end
       end
 
       #-------------------------------------------------------------------------
@@ -231,6 +247,7 @@ module KIF
         when "c" then _INTL("Caught {1}, {2}", SoulLink.species_name(e["s"]), e["p"])
         when "m" then _INTL("No catch, {1}", e["p"])
         when "d" then e["x"] ? _INTL("{1} died with its pair", e["n"]) : _INTL("{1} died, {2}", e["n"], e["p"])
+        when "x" then _INTL("Update from a newer version")
         else _INTL("Run over")
         end
       end
@@ -296,6 +313,8 @@ module KIF
       #-------------------------------------------------------------------------
       ICON_RECT = [224, 58, 32, 32]   # the partner's icon, half size, right of the HP numbers
       DOT_POS   = [238, 46]
+      SUMMARY_ICON = [456, 72, 32, 32]   # Summary, first page: right of the species name
+      SUMMARY_DOT  = [442, 80]
       DOT_COLORS = { alive: [96, 216, 96], hurt: [248, 200, 40], dead: [232, 64, 64], missed: [232, 64, 64], waiting: [168, 168, 168] }
       # 7x7 at the party's 2x pixel size, drawn from DOT_POS one cell up and left:
       # w light ring (stands out on the selected panel's green), o outline, x colour
@@ -321,12 +340,13 @@ module KIF
         spr&.dispose
       end
 
-      def draw_partner(bmp, pkmn)
+      # icon_rect, dot_pos: where (the party panel by default, the Summary's first page)
+      def draw_partner(bmp, pkmn, icon_rect = ICON_RECT, dot_pos = DOT_POS)
         r = SoulLink.pair_of(pkmn) or return
         if r[:theirs].is_a?(Hash)
-          draw_icon(bmp, (r[:snap] && r[:snap][0]) || r[:theirs][:s], ICON_RECT, r[:state] == :dead ? 128 : 255)
+          draw_icon(bmp, (r[:snap] && r[:snap][0]) || r[:theirs][:s], icon_rect, r[:state] == :dead ? 128 : 255)
         end
-        draw_dot(bmp, *DOT_POS, DOT_COLORS[r[:state]] || DOT_COLORS[:waiting])
+        draw_dot(bmp, *dot_pos, DOT_COLORS[r[:state]] || DOT_COLORS[:waiting])
       end
 
       def party_prompts; [_INTL("Choose a Pokémon."), _INTL("Choose Pokémon or cancel.")]; end
@@ -339,6 +359,8 @@ module KIF
               n > 0 ? _INTL("Linked with {1} (not connected, {2} to send)", name, n) :
                       _INTL("Linked with {1} (not connected)", name)
         return [top, ""] unless pkmn
+        clash = SoulLink.type_clash(pkmn)
+        top = _INTL("Type rule: same type as {1}", clash.name) if clash
         r = SoulLink.pair_of(pkmn)
         return [top, _INTL("{1} has no pair.", pkmn.name)] unless r
         t = r[:theirs]
@@ -364,6 +386,9 @@ module KIF
         return pbMessage(_INTL("That code is from another link, or a letter in it is wrong.")) if h == :key
         return unless h.is_a?(Hash)
         lines, count = SoulLink.receive_update(h)
+        if count == 0 && h["f"] != SoulLink.state[:side] && (first = h["e"].map { |e| e["q"] }.min) && first > SoulLink.state[:their_seq] + 1
+          return pbMessage(_INTL("That code starts after your last update. Paste the earlier code first."))
+        end
         return pbMessage(_INTL("Nothing new in that code. You're up to date.")) if count == 0
         deaths = h["e"].count { |e| e["k"] == "d" }
         rows = lines.map { |l, r| r.to_s.empty? ? l : "#{l}  -  #{r}" } + [_INTL("OK")]
@@ -397,6 +422,24 @@ class PokemonPartyPanel
     rescue StandardError => e
       KIF.log("Soul Link: party icon failed (#{e.class}: #{e.message})")
     end
+  end
+end
+
+# The Summary's first page: the partner's icon and the pair's dot (NSL-13)
+class PokemonSummary_Scene
+  alias kif_sl_drawPageOne drawPageOne unless method_defined?(:kif_sl_drawPageOne)
+
+  def drawPageOne
+    ret = kif_sl_drawPageOne
+    begin
+      ov = @sprites["overlay"]
+      if @pokemon && KIF::SoulLink.linked? && ov && !ov.disposed?
+        KIF::SoulLink::Menu.draw_partner(ov.bitmap, @pokemon, KIF::SoulLink::Menu::SUMMARY_ICON, KIF::SoulLink::Menu::SUMMARY_DOT)
+      end
+    rescue StandardError => e
+      KIF.log("Soul Link: Summary icon failed (#{e.class}: #{e.message})")
+    end
+    return ret
   end
 end
 
@@ -458,12 +501,8 @@ module KIF
     end
 
     def self.saved_partner(save_data)
-      return nil unless save_data.is_a?(Hash)
-      set = save_data[:kif_save_settings]
-      g = save_data[:global_metadata]
-      return nil unless set.is_a?(Hash) && set[:ch_soullink] == 1 && g.respond_to?(:kif_soullink)
-      st = g.kif_soullink
-      return st.is_a?(Hash) && st[:key] ? st[:partner_name] : nil
+      st = saved_state(save_data)
+      return st ? st[:partner_name] : nil
     end
   end
 end

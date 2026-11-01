@@ -53,6 +53,7 @@ end
 
 class Pokemon
   attr_accessor :kif_sl_id
+  attr_accessor :kif_sl_fused   # made by Fused link mode: not to be unfused while linked
 end
 
 module KIF
@@ -68,9 +69,25 @@ module KIF
       attr_reader :peer         # what the connected partner said (sl_hello), this session only
     end
 
+    # On = the rules apply: Soul Link On, Nuzlocke On, a save loaded
     def self.on?
       return $PokemonSystem && $PokemonSystem.ch_soullink == 1 && KIF::Nuzlocke.on? && $PokemonGlobal && digest? ? true : false
     end
+
+    # Awake = the link still talks (hello, updates, codes, the screens). That is
+    # while Nuzlocke is On, and for a linked save after its run ended (Keep
+    # playing turns Nuzlocke Off) or with events the partner doesn't have yet.
+    # The rules (pairs, deaths, fusions) are only applied while On (NSL-01).
+    def self.awake?
+      return false unless $PokemonSystem && $PokemonSystem.ch_soullink == 1 && $PokemonGlobal && digest?
+      return true if KIF::Nuzlocke.on?
+      st = $PokemonGlobal.kif_soullink
+      return false unless st[:key]
+      return (KIF::Nuzlocke.state[:ended] || st[:my_seq].to_i > st[:acked].to_i) ? true : false
+    end
+
+    # the run is over and Nuzlocke is Off: nothing is applied to the Pokémon any more
+    def self.run_ended?; KIF::Nuzlocke.state[:ended] && !KIF::Nuzlocke.on? ? true : false; end
 
     # SHA-256 for codes and keys. A build without the digest library (JoiPlay's
     # isn't checked yet) keeps Soul Link off: LoadError gets past `rescue => e`.
@@ -84,9 +101,40 @@ module KIF
       end
     end
 
-    def self.state; $PokemonGlobal ? $PokemonGlobal.kif_soullink : {}; end
-    def self.linked?; on? && state[:key] ? true : false; end
+    # A save was loaded (or the game reset): what this module kept of the last
+    # one's connection (what was sent, the partner's party, notes) is forgotten
+    # and a new hello goes out (NSL-10). The connection itself stays.
+    def self.new_save(g)
+      @save_id = g.object_id
+      @sent = @party_sent = @partner_party = @party_told = @caught = @offer = nil
+      @hello_sent = @asked = false
+      @notes = []
+    end
+
+    def self.state
+      g = $PokemonGlobal
+      new_save(g) if g && g.object_id != @save_id
+      return g ? g.kif_soullink : {}
+    end
+
+    def self.linked?; awake? && state[:key] ? true : false; end
     def self.partner; state[:partner_name] || "?"; end
+
+    # one of mine that must stay with its pair: linked, alive, in a live run
+    def self.protected?(p)
+      return false unless p && !p.egg? && p.hp > 0 && !p.kif_nz_dead && KIF::Nuzlocke.on? && linked?
+      return !ids_of(p).empty?
+    end
+
+    # the message when a protected Pokémon would leave the game other than by dying, or nil
+    def self.leave_refusal(p, what)
+      return nil unless protected?(p)
+      return case what
+             when :release then _INTL("{1} is linked to {2}'s Pokémon, so it can't be released.", p.name, partner)
+             when :trade   then _INTL("{1} is linked to {2}'s Pokémon, so it can't be traded.", p.name, partner)
+             else _INTL("{1} is linked to {2}'s Pokémon, so it can't be deleted.", p.name, partner)
+             end
+    end
 
     #---------------------------------------------------------------------------
     # Small pieces: hashes, codes
@@ -197,19 +245,38 @@ module KIF
       key = crypto.sha256("KIF SL key " + lo + hi)
       state.replace(half: half, key: crypto.hex(key), link: crypto.hex(crypto.sha256("KIF SL id " + key))[0, 16],
                     side: half == lo ? 0 : 1, partner_name: info["n"], partner_tid: info["t"],
+                    mode: half == lo ? $PokemonSystem.ch_sl_mode : info["m"],   # both play side 0's mode (NSL-20)
                     my_seq: 0, their_seq: 0, acked: 0, my_log: [], their_log: [], places: {}, pending: [])
       KIF.log("Soul Link: linked with #{info['n']}")
       @offer = nil
       @asked = false
       @sent = nil
       send_hello
+      starter_check
       return true
     end
 
+    # the partner is told by a hello with no link in it (NSL-09)
     def self.unlink
       state.clear
       @offer = nil
       @asked = false
+      @sent = nil
+      send_hello(true)
+    end
+
+    # The starter pairs as the place "Starter" when the link is made before the
+    # first Poké Ball (NSL-03); checked once a second on the map and when linking.
+    STARTER = "Starter"
+
+    def self.starter_check
+      st = state
+      return if st[:starter_done] || !linked?
+      return st[:starter_done] = true if KIF::Nuzlocke.started?
+      party = $Trainer.party.compact
+      return unless party.length == 1 && KIF::Nuzlocke.only_pokemon?
+      st[:starter_done] = true
+      encounter_done(STARTER, party[0])
     end
 
     # Over the connection: picking Link sends my code; the link is made once
@@ -264,14 +331,47 @@ module KIF
       return unless mine.is_a?(String) && theirs
       if theirs == :missed
         queue("k" => "kill", "i" => mine, "why" => "missed", "p" => place)
-      elsif $PokemonSystem.ch_sl_mode == 1 && !pl[:fused]
+      elsif (gone = state[:their_log].find { |e| e["k"] == "d" && Array(e["i"]).include?(theirs[:i]) })
+        # their Pokémon died before mine was caught: mine dies on arrival (NSL-08)
+        queue("k" => "kill", "i" => mine, "why" => "died", "who" => gone["n"], "s" => gone["s"], "p" => gone["p"])
+      elsif link_mode == 1 && !pl[:fused]
         pl[:fused] = true
         queue("k" => "fuse", "i" => mine, "s" => theirs[:s], "n" => theirs[:n], "p" => place)
       end
     end
 
+    # Linked or Fused: the agreed mode of this link (older saves: my own setting)
+    def self.link_mode; state[:mode] || $PokemonSystem.ch_sl_mode; end
+
     def self.queue(action)
-      state[:pending] << action
+      state[:pending] << action unless run_ended?   # a finished run takes no more deaths
+    end
+
+    # A place Nuzlocke used up without a wild battle (a gift, a Safari catch): the
+    # Pokémon pairs there like a wild catch (NSL-02); without the Pokémon nothing
+    # is logged (a miss would kill the partner's catch).
+    def self.place_used(place, pkmn)
+      encounter_done(place, pkmn) if pkmn.is_a?(Pokemon) && linked? && KIF::Nuzlocke.on?
+    end
+
+    # A co-op wild battle (I am the guest) ended with nobody catching anything, and the host is my
+    # Soul Link partner: its first encounter here is lost for the host, so mine is lost too, else
+    # my next catch here would die on arrival (NSL-16). decision: the host's result (4 = caught).
+    # Not when the host's side of this place was settled already.
+    def self.shared_miss?(place, decision)
+      return false unless [1, 2, 3, 5].include?(decision) && linked? && KIF::Nuzlocke.on? && connected?
+      pl = state[:places][place]
+      return !(pl && pl[:theirs])
+    end
+
+    # What a block added to the party or the boxes (a gift call doesn't return it): [result, Pokémon or nil]
+    def self.watching
+      before = {}
+      (each_mon { |p, _| before[p.object_id] = true }) rescue nil   # (the gift is given whatever this finds)
+      ret = yield
+      got = nil
+      (each_mon { |p, _| got ||= p unless before[p.object_id] }) rescue nil
+      return [ret, got]
     end
 
     def self.ids_of(p)
@@ -286,6 +386,7 @@ module KIF
     def self.each_mon
       $Trainer.party.each { |p| yield p, :party if p }
       $PokemonStorage.maxBoxes.times do |b|
+        next if $PokemonStorage[b].is_a?(StorageTransferBox)   # shared by every save: writing to it saves the game (as Nuzlocke)
         $PokemonStorage.maxPokemon(b).times { |i| p = $PokemonStorage[b, i]; yield p, [b, i] if p }
       end
       (($PokemonGlobal.daycare rescue nil) || []).each { |slot| yield slot[0], :daycare if slot.is_a?(Array) && slot[0].is_a?(Pokemon) }
@@ -313,13 +414,35 @@ module KIF
       log_event("k" => "o")
     end
 
+    # Lock save: the save can't be opened again, so a partner who isn't connected hears of it from the load screen
+    def self.offline_note
+      return unless linked? && !applying && !connected?
+      pbMessage(_INTL("{1} isn't connected. To end {1}'s run too, pick this save on the load screen and choose Share Soul Link code.", partner))
+    end
+
+    # The linked state inside a save's data when its Soul Link is On (the load screen), else nil
+    def self.saved_state(save_data)
+      return nil unless save_data.is_a?(Hash) && digest?
+      set = save_data[:kif_save_settings]
+      g = save_data[:global_metadata]
+      return nil unless set.is_a?(Hash) && set[:ch_soullink] == 1 && g.respond_to?(:kif_soullink)
+      st = g.kif_soullink
+      return st.is_a?(Hash) && st[:key] ? st : nil
+    end
+
+    # events of a saved (locked) run the partner hasn't confirmed
+    def self.saved_unsent(save_data)
+      st = saved_state(save_data) or return 0
+      return st[:my_seq].to_i - st[:acked].to_i
+    end
+
     #---------------------------------------------------------------------------
     # Update codes
     #---------------------------------------------------------------------------
     def self.unsent; linked? ? state[:my_seq] - state[:acked] : 0; end
 
-    def self.update_code(events, side = state[:side])
-      st = state
+    def self.update_code(events, side = nil, st = state)
+      side ||= st[:side]
       z = Zlib::Deflate.deflate(json({ "v" => 1, "l" => st[:link], "f" => side, "a" => st[:their_seq], "e" => events }))
       mac = crypto.hmac(crypto.unhex(st[:key]), "KIFSL" + z)[0, 8]
       return make_code("KIFSL", z + mac)
@@ -330,21 +453,44 @@ module KIF
       return update_code(state[:my_log].select { |e| e["q"] > state[:acked] })
     end
 
+    PASTE_MAX = 1800   # a pasted code must fit a Discord message (2000)
+
+    # the same in codes of at most PASTE_MAX characters, to be pasted in order (NSL-29)
+    def self.my_update_codes(st = state)
+      evs = st[:my_log].select { |e| e["q"] > st[:acked] }
+      out = []
+      until evs.empty?
+        n = [evs.length, CHUNK].min
+        n -= [n / 4, 1].max while n > 1 && update_code(evs.first(n), nil, st).length > PASTE_MAX
+        out << update_code(evs.shift(n), nil, st)
+      end
+      return out.empty? ? [update_code([], nil, st)] : out   # nothing new: a code that still says what I have
+    end
+
     EV_KINDS = %w[c m d o]
     SPECIES_RE = /\A(?!.*_x_)[A-Za-z0-9_]{1,48}\z/   # :NIDORANfE has a small letter; "_x_" ids make PIF's fusion lookup raise
 
     def self.valid_event?(e)
-      return false unless e.is_a?(Hash) && e["q"].is_a?(Integer) && e["q"] > 0 && EV_KINDS.include?(e["k"]) &&
+      return false unless e.is_a?(Hash) && e["q"].is_a?(Integer) && e["q"] > 0 && (EV_KINDS + ["x"]).include?(e["k"]) &&
                           e["r"].is_a?(String) && e["r"].length <= 8
       str = proc { |k, n| e[k].nil? || (e[k].is_a?(String) && e[k].length <= n && e[k] !~ /[\x00-\x1f]/) }
       return false unless str.call("p", 48) && str.call("n", 24) && str.call("s", 48)
       return false if e["s"] && e["s"] !~ SPECIES_RE
       ids = e["i"].is_a?(Array) ? e["i"] : [e["i"]].compact
       return false unless ids.length <= 6 && ids.all? { |i| i.is_a?(String) && i =~ /\A[a-z0-9]{1,8}\z/ }
+      return false if e["k"] == "d" && !(e["i"].is_a?(Array) && !e["i"].empty?)   # their_event and own_event walk the ids (NSL-30)
+      return false if e["k"] == "c" && !e["i"].is_a?(String)
       return false if e["l"] && !(e["l"].is_a?(Integer) && e["l"].between?(1, 1000))
       return false if e["t"] && !(e["t"].is_a?(Integer) && e["t"].between?(0, 2**40))
       return false unless e["dbg"].nil? || e["dbg"] == 1
-      return e["k"] == "o" || e["k"] == "d" || e["p"].is_a?(String)
+      return e["k"] == "x" || e["k"] == "o" || e["k"] == "d" || e["p"].is_a?(String)
+    end
+
+    # An event kind this build doesn't know (a newer build made it): kept as an empty
+    # "x" with its number, so the rest of the code still applies (NSL-21)
+    def self.future_event(e)
+      return e unless e.is_a?(Hash) && e["k"].is_a?(String) && !EV_KINDS.include?(e["k"]) && e["k"] != "x"
+      return { "q" => e["q"], "r" => e["r"], "k" => "x", "t" => e["t"] }
     end
 
     # Hash {f:, a:, e:} or a Symbol why not: :invalid, :key (not this link / tampered)
@@ -355,6 +501,7 @@ module KIF
       z = bytes[0...-8]
       return :key unless crypto.same?(crypto.hmac(crypto.unhex(state[:key]), "KIFSL" + z)[0, 8], bytes[-8, 8])
       h = (s = inflate(z)) && parse(s)
+      h["e"] = h["e"].map { |e| future_event(e) } if h.is_a?(Hash) && h["e"].is_a?(Array)
       return :invalid unless h.is_a?(Hash) && h["v"] == 1 && h["l"] == state[:link] && [0, 1].include?(h["f"]) &&
                              h["a"].is_a?(Integer) && h["e"].is_a?(Array) && h["e"].all? { |e| valid_event?(e) }
       return h
@@ -407,10 +554,10 @@ module KIF
           dead << mon_name(pl[:mine])
           queue("k" => "kill", "i" => pl[:mine], "why" => "died", "who" => e["n"], "s" => e["s"], "p" => e["p"])
         end
-        return [_INTL("{1} died, {2}", e["n"], e["p"]), dead.empty? ? "" : _INTL("{1} dies", dead.join(", "))]
+        return [_INTL("{1} died, {2}", e["n"], e["p"]), dead.empty? || run_ended? ? "" : _INTL("{1} dies", dead.join(", "))]
       when "o"
         queue("k" => "over")
-        return [_INTL("{1}'s run is over", who), _INTL("yours ends")]
+        return [_INTL("{1}'s run is over", who), run_ended? ? "" : _INTL("yours ends")]
       end
     end
 
@@ -476,9 +623,10 @@ module KIF
     # What the events lead to, at a quiet moment on the map (or in the Soul
     # Link screen): deaths, fusions, the run's end
     #---------------------------------------------------------------------------
-    def self.pending?; linked? && !state[:pending].empty?; end
+    def self.pending?; linked? && KIF::Nuzlocke.on? && (!state[:pending].empty? || state[:wipe]) ? true : false; end
 
-    def self.apply_pending(show = true)
+    # warp: on the map a wiped party blacks out as after a lost battle; in a screen it waits for the map (NSL-23)
+    def self.apply_pending(show = true, warp = false)
       return unless pending?
       st = state
       over = nil
@@ -501,7 +649,8 @@ module KIF
           elsif show
             pbMessage(msg)
           end
-          kill(p, where, a["why"] == "log" ? :log : true)
+          reason = a["why"] == "missed" ? _INTL("no pair") : a["why"] == "died" ? _INTL("linked to {1}'s {2}", partner, a["who"]) : nil
+          kill(p, where, a["why"] == "log" ? :log : true, reason)
         when "fuse"
           fuse(a) && show && pbMessage(_INTL("Soul Link: {1} fused with {2}'s {3}.", a["was"], partner, species_name(a["s"])))
         when "over"
@@ -509,11 +658,12 @@ module KIF
         end
       end
       KIF::Nuzlocke.move_dead_out if $Trainer.party.any? { |p| p && p.kif_nz_dead } && $Trainer.party.any? { |p| KIF::Nuzlocke.able?(p) }
+      st.delete(:wipe)
       if over
         pbMessage(_INTL("{1}'s run is over, so yours ends too.", partner)) if show && !over["own"]
         end_together
       elsif !$Trainer.party.any? { |p| KIF::Nuzlocke.able?(p) } && $Trainer.party.any? { |p| p && p.kif_nz_dead }
-        KIF::Nuzlocke.whiteout
+        warp ? pbStartOver : st[:wipe] = true
       end
     end
 
@@ -524,15 +674,15 @@ module KIF
       self.applying = false
     end
 
-    def self.kill(p, where, how = true)
+    def self.kill(p, where, how = true, why = nil)
       self.applying = how
       p.hp = 0
-      KIF::Nuzlocke.bury(p)
+      KIF::Nuzlocke.bury(p, why)
       return unless where.is_a?(Array)   # party: Nuzlocke moves them; Day Care: stays, dead
       fate = $PokemonSystem.ch_nz_fainted
       return if fate > KIF::Nuzlocke::FAINTED_RELEASED
       if fate == KIF::Nuzlocke::FAINTED_GRAVEYARD
-        (KIF::Nuzlocke.state[:graveyard] ||= []) << { :name => p.name, :species => p.species, :level => p.level,
+        (KIF::Nuzlocke.state[:graveyard] ||= []) << { :name => p.name, :species => p.species, :level => p.level, :why => why,
                                                       :place => KIF::Nuzlocke.place_name($game_map.map_id), :pokemon => p }
       end
       $PokemonStorage[where[0], where[1]] = nil
@@ -552,6 +702,7 @@ module KIF
       p.original_head = head
       p.original_body = half
       p.species = getFusionSpecies(body.id, p.species).id
+      p.kif_sl_fused = true
       p.calc_stats
       return true
     rescue StandardError => e
@@ -562,9 +713,17 @@ module KIF
     #---------------------------------------------------------------------------
     # Over the Multiplayer connection
     #---------------------------------------------------------------------------
+    # The line to my partner: the connection their hello came on (a lobby with
+    # more players has more lines; every sl_* message goes to this one), else the session
     def self.session
-      s = KIF::Net.session if defined?(KIF::Net) && KIF::Net.respond_to?(:session)
+      s = @peer_line if @peer_line.respond_to?(:connected?) && @peer_line.connected?
+      s ||= KIF::Net.session if defined?(KIF::Net) && KIF::Net.respond_to?(:session)
       return s&.connected? ? s : nil
+    end
+
+    # a message on this line (nil: the only one) is from my partner's line, or no partner line is known
+    def self.partner_line?(line)
+      return line.nil? || @peer_line.nil? || line.equal?(@peer_line)
     end
 
     def self.connected?
@@ -572,13 +731,18 @@ module KIF
       return @peer["link"] == state[:link]
     end
 
-    def self.on_connect(_s = nil)
-      on_disconnect
+    # (a new line while my partner's is still up changes nothing of the partner's state)
+    def self.on_connect(line = nil)
+      keep = line && @peer_line && !line.equal?(@peer_line) && @peer_line.respond_to?(:connected?) && @peer_line.connected?
+      on_disconnect unless keep
       send_hello
     end
 
-    def self.on_disconnect
+    # a line that isn't my partner's closing changes nothing
+    def self.on_disconnect(line = nil)
+      return if line && @peer_line && !line.equal?(@peer_line)
       @peer = nil
+      @peer_line = nil
       @peer_info = nil   # (a new partner must not be linked with the last one's code)
       @offer = nil
       @asked = false
@@ -586,9 +750,10 @@ module KIF
       @hello_sent = false
     end
 
-    def self.send_hello
+    # force: also when the link is gone (Unlink: the partner learns from the hello)
+    def self.send_hello(force = false)
       s = session or return
-      return unless on?
+      return unless force || awake?
       st = state
       s.post("sl_hello", "link" => st[:link] || "", "seen" => st[:their_seq] || 0, "acked" => st[:acked] || 0,
                          "code" => link_code)
@@ -596,16 +761,23 @@ module KIF
       @hello_sent = true
     end
 
-    # Soul Link turned on while connected: say hello then (checked every second on the map)
+    # Soul Link turned on while connected, or a save loaded: say hello then (checked every second on the map)
     def self.hello_late
-      send_hello if !@hello_sent && session && on?
+      send_hello if !@hello_sent && session && awake?
     end
 
-    # id:species:level:hp:totalhp for each link in the party (a fusion has two)
+    PARTY_MAX = 900   # characters of an sl_party row list (Net.rb TYPES)
+
+    # id:species:level:hp:totalhp:name for each link in the party (a fusion has two)
     def self.party_ids
-      rows = $Trainer.party.compact.flat_map { |p| ids_of(p).map { |id| [id, p.species, p.level, p.hp, p.totalhp].join(":") } }
-      return rows.join(",")[0, 600]
+      rows = $Trainer.party.compact.flat_map { |p| ids_of(p).map { |id| [id, p.species, p.level, p.hp, p.totalhp, row_name(p)].join(":") } }
+      out = +""
+      rows.each { |r| break if out.length + r.length + 1 > PARTY_MAX; out << "," unless out.empty?; out << r }
+      return out
     end
+
+    # the current nickname, safe in a row (no separators or codes)
+    def self.row_name(p); p.name.to_s.gsub(/[\<>:,\x00-\x1f]/, "")[0, 12]; end
 
     # the party again when it changed (checked every second on the map)
     def self.send_party
@@ -615,13 +787,14 @@ module KIF
       session.post("sl_party", "ids" => @party_sent = ids)
     end
 
-    # the partner's last party: {id => [species, level, hp, totalhp]}
+    # the partner's last party: {id => [species, level, hp, totalhp, name or nil]}
     def self.read_party(text)
       snap = {}
       text.split(",").each do |row|
         id, s, *n = row.split(":")
+        name = n.length == 4 ? n.pop : nil   # a row from a build without names has three numbers
         next unless id.to_s =~ /\A[a-z0-9]{1,8}\z/ && s.to_s =~ SPECIES_RE && n.length == 3 && n.all? { |x| x =~ /\A\d{1,5}\z/ }
-        snap[id] = [s, *n.map(&:to_i)]
+        snap[id] = [s, *n.map(&:to_i), name.to_s.empty? ? nil : KIF::Net.shown_name(name)[0, 12]]
       end
       return snap
     end
@@ -635,17 +808,25 @@ module KIF
       @sent = st[:my_seq]
     end
 
-    # a message from the partner's game (KIF::Net.update)
-    def self.receive(type, msg)
+    # a message from the partner's game (KIF::Net.update); line: the connection it came on
+    def self.receive(type, msg, line = nil)
       if type == "sl_hello"   # kept while Off too: linking needs it once Soul Link is turned on
+        # a third player's hello never replaces my partner's (a lobby with more players)
+        return if line && @peer_line && !line.equal?(@peer_line) && linked? && msg["link"] != state[:link]
         @peer = msg
+        @peer_line = line
         @peer_info = read_link_code(msg["code"])
       end
-      return unless on?
+      return unless awake?
       st = state
       case type
       when "sl_hello"
-        return unless st[:key] && msg["link"] == st[:link]
+        if st[:key] && msg["link"] != st[:link]
+          note_left if @peer_info.is_a?(Hash) && @peer_info["t"] == st[:partner_tid]   # their save isn't linked with this one
+          return
+        end
+        return unless st[:key]
+        st.delete(:left)
         st[:acked] = [msg["seen"], st[:my_seq]].min
         s = session
         mine = st[:my_log].select { |e| e["q"] > msg["seen"] }
@@ -655,24 +836,47 @@ module KIF
         echo.each_slice(CHUNK) { |part| s.post("sl_up", "code" => update_code(part, 1 - st[:side])) }
         s.post("sl_party", "ids" => @party_sent = party_ids)
       when "sl_link"
+        return unless partner_line?(line) || !st[:key]
         info = read_link_code(msg["code"])
         return unless info.is_a?(Hash)
         @offer = info
         @peer_info = info
         link_with(info) if @asked && !st[:key]
       when "sl_up"
+        return unless partner_line?(line)
         h = read_update_code(msg["code"])
         return KIF.log("Soul Link: an update from #{partner} didn't fit (#{h})") unless h.is_a?(Hash)
+        before = st[:their_seq]
         lines, n = receive_update(h)
         @notes = (@notes || []) + lines
         # tell them what arrived (an empty update carries "a")
         session&.post("sl_up", "code" => update_code([])) if n > 0 && h["f"] != st[:side]
+        news(h["e"], before, st[:their_seq]) if n > 0 && h["f"] != st[:side]
       when "sl_party"
-        return unless connected?   # only my partner's party
+        return unless connected? && partner_line?(line)   # only my partner's party
         snap = read_party(msg["ids"])
         @partner_party = snap.keys
         st[:partner_party] = snap
       end
+    end
+
+    # the partner's game isn't linked with this one (they unlinked, or loaded another save)
+    def self.note_left
+      st = state
+      return if st[:left]
+      st[:left] = true
+      KIF.log("Soul Link: #{partner}'s game isn't linked with this save")
+      KIF::Net.notes << _INTL("{1} isn't linked with you any more. Pick Unlink in Soul Link to start over.", partner)
+    end
+
+    # one line on the map for the catches and misses the partner's game just sent (deaths show as they apply)
+    def self.news(events, from, upto)
+      evs = events.select { |e| e["q"] > from && e["q"] <= upto && %w[c m].include?(e["k"]) }
+      return if evs.empty?
+      e = evs[0]
+      KIF::Net.notes << (evs.length > 1 ? _INTL("{1} sent {2} Soul Link updates. See Soul Link, Soul Link log.", partner, evs.length) :
+                         e["k"] == "c" ? _INTL("{1} caught {2} on {3}.", partner, species_name(e["s"]), e["p"]) :
+                                         _INTL("{1} had no catch on {2}.", partner, e["p"]))
     end
 
     def self.peer_info; @peer_info; end
@@ -692,6 +896,7 @@ module KIF
       m, t = pl[:mine], pl[:theirs]
       snap = t.is_a?(Hash) ? (state[:partner_party] || {})[t[:i]] : nil
       st = if m == :missed || t == :missed then :missed
+           elsif m.is_a?(String) && mine_dead.include?(m) then :dead   # before the partner has caught: dead, not waiting
            elsif m.nil? then :open
            elsif t.nil? then :waiting
            elsif mine_dead.include?(m) || their_dead.include?(t[:i]) || (snap && snap[2] <= 0) then :dead
@@ -708,10 +913,11 @@ module KIF
       return state[:places].map { |place, pl| pair(place, pl, md, td) }
     end
 
-    # the partner's Pokémon: its nickname, or what it is now (it may have evolved)
+    # the partner's Pokémon: its nickname now (from their last party), else the one it was caught with
     def self.their_name(r)
       t = r[:theirs]
       return "?" unless t.is_a?(Hash)
+      return r[:snap][4] if r[:snap] && r[:snap][4]
       return r[:snap] && t[:n] == species_name(t[:s]) ? species_name(r[:snap][0]) : t[:n]
     end
 
@@ -732,16 +938,38 @@ module KIF
       out = []
       return out unless linked?
       party = $Trainer.party.compact.reject { |p| p.egg? || p.kif_nz_dead }
-      if $PokemonSystem.ch_sl_type == 1
-        seen = {}
-        party.each do |p|
-          next if ids_of(p).empty?
-          t = p.type1
-          out << _INTL("Type rule: {1} and {2} are both {3} type.", seen[t].name, p.name, GameData::Type.get(t).name) if seen[t]
-          seen[t] ||= p
-        end
+      return type_lines(party) + party_rule_lines(party)
+    end
+
+    def self.type_lines(party = nil)
+      out = []
+      return out unless $PokemonSystem.ch_sl_type == 1 && linked?
+      party ||= $Trainer.party.compact.reject { |p| p.egg? || p.kif_nz_dead }
+      seen = {}
+      party.each do |p|
+        next if ids_of(p).empty?
+        t = p.type1
+        out << _INTL("Type rule: {1} and {2} are both {3} type.", seen[t].name, p.name, GameData::Type.get(t).name) if seen[t]
+        seen[t] ||= p
       end
-      return out + party_rule_lines(party)
+      return out
+    end
+
+    # another linked Pokémon in the party with this one's primary type (the party screen's box says so), or nil
+    def self.type_clash(p)
+      return nil unless $PokemonSystem.ch_sl_type == 1 && linked? && p && !p.egg? && !p.kif_nz_dead && !ids_of(p).empty?
+      return $Trainer.party.compact.find { |o| !o.equal?(p) && !o.egg? && !o.kif_nz_dead && !ids_of(o).empty? && o.type1 == p.type1 }
+    end
+
+    # Lines for the Soul Link screen when the partner's game plays by other settings or another build (NSL-20, NSL-21)
+    def self.differences
+      out = []
+      info = @peer_info
+      return out unless connected? && info.is_a?(Hash)
+      out << _INTL("Settings differ now from {1}'s.", partner) if info["set"] != rules_hash || (info["g"] && info["g"] != game_hash)
+      s = session
+      out << _INTL("{1} has KIF {2}, you have KIF {3}.", partner, s.partner_ver, KIF::Net.version) if s.respond_to?(:partner_ver) && s.partner_ver != KIF::Net.version
+      return out
     end
 
     def self.party_rule_lines(party = nil)
@@ -756,10 +984,11 @@ module KIF
       return out
     end
 
-    # the party rule on the map (checked each second): a line when a pair newly
-    # goes missing (a PC deposit, a party change on either side), not every step
+    # the party and type rules on the map (checked each second): a line when a
+    # clash or a missing pair is new (a PC deposit, a party change on either
+    # side), not every step
     def self.party_rule_check
-      lines = party_rule_lines
+      lines = type_lines + party_rule_lines
       fresh = lines - (@party_told || [])
       @party_told = lines
       return if fresh.empty?
@@ -786,7 +1015,7 @@ KIF::Options.add(:challenges, :save) {
                  proc { $PokemonSystem.ch_sl_mode },
                  proc { |value| $PokemonSystem.ch_sl_mode = value },
                  [_INTL("Your catch and your partner's catch from the same place are linked."),
-                  _INTL("Your catch fuses with your partner's catch from the same place: yours is the head, theirs the body.")])
+                  _INTL("Your catch fuses with your partner's catch from the same place: yours is the head, theirs the body. The fusion can't be unfused.")])
 }
 KIF::Options.add(:challenges, :save) {
   EnumOption.new(_INTL("Soul Link type rule"), [_INTL("Off"), _INTL("On")],
@@ -804,7 +1033,7 @@ KIF::Options.add(:challenges, :save) {
 }
 
 KIF::PauseMenu.add(:kif_soullink, "Soul Link", icon: "menuIcons/PLAYER", order: 55,
-  condition: proc { KIF::SoulLink.on? },
+  condition: proc { KIF::SoulLink.awake? },
   handler: proc { |scene|
     scene.pbHideMenu if scene.respond_to?(:pbHideMenu)   # the pause menu draws over the screens (z 99999)
     KIF::SoulLink::Menu.open
@@ -848,8 +1077,8 @@ module KIF
       alias kif_sl_bury bury unless method_defined?(:kif_sl_bury)
       alias kif_sl_end_run end_run unless method_defined?(:kif_sl_end_run)
 
-      def bury(p)
-        ret = kif_sl_bury(p)
+      def bury(p, why = nil)
+        ret = kif_sl_bury(p, why)
         begin
           KIF::SoulLink.died(p)
         rescue => e
@@ -861,6 +1090,7 @@ module KIF
       def end_run(*args)
         begin
           KIF::SoulLink.run_over
+          KIF::SoulLink.offline_note if args[0]   # a locked save can't be opened again
         rescue => e
           KIF.log("Soul Link: run end not logged (#{e.class}: #{e.message})")
         end
@@ -870,27 +1100,35 @@ module KIF
   end
 end
 
-Events.onMapUpdate += proc { |_sender, _e|
-  if Graphics.frame_count % 60 == 0
-    begin
-      KIF::SoulLink.hello_late
-    rescue => e
-      KIF.log("Soul Link: hello not sent (#{e.class}: #{e.message})")
+module KIF
+  module SoulLink
+    # every map frame (a test calls it with the frame it wants)
+    def self.map_tick(frame = Graphics.frame_count)
+      if frame % 60 == 0
+        begin
+          hello_late
+          starter_check
+        rescue => e
+          KIF.log("Soul Link: hello not sent (#{e.class}: #{e.message})")
+        end
+      end
+      if frame % 60 == 0 && linked?
+        begin
+          send_party
+          party_rule_check
+        rescue => e
+          KIF.log("Soul Link: party not sent (#{e.class}: #{e.message})")
+        end
+      end
+      if pending? && KIF::Net.quiet?
+        begin
+          apply_pending(true, true)
+        rescue => e
+          KIF.log("Soul Link: applying failed (#{e.class}: #{e.message})")
+        end
+      end
     end
   end
-  if Graphics.frame_count % 60 == 0 && KIF::SoulLink.linked?
-    begin
-      KIF::SoulLink.send_party
-      KIF::SoulLink.party_rule_check
-    rescue => e
-      KIF.log("Soul Link: party not sent (#{e.class}: #{e.message})")
-    end
-  end
-  if KIF::SoulLink.pending? && KIF::Net.quiet?
-    begin
-      KIF::SoulLink.apply_pending
-    rescue => e
-      KIF.log("Soul Link: applying failed (#{e.class}: #{e.message})")
-    end
-  end
-}
+end
+
+Events.onMapUpdate += proc { |_sender, _e| KIF::SoulLink.map_tick }

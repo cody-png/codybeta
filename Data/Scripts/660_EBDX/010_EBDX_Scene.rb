@@ -792,22 +792,25 @@ class PokeBattle_SceneEBDX < PokeBattle_Scene
     end
   end
 
+  # The sprite names of battler i, made once (this runs every frame)
+  BATTLER_SPRITE_KEYS = {}
   def pbFrameUpdate(cw = nil)
     cw.update if cw
     @battle.battlers.each_with_index do |b, i|
       next if !b
+      dataBox, pokemon, shadow = (BATTLER_SPRITE_KEYS[i] ||= ["dataBox_#{i}", "pokemon_#{i}", "shadow_#{i}"].freeze)
       # DataBoxEBDX.update takes no arguments
-      @sprites["dataBox_#{i}"].update if @sprites["dataBox_#{i}"] && @sprites["dataBox_#{i}"].respond_to?(:update)
+      @sprites[dataBox].update if @sprites[dataBox] && @sprites[dataBox].respond_to?(:update)
       # DynamicPokemonSprite.update takes optional scale_y argument
-      if @sprites["pokemon_#{i}"] && @sprites["pokemon_#{i}"].respond_to?(:update)
+      if @sprites[pokemon] && @sprites[pokemon].respond_to?(:update)
         # Check if it's a DynamicPokemonSprite (takes optional arg) or other sprite
-        if @sprites["pokemon_#{i}"].is_a?(DynamicPokemonSprite)
-          @sprites["pokemon_#{i}"].update
+        if @sprites[pokemon].is_a?(DynamicPokemonSprite)
+          @sprites[pokemon].update
         else
-          @sprites["pokemon_#{i}"].update rescue nil
+          @sprites[pokemon].update rescue nil
         end
       end
-      @sprites["shadow_#{i}"].update if @sprites["shadow_#{i}"] && @sprites["shadow_#{i}"].respond_to?(:update)
+      @sprites[shadow].update if @sprites[shadow] && @sprites[shadow].respond_to?(:update)
     end
     # EBDX command/fight window updates are handled in their input loops
     # (pbCommandMenuEBDX / pbFightMenu) — NOT here, because their update()

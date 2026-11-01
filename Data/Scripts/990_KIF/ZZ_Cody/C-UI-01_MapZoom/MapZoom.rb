@@ -725,3 +725,12 @@ class NightmareSprite
     end
   end
 end
+
+# The busiest hooks above (the tile grid, every character's screen position,
+# every character sprite) look at KIF::MapZoom.scale first, and that is 1.0
+# whenever the module is Off or a mod replaced the feature (MapZoom.wanted),
+# when they hand over to PIF's own method. The module gate in front of them
+# would only repeat that check hundreds of times a frame.
+KIF::Modules.self_gated(TilemapRenderer, :refresh_tile_coordinates, :refresh_tile_z) if defined?(KIF::Modules)
+KIF::Modules.self_gated(Game_Character, :screen_x, :screen_y_ground, :screen_y, :screen_z) if defined?(KIF::Modules)
+KIF::Modules.self_gated(Sprite_Character, :update) if defined?(KIF::Modules)

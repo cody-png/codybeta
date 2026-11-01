@@ -85,14 +85,14 @@ class ::Hash
   unless method_defined?(:try_key?)
     def try_key?(*args)
       for key in args
-        return false if !self.keys.include?(key) || !self[key]
+        return false if !self.key?(key) || !self[key]
       end
       return true
     end
   end
   unless method_defined?(:get_key)
     def get_key(key)
-      return self.keys.include?(key) ? self[key] : nil
+      return self.key?(key) ? self[key] : nil
     end
   end
   unless method_defined?(:deep_merge!)

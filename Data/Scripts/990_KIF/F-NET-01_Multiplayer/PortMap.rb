@@ -17,7 +17,9 @@
 #   first; one answer per device; a plain, short LOCATION path
 # - NAT-PMP only to that router, never to whoever answered the search
 # - a 2-hour lease, never a permanent mapping, on a random external port
-#   (the port the game listens on, 52411-52415, stays inside the router)
+#   (the port the game listens on, 52411-52415, stays inside the router);
+#   a router that wants equal ports (UPnP 724) or has that port taken (718) gets
+#   one more try with the listening port, so it still opens
 # - at most 4 services per device and 10 s for the whole opening; replies are
 #   cut at 64 KB (description) and 32 KB (SOAP) and read without backtracking
 # - Net.stop ends it early: it sets Thread[:kif_stop] on the opening thread
@@ -68,9 +70,9 @@ module KIF
               shared ||= [ext, :upnp]
               next
             end
-            if add_upnp(svc, port, ext_port, svc[:local] || local)
-              return res.merge(status: :open, via: :upnp, external_ip: ext, external_port: ext_port, gateway: from,
-                               mapping: [:upnp, svc, ext_port, port])
+            if (used = add_upnp(svc, port, ext_port, svc[:local] || local))   # the port the router took
+              return res.merge(status: :open, via: :upnp, external_ip: ext, external_port: used, gateway: from,
+                               mapping: [:upnp, svc, used, port])
             end
           end
         end
@@ -96,7 +98,7 @@ module KIF
       # the mapping again (lease renewal); never a longer lease than LEASE
       def renew(mapping)
         case mapping[0]
-        when :upnp then add_upnp(mapping[1], mapping[3], mapping[2], mapping[1][:local])
+        when :upnp then add_upnp(mapping[1], mapping[3], mapping[2], mapping[1][:local], false)   # no other port: the code names this one
         when :natpmp
           eport = natpmp_map(mapping[1], mapping[2], mapping[3], mapping[4], LEASE)
           mapping[4] = eport if eport && eport > 0   # the router may give another port: the next renewal asks for that one
@@ -271,12 +273,26 @@ module KIF
         end
       end
 
-      def add_upnp(svc, port, ext_port, client)   # a routers that only takes permanent mappings (error 725) is left alone
-        r = soap(svc, "AddPortMapping",
-                 "NewRemoteHost" => "", "NewExternalPort" => ext_port, "NewProtocol" => "TCP",
-                 "NewInternalPort" => port, "NewInternalClient" => client, "NewEnabled" => 1,
-                 "NewPortMappingDescription" => DESC, "NewLeaseDuration" => LEASE)
-        return r[:status] == 200
+      # The external port the router took, or nil. A router that only takes permanent mappings
+      # (error 725) is left alone. One that wants the same port on both sides (724) or has the
+      # random one taken (718) gets one more try with the listening port, unless Stop came meanwhile
+      # (a request that was sent is waited for, so a late one would leave a mapping behind).
+      # shortcut: for such a router the fixed KIF port is on the internet again; a router that
+      # can't do more would otherwise not open at all, and the player can open it by hand anyway.
+      def add_upnp(svc, port, ext_port, client, fallback = true)
+        r = add_once(svc, port, ext_port, client)
+        return ext_port if r[:status] == 200
+        if fallback && ext_port != port && %w[718 724].include?(r["errorCode"]) && !over?
+          return port if add_once(svc, port, port, client)[:status] == 200
+        end
+        return nil
+      end
+
+      def add_once(svc, port, ext_port, client)
+        return soap(svc, "AddPortMapping",
+                    "NewRemoteHost" => "", "NewExternalPort" => ext_port, "NewProtocol" => "TCP",
+                    "NewInternalPort" => port, "NewInternalClient" => client, "NewEnabled" => 1,
+                    "NewPortMappingDescription" => DESC, "NewLeaseDuration" => LEASE)
       end
 
       # {status:, "NewX" => value, "errorCode" => ...}; remembers this PC's

@@ -14,22 +14,27 @@
 #     joiner -> host  {"t":"auth","p":HMAC(Ke, "KIF2 join")}   Ke = SHA-256(nJ, nH,
 #     host -> joiner  {"t":"auth","p":HMAC(Ke, "KIF2 host")}   X, Y, K = g^2xy, w)
 #     The joiner proves first. A wrong proof: {"t":"no","why":"code"} and the
-#     line closes; 5 wrong proofs from one address and it's ignored for 10
-#     minutes; at most 10 handshakes start in 10 seconds.
+#     line closes; 5 wrong proofs from one address (an IPv6 /64) and it's
+#     ignored for 10 minutes; at most 10 handshakes start in 10 seconds.
 #     Two secrets: the code that goes over the internet holds the secret
 #     (lowest bit of its first byte 0); the code "Find on this network" gives
 #     out holds the LAN secret (that bit 1, Session#lan_secret). A joiner whose
 #     secret has the bit set says "k":"l" and the host uses its LAN secret, from
 #     a private address only: what any neighbour can ask for is no key to the
-#     internet code. After a join was accepted both secrets are new.
+#     internet code. After a join was accepted, or the player said No, both
+#     secrets are new.
 #   Then the joiner says hello and the host's player is asked "Let <name>
 #   join?". The host answers with its own hello, or a signed
-#   {"t":"no","why":"declined"} (also after 60 s without an answer).
+#   {"t":"no","why":"declined"} (also after 60 s without an answer; that one
+#   changes nothing: no wait for the address, the code stays).
 #   After the proofs (max 64 KB a frame): payload = 32-byte MAC + JSON object
 #     {"t":type,"s":seq,...}; MAC = HMAC-SHA256(direction key, JSON); keys
 #     come from Ke and both nonces. A frame with a wrong MAC, an old
 #     sequence number (replay) or fields that don't fit its type is dropped;
 #     a type this version doesn't know is ignored. 5 bad frames close the line.
+#     So does a stream of frames that would cost the game too long to read:
+#     the reader counts each frame's cost from its text (Net.cost) against a
+#     budget that fills with the clock (VALUE_RATE a second, VALUE_BURST saved).
 #   The first signed message each way is "hello" (name, KIF version).
 #   "ping" every 5 s of quiet; 20 s without a byte = lost. "bye" = clean close.
 #
@@ -59,7 +64,9 @@ module KIF
     POLL_TIME  = 0.01    # seconds one poll works on frames; the rest waits for the next poll
     ASK_LIMIT  = 3       # "Let <name> join?" prompts a minute
     DECLINE_WAIT = 600   # seconds an address that was told no is turned away
-    MAX_VALUES = 2500    # values (numbers, strings, lists, objects) in one signed message (honest ones hold about 150)
+    MAX_VALUES = 4200    # values (numbers, strings, lists, objects, keys) in one signed message: the 8 KB a mod may share holds about 4100 numbers, honest built-in ones under 1000
+    VALUE_RATE  = 20_000   # what the other game's frames may cost to read, a second (Net.cost units, about 5 microseconds each; a mod at its API limit is 16,400)
+    VALUE_BURST = 100_000  # the most that may be saved up while the line is quiet
 
     # Message types after the handshake: field => [class, max length] or
     # [Integer, min, max]. Later features (Soul Link, trading) add theirs.
@@ -80,6 +87,20 @@ module KIF
 
     # a name from the other game, safe to show in a PIF message (no \ codes)
     def self.shown_name(n); n.to_s.gsub(/[\\<>\x00-\x1f]/, "")[0, 24]; end
+
+    # What reading a frame will cost the game thread, counted from its text before anything is parsed:
+    # one for each place a value starts ([ { , :), a quarter for each backslash escape (slow to unescape).
+    def self.cost(frame); frame.count("[{,:") + 1 + frame.count("\\") / 4; end
+
+    # Who a handshake counts against: an IPv4 address; an IPv6 one stands for its whole /64 (one
+    # customer owns 2^64 addresses, so a wait for one address would not hold).
+    def self.net_key(addr)
+      a = addr.to_s.sub(/\A::ffff:/i, "").sub(/%.*\z/, "")
+      return a unless a.include?(":")
+      return Addrinfo.ip(a).to_sockaddr.byteslice(8, 8).unpack1("H*")
+    rescue StandardError
+      return addr.to_s
+    end
 
     # a version text from the other game: letters, digits and . _ + - space only
     # (it goes into _INTL, where a backslash in an argument is a replacement code)
@@ -246,7 +267,7 @@ module KIF
       def frame(payload); [payload.bytesize].pack("N") + payload.b; end
 
       # Hash or nil; never raises. max: the most values (numbers, strings, lists,
-      # objects) it reads; more is refused after reading that many
+      # objects) and object keys it reads; more is refused after reading that many
       def parse(text, max = nil); Parser.new(text, max).run; end
     end
 
@@ -278,9 +299,11 @@ module KIF
 
       def ws; @i = WS.match(@s, @i).end(0); end
 
+      def count; raise "big" if @max && (@n += 1) > @max; end
+
       def value(depth)
         raise "deep" if depth > DEPTH
-        raise "big" if @max && (@n += 1) > @max   # a 64 KB message of 0s would otherwise cost the game thread tens of ms
+        count   # a 64 KB message of 0s would otherwise cost the game thread tens of ms
         ws
         case @s[@i]
         when "{"
@@ -290,6 +313,7 @@ module KIF
           return (@i += 1; h) if @s[@i] == "}"
           loop do
             ws
+            count
             m = STR.match(@s, @i) or raise "key"
             @i = m.end(0)
             k = unescape(m[1])
@@ -444,6 +468,8 @@ module KIF
         @key = nil
         @seq = 0
         @last_rx = @last_tx = Net.now
+        @budget = VALUE_BURST   # what the frames may still cost to read (the reader thread only)
+        @budget_at = @last_rx
         @closed = false
         @reader = Thread.new { read_loop }
         @writer = Thread.new { write_loop }
@@ -505,8 +531,18 @@ module KIF
               @inbox << [:error, :flood]
               return hard_close
             end
+            fr = buf.byteslice(4, n)
+            # reading a frame costs the game thread (Net.cost); the budget fills with the clock, not with
+            # polls, so what piled up while the game was busy is only what the partner sent in that time
+            now = Net.now
+            @budget = [@budget + (now - @budget_at) * VALUE_RATE, VALUE_BURST].min - Net.cost(fr)
+            @budget_at = now
+            if @budget < 0   # a stream of heavy messages: not an honest partner
+              @inbox << [:error, :flood]
+              return hard_close
+            end
             @inbox_lock.synchronize { @inbox_bytes += n }
-            @inbox << buf.byteslice(4, n)
+            @inbox << fr
             buf = buf.byteslice(4 + n, buf.bytesize - 4 - n)
             sec = Net.now.floor
             count = 0 if sec != second
@@ -601,11 +637,7 @@ module KIF
         @conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
         @state = :connected
         @later << [:connected, @partner]
-        if @via == :direct   # the code is used up: whoever saw it later needs a new one (the host screen shows it)
-          @secret = Net.new_secret(false)
-          @lan_secret = Net.new_secret(true) if @lan_secret
-          @pakes = {}
-        end
+        renew_secrets if @via == :direct   # the code is used up: whoever saw it later needs a new one (the host screen shows it)
         return true
       end
 
@@ -615,12 +647,17 @@ module KIF
         return @lan_secret ||= Net.new_secret(true)
       end
 
-      # host: say no (also after answer_timeout); hosting goes on. The address is
-      # turned away for DECLINE_WAIT s (not after a timeout: nobody was there).
+      # host: say no (also after answer_timeout); hosting goes on. After a real No
+      # the address (an IPv6 /64) is turned away for DECLINE_WAIT s and the code is
+      # new, as after a join: whoever saw it later can't come back from another
+      # address. Nothing of that after a timeout: nobody was there.
       def decline(timed_out = false)
         return false unless asking?
         Net.log("said no to #{@partner}")
-        @fails[@conn.addr] = [MAX_BAD, Net.now + DECLINE_WAIT] unless timed_out
+        unless timed_out
+          @fails[Net.net_key(@conn.addr)] = [MAX_BAD, Net.now + DECLINE_WAIT]
+          renew_secrets if @via == :direct
+        end
         @conn.send_msg({ "t" => "no", "why" => "declined" })
         drop_line(true)
         @partner = nil
@@ -760,7 +797,8 @@ module KIF
           return
         end
         addr = (sock.remote_address.ip_address rescue "?")
-        f = @fails[addr]
+        key = Net.net_key(addr)
+        f = @fails[key]
         @hs_log.reject! { |t| Net.now - t > 10 }
         @asks.reject! { |t| Net.now - t > 60 }
         # the same address again while its handshake hasn't finished: a retry (its
@@ -773,11 +811,18 @@ module KIF
           (sock.write(Wire.frame(Wire.json({ "t" => "no", "why" => why }))) rescue nil)
           return (sock.close rescue nil)
         end
-        @fails.delete(addr) if f && Net.now >= f[1]
+        @fails.delete(key) if f && Net.now >= f[1]
         @hs_log << Net.now
         drop_line if again
         start(sock)
         @hs_state = :wait_hi
+      end
+
+      # new codes (the join code and the one "Find on this network" gives out)
+      def renew_secrets
+        @secret = Net.new_secret(false)
+        @lan_secret = Net.new_secret(true) if @lan_secret
+        @pakes = {}
       end
 
       def start(sock)
@@ -845,7 +890,7 @@ module KIF
           return bad_hs(out, :closed) unless h["t"] == "auth"
           if @role == :host
             unless Crypto.same?(p, proof("join"))
-              f = (@fails[@conn.addr] ||= [0, 0])
+              f = (@fails[Net.net_key(@conn.addr)] ||= [0, 0])
               f[0] += 1
               f[1] = Net.now + 600
               out << [:rejected, @conn.addr]

@@ -8,31 +8,43 @@
 #
 # Wire: every frame is a 4-byte big-endian length + payload.
 #   Handshake (plain JSON, max 1 KB a frame), SPAKE2 (module Spake2 below):
-#     joiner -> host  {"t":"hi","v":2,"n":nJ,"x":X}    nJ, nH: 16 random bytes
-#     host -> joiner  {"t":"hi","v":2,"n":nH,"y":Y}    X = g^x M^w, Y = g^y N^w
+#     joiner -> host  {"t":"hi","v":3,"n":nJ,"x":X}    nJ, nH: 16 random bytes
+#     host -> joiner  {"t":"hi","v":3,"n":nH,"y":Y}    X = g^x M^w, Y = g^y N^w
 #     joiner -> host  {"t":"auth","p":HMAC(Ke, "KIF2 join")}   Ke = SHA-256(nJ, nH,
 #     host -> joiner  {"t":"auth","p":HMAC(Ke, "KIF2 host")}   X, Y, K = g^2xy, w)
 #     The joiner proves first. A wrong proof: {"t":"no","why":"code"} and the
 #     line closes; 5 wrong proofs from one address and it's ignored for 10
-#     minutes; at most 10 handshakes start in 10 seconds.
+#     minutes; at most 10 failed handshakes in 10 seconds. A host keeps a few
+#     handshakes going at once (4, 2 for one address; the oldest makes room), so
+#     a silent connection can't hold the door. "busy" is only said to someone
+#     with the right code (signed). "wait" and "code" arrive unsigned: the
+#     joiner keeps them as a hint and reports them only if the line then closes.
 #   Then the joiner says hello and the host's player is asked "Let <name>
 #   join?". The host answers with its own hello, or a signed
-#   {"t":"no","why":"declined"} (also after 60 s without an answer).
-#   After the proofs (max 64 KB a frame): payload = 32-byte MAC + JSON object
-#     {"t":type,"s":seq,...}; MAC = HMAC-SHA256(direction key, JSON); keys
-#     come from Ke and both nonces. A frame with a wrong MAC, an old
-#     sequence number (replay) or fields that don't fit its type is dropped;
-#     a type this version doesn't know is ignored. 5 bad frames close the line.
+#   {"t":"no","why":"declined"} (also after 60 s without an answer). After 3
+#   no's in 10 minutes the host stops asking and says no.
+#   After the proofs (max 64 KB a frame): payload = 32-byte MAC + 8-byte
+#     number + encrypted JSON object {"t":type,...}. Keys come from Ke and
+#     both nonces, one set per direction. The cipher is HMAC-SHA256 in counter
+#     mode over (number, block); MAC = HMAC-SHA256(direction key, number +
+#     ciphertext), checked before anything is decrypted or read. A frame with
+#     a wrong MAC, an old number (replay) or fields that don't fit its type is
+#     dropped; a type this version doesn't know is ignored. 5 bad frames close
+#     the line. A line also closes when it sends more than 192 KB a second
+#     (after a 1.5 MB burst) or more than 4 MB sit unread.
 #   The first signed message each way is "hello" (name, KIF version).
 #   "ping" every 5 s of quiet; 20 s without a byte = lost. "bye" = clean close.
+#   A line whose writes make no progress for 10 s is closed.
 #
 # Peer data is never Marshal-loaded or eval'd: only JSON text (ASCII, nesting
 # limited) read by the small parser below into Hash/Array/String/Integer/
 # Float/true/false/nil, then checked against TYPES.
 #
 # Threads: an accept thread (host), a connect thread (join), and a reader
-# and a writer thread per connection. They only move bytes; everything else
-# runs on the game's thread in Session#poll, which never waits.
+# and a writer thread per connection. They only move bytes (the reader also
+# closes a line that is too fast, stalled, or silent in its handshake);
+# everything else runs on the game's thread in Session#poll, which never
+# waits and stops after about 8 ms of work.
 # Only socket calls built into the engine's Ruby are used (no socket.rb
 # helpers such as connect_nonblock/accept_nonblock, no Net::HTTP, no IPAddr).
 #===============================================================================
@@ -46,11 +58,27 @@ module KIF
     MAX_PRE    = 1024    # frames before the handshake is done
     MAX_BAD    = 5       # bad frames before the line is closed
     MAX_RATE   = 400     # frames a second before the line is closed
-    PROTO      = 2
-    HS_LIMIT   = 10      # handshakes a host starts in 10 s
+    PROTO      = 3
+    HS_LIMIT   = 10      # failed handshakes a host puts up with in 10 s
+    MAX_PENDING   = 4    # handshakes a host runs at once (the oldest makes room)
+    MAX_PER_ADDR  = 2    # ... of them from one address
+    MAX_SOCKS     = 8    # accepted sockets waiting for the game to look at them
+    MAX_ASKS      = 3    # "no" answers in 10 minutes before the host stops asking
+    MAX_STRANGERS = 5    # wrong visitors a relay host puts up with
+    POLL_BUDGET   = 0.008 # seconds of frame work in one Session#poll (at least one frame)
+    MAX_OUT       = 512  # frames waiting to be written before the line is closed
+    WRITE_TIMEOUT = 10.0 # seconds a write may make no progress
+    MAX_VALUES    = 4096 # values (numbers, strings, lists...) in one message from the partner
+    PARSE_MAX     = 20_000 # ... and in any other text Wire.parse is asked to read
+    ARRAY_MAX     = 256  # a list field without its own limit
+    HASH_MAX      = 128  # a table field without its own limit
+    OBJ_ARRAY_MAX = 2048 # a list inside an [Object] field (mod data)
+    OBJ_HASH_MAX  = 512
 
     # Message types after the handshake: field => [class, max length] or
-    # [Integer, min, max]. Later features (Soul Link, trading) add theirs.
+    # [Integer, min, max] or [Array, max items] or [Hash, max keys] or [Object]
+    # (any value, but the key must be there). Later features (Soul Link,
+    # trading) add theirs.
     TYPES = {
       "hello" => { "name" => [String, 24], "ver" => [String, 16] },
       "ping"  => {},
@@ -68,6 +96,48 @@ module KIF
 
     # a name from the other game, safe to show in a PIF message (no \ codes)
     def self.shown_name(n); n.to_s.gsub(/[\\<>\x00-\x1f]/, "")[0, 24]; end
+
+    # the other game's version text: letters, digits and . + _ - only (it goes
+    # through _INTL, where a backslash in an argument is read as a command)
+    def self.shown_ver(v); v.to_s.gsub(/[^0-9A-Za-z.+_ -]/, "")[0, 16]; end
+
+    # an address for the log: most of it hidden (the log is sent in bug reports)
+    def self.mask_addr(ip)
+      a = ip.to_s
+      return a.split(".")[0, 2].join(".") + ".x.x" if a =~ /\A\d+\.\d+\.\d+\.\d+\z/
+      return a.split(":")[0, 2].join(":") + ":x" if a.include?(":")
+      return "?"
+    end
+
+    # :loopback, :private, :linklocal, :unspecified, :multicast, :public or
+    # :invalid, for an address written as an IP number
+    def self.addr_kind(ip)
+      a = Addrinfo.ip(ip.to_s.sub(/%.*\z/, ""))
+      if a.ipv4?
+        o = a.ip_address.split(".").map(&:to_i)
+        return :unspecified if o[0] == 0
+        return :loopback if o[0] == 127
+        return :linklocal if o[0] == 169 && o[1] == 254
+        return :multicast if o[0].between?(224, 239)
+        return :invalid if o[0] >= 240
+        return :private if o[0] == 10 || (o[0] == 172 && o[1].between?(16, 31)) || (o[0] == 192 && o[1] == 168) ||
+                           (o[0] == 100 && o[1].between?(64, 127))
+        return :public
+      end
+      b = a.to_sockaddr.byteslice(8, 16).bytes
+      return :unspecified if b.all?(0)
+      return :loopback if b[0, 15].all?(0) && b[15] == 1
+      return addr_kind(b[12, 4].join(".")) if b[0, 10].all?(0) && b[10] == 0xff && b[11] == 0xff   # ::ffff:a.b.c.d
+      return :multicast if b[0] == 0xff
+      return :linklocal if b[0] == 0xfe && (b[1] & 0xc0) == 0x80
+      return :private if (b[0] & 0xfe) == 0xfc
+      return :public
+    rescue StandardError
+      return :invalid
+    end
+
+    # a computer on this network or this one (what a LAN answer may come from)
+    def self.near?(ip); [:loopback, :private, :linklocal].include?(addr_kind(ip)); end
 
     def self.available?
       return @available unless @available.nil?
@@ -88,6 +158,26 @@ module KIF
 
     def self.now; Process.clock_gettime(Process::CLOCK_MONOTONIC); end
 
+    # One thread looks at every open line twice a second (Conn#check_limits).
+    @watched ||= []
+    @watch_lock ||= Mutex.new
+
+    def self.watch(conn)
+      @watch_lock.synchronize do
+        @watched << conn
+        unless @watchdog && @watchdog.alive?
+          @watchdog = Thread.new do
+            loop do
+              sleep 0.5
+              list = @watch_lock.synchronize { @watched.reject!(&:closed?); @watched.dup }
+              list.each { |c| (c.check_limits rescue nil) }
+            end
+          end
+          @watchdog.report_on_exception = false
+        end
+      end
+    end
+
     #---------------------------------------------------------------------------
     # HMAC-SHA256 on Digest::SHA256 (the engine has no OpenSSL)
     #---------------------------------------------------------------------------
@@ -97,12 +187,30 @@ module KIF
       def random(n); Random.urandom(n); end
       def sha256(s); Digest::SHA256.digest(s.b); end
 
-      def hmac(key, msg)
-        key = sha256(key) if key.bytesize > 64
-        key = key.b.ljust(64, "\0".b)
-        ipad = key.bytes.map { |b| b ^ 0x36 }.pack("C*")
-        opad = key.bytes.map { |b| b ^ 0x5c }.pack("C*")
-        return sha256(opad + sha256(ipad + msg.b))
+      # HMAC with the key's pads made once (a key stream asks for thousands)
+      class Mac
+        def initialize(key)
+          key = Crypto.sha256(key) if key.bytesize > 64
+          key = key.b.ljust(64, "\0".b)
+          @ipad = key.bytes.map { |b| b ^ 0x36 }.pack("C*")
+          @opad = key.bytes.map { |b| b ^ 0x5c }.pack("C*")
+        end
+
+        def digest(msg); Crypto.sha256(@opad + Crypto.sha256(@ipad + msg.b)); end
+      end
+
+      def hmac(key, msg); Mac.new(key).digest(msg); end
+
+      # n bytes of key stream for frame number seq: HMAC(key, seq + block number)
+      def stream(mac, seq, n)
+        head = [seq].pack("Q>")
+        return ((n + 31) / 32).times.map { |i| mac.digest(head + [i].pack("N")) }.join.byteslice(0, n)
+      end
+
+      def xor(a, b)
+        return "".b if a.empty?
+        x = a.unpack1("H*").to_i(16) ^ b.unpack1("H*").to_i(16)
+        return [x.to_s(16).rjust(a.bytesize * 2, "0")].pack("H*")
       end
 
       def same?(a, b)
@@ -222,8 +330,8 @@ module KIF
 
       def frame(payload); [payload.bytesize].pack("N") + payload.b; end
 
-      # Hash or nil; never raises
-      def parse(text); Parser.new(text).run; end
+      # Hash or nil; never raises. A message from the partner is read with max = MAX_VALUES.
+      def parse(text, max = PARSE_MAX); Parser.new(text, max).run; end
     end
 
     class Parser
@@ -233,9 +341,11 @@ module KIF
       STR = /\G"((?:[^"\\\x00-\x1f]|\\["\\\/bfnrt]|\\u[0-9a-fA-F]{4})*)"/
       ESC = { "b" => "\b", "f" => "\f", "n" => "\n", "r" => "\r", "t" => "\t" }
 
-      def initialize(text)
+      def initialize(text, max = PARSE_MAX)
         @s = text.to_s.b
         @i = 0
+        @n = 0
+        @max = max
       end
 
       def run
@@ -254,6 +364,7 @@ module KIF
 
       def value(depth)
         raise "deep" if depth > DEPTH
+        raise "many" if (@n += 1) > @max   # the cost of a message is bounded, not only its size
         ws
         case @s[@i]
         when "{"
@@ -301,7 +412,10 @@ module KIF
           end
           m = NUM.match(@s, @i) or raise "value"
           @i = m.end(0)
-          return m[0] =~ /[.eE]/ ? m[0].to_f : m[0].to_i
+          return m[0].to_i unless m[0] =~ /[.eE]/
+          f = m[0].to_f
+          raise "float" unless f.finite?   # 1e999 is not a number we hand on
+          return f
         end
       end
 
@@ -331,8 +445,14 @@ module KIF
           return nil unless v.is_a?(String) && v.valid_encoding? && v.length <= a && v !~ /[\x00-\x1f\u007f]/
         elsif cls == Integer
           return nil unless v.is_a?(Integer) && v >= a && v <= b
-        else
-          return nil unless v.is_a?(cls)
+        elsif cls == Array
+          return nil unless v.is_a?(Array) && v.length <= (a || ARRAY_MAX)
+        elsif cls == Hash
+          return nil unless v.is_a?(Hash) && v.length <= (a || HASH_MAX)
+        else   # Object: anything, but it has to be there, and a list or table in it stays small
+          return nil unless h.key?(k)
+          return nil if v.is_a?(Array) && v.length > OBJ_ARRAY_MAX
+          return nil if v.is_a?(Hash) && v.length > OBJ_HASH_MAX
         end
         out[k] = v
       end
@@ -374,7 +494,7 @@ module KIF
       # Hash (kind, ip, port, secret, room), :typo (looks like a code, a
       # character is wrong) or :invalid
       def read(text)
-        t = text.to_s.upcase.gsub(/[\s\-_.]/, "")
+        t = text.to_s.scrub("").upcase.gsub(/[\s\-_.]/, "")
         KINDS.each do |kind, (prefix, nbytes)|
           body = t[prefix.length..-1]
           next unless t.start_with?(prefix) && body.length == chars_for(nbytes)
@@ -402,8 +522,14 @@ module KIF
     # One TCP line: reader and writer threads, frames in, frames out
     #---------------------------------------------------------------------------
     class Conn
+      # what the reader lets through: a burst, then a steady rate (bytes a
+      # second), and how much may sit unread (frames, bytes). Before the
+      # handshake is through the room is small.
+      PRE  = { burst: 8_192, refill: 2_048, frames: 16, bytes: 16_384 }
+      OPEN = { burst: 1_572_864, refill: 196_608, frames: 16_384, bytes: 4_194_304 }
+
       attr_reader :inbox, :addr, :last_rx
-      attr_accessor :cap, :ping_every
+      attr_accessor :cap, :ping_every, :deadline
 
       def initialize(sock)
         @sock = sock
@@ -412,23 +538,75 @@ module KIF
         @out = Queue.new
         @cap = MAX_PRE
         @ping_every = 5.0
-        @key = nil
+        @mac = @enc = @rx_mac = @rx_enc = nil
         @seq = 0
         @last_rx = @last_tx = Net.now
         @closed = false
+        @opened = false
+        @deadline = nil      # the handshake has to be through by then (the reader sees to it)
+        @write_since = nil   # a write began then and hasn't finished
+        @got = 0             # bytes of frames queued (reader thread) and taken (game thread)
+        @taken = 0
         @reader = Thread.new { read_loop }
         @writer = Thread.new { write_loop }
         [@reader, @writer].each { |t| t.report_on_exception = false }
+        Net.watch(self)
       end
 
       def closed?; @closed; end
 
-      # from now on every message is signed with this key (writer thread signs)
-      def sign_with(key); @key = key; end
+      # called about twice a second by Net.watch's thread: a handshake that took
+      # too long, a write that makes no progress. Closing ends the reader.
+      def check_limits
+        return if @closed
+        why = watch or return
+        @inbox << [:error, why]
+        hard_close
+      end
 
-      def send_raw(hash); @out << [:raw, Wire.json(hash)] unless @closed; end
-      def send_msg(hash); @out << [:msg, hash] unless @closed; end
-      def send_bytes(bytes); @out << [:bytes, bytes] unless @closed; end   # tests only
+      # the next queued frame (a String), or an event ([:error, why], [:closed]), or nil
+      def next_frame
+        f = (@inbox.pop(true) rescue nil)
+        @taken += f.bytesize if f.is_a?(String)
+        return f
+      end
+
+      # from now on every message is signed and hidden (the writer thread does it)
+      def keys(tx_mac, tx_enc, rx_mac, rx_enc)
+        @rx_mac = Crypto::Mac.new(rx_mac)
+        @rx_enc = Crypto::Mac.new(rx_enc)
+        @enc = Crypto::Mac.new(tx_enc)
+        @mac = Crypto::Mac.new(tx_mac)   # last: the writer looks at this one
+      end
+
+      # the handshake is through: bigger frames, a bigger room
+      def open_up
+        @cap = MAX_FRAME
+        @deadline = nil
+        @opened = true
+      end
+
+      # payload of a signed frame: MAC + number + hidden JSON
+      def seal(json, seq)
+        n = [seq].pack("Q>")
+        ct = Crypto.xor(json.b, Crypto.stream(@enc, seq, json.bytesize))
+        return @mac.digest(n + ct) + n + ct
+      end
+
+      # [number, hidden JSON] when the MAC is right, else nil
+      def verify(payload)
+        return nil if payload.bytesize < 41 || @rx_mac.nil?
+        n = payload.byteslice(32, 8)
+        ct = payload.byteslice(40, payload.bytesize - 40)
+        return nil unless Crypto.same?(@rx_mac.digest(n + ct), payload.byteslice(0, 32))
+        return [n.unpack1("Q>"), ct]
+      end
+
+      def reveal(ct, seq); Crypto.xor(ct, Crypto.stream(@rx_enc, seq, ct.bytesize)); end
+
+      def send_raw(hash); put([:raw, Wire.json(hash)]); end
+      def send_msg(hash); put([:msg, hash]); end
+      def send_bytes(bytes); put([:bytes, bytes]); end   # tests only
 
       # closes once what's queued is written (at most 1 s later)
       def finish
@@ -440,7 +618,7 @@ module KIF
       # bye: sent before the line closes
       def close(bye = false)
         return if @closed
-        return hard_close unless bye && @key
+        return hard_close unless bye && @mac
         send_msg({ "t" => "bye" })
         finish
       end
@@ -452,11 +630,35 @@ module KIF
 
       private
 
+      def put(item)
+        return if @closed
+        if @out.size >= MAX_OUT   # the other end isn't taking what we send
+          @inbox << [:error, :stalled]
+          return hard_close
+        end
+        @out << item
+      end
+
+      # why the line has to go
+      def watch
+        now = Net.now
+        return :timeout if @deadline && now > @deadline
+        return :stalled if @write_since && now - @write_since > WRITE_TIMEOUT
+        return nil
+      end
+
       def read_loop
         buf = "".b
         count = 0
         second = Net.now.floor
+        lim = PRE
+        tokens = lim[:burst].to_f
+        at = Net.now
         loop do
+          if @opened && lim.equal?(PRE)
+            lim = OPEN
+            tokens = lim[:burst].to_f
+          end
           chunk = @sock.readpartial(16_384)
           @last_rx = Net.now
           buf << chunk
@@ -467,16 +669,21 @@ module KIF
               return hard_close
             end
             break if buf.bytesize < 4 + n
-            @inbox << buf.byteslice(4, n)
-            buf = buf.byteslice(4 + n, buf.bytesize - 4 - n)
-            sec = Net.now.floor
+            now = Net.now
+            tokens = [tokens + (now - at) * lim[:refill], lim[:burst]].min
+            at = now
+            tokens -= 4 + n
+            sec = now.floor
             count = 0 if sec != second
             second = sec
             count += 1
-            if count > MAX_RATE
+            if tokens < 0 || count > MAX_RATE || @inbox.size >= lim[:frames] || @got - @taken + n > lim[:bytes]
               @inbox << [:error, :flood]
               return hard_close
             end
+            @inbox << buf.byteslice(4, n)
+            @got += n
+            buf = buf.byteslice(4 + n, buf.bytesize - 4 - n)
           end
         end
       rescue EOFError, IOError, SystemCallError, StandardError
@@ -488,7 +695,7 @@ module KIF
         until @closed
           item = (@out.pop(true) rescue nil)
           if item.nil?
-            if @key && Net.now - @last_tx >= @ping_every
+            if @mac && Net.now - @last_tx >= @ping_every
               item = [:msg, { "t" => "ping" }]
             else
               sleep 0.02
@@ -501,8 +708,8 @@ module KIF
           when :bytes then write(item[1])
           when :msg
             @seq += 1
-            json = Wire.json(item[1].merge("s" => @seq))
-            write(Wire.frame(Crypto.hmac(@key, json) + json))
+            json = Wire.json({ "t" => item[1]["t"] }.merge(item[1]))
+            write(Wire.frame(seal(json, @seq)))
           end
         end
       rescue StandardError
@@ -510,8 +717,27 @@ module KIF
       end
 
       def write(bytes)
+        @write_since = Net.now
         @sock.write(bytes)
+        @write_since = nil
         @last_tx = Net.now
+      end
+    end
+
+    #---------------------------------------------------------------------------
+    # One line of a session and where its handshake stands. A joiner has one;
+    # a host runs a few handshakes at once (@pending) and keeps the one whose
+    # proof was right as the partner's line.
+    #---------------------------------------------------------------------------
+    class Line
+      attr_accessor :conn, :hs, :started, :bad, :rx_seq, :ke, :nj, :nh, :my_nonce, :x, :xe, :hint, :gone
+
+      def initialize(conn)
+        @conn = conn
+        @started = Net.now
+        @bad = 0
+        @rx_seq = 0
+        @gone = false
       end
     end
 
@@ -521,7 +747,8 @@ module KIF
     #   [:join_request, name]   (host) someone with the code: #accept or #decline
     #   [:connected, name]      handshake done, partner said hello
     #   [:message, type, hash]  a checked message
-    #   [:disconnected, why]    :bye, :timeout, :closed, :error
+    #   [:disconnected, why]    :bye, :timeout, :closed, :error, :flood,
+    #                           :oversized, :stalled
     #   [:failed, why]          joining failed: :unreachable, :code, :busy,
     #                           :wait, :timeout, :host_code, :closed, :relay,
     #                           :declined
@@ -530,8 +757,9 @@ module KIF
     # player is asked), :waiting (joiner: for the answer), :connected, :closed
     #---------------------------------------------------------------------------
     class Session
-      attr_reader :state, :role, :partner, :partner_ver, :port, :via, :ports, :secret, :room, :conn, :relay
+      attr_reader :role, :partner, :partner_ver, :port, :via, :ports, :secret, :room, :relay
       attr_accessor :ping_every, :timeout, :handshake_timeout, :answer_timeout, :hs_limit, :name, :ver
+      attr_accessor :wave_at   # when the partner's last hello was shown (NetMenu)
 
       def initialize(name, ver)
         @name = name.to_s[0, 24]
@@ -544,20 +772,35 @@ module KIF
         @handshake_timeout = 10.0
         @answer_timeout = 60.0
         @hs_limit = HS_LIMIT
-        @hs_log = []
+        @hs_log = []             # when a handshake failed (the last 10 s)
         @fails = {}              # address => [count, until]
+        @no_log = []             # when the player said no (the last 10 minutes)
+        @wrong_logged = 0
+        @strangers = 0
+        @line = nil              # the partner's line (a joiner's only line)
+        @pending = []            # host: handshakes still running
         @servers = []
         @threads = []
+        @acceptors = []
+        @v6 = false
       end
+
+      # a host with handshakes running and no partner reads as :handshake
+      def state; (@state == :listening && !@pending.empty?) ? :handshake : @state; end
+
+      def conn; l = @line || @pending.last; l && l.conn; end
 
       def connected?; @state == :connected; end
       def asking?; @state == :asking; end
       def hosting?; @role == :host && @state != :closed && @state != :idle; end
 
+      # false when the thread that takes visitors is gone
+      def accept_alive?; @acceptors.any?(&:alive?); end
+
       # host: let the asking player in
       def accept
         return false unless asking?
-        @conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
+        @line.conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
         @state = :connected
         @later << [:connected, @partner]
         return true
@@ -567,7 +810,8 @@ module KIF
       def decline
         return false unless asking?
         Net.log("said no to #{@partner}")
-        @conn.send_msg({ "t" => "no", "why" => "declined" })
+        @no_log << Net.now
+        @line.conn.send_msg({ "t" => "no", "why" => "declined" })
         drop_line(true)
         @partner = nil
         @state = :closed if @via == :relay   # the relay room is used up
@@ -596,21 +840,29 @@ module KIF
         end
         return nil unless @port
         begin
-          @servers << TCPServer.new("::", @port) if ipv6 && bind == "0.0.0.0"
+          if ipv6 && bind == "0.0.0.0"
+            @servers << TCPServer.new("::", @port)
+            @v6 = true
+          end
         rescue SystemCallError, SocketError
           nil
         end
-        @servers.each do |srv|
-          t = Thread.new do
-            loop { @events << [:sock, srv.accept] }
-          rescue StandardError
-            nil
-          end
-          t.report_on_exception = false
-          @threads << t
-        end
+        @servers.each { |srv| listen_on(srv) }
         @state = :listening
         return @port
+      end
+
+      # The IPv6 door stays shut until the player asks for an IPv6 code
+      def open_ipv6
+        return true if @v6
+        return false unless @role == :host && @via == :direct && @port && hosting?
+        srv = TCPServer.new("::", @port)
+        @servers << srv
+        @v6 = true
+        listen_on(srv)
+        return true
+      rescue SystemCallError, SocketError
+        return false
       end
 
       def join(host, port, secret)
@@ -627,6 +879,7 @@ module KIF
         @room = room
         @via = :relay
         @relay = [rhost, rport]
+        @strangers = 0
         connect_out(rhost, rport)
       end
 
@@ -642,20 +895,28 @@ module KIF
       def post(type, fields = {})
         return false unless connected?
         msg = Net.check_fields(type, fields.merge("t" => type)) or return false
-        @conn.send_msg(msg)
+        @line.conn.send_msg(msg)
         return true
       end
 
       def close
-        @conn.close(connected?) if @conn
-        @servers.each { |s| (s.close rescue nil) }
-        @servers = []
+        @line.conn.close(connected?) if @line
+        @line = nil
+        @pending.each { |l| l.conn.close(false) }
+        @pending = []
         @threads.each { |t| (t.kill rescue nil) }
         @threads = []
+        @acceptors = []
+        @servers.each { |s| (s.close rescue nil) }
+        @servers = []
+        while (ev = (@events.pop(true) rescue nil))   # taken but never looked at
+          (ev[1].close rescue nil) if ev[0] == :sock
+        end
         @state = :closed
       end
 
-      # Never waits: takes what the threads left and moves the state on
+      # Never waits: takes what the threads left and moves the state on. Works
+      # for about POLL_BUDGET and leaves the rest queued for the next call.
       def poll
         out = @later
         @later = []
@@ -667,19 +928,50 @@ module KIF
             @state = :closed if @state == :connecting
           end
         end
-        if @conn
-          while @conn && (f = (@conn.inbox.pop(true) rescue nil))
-            f.is_a?(Array) ? line_ended(f[1] || :closed, out) : frame(f, out)
+        stop_at = Net.now + POLL_BUDGET
+        catch(:budget) do
+          ([@line] + @pending).compact.each do |line|
+            until line.gone
+              f = line.conn.next_frame or break
+              f.is_a?(Array) ? line_ended(line, f[1] || :closed, out) : frame(line, f, out)
+              throw :budget if Net.now > stop_at
+            end
           end
-          check_time(out) if @conn
         end
+        check_time(out)
         return out
       end
 
       private
 
+      # takes visitors; a failed accept is not the end of it
+      def listen_on(srv)
+        t = Thread.new do
+          loop do
+            begin
+              s = srv.accept
+            rescue IOError
+              break   # closed
+            rescue SystemCallError, SocketError
+              break if srv.closed?
+              sleep 0.1   # a visitor that left before we looked, or out of descriptors
+              next
+            end
+            if @events.size >= MAX_SOCKS   # the game isn't looking: no room for more
+              (s.close rescue nil)
+            else
+              @events << [:sock, s]
+            end
+          end
+        end
+        t.report_on_exception = false
+        @threads << t
+        @acceptors << t
+      end
+
       def connect_out(host, port)
         @state = :connecting
+        @threads.delete_if { |t| !t.alive? }
         t = Thread.new do
           s = TCPSocket.new(host, port, connect_timeout: 6)
           @events << [:sock, s]
@@ -690,142 +982,193 @@ module KIF
         @threads << t
       end
 
+      def new_line(sock)
+        c = Conn.new(sock)
+        c.ping_every = @ping_every
+        return Line.new(c)
+      end
+
+      def refuse(sock, why)
+        (sock.write(Wire.frame(Wire.json({ "t" => "no", "why" => why }))) rescue nil)
+        (sock.close rescue nil)
+      end
+
       def accepted(sock, out)
         if @role == :join || @via == :relay
           return (sock.close rescue nil) unless @state == :connecting
-          start(sock)
+          @line = new_line(sock)
+          @state = :handshake
           if @via == :relay
-            @hs_state = :relay_wait
-            @conn.send_raw({ "t" => "relay", "room" => Crypto.hex(@room), "role" => @role.to_s })
+            @line.hs = :relay_wait
+            @line.conn.send_raw({ "t" => "relay", "room" => Crypto.hex(@room), "role" => @role.to_s })
           else
-            send_hi
+            @line.conn.deadline = Net.now + @handshake_timeout
+            send_hi(@line)
           end
           return
         end
+        return (sock.close rescue nil) if @state == :closed
         addr = (sock.remote_address.ip_address rescue "?")
+        now = Net.now
         f = @fails[addr]
-        @hs_log.reject! { |t| Net.now - t > 10 }
-        # the same address again while its handshake hasn't finished: a retry (its
-        # first try gave up while this game wasn't polling, e.g. in a battle)
-        again = @conn && @state == :handshake && @conn.addr == addr
-        why = if (f && f[0] >= MAX_BAD && Net.now < f[1]) || @hs_log.length >= @hs_limit then "wait"
-              elsif @conn && !again then "busy"
-              end
-        if why
-          (sock.write(Wire.frame(Wire.json({ "t" => "no", "why" => why }))) rescue nil)
-          return (sock.close rescue nil)
-        end
-        @fails.delete(addr) if f && Net.now >= f[1]
-        @hs_log << Net.now
-        drop_line if again
-        start(sock)
-        @hs_state = :wait_hi
-      end
-
-      def start(sock)
-        @conn = Conn.new(sock)
-        @conn.ping_every = @ping_every
-        @hs_started = Net.now
-        @state = :handshake
-        @bad = 0
-        @rx_seq = 0
+        @hs_log.reject! { |t| now - t > 10 }
+        # an address that guessed wrong too often, or too many failed handshakes
+        # lately. (Whether the host is busy is only told to someone with the code.)
+        return refuse(sock, "wait") if (f && f[0] >= MAX_BAD && now < f[1]) || @hs_log.length >= @hs_limit
+        @fails.delete(addr) if f && now >= f[1]
+        @fails.delete_if { |_, v| now >= v[1] } if @fails.length > 64
+        # room for this one: the oldest of this address, then the oldest of all, goes
+        mine = @pending.select { |l| l.conn.addr == addr }
+        drop_pending(mine.first) if mine.length >= MAX_PER_ADDR
+        drop_pending(@pending.first) if @pending.length >= MAX_PENDING
+        line = new_line(sock)
+        line.hs = :wait_hi
+        line.conn.deadline = now + @handshake_timeout
+        @pending << line
       end
 
       # [w, my base^w, inverse of their base^w], once a session
       def pake; @pake ||= Spake2.setup(@secret, @role == :join); end
 
-      def send_hi
-        @my_nonce = Crypto.random(16)
-        @x, @xe = Spake2.start(pake[1])
-        @conn.send_raw({ "t" => "hi", "v" => PROTO, "n" => Crypto.hex(@my_nonce), "x" => Spake2.hex(@xe) })
-        @hs_state = :wait_hi
+      def send_hi(line)
+        line.my_nonce = Crypto.random(16)
+        line.x, line.xe = Spake2.start(pake[1])
+        line.conn.send_raw({ "t" => "hi", "v" => PROTO, "n" => Crypto.hex(line.my_nonce), "x" => Spake2.hex(line.xe) })
+        line.hs = :wait_hi
       end
 
-      def proof(who); Crypto.hmac(@ke, "KIF2 #{who}"); end
+      def proof(line, who); Crypto.hmac(line.ke, "KIF2 #{who}"); end
 
-      def frame(payload, out)
-        return signed(payload, out) if @hs_state == :done
-        h = Wire.parse(payload)
-        return bad_hs(out, :closed) unless h
-        if h["t"] == "no" && (@role == :join || @via == :relay)
-          return give_up(out, [:failed, NO_WHY[h["why"]] || :closed])
+      def frame(line, payload, out)
+        return signed(line, payload, out) if line.hs == :done
+        h = Wire.parse(payload, MAX_VALUES)
+        return bad_hs(line, out, :closed) unless h
+        if h["t"] == "no" && line.hs != :relay_wait && (@role == :join || @via == :relay)
+          # not signed, so anyone on the path could have sent it: a hint for
+          # when the line ends, and the handshake goes on
+          line.hint = NO_WHY[h["why"]] || line.hint
+          return
         end
-        case @hs_state
+        case line.hs
         when :relay_wait
           return give_up(out, [:failed, :relay]) unless h["t"] == "relay_ok"
-          @hs_started = Net.now
-          @role == :join ? send_hi : (@hs_state = :wait_hi)
+          line.started = Net.now
+          line.conn.deadline = Net.now + @handshake_timeout
+          @role == :join ? send_hi(line) : (line.hs = :wait_hi)
         when :wait_hi
           n = Crypto.unhex(h["n"])
-          return bad_hs(out, :closed) unless h["t"] == "hi" && h["v"] == PROTO && n && n.bytesize == 16
+          return bad_hs(line, out, :closed) unless h["t"] == "hi" && h["v"] == PROTO && n && n.bytesize == 16
           theirs = Spake2.read(h[@role == :host ? "x" : "y"])
           if @role == :host
-            @nj = n
-            @nh = Crypto.random(16)
+            line.nj = n
+            line.nh = Crypto.random(16)
             y, ye = Spake2.start(pake[1])
-            k = Spake2.finish(y, theirs, pake[2]) or return bad_hs(out, :closed)
-            @ke = Spake2.key(@nj, @nh, theirs, ye, k, pake[0])
-            @conn.send_raw({ "t" => "hi", "v" => PROTO, "n" => Crypto.hex(@nh), "y" => Spake2.hex(ye) })
+            k = Spake2.finish(y, theirs, pake[2]) or return bad_hs(line, out, :closed)
+            line.ke = Spake2.key(line.nj, line.nh, theirs, ye, k, pake[0])
+            line.conn.send_raw({ "t" => "hi", "v" => PROTO, "n" => Crypto.hex(line.nh), "y" => Spake2.hex(ye) })
           else
-            @nj = @my_nonce
-            @nh = n
-            k = Spake2.finish(@x, theirs, pake[2]) or return give_up(out, [:failed, :host_code])
-            @ke = Spake2.key(@nj, @nh, @xe, theirs, k, pake[0])
-            @x = nil
-            @conn.send_raw({ "t" => "auth", "p" => Crypto.hex(proof("join")) })
+            line.nj = line.my_nonce
+            line.nh = n
+            k = Spake2.finish(line.x, theirs, pake[2]) or return give_up(out, [:failed, :host_code])
+            line.ke = Spake2.key(line.nj, line.nh, line.xe, theirs, k, pake[0])
+            line.x = nil
+            line.conn.send_raw({ "t" => "auth", "p" => Crypto.hex(proof(line, "join")) })
           end
-          @hs_state = :wait_auth
+          line.hs = :wait_auth
         when :wait_auth
           p = Crypto.unhex(h["p"])
-          return bad_hs(out, :closed) unless h["t"] == "auth"
+          return bad_hs(line, out, :closed) unless h["t"] == "auth"
           if @role == :host
-            unless Crypto.same?(p, proof("join"))
-              f = (@fails[@conn.addr] ||= [0, 0])
-              f[0] += 1
-              f[1] = Net.now + 600
-              out << [:rejected, @conn.addr]
-              Net.log("wrong code from #{@conn.addr} (#{f[0]})")
-              @conn.send_raw({ "t" => "no", "why" => "code" })
-              drop_line(true)
-              return if @via == :direct
-              out << [:failed, :code]   # through a relay the room is used up
-              return @state = :closed
-            end
-            @conn.send_raw({ "t" => "auth", "p" => Crypto.hex(proof("host")) })
+            return wrong_code(line, out) unless Crypto.same?(p, proof(line, "join"))
+            line.conn.send_raw({ "t" => "auth", "p" => Crypto.hex(proof(line, "host")) })
           else
-            return give_up(out, [:failed, :host_code]) unless Crypto.same?(p, proof("host"))
+            return give_up(out, [:failed, :host_code]) unless Crypto.same?(p, proof(line, "host"))
           end
-          key = Crypto.hmac(@ke, "KIF2 key".b + @nj + @nh)
-          @rx_key = Crypto.hmac(key, @role == :host ? "j2h" : "h2j")
-          @conn.sign_with(Crypto.hmac(key, @role == :host ? "h2j" : "j2h"))
-          @conn.cap = MAX_FRAME
-          @hs_state = :done
-          return if @role == :host   # its hello waits for the player's answer
-          @conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
-          @state = :waiting
-          @hs_started = Net.now
+          key = Crypto.hmac(line.ke, "KIF2 key".b + line.nj + line.nh)
+          j2h = Crypto.hmac(key, "j2h")
+          h2j = Crypto.hmac(key, "h2j")
+          ej2h = Crypto.hmac(key, "j2h enc")
+          eh2j = Crypto.hmac(key, "h2j enc")
+          if @role == :host
+            line.conn.keys(h2j, eh2j, j2h, ej2h)
+          else
+            line.conn.keys(j2h, ej2h, h2j, eh2j)
+          end
+          line.conn.open_up
+          line.hs = :done
+          line.started = Net.now
+          if @role == :host
+            admit(line) if @via == :direct   # its hello waits for the player's answer
+          else
+            line.conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
+            @state = :waiting
+          end
         end
       end
 
-      def signed(payload, out)
-        mac = payload.byteslice(0, 32)
-        json = payload.byteslice(32, payload.bytesize - 32).to_s
-        h = Crypto.same?(Crypto.hmac(@rx_key, json), mac) ? Wire.parse(json) : nil
-        return bad_frame(out, "bad signature") unless h
-        seq = h["s"]
-        return bad_frame(out, "old or missing number") unless seq.is_a?(Integer) && seq > @rx_seq
-        @rx_seq = seq
+      # host: the proof was right. One partner at a time: a second one hears
+      # "busy" (signed, so only someone with the code hears it).
+      def admit(line)
+        @pending.delete(line)
+        if @line
+          line.conn.send_msg({ "t" => "no", "why" => "busy" })
+          line.gone = true
+          line.conn.finish
+        else
+          @line = line
+          @state = :handshake
+        end
+      end
+
+      # host: a wrong proof
+      def wrong_code(line, out)
+        addr = line.conn.addr
+        count = 1
+        if @via == :direct
+          f = (@fails[addr] ||= [0, 0])
+          f[0] += 1
+          f[1] = Net.now + 600
+          count = f[0]
+        end
+        @hs_log << Net.now
+        out << [:rejected, addr]
+        if @wrong_logged < 5   # the log is sent in bug reports: no flood, no whole address
+          @wrong_logged += 1
+          Net.log("wrong code from #{Net.mask_addr(addr)} (#{count})")
+        end
+        line.conn.send_raw({ "t" => "no", "why" => "code" })
+        return stranger_left(line, out, true) if @via == :relay
+        drop_pending(line, true)
+      end
+
+      def signed(line, payload, out)
+        return unless line.equal?(@line)
+        seq, ct = line.conn.verify(payload)
+        return bad_frame(line, out, "bad signature") unless seq
+        return bad_frame(line, out, "old or missing number") unless seq > line.rx_seq
+        line.rx_seq = seq
+        h = Wire.parse(line.conn.reveal(ct, seq), MAX_VALUES)
+        return bad_frame(line, out, "unreadable") unless h
         type = h["t"]
         return unless TYPES.key?(type)   # a newer version's message: ignored
-        msg = Net.check_fields(type, h) or return bad_frame(out, "#{type} doesn't fit")
+        msg = Net.check_fields(type, h) or return bad_frame(line, out, "#{type} doesn't fit")
         case type
         when "ping" then nil
-        when "bye"  then line_ended(:bye, out)
+        when "bye"  then line_ended(line, :bye, out)
         when "hello"
           return unless @state == :handshake || @state == :waiting
           @partner = Net.shown_name(msg["name"])
-          @partner_ver = msg["ver"]
+          @partner_ver = Net.shown_ver(msg["ver"])
           if @role == :host
+            @no_log.reject! { |t| Net.now - t > 600 }
+            if @no_log.length >= MAX_ASKS   # told no again and again: no more questions
+              Net.log("not asking again (#{MAX_ASKS} no's in 10 minutes)")
+              line.conn.send_msg({ "t" => "no", "why" => "declined" })
+              drop_line(true)
+              @partner = nil
+              @state = :closed if @via == :relay
+              return
+            end
             @state = :asking
             @asking_since = Net.now
             out << [:join_request, @partner]
@@ -840,15 +1183,18 @@ module KIF
         end
       end
 
-      def bad_frame(out, why)
-        @bad += 1
+      def bad_frame(line, out, why)
+        line.bad += 1
         Net.log("dropped a message from the partner (#{why})")
-        line_ended(:error, out) if @bad >= MAX_BAD
+        line_ended(line, :error, out) if line.bad >= MAX_BAD
       end
 
-      def bad_hs(out, why)
-        return give_up(out, [:failed, why]) if @role == :join || @via == :relay
-        drop_line
+      # a handshake message that doesn't fit
+      def bad_hs(line, out, why)
+        @hs_log << Net.now
+        return give_up(out, [:failed, why]) if @role == :join || line.hs == :relay_wait
+        return stranger_left(line, out) if @via == :relay
+        drop_pending(line)
       end
 
       def give_up(out, ev)
@@ -857,90 +1203,163 @@ module KIF
         @state = :closed
       end
 
-      # host: the line goes, hosting goes on
+      # relay host: someone got into the room who isn't the friend. The room
+      # is used again (the relay made it new when it paired them), a few times.
+      def stranger_left(line, out, gently = false)
+        @strangers += 1
+        drop_line(gently)
+        if @strangers > MAX_STRANGERS
+          out << [:failed, :code]
+          @state = :closed
+        else
+          connect_out(*@relay)
+        end
+      end
+
+      # the partner's line goes; a direct host goes on listening
       def drop_line(gently = false)
-        (gently ? @conn.finish : @conn.close(false)) if @conn
-        @conn = nil
-        @hs_state = nil
+        if @line
+          @line.gone = true
+          gently ? @line.conn.finish : @line.conn.close(false)
+        end
+        @line = nil
         @state = :listening if @role == :host && @via == :direct
       end
 
-      def line_ended(why, out)
+      def drop_pending(line, gently = false)
+        line.gone = true
+        gently ? line.conn.finish : line.conn.close(false)
+        @pending.delete(line)
+      end
+
+      def line_ended(line, why, out)
+        return if line.gone
+        unless line.equal?(@line)   # a handshake nobody finished: a scan, a stranger
+          @hs_log << Net.now if [:oversized, :flood].include?(why)
+          return drop_pending(line)
+        end
         was = @state
+        return stranger_left(line, out) if @role == :host && @via == :relay && [:wait_hi, :wait_auth].include?(line.hs)
+        hint = line.hint
         drop_line
         if was == :connected
           out << [:disconnected, why]
+          @partner = nil
         elsif @role == :join || @via == :relay
-          out << [:failed, why == :bye ? :closed : why]
+          out << [:failed, why == :bye ? :closed : (hint && [:closed, :timeout].include?(why) ? hint : why)]
         end
-        @partner = nil if was == :connected
         @state = :closed if @role == :join || @via == :relay
       end
 
       def check_time(out)
-        if @state == :handshake && @hs_state != :relay_wait && Net.now - @hs_started > @handshake_timeout
-          return @role == :join || @via == :relay ? give_up(out, [:failed, :timeout]) : drop_line
+        now = Net.now
+        @pending.dup.each { |l| drop_pending(l) if now - l.started > @handshake_timeout }
+        l = @line or return
+        if @state == :handshake && l.hs != :relay_wait && now - l.started > @handshake_timeout
+          return give_up(out, [:failed, l.hint || :timeout]) if @role == :join
+          return stranger_left(l, out) if @via == :relay && l.hs != :done
+          return @via == :relay ? give_up(out, [:failed, :timeout]) : drop_line
         end
-        if @state == :asking && Net.now - @asking_since > @answer_timeout
+        if @state == :asking && now - @asking_since > @answer_timeout
           decline
           return out << [:failed, :declined] if @state == :closed
           return
         end
-        return give_up(out, [:failed, :declined]) if @state == :waiting && Net.now - @hs_started > @answer_timeout + @handshake_timeout
-        line_ended(:timeout, out) if [:connected, :asking, :waiting].include?(@state) && Net.now - @conn.last_rx > @timeout
+        return give_up(out, [:failed, :declined]) if @state == :waiting && now - l.started > @answer_timeout + @handshake_timeout
+        line_ended(l, :timeout, out) if [:connected, :asking, :waiting].include?(@state) && now - l.conn.last_rx > @timeout
       end
     end
 
     #---------------------------------------------------------------------------
-    # "Find on this network": UDP broadcast on LAN_PORT
+    # "Find on this network": UDP broadcast on LAN_PORT. An answer says the
+    # game's name and port; the join code's secret is never in it (the joiner
+    # types the code), and the address is the one the answer came from. The
+    # question is 64 bytes, the longest answer is no longer, so a spoofed
+    # asker gets nothing bigger than it sent.
     #---------------------------------------------------------------------------
     module LAN
-      ASK = "KIF-FIND 1"
+      ASK = ("KIF-FIND 2 " + "-" * 53).freeze
+      MAX_FIND = 8
 
       module_function
 
-      # Host: answers askers with its name and its code for this network.
-      # The code holds the secret, so anyone on the same network can join
-      # while a place is free (as with LAN games).
+      # Host: answers askers on this network with its name and the port of
+      # `code` (the rest of the code, the secret, stays home). One answer a
+      # second to each asker, ten a second in all.
       def responder(name, code, port: LAN_PORT)
+        info = JoinCode.read(code)
+        return nil unless info.is_a?(Hash) && info[:kind] != :relay
+        nm = name.to_s[0, 24]
+        reply = Wire.json({ "t" => "kif_host", "name" => nm, "port" => info[:port] })
+        while reply.bytesize > ASK.bytesize && !nm.empty?
+          nm = nm[0, nm.length - 1]
+          reply = Wire.json({ "t" => "kif_host", "name" => nm, "port" => info[:port] })
+        end
         u = UDPSocket.new
-        u.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, true)
         u.bind("0.0.0.0", port)
-        reply = Wire.json({ "t" => "kif_host", "name" => name.to_s[0, 24], "code" => code })
         t = Thread.new do
+          seen = {}
+          recent = []
           loop do
-            data, from = u.recvfrom(64)
-            next unless data == ASK
+            begin
+              data, from = u.recvfrom(256)
+            rescue IOError
+              break   # closed
+            rescue SystemCallError, SocketError
+              break if u.closed?
+              sleep 0.05   # an answer that bounced (Windows reports it here)
+              next
+            end
+            next unless data == ASK && from && Net.near?(from[3])
+            now = Net.now
+            next if seen[from[3]] && now - seen[from[3]] < 1.0
+            recent.reject! { |x| now - x > 1.0 }
+            next if recent.length >= 10
+            seen.delete_if { |_, x| now - x > 1.0 } if seen.length > 64
+            seen[from[3]] = now
+            recent << now
             (u.send(reply, 0, from[3], from[1]) rescue nil)
           end
-        rescue StandardError
-          nil
         end
         t.report_on_exception = false
         return u
       rescue StandardError
+        (u.close rescue nil)
         return nil
       end
 
-      # Joiner: a Thread whose value is [[name, code_info], ...]
+      # Joiner: a Thread whose value is [[name, {kind:, ip:, port:, secret: nil}], ...]:
+      # at most MAX_FIND games, each once, at the address its answer came from
       def find(to: "255.255.255.255", port: LAN_PORT, wait: 1.5)
         t = Thread.new do
           found = {}
-          u = UDPSocket.new
+          u = nil
           begin
+            u = UDPSocket.new
             u.setsockopt(Socket::SOL_SOCKET, Socket::SO_BROADCAST, true)
             u.send(ASK, 0, to, port)
             stop = Net.now + wait
-            while (left = stop - Net.now) > 0
+            while found.length < MAX_FIND && (left = stop - Net.now) > 0
               next unless IO.select([u], nil, nil, left)
-              data, = (u.recvfrom(512) rescue nil)
-              h = Parser.new(data).run if data
-              next unless h && h["t"] == "kif_host" && h["name"].is_a?(String) && h["code"].is_a?(String)
-              info = JoinCode.read(h["code"])
-              found[h["code"]] = [Net.shown_name(h["name"]), info] if info.is_a?(Hash) && info[:kind] != :relay
+              data, from = (u.recvfrom(512) rescue nil)
+              next unless data && from && from[1] == port && Net.near?(from[3])
+              h = Parser.new(data).run
+              next unless h && h["t"] == "kif_host" && h["name"].is_a?(String)
+              gport = h["port"]
+              if !gport.is_a?(Integer) && h["code"].is_a?(String)   # an answer with a code: only its port is used
+                info = JoinCode.read(h["code"])
+                gport = info[:port] if info.is_a?(Hash) && info[:kind] != :relay
+              end
+              next unless gport.is_a?(Integer) && gport.between?(1, 65_535)
+              ip = from[3].sub(/%.*\z/, "")
+              name = Net.shown_name(h["name"])
+              name = ip if name.empty?
+              found[[ip, gport]] ||= [name, { kind: ip.include?(":") ? :v6 : :v4, ip: ip, port: gport, secret: nil }]
             end
+          rescue SystemCallError, SocketError, IOError
+            nil   # no network: what was found so far (the menu says "no games found")
           ensure
-            u.close
+            (u.close rescue nil)
           end
           found.values
         end

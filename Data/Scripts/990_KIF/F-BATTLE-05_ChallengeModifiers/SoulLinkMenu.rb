@@ -55,7 +55,7 @@ module KIF
         end
       end
 
-      def clip; (Input.clipboard.to_s rescue "").strip; end
+      def clip; (Input.clipboard.to_s.scrub("").strip rescue ""); end
 
       # text cut to width in bmp's font, with "..." when cut
       def fit(bmp, text, width)

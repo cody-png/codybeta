@@ -313,8 +313,8 @@ module KIF
       #-------------------------------------------------------------------------
       ICON_RECT = [224, 58, 32, 32]   # the partner's icon, half size, right of the HP numbers
       DOT_POS   = [238, 46]
-      SUMMARY_ICON = [456, 72, 32, 32]   # Summary, first page: right of the species name
-      SUMMARY_DOT  = [442, 80]
+      SUMMARY_ICON = [456, 232, 32, 32]   # Summary, first page: the free end of the "Exp. Points" row (not checked in the real game)
+      SUMMARY_DOT  = [442, 240]
       DOT_COLORS = { alive: [96, 216, 96], hurt: [248, 200, 40], dead: [232, 64, 64], missed: [232, 64, 64], waiting: [168, 168, 168] }
       # 7x7 at the party's 2x pixel size, drawn from DOT_POS one cell up and left:
       # w light ring (stands out on the selected panel's green), o outline, x colour

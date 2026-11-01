@@ -896,9 +896,13 @@ def pbUnfuse(pokemon, scene, *args)
   end
 end
 
-# A linked Pokémon only leaves its pair by dying: no release, and no NPC trade (NSL-05)
+# A linked Pokémon only leaves its pair by dying: no release (one or many), no NPC trade,
+# and not to PIF's Transfer Box, which every other save can take from (NSL-05)
 class PokemonStorageScreen
   alias kif_nz_pbRelease pbRelease unless method_defined?(:kif_nz_pbRelease)
+  alias kif_nz_pbReleaseMulti pbReleaseMulti unless method_defined?(:kif_nz_pbReleaseMulti)
+  alias kif_nz_pbPlace pbPlace unless method_defined?(:kif_nz_pbPlace)
+  alias kif_nz_pbSwap pbSwap unless method_defined?(:kif_nz_pbSwap)
 
   def pbRelease(selected, heldpoke)
     pokemon = heldpoke || (@storage[selected[0], selected[1]] rescue nil)
@@ -908,6 +912,37 @@ class PokemonStorageScreen
       return false
     end
     return kif_nz_pbRelease(selected, heldpoke)
+  end
+
+  # the multi-select Release (outside Debug too) deletes the whole selection
+  def pbReleaseMulti(box)
+    if defined?(KIF::SoulLink)
+      msg = (getMultiSelection(box, nil) rescue []).map { |i| KIF::SoulLink.leave_refusal(@storage[box, i], :release) }.compact.first
+      if msg
+        pbDisplay(msg)
+        return false
+      end
+    end
+    return kif_nz_pbReleaseMulti(box)
+  end
+
+  def pbPlace(selected)
+    return if kif_nz_transfer_refused?(selected)
+    return kif_nz_pbPlace(selected)
+  end
+
+  def pbSwap(selected)
+    return if kif_nz_transfer_refused?(selected)
+    return kif_nz_pbSwap(selected)
+  end
+
+  # the Pokémon in hand would go into the Transfer Box and it is linked
+  def kif_nz_transfer_refused?(selected)
+    return false unless @heldpkmn && @scene.respond_to?(:inTransferBox) && @scene.inTransferBox && selected[0] != -1
+    msg = defined?(KIF::SoulLink) && KIF::SoulLink.leave_refusal(@heldpkmn, :transfer)
+    return false unless msg
+    pbDisplay(msg)
+    return true
   end
 end
 

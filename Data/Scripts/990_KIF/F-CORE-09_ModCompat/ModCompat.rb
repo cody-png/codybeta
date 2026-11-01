@@ -728,7 +728,7 @@ class PokemonStorageScene
       box, index = selected
       pkmn = heldpoke || (storage[box, index] rescue nil)
       return false unless pkmn && KIF::PokeIO.export(pkmn)
-      if KIF::PokeIO.delete_on_export? && !heldpoke
+      if KIF::PokeIO.delete_on_export?(pkmn) && !heldpoke
         party = (box == -1)
         last = party && ($Trainer.able_pokemon_count <= 1 && pkmn.able? rescue true)
         storage.pbDelete(box, index) unless last

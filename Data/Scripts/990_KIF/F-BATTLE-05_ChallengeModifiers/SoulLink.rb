@@ -132,6 +132,7 @@ module KIF
       return case what
              when :release then _INTL("{1} is linked to {2}'s Pokémon, so it can't be released.", p.name, partner)
              when :trade   then _INTL("{1} is linked to {2}'s Pokémon, so it can't be traded.", p.name, partner)
+             when :transfer then _INTL("{1} is linked to {2}'s Pokémon, so it can't go to the Transfer Box.", p.name, partner)
              else _INTL("{1} is linked to {2}'s Pokémon, so it can't be deleted.", p.name, partner)
              end
     end
@@ -272,9 +273,10 @@ module KIF
     def self.starter_check
       st = state
       return if st[:starter_done] || !linked?
-      return st[:starter_done] = true if KIF::Nuzlocke.started?
       party = $Trainer.party.compact
-      return unless party.length == 1 && KIF::Nuzlocke.only_pokemon?
+      return unless party.length == 1   # (cheap: the Poké Ball scan below runs once)
+      return st[:starter_done] = true if KIF::Nuzlocke.started?
+      return unless KIF::Nuzlocke.only_pokemon?
       st[:starter_done] = true
       encounter_done(STARTER, party[0])
     end
@@ -357,11 +359,11 @@ module KIF
     # A co-op wild battle (I am the guest) ended with nobody catching anything, and the host is my
     # Soul Link partner: its first encounter here is lost for the host, so mine is lost too, else
     # my next catch here would die on arrival (NSL-16). decision: the host's result (4 = caught).
-    # Not when the host's side of this place was settled already.
+    # Not when the host caught here before (its place was not this battle's).
     def self.shared_miss?(place, decision)
       return false unless [1, 2, 3, 5].include?(decision) && linked? && KIF::Nuzlocke.on? && connected?
       pl = state[:places][place]
-      return !(pl && pl[:theirs])
+      return !(pl && pl[:theirs].is_a?(Hash))   # (their miss may be this very battle's, sent just before its end)
     end
 
     # What a block added to the party or the boxes (a gift call doesn't return it): [result, Pokémon or nil]
@@ -766,7 +768,7 @@ module KIF
       send_hello if !@hello_sent && session && awake?
     end
 
-    PARTY_MAX = 900   # characters of an sl_party row list (Net.rb TYPES)
+    PARTY_MAX = 600   # characters of an sl_party row list (Net.rb TYPES): a full party of fusions with 12-letter names is about 540
 
     # id:species:level:hp:totalhp:name for each link in the party (a fusion has two)
     def self.party_ids

@@ -31,7 +31,7 @@ KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (01
                  proc { $PokemonSystem.kif_coop_teams },
                  proc { |value| $PokemonSystem.kif_coop_teams = value },
                  [_INTL("Fighting together: trainers have the same Pokémon as when you play alone."),
-                  _INTL("Fighting together: a trainer brings more Pokémon, one extra for each of you, and the Exp is split so a battle gives the same in total. The host's setting counts.")])
+                  _INTL("Fighting together: a trainer's team grows with the players, twice the Pokémon for two of you and three times for three. Exp is split the same way, so a battle gives the same in total. The host's setting counts.")])
 }
 
 module KIF
@@ -98,7 +98,10 @@ module KIF
 
       def load_file(mode)
         path = FILES[mode]
-        return {} unless File.exist?(path)
+        unless File.exist?(path)
+          KIF.log("Co-op trainer teams: #{path} is missing, bigger teams are off for this set")
+          return {}
+        end
         d = Marshal.load(File.binread(path))   # shipped game data, never from a peer
         return d.is_a?(Hash) ? d : {}
       rescue StandardError => e

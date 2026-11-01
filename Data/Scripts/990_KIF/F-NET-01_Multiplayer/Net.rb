@@ -5,6 +5,8 @@
 # Peer to peer, no server: one game hosts (TCP 52411, or the next free of
 # 52412-52415), the other joins with a join code. Optional community relay
 # (Tools/kif_relay.rb) for players who can't host; none is built in.
+# Or over Steam (NetSteam.rb, Session#host_steam): the same frames, each one
+# Steam message, between members of a friends-only lobby.
 #
 # Wire: every frame is a 4-byte big-endian length + payload.
 #   Handshake (plain JSON, max 1 KB a frame), SPAKE2 (module Spake2 below):
@@ -516,21 +518,125 @@ module KIF
     end
 
     #---------------------------------------------------------------------------
+    # One Steam line (NetSteam.rb has the layer): the same frames as Conn, each
+    # one Steam message (ISteamNetworkingMessages, reliable). The session's
+    # Steam thread calls #push with what arrived and #flush to send, so pings
+    # and timeouts work while the game thread is busy, as on TCP.
+    #---------------------------------------------------------------------------
+    class SteamConn
+      attr_reader :inbox, :addr, :last_rx, :peer
+      attr_accessor :cap, :ping_every
+
+      def initialize(steam, peer)
+        @steam = steam
+        @peer = peer
+        @addr = "steam:" + Crypto.hex(Crypto.sha256(peer.to_s))[0, 10]   # the wrong-code count's key; logs never show a Steam ID
+        @inbox = Queue.new
+        @out = Queue.new
+        @lock = Mutex.new
+        @cap = MAX_PRE
+        @ping_every = 5.0
+        @key = nil
+        @seq = 0
+        @last_rx = @last_tx = Net.now
+        @closed = false
+        @second = 0
+        @count = 0
+      end
+
+      def closed?; @closed; end
+      def sign_with(key); @key = key; end
+      def send_raw(hash); @out << [:raw, Wire.json(hash)] unless @closed; end
+      def send_msg(hash); @out << [:msg, hash] unless @closed; end
+      def send_bytes(bytes); @out << [:bytes, bytes] unless @closed; end   # tests only
+
+      # sends what's queued now, then closes
+      def finish
+        return if @closed
+        flush
+        @closed = true
+      end
+
+      def close(bye = false)
+        return if @closed
+        send_msg({ "t" => "bye" }) if bye && @key
+        finish
+      end
+
+      def hard_close; @closed = true; end
+
+      # a message from the peer: the same caps as Conn's reader
+      def push(data)
+        return if @closed
+        @last_rx = Net.now
+        if data.bytesize == 0 || data.bytesize > @cap
+          @inbox << [:error, :oversized]
+          return hard_close
+        end
+        sec = Net.now.floor
+        @count = 0 if sec != @second
+        @second = sec
+        @count += 1
+        if @count > MAX_RATE
+          @inbox << [:error, :flood]
+          return hard_close
+        end
+        @inbox << data
+      end
+
+      # what's queued, and a ping after ping_every of quiet (one sender at a time: sequence numbers stay in order)
+      def flush
+        @lock.synchronize do
+          return if @closed
+          @out << [:msg, { "t" => "ping" }] if @out.empty? && @key && Net.now - @last_tx >= @ping_every
+          while (bytes = @held || next_frame)
+            @held = nil
+            r = @steam.send_to(@peer, bytes)
+            break @held = bytes if r == :full   # Steam's send buffer is full: the same bytes go next flush (TCP waits too)
+            unless r
+              @inbox << [:closed]
+              return hard_close
+            end
+            @last_tx = Net.now
+          end
+        end
+      end
+
+      private
+
+      # the next queued frame's bytes (a message signed with the next number), or nil
+      def next_frame
+        item = (@out.pop(true) rescue nil) or return nil
+        return item[1] unless item[0] == :msg
+        @seq += 1
+        json = Wire.json(item[1].merge("s" => @seq))
+        return Crypto.hmac(@key, json) + json
+      end
+    end
+
+    #---------------------------------------------------------------------------
     # A session: hosting (one partner in v1), joining, or either through a
-    # relay. Events from #poll:
+    # relay or Steam. Events from #poll:
     #   [:join_request, name]   (host) someone with the code: #accept or #decline
     #   [:connected, name]      handshake done, partner said hello
     #   [:message, type, hash]  a checked message
     #   [:disconnected, why]    :bye, :timeout, :closed, :error
     #   [:failed, why]          joining failed: :unreachable, :code, :busy,
     #                           :wait, :timeout, :host_code, :closed, :relay,
-    #                           :declined
+    #                           :declined; :steam (no lobby made), :not_host
+    #                           (the Steam friend only joined someone else's lobby)
     #   [:rejected, address]    (host) someone with a wrong code
     # States: :idle, :listening, :connecting, :handshake, :asking (host: the
     # player is asked), :waiting (joiner: for the answer), :connected, :closed
+    # Over Steam (via :steam) the host makes a friends-only lobby. Its lobby
+    # data holds only the tags friends see (version, mode...); the secret is
+    # in the host's member data, which only lobby members can read, and the
+    # same handshake still has to pass. Only lobby members get a line, a
+    # joiner talks only to the lobby's owner (the friend picked), and
+    # leaving the lobby ends it.
     #---------------------------------------------------------------------------
     class Session
-      attr_reader :state, :role, :partner, :partner_ver, :port, :via, :ports, :secret, :room, :conn, :relay
+      attr_reader :state, :role, :partner, :partner_ver, :port, :via, :ports, :secret, :room, :conn, :relay, :lobby, :steam
       attr_accessor :ping_every, :timeout, :handshake_timeout, :answer_timeout, :hs_limit, :name, :ver
 
       def initialize(name, ver)
@@ -639,6 +745,24 @@ module KIF
         connect_out(rhost, rport)
       end
 
+      # steam: the Steam layer (KIF::Net::Steam, or a test's stand-in); tags: lobby data
+      def host_steam(steam, tags = {}, slots = 4)
+        @role = :host
+        @secret = Crypto.random(16)
+        @tags = tags
+        steam_start(steam)
+        steam.create_lobby(slots)   # more slots than players: someone who stays in it can't keep a friend out (one partner, as on TCP)
+      end
+
+      # friend: the friend picked or who invited (nil: whoever owns the lobby)
+      def join_steam(steam, lobby, friend = nil)
+        @role = :join
+        @lobby = lobby
+        @friend = friend
+        steam_start(steam)
+        steam.join_lobby(lobby)
+      end
+
       def post(type, fields = {})
         return false unless connected?
         msg = Net.check_fields(type, fields.merge("t" => type)) or return false
@@ -648,9 +772,15 @@ module KIF
 
       def close
         @conn.close(connected?) if @conn
+        if @lobby && @steam
+          @steam.leave_lobby(@lobby)
+          Net.log("left the Steam lobby")
+          @lobby = nil
+        end
         @servers.each { |s| (s.close rescue nil) }
         @servers = []
         @threads.each { |t| (t.kill rescue nil) }
+        @threads.each { |t| (t.join(0.5) rescue nil) } if @via == :steam   # out of Steam's calls before Steam may shut down
         @threads = []
         @state = :closed
       end
@@ -659,9 +789,11 @@ module KIF
       def poll
         out = @later
         @later = []
+        steam_events(out) if @via == :steam && @state != :closed
         while (ev = (@events.pop(true) rescue nil))
           case ev[0]
           when :sock then accepted(ev[1], out)
+          when :steam_msg then steam_msg(ev[1], ev[2], out)
           when :connect_failed
             out << [:failed, :unreachable] if @state == :connecting
             @state = :closed if @state == :connecting
@@ -693,7 +825,7 @@ module KIF
       def accepted(sock, out)
         if @role == :join || @via == :relay
           return (sock.close rescue nil) unless @state == :connecting
-          start(sock)
+          start(Conn.new(sock))
           if @via == :relay
             @hs_state = :relay_wait
             @conn.send_raw({ "t" => "relay", "room" => Crypto.hex(@room), "role" => @role.to_s })
@@ -702,7 +834,18 @@ module KIF
           end
           return
         end
-        addr = (sock.remote_address.ip_address rescue "?")
+        why, again = admit((sock.remote_address.ip_address rescue "?"))
+        if why
+          (sock.write(Wire.frame(Wire.json({ "t" => "no", "why" => why }))) rescue nil)
+          return (sock.close rescue nil)
+        end
+        drop_line if again
+        start(Conn.new(sock))
+        @hs_state = :wait_hi
+      end
+
+      # host, a new line from addr: [why it's refused ("wait", "busy") or nil, whether it's a retry]
+      def admit(addr)
         f = @fails[addr]
         @hs_log.reject! { |t| Net.now - t > 10 }
         # the same address again while its handshake hasn't finished: a retry (its
@@ -711,19 +854,14 @@ module KIF
         why = if (f && f[0] >= MAX_BAD && Net.now < f[1]) || @hs_log.length >= @hs_limit then "wait"
               elsif @conn && !again then "busy"
               end
-        if why
-          (sock.write(Wire.frame(Wire.json({ "t" => "no", "why" => why }))) rescue nil)
-          return (sock.close rescue nil)
-        end
+        return [why, false] if why
         @fails.delete(addr) if f && Net.now >= f[1]
         @hs_log << Net.now
-        drop_line if again
-        start(sock)
-        @hs_state = :wait_hi
+        return [nil, again]
       end
 
-      def start(sock)
-        @conn = Conn.new(sock)
+      def start(conn)
+        @conn = conn
         @conn.ping_every = @ping_every
         @hs_started = Net.now
         @state = :handshake
@@ -746,7 +884,7 @@ module KIF
       def frame(payload, out)
         return signed(payload, out) if @hs_state == :done
         h = Wire.parse(payload)
-        return bad_hs(out, :closed) unless h
+        return (@via == :steam ? nil : bad_hs(out, :closed)) unless h   # Steam: a late signed message of an old line
         if h["t"] == "no" && (@role == :join || @via == :relay)
           return give_up(out, [:failed, NO_WHY[h["why"]] || :closed])
         end
@@ -787,7 +925,7 @@ module KIF
               Net.log("wrong code from #{@conn.addr} (#{f[0]})")
               @conn.send_raw({ "t" => "no", "why" => "code" })
               drop_line(true)
-              return if @via == :direct
+              return unless @via == :relay
               out << [:failed, :code]   # through a relay the room is used up
               return @state = :closed
             end
@@ -862,7 +1000,7 @@ module KIF
         (gently ? @conn.finish : @conn.close(false)) if @conn
         @conn = nil
         @hs_state = nil
-        @state = :listening if @role == :host && @via == :direct
+        @state = :listening if @role == :host && @via != :relay
       end
 
       def line_ended(why, out)
@@ -888,6 +1026,130 @@ module KIF
         end
         return give_up(out, [:failed, :declined]) if @state == :waiting && Net.now - @hs_started > @answer_timeout + @handshake_timeout
         line_ended(:timeout, out) if [:connected, :asking, :waiting].include?(@state) && Net.now - @conn.last_rx > @timeout
+      end
+
+      #-------------------------------------------------------------------------
+      # Steam
+      #-------------------------------------------------------------------------
+      def steam_start(steam)
+        @via = :steam
+        @steam = steam
+        @state = :connecting
+        @steam_t0 = Net.now
+        @asks = {}   # peer => when Steam asked for a line not let in yet
+        steam.receive   # Steam keeps one stream per pair of players: what an old line left isn't this one's
+        # moves bytes only, like Conn's threads: what arrives from the line's
+        # peer goes to it, from anyone else to #poll
+        t = Thread.new do
+          loop do
+            steam.receive.each do |data, peer|
+              c = @conn
+              c.is_a?(SteamConn) && c.peer == peer ? c.push(data) : @events << [:steam_msg, peer, data]
+            end
+            c = @conn
+            c.flush if c.is_a?(SteamConn)
+            sleep 0.02
+          end
+        rescue StandardError => e
+          Net.log("the Steam line stopped (#{e.class})")
+        end
+        t.report_on_exception = false
+        @threads << t
+      end
+
+      def steam_events(out)
+        @steam.take(:lobby_created, :lobby_enter, :member, :session_request, :session_failed).each do |ev|
+          case ev[0]
+          when :lobby_created
+            _, ok, lobby = ev
+            unless @role == :host && @state == :connecting && !@lobby
+              @steam.leave_lobby(lobby) if ok   # one this session didn't ask for (hosting started again quickly)
+              next
+            end
+            unless ok
+              Net.log("Steam didn't make a lobby")
+              give_up(out, [:failed, :steam])
+              next
+            end
+            @lobby = lobby
+            @tags.each { |k, v| @steam.set_lobby_data(lobby, k.to_s, v.to_s) }
+            @steam.set_member_data(lobby, "key", Crypto.hex(@secret))
+            @state = :listening
+            Net.log("Steam lobby made (friends only)")
+          when :lobby_enter
+            _, lobby, resp = ev
+            next unless @role == :join && lobby == @lobby && @state == :connecting && !@entered
+            if resp == 1
+              @entered = true
+              Net.log("entered the Steam lobby")
+            else
+              Net.log("couldn't enter the Steam lobby (#{resp})")
+              give_up(out, [:failed, resp == 4 ? :busy : :unreachable])   # 4: full
+            end
+          when :member
+            _, lobby, user, bits = ev
+            next unless lobby == @lobby && bits & 0x1e != 0 && @conn.is_a?(SteamConn) && user == @conn.peer   # left, disconnected, kicked, banned
+            Net.log("the Steam partner left the lobby")
+            line_ended(:bye, out)   # leaving is their goodbye (it can come before the bye message)
+          when :session_request
+            peer = ev[1]
+            next if @asks.key?(peer) || @asks.size >= 8 || steam_accept(peer)
+            @asks[peer] = Net.now   # asked again below: Steam can tell the host of a joiner before its member list has them
+            Net.log(@role == :host ? "a Steam player who isn't in the lobby asked for a line (let in if they join it within 5 s)"
+                                   : "ignored a Steam player who isn't the host")
+          when :session_failed
+            next unless @conn.is_a?(SteamConn) && ev[1] == @conn.peer
+            Net.log("the Steam line failed")
+            line_ended(:closed, out)
+          end
+        end
+        @asks.delete_if { |peer, t| steam_accept(peer) || Net.now - t > 5 } unless @asks.empty?
+        steam_hello(out) if @entered && !@conn && @state == :connecting
+        if @state == :connecting && Net.now - @steam_t0 > @handshake_timeout
+          give_up(out, [:failed, @role == :host ? :steam : (@entered ? :host_code : :unreachable)])
+        end
+      end
+
+      # a Steam line only from a lobby member (host) or the lobby's owner (joiner)
+      def steam_accept(peer)
+        ok = @role == :host ? @lobby && peer != @steam.me && @steam.lobby_members(@lobby).include?(peer) : peer == @peer
+        @steam.accept(peer) if ok
+        return ok
+      end
+
+      # joiner in the lobby: the secret from the owner's member data (it can
+      # come a moment after the lobby), then the same handshake as TCP. The
+      # owner must be the friend picked or who invited: one who only joined
+      # someone else's lobby would connect this game to that stranger.
+      def steam_hello(out)
+        owner = @steam.lobby_owner(@lobby)
+        return if owner == 0 || owner == @steam.me
+        if @friend && owner != @friend
+          Net.log("the Steam friend isn't the lobby's host")
+          return give_up(out, [:failed, :not_host])
+        end
+        key = Crypto.unhex(@steam.member_data(@lobby, owner, "key").to_s)
+        return unless key && key.bytesize == 16
+        @secret = key
+        @peer = owner
+        start(SteamConn.new(@steam, owner))
+        send_hi
+      end
+
+      # host: a message from a peer with no line yet (a joiner's first "hi")
+      def steam_msg(peer, data, out)
+        return @conn.push(data) if @conn.is_a?(SteamConn) && @conn.peer == peer   # came before its line was made
+        return unless @role == :host && @lobby && @state != :closed && @state != :connecting
+        return unless peer != @steam.me && @steam.lobby_members(@lobby).include?(peer)
+        h = Wire.parse(data) if data.bytesize <= MAX_PRE
+        return unless h && h["t"] == "hi"   # a line starts with a hi; a late message of an old line isn't one
+        conn = SteamConn.new(@steam, peer)
+        why, again = admit(conn.addr)
+        return @steam.send_to(peer, Wire.json({ "t" => "no", "why" => why })) if why
+        drop_line if again
+        start(conn)
+        @hs_state = :wait_hi
+        conn.push(data)
       end
     end
 

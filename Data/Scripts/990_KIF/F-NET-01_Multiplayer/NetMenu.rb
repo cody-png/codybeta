@@ -19,7 +19,10 @@ KIF::Options.add(:graphics, :global) {   # placed under System > Multiplayer (01
                  proc { $PokemonSystem.kif_multiplayer },
                  proc { |value|
                    $PokemonSystem.kif_multiplayer = value
-                   KIF::Net.stop if value == 0   # Off takes the pause entry away: hosting or a connection ends with it
+                   if value == 0   # Off takes the pause entry away: hosting or a connection ends with it,
+                     KIF::Net.stop
+                     KIF::Net.steam.shutdown   # and friends stop seeing "Playing Spacewar" (On starts Steam again)
+                   end
                  },
                  [_INTL("No Multiplayer entry in the pause menu."),
                   _INTL("Multiplayer in the pause menu: play with a friend over the internet or your network.")])
@@ -89,6 +92,100 @@ module KIF
       @session = s
     end
 
+    #---------------------------------------------------------------------------
+    # Steam (NetSteam.rb): only with Multiplayer On (friends see "Playing
+    # Spacewar" from then on); none on phones or without Steam
+    #---------------------------------------------------------------------------
+    def self.steam; @steam_layer || Steam; end   # tests put a stand-in in @steam_layer
+    def self.steam?; menu_on? && steam.start ? true : false; end
+
+    def self.start_steam_host
+      s = new_session
+      s.host_steam(steam, steam_tags)
+      @session = s
+      log("hosting on Steam")
+    end
+
+    # friend: the one picked or who invited; the lobby's owner must be them
+    def self.start_steam_join(lobby, friend)
+      s = new_session
+      s.join_steam(steam, lobby, friend)
+      @session = s
+      log("joining a friend on Steam")
+    end
+
+    def self.game_mode
+      (getCurrentGameModeSymbol.to_s.split("_").map(&:capitalize).join(" ") rescue "?")
+    end
+
+    def self.difficulty
+      return "Easy" if $game_switches && $game_switches[SWITCH_GAME_DIFFICULTY_EASY]
+      return "Hard" if $game_switches && $game_switches[SWITCH_GAME_DIFFICULTY_HARD]
+      return "Normal"
+    rescue StandardError
+      return "?"
+    end
+
+    # the mods this session loaded (folder and loose file names), sorted
+    def self.mod_names
+      (KIF::Mods.loaded_dirs.map { |d| File.basename(d) } + KIF::Mods.loaded_root.map { |f| File.basename(f, ".rb") }).sort.join(",")
+    rescue StandardError
+      ""
+    end
+
+    # the lobby's data: what friends see before joining (never the secret)
+    def self.steam_tags
+      mods = mod_names
+      { "kif" => "1", "ver" => version, "mode" => game_mode, "diff" => difficulty, "mods" => mods[0, 200],
+        "modh" => Crypto.hex(Crypto.sha256(mods))[0, 8], "name" => my_name[0, 24] }
+    end
+
+    # a KIF lobby's tags as shown text, or nil (not KIF, or its data hasn't come)
+    def self.lobby_tags(lobby)
+      sl = steam
+      return nil unless sl.lobby_data(lobby, "kif") == "1"
+      { "ver" => 16, "mode" => 16, "diff" => 8, "mods" => 200, "modh" => 8, "name" => 24 }.to_h do |k, n|
+        [k, sl.lobby_data(lobby, k).to_s.gsub(/[\\<>\x00-\x1f\u007f]/, "")[0, n]]
+      end
+    end
+
+    # what differs from this game, one line each (empty: nothing)
+    def self.steam_mismatch(t)
+      out = []
+      out << _INTL("They have KIF {1}, you have KIF {2}.", t["ver"], version) if t["ver"] != version
+      out << _INTL("Their game is {1}, yours is {2}.", t["mode"], game_mode) if t["mode"] != game_mode
+      out << _INTL("Their difficulty is {1}, yours is {2}.", t["diff"], difficulty) if t["diff"] != difficulty
+      if t["modh"] != steam_tags["modh"]
+        mine = mod_names[0, 200]
+        out << _INTL("Their mods: {1}", t["mods"].empty? ? _INTL("none") : t["mods"])
+        out << _INTL("Your mods: {1}", mine.empty? ? _INTL("none") : mine)
+      end
+      return out
+    end
+
+    # once a frame after the session: an invite is kept for the map; events
+    # nobody took are dropped (a lobby made for a hosting that ended is left)
+    def self.steam_leftovers(sl)
+      sl.take(:lobby_created).each { |_, ok, lobby| sl.leave_lobby(lobby) if ok && lobby != @session&.lobby }
+      inv = sl.take(:invite).last
+      if inv && menu_on?
+        @invite = inv[1, 2]
+        log("Steam: a friend's invite came")
+      end
+      sl.clear
+    end
+
+    # on the map: "<friend> invited you. Join?"
+    def self.ask_invite
+      lobby, friend = @invite
+      @invite = nil
+      return unless steam.ready?
+      who = shown_name(steam.name(friend))
+      q = live? ? _INTL("{1} invited you to play on Steam. Leave this game and join them?", who)
+                : _INTL("{1} invited you to play on Steam. Join them?", who)
+      Menu.open(steam_lobby: [lobby, friend]) if pbConfirmMessage(q)
+    end
+
     def self.stop
       if @session
         @session.close
@@ -114,11 +211,18 @@ module KIF
       stop
       stop_at = now + 3
       @cleanup.each { |t| t.join([stop_at - now, 0].max) }
+      steam.shutdown if steam.ready?
     end
 
     # every frame on the map and in the screens below; never waits
     def self.update
-      return unless @session
+      sl = steam.ready? ? steam : nil
+      sl&.pump
+      poll_session if @session
+      steam_leftovers(sl) if sl
+    end
+
+    def self.poll_session
       if @pm.nil? && @pm_thread && !@pm_thread.alive?
         @pm = (@pm_thread.value rescue nil) || { status: :closed }
         @renew_at = now + 3600
@@ -222,8 +326,10 @@ module KIF
 
     # every frame on the map
     def self.map_update
-      return unless @session
+      steam.start if menu_on?   # once a game; then invites can come
       update
+      ask_invite if @invite && quiet?
+      return unless @session
       ask_join if @session&.asking? && quiet?
       pbMessage(@notes.shift) if !@notes.empty? && quiet?   # "<name> says hello!", a disconnect
     end
@@ -365,15 +471,17 @@ module KIF
     module Menu
       module_function
 
-      def open
+      # steam_lobby: [lobby, friend] of a friend's invite accepted on the map
+      def open(steam_lobby: nil)
         unless Net.available?
           return pbMessage(_INTL("Multiplayer needs the game's network library, which this copy of the game doesn't have."))
         end
         @scr = Screen.new
         begin
           s = Net.session
-          if s&.connected? then connected
-          elsif s&.hosting? then hosting
+          if steam_lobby then return steam_join(*steam_lobby)
+          elsif s&.connected? then connected
+          elsif s&.hosting? then s.via == :steam ? steam_hosting : hosting
           end
           main unless Net.live?   # B leaves a game that goes on: Host or Join from main would end it
         ensure
@@ -396,18 +504,145 @@ module KIF
 
       def main
         loop do
-          cmds = [_INTL("Host a game"), _INTL("Join with a code"), _INTL("Join by address"),
-                  _INTL("Find on this network"), _INTL("Back")]
-          case pick(_INTL("Play with a friend\nOne of you hosts, the other joins.\nNo account and no server needed."),
-                    cmds, _INTL("Host: your friend joins your game.\nJoin: use the code your friend sent you."))
-          when 0 then host
-          when 1 then join_code
-          when 2 then join_address
-          when 3 then find_lan
+          rows = [[_INTL("Host a game"), :host], [_INTL("Join with a code"), :code], [_INTL("Join by address"), :address],
+                  [_INTL("Find on this network"), :lan], [_INTL("Back"), nil]]
+          steam = Net.steam?
+          rows.unshift([_INTL("Host on Steam"), :steam_host], [_INTL("Join a Steam friend"), :steam_join]) if steam
+          help = steam ? _INTL("Steam: host and invite a Steam friend, or join one.\nCode: your friend joins with the code you send.")
+                       : _INTL("Host: your friend joins your game.\nJoin: use the code your friend sent you.")
+          r = pick(steam ? _INTL("Play with a friend\nOne of you hosts, the other joins.\nNo server needed.")
+                         : _INTL("Play with a friend\nOne of you hosts, the other joins.\nNo account and no server needed."),
+                   rows.map(&:first), help)
+          case (r && r >= 0 ? rows[r][1] : nil)
+          when :steam_host then steam_host
+          when :steam_join then steam_join_list
+          when :host then host
+          when :code then join_code
+          when :address then join_address
+          when :lan then find_lan
           else return
           end
           return if Net.live?
         end
+      end
+
+      #-------------------------------------------------------------------------
+      # Steam: host, invite, join a friend
+      #-------------------------------------------------------------------------
+      def steam_host
+        Net.start_steam_host
+        steam_hosting
+      end
+
+      # returns when hosting stops or the player leaves (hosting goes on)
+      def steam_hosting
+        watch = proc { [Net.session&.state, Net.notes.length] }
+        loop do
+          s = Net.session
+          unless s&.hosting?
+            pbMessage(_INTL("Steam didn't make a lobby. Check that Steam is running and online, then try again.")) if Net.take_failure
+            Net.stop if s
+            return
+          end
+          return connected if s.connected?
+          lines = [_INTL("Host on Steam"), s.lobby ? _INTL("Lobby: Friends only") : _INTL("Making a Steam lobby..."),
+                   _INTL("Friend joined: Not yet")]
+          cmds = s.lobby ? [_INTL("Invite a Steam friend"), _INTL("Stop hosting")] : [_INTL("Stop hosting")]
+          help = Net.notes.shift || _INTL("Invite a Steam friend, or they pick Join a Steam friend.\nWaiting for them to join...")
+          r = pick(lines.join("\n"), cmds, help, watch)
+          next if r.nil?
+          return if r < 0
+          if cmds.length == 2 && r == 0
+            steam_invite(s.lobby)
+          elsif pbConfirmMessage(_INTL("Stop hosting?"))
+            Net.stop
+            return
+          end
+        end
+      end
+
+      # Steam's invite window when its overlay is in this game window; the
+      # friend list here always (InviteUserToLobby needs no overlay)
+      def steam_invite(lobby)
+        sl = Net.steam
+        overlay = sl.overlay?
+        list = sl.friends_online.first(200)
+        names = list.map { |_, n| Net.shown_name(n) }
+        rows = (overlay ? [_INTL("Open Steam's invite window")] : []) + names + [_INTL("Back")]
+        if !overlay && list.empty?
+          return pbMessage(_INTL("None of your Steam friends are online right now."))
+        end
+        msg = overlay ? _INTL("Invite a Steam friend:") : _INTL("Steam's overlay can't show in this game window, so pick the friend here. They get a Steam invite.")
+        i = pbMessage(msg, rows, rows.length)
+        i -= 1 if overlay
+        if i == -1
+          sl.invite_dialog(lobby)
+          Net.log("Steam: invite window opened")
+        elsif i >= 0 && i < list.length
+          ok = sl.invite(lobby, list[i][0])
+          Net.log("Steam: invite #{ok ? 'sent' : 'not sent'}")
+          pbMessage(ok ? _INTL("Invite sent to {1}. When they accept it in Steam, their game joins yours.", names[i])
+                       : _INTL("Steam didn't send the invite. Try again."))
+        end
+      end
+
+      def steam_join_list
+        sl = Net.steam
+        found = sl.friend_lobbies
+        found.each { |_, l| sl.request_lobby_data(l) }
+        unless found.empty?   # a friend's lobby data comes in a moment; a friend in another game's lobby never has KIF's
+          wait_for(_INTL("Join a Steam friend\nLooking for friends hosting KIF..."), 2) { found.all? { |_, l| Net.lobby_tags(l) } }
+        end
+        games = found.filter_map { |f, l| (t = Net.lobby_tags(l)) && [f, l, t] }
+        if games.empty?
+          return pbMessage(_INTL("None of your Steam friends are hosting KIF right now. Ask them to pick Host on Steam and invite you."))
+        end
+        names = games.map { |f, _, t| _INTL("{1} ({2}, KIF {3})", Net.shown_name(sl.name(f)), t["mode"], t["ver"]) } + [_INTL("Back")]
+        i = pbMessage(_INTL("Friends hosting KIF:"), names, names.length)
+        steam_join(games[i][1], games[i][0], games[i][2]) if i < games.length
+      end
+
+      # friend: picked or who invited; tags: the lobby's (read again when nil); differences are shown first
+      def steam_join(lobby, friend, tags = nil)
+        unless tags
+          Net.steam.request_lobby_data(lobby)
+          wait_for(_INTL("Join on Steam\nReading your friend's game..."), 3) { Net.lobby_tags(lobby) }
+          tags = Net.lobby_tags(lobby) or return pbMessage(_INTL("That Steam game isn't a KIF game, or it has closed."))
+        end
+        warn = Net.steam_mismatch(tags)
+        unless warn.empty?
+          pbMessage(_INTL("{1}'s game is different from yours:", tags["name"]) + "\n" + warn.join("\n"))
+          return unless pbConfirmMessage(_INTL("Join anyway?"))
+        end
+        Net.start_steam_join(lobby, friend)
+        loop do
+          s = Net.session
+          break unless s && s.state != :closed && !s.connected?
+          head = s.state == :waiting ? _INTL("Join on Steam\nWaiting for your friend to let you in...")
+                                     : _INTL("Join on Steam\nConnecting to your friend's game...")
+          r = pick(head, [_INTL("Cancel")], _INTL("Through Steam."), proc { Net.session&.state })
+          next if r.nil?
+          return Net.stop
+        end
+        return connected if Net.session&.connected?
+        why = Net.take_failure
+        Net.stop
+        pbMessage({
+          busy: _INTL("Someone else is playing with them right now."),
+          timeout: _INTL("Their game didn't answer in time (in a battle or a menu?). Try again when they're on the map."),
+          declined: _INTL("Your friend didn't let you in (they said no, or didn't answer in time)."),
+          host_code: _INTL("That Steam game isn't a KIF game, or it has closed."),
+          not_host: _INTL("Your friend is in someone else's game, not hosting one. Ask them to pick Host on Steam.")
+        }[why] || _INTL("Couldn't get into your friend's Steam lobby. It may have closed."))
+      end
+
+      # frames until the block is true or secs pass (Cancel or B stops early)
+      def wait_for(head, secs)
+        stop = Net.now + secs
+        until yield
+          return false if Net.now > stop || pick_once(head, [_INTL("Cancel")], "")
+        end
+        return true
       end
 
       #-------------------------------------------------------------------------
@@ -697,7 +932,8 @@ module KIF
           end
           relay = s.via == :relay
           lines = [_INTL("Connected"), _INTL("Connected to: {1}", s.partner),
-                   relay ? _INTL("Connection: Through relay ({1})", s.relay.join(":")) : _INTL("Connection: Direct")]
+                   relay ? _INTL("Connection: Through relay ({1})", s.relay.join(":")) :
+                   s.via == :steam ? _INTL("Connection: Steam") : _INTL("Connection: Direct")]
           if s.partner_ver != Net.version
             lines << _INTL("{1} has KIF {2}, you have KIF {3}.", s.partner, s.partner_ver, Net.version)
           end
@@ -705,7 +941,8 @@ module KIF
           lines << where if where
           note = Net.notes.shift || note
           help = note ||
-                 (relay ? _INTL("Connected through relay.\nPlay works the same, just a bit slower.")
+                 (relay ? _INTL("Connected through relay.\nPlay works the same, just a bit slower.") :
+                  s.via == :steam ? _INTL("Connected to {1} through Steam.", s.partner)
                         : _INTL("Connected to {1} (direct).\nYour games talk to each other directly.", s.partner))
           sl = defined?(KIF::SoulLink) && KIF::SoulLink.on?
           cmds = [_INTL("Send hello"), _INTL("Disconnect")]

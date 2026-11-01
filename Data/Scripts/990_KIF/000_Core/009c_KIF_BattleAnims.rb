@@ -14,7 +14,8 @@
 # makes all of them, so the answers are the same. The first start after the
 # data file changes loads it whole, as before, and writes the cache. In debug
 # mode (the animation editor saves this list back to the file) nothing
-# changes at all.
+# changes at all; when debug mode is switched on later (Options > DEBUG) the
+# lazy list is dropped and the file is read whole the next time it is asked for.
 #===============================================================================
 module KIF
   module Perf
@@ -136,6 +137,9 @@ class Object
 
   def pbLoadBattleAnimations
     $PokemonTemp = PokemonTemp.new if !$PokemonTemp
+    cur = $PokemonTemp.battleAnims
+    # the editors save this list back to the file, so they never get the lazy one (unmade places would be saved as nil)
+    $PokemonTemp.battleAnims = nil if $DEBUG && cur && cur.instance_variable_get(:@array).is_a?(KIF::Perf::AnimCache::AnimList)
     if !$PokemonTemp.battleAnims && pbRgssExists?("Data/PkmnAnimations.rxdata")
       anims = KIF::Perf::AnimCache.lazy("Data/PkmnAnimations.rxdata")
       $PokemonTemp.battleAnims = anims if anims

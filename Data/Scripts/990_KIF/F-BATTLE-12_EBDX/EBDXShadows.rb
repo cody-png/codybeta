@@ -22,7 +22,11 @@ module KIF
       h = bmp.height
       seen = bmp.instance_variable_get(:@kif_feet_gap)
       return seen[1] if seen && seen[0] == h
-      gap = scan_feet_gap(bmp)
+      gap = begin
+        scan_feet_gap(bmp)
+      rescue StandardError
+        0   # remembered too, so a bitmap that can't be read isn't scanned again every frame
+      end
       bmp.instance_variable_set(:@kif_feet_gap, [h, gap])
       return gap
     rescue StandardError
@@ -34,12 +38,17 @@ module KIF
       w = bmp.width
       h = bmp.height
       if bmp.respond_to?(:raw_data)
-        raw = bmp.raw_data   # 0xRRGGBBAA per pixel, as in F-SHINY-01
+        raw = bmp.raw_data   # 0xRRGGBBAA per pixel, top row first, as in F-SHINY-01
         stride = w * 4
+        trusted = true
         (h - 1).downto(0) do |y|
-          return h - 1 - y if raw.byteslice(y * stride, stride).unpack("N*").any? { |px| (px & 0xFF) >= FEET_ALPHA }
+          x = raw.byteslice(y * stride, stride).unpack("N*").index { |px| (px & 0xFF) >= FEET_ALPHA }
+          next unless x
+          return h - 1 - y if bmp.get_pixel(x, y).alpha >= FEET_ALPHA
+          trusted = false   # raw_data is not laid out as assumed: read the pixels instead
+          break
         end
-        return 0
+        return 0 if trusted
       end
       (h - 1).downto(0) do |y|
         (0...w).step(2) { |x| return h - 1 - y if bmp.get_pixel(x, y).alpha >= FEET_ALPHA }
@@ -56,11 +65,15 @@ module KIF
       return [feet + altitude * 2 * zoom_y, bottom].min
     end
 
+    # the sprite hash keys, made once (this runs for every battler every frame)
+    RSHADOW_KEYS = Array.new(6) { |i| "rshadow_#{i}".freeze }.freeze
+    POKEMON_KEYS = Array.new(6) { |i| "pokemon_#{i}".freeze }.freeze
+
     module BattlerShadow
       def ebdxUpdateRoundShadow(i)
         super
-        rs = @sprites["rshadow_#{i}"]
-        pk = @sprites["pokemon_#{i}"]
+        rs = @sprites[RSHADOW_KEYS[i] || "rshadow_#{i}"]
+        pk = @sprites[POKEMON_KEYS[i] || "pokemon_#{i}"]
         return if !rs || rs.disposed? || !rs.visible || !pk
         bmp = pk.bitmap
         return if !bmp || bmp.disposed?

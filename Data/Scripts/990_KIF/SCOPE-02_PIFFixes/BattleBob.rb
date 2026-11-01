@@ -14,7 +14,18 @@
 class PokemonBattlerSprite
   alias kif_bob_update update unless method_defined?(:kif_bob_update) || private_method_defined?(:kif_bob_update)
   def update(frameCounter = 0, *rest)
-    frameCounter = Graphics.frame_count unless @selected == 1 || @selected == 2
-    return kif_bob_update(frameCounter, *rest)
+    scene_counter = frameCounter
+    frameCounter = Graphics.frame_count unless @selected == 1
+    ret = kif_bob_update(frameCounter, *rest)
+    # a targeted sprite bobs on the game's count too, but PIF's blink keeps the scene's counter
+    if @selected == 2 && @spriteVisible
+      @updating = true   # as in PIF's update: the flash must not change the shown state it comes back to
+      case (scene_counter / SIXTH_ANIM_PERIOD).floor
+      when 2, 5 then self.visible = false
+      else self.visible = true
+      end
+      @updating = false
+    end
+    return ret
   end
 end

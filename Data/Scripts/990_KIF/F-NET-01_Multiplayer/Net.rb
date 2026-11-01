@@ -55,12 +55,12 @@ module KIF
     MAX_QUEUED = 4_194_304   # bytes read but not yet taken by the game thread; more and the line is closed
     POLL_BYTES = 65_536      # one poll() stops after about this many frame bytes...
     POLL_SECS  = 0.004       # ...or this long (the rest stays queued for the next frame), but takes at least one
-    # The parser's time goes with the number of values in a frame (about 3 us each), not with its bytes: "[", "{" and ","
-    # are counted. An honest message has a few hundred (a co-op start about 150, 24 battle events 750); the biggest the
-    # mod API allows, 8 KB of numbers, about 4100.
+    # The parser's time goes with the number of values in a frame (2-5 us each for numbers, long numbers, floats, texts,
+    # escapes and table keys alike), not with its bytes: "[", "{" and "," are counted. An honest message has a few
+    # hundred (a co-op start about 150, 24 battle events 750); the biggest the mod API allows, 8 KB of numbers, about 4100.
     FRAME_VALUES = 4_500     # most a frame may hold; more is a bad frame, unparsed
     VALUE_BURST  = 20_000    # most a line may send at once (the mod API's 32 KB in a second, all numbers, is 16400)...
-    VALUE_RATE   = 5_000     # ...then this many a second (under 2% of the game's thread); a line that runs dry is closed
+    VALUE_RATE   = 5_000     # ...then this many a second (about 2% of the game's thread); a line that runs dry is closed
     PROTO      = 3       # 3: picture hashes are 32 hex digits (sp_get / sp_img)
     HS_LIMIT   = 10      # handshakes a host starts in 10 s
 

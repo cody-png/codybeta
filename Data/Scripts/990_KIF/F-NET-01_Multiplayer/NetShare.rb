@@ -15,7 +15,10 @@
 #     Integer (|n| <= 2^53), finite Float, true, false, nil; symbols arrive
 #     as strings; nesting at most 8 deep
 #   * at most 8 KB of data a message, 30 messages and 32 KB a second each way
-#     (all mods together); over that, share returns false / the message is dropped
+#     (all mods together); over that, share returns false / the message is dropped.
+#     The same for values (every number, text, list and table): at most 4490 in
+#     a message, 16500 at once and 3500 a second from all mods (the line is
+#     closed above 20000 at once and 5000 a second: Net.rb VALUE_RATE)
 #   * nothing received is eval'd, Marshal-loaded or turned into a class,
 #     method or file name; a handler that raises is logged, never fatal
 #   * strings in data and the key are the PARTNER's text: they may hold message
@@ -35,6 +38,8 @@ module KIF
       MAX_DATA  = 8_192
       MAX_BYTES = 32_768   # a second, each way
       MAX_MSGS  = 30       # a second, each way
+      SHARE_BURST = 16_500 # values ("[{,") the mods may send at once: the mod API's whole second, 4 messages of 8 KB of numbers...
+      SHARE_RATE  = 3_500  # ...then this many a second (the line takes 5000; co-op needs the rest)
       MAX_DEPTH = 8
       MAX_INT   = 2**53
       BAD = Object.new.freeze
@@ -64,7 +69,7 @@ module KIF
       # per connection: the partner's mod ids and the rate counters
       def self.state(s)
         s.instance_variable_get(:@kif_mod_share) ||
-          s.instance_variable_set(:@kif_mod_share, { peer: [], tx: [0, 0, 0], rx: [0, 0, 0] })
+          s.instance_variable_set(:@kif_mod_share, { peer: [], tx: [0, 0, 0], rx: [0, 0, 0], vals: [SHARE_BURST.to_f, Net.now] })
       end
 
       def self.on_connect(s)
@@ -115,6 +120,17 @@ module KIF
         return true
       end
 
+      # false when the mods are over their values (a token bucket): the line is closed over more, so share says no first
+      def self.pay(st, values)
+        b = st[:vals]
+        now = Net.now
+        b[0] = [SHARE_BURST.to_f, b[0] + (now - b[1]) * SHARE_RATE].min
+        b[1] = now
+        return false if b[0] < values
+        b[0] -= values
+        return true
+      end
+
       MAX_WARNED = 32
 
       # one log line per mod and reason until the next connection, at most
@@ -138,9 +154,13 @@ module KIF
         return note(id, "a key is 1-64 characters, no control characters") unless k.length.between?(1, 64) && k !~ /[\x00-\x1f\x7f]/
         d = clean(data)
         return note(id, "data must be JSON-safe (Hash, Array, String, Integer, Float, true, false, nil)") if d.equal?(BAD)
-        size = Wire.json(d).bytesize
+        json = Wire.json(d)
+        size = json.bytesize
+        values = json.count("[{,") + 8   # + the message around it
         return note(id, "data over #{MAX_DATA} bytes (#{size})") if size > MAX_DATA
+        return note(id, "data over #{FRAME_VALUES - 8} values (#{values - 8}; every number, text, list and table counts)") if values > FRAME_VALUES
         return note(id, "over #{MAX_MSGS} messages or #{MAX_BYTES} bytes a second; dropped") unless spend(state(s), :tx, size)
+        return note(id, "over #{SHARE_RATE} values a second (#{values}); dropped") unless pay(state(s), values)
         return s.post("mod_sh", "m" => id, "k" => k, "d" => d)
       end
 

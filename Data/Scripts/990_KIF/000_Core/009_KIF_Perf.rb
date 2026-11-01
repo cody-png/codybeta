@@ -16,10 +16,12 @@
 #===============================================================================
 module KIF
   module Perf
-    @token = rand(2**30) + 1
+    # A Random of its own: the game's random stream is not touched by a data reload (the
+    # same seed gives the same battle whether or not mod data was synced during it)
+    @token = Random.new.rand(2**30) + 1
 
     def self.token; @token; end
-    def self.bump_token; @token = rand(2**30) + 1; end
+    def self.bump_token; @token = Random.new.rand(2**30) + 1; end
   end
 end
 

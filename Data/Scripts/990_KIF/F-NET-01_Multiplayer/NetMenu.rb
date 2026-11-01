@@ -252,7 +252,7 @@ module KIF
             @notes << t unless @notes.include?(t)   # shown on the map too: one at a time, however many come
           elsif ev[1].start_with?("sl_") && defined?(KIF::SoulLink)
             begin
-              KIF::SoulLink.receive(ev[1], ev[2])
+              KIF::SoulLink.receive(ev[1], ev[2], s)
             rescue => e
               log("Soul Link message failed (#{e.class}: #{e.message})")
             end
@@ -280,7 +280,7 @@ module KIF
             end
           end
         when :disconnected
-          KIF::SoulLink.on_disconnect if defined?(KIF::SoulLink)
+          KIF::SoulLink.on_disconnect(s) if defined?(KIF::SoulLink)
           KIF::Presence.on_disconnect if defined?(KIF::Presence)
           KIF::Coop.on_disconnect if defined?(KIF::Coop)
           KIF::Trade.on_disconnect if defined?(KIF::Trade)
@@ -944,7 +944,7 @@ module KIF
                  (relay ? _INTL("Connected through relay.\nPlay works the same, just a bit slower.") :
                   s.via == :steam ? _INTL("Connected to {1} through Steam.", s.partner)
                         : _INTL("Connected to {1} (direct).\nYour games talk to each other directly.", s.partner))
-          sl = defined?(KIF::SoulLink) && KIF::SoulLink.on?
+          sl = defined?(KIF::SoulLink) && KIF::SoulLink.awake?
           cmds = [_INTL("Send hello"), _INTL("Disconnect")]
           cmds.unshift(_INTL("Soul Link")) if sl
           tr = defined?(KIF::Trade) ? cmds.length : nil   # after Disconnect, before co-op's row

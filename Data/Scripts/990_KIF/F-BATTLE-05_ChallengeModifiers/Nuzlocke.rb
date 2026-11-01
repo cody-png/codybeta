@@ -66,6 +66,7 @@ module KIF
       attr_accessor :started_over   # pbStartOver ran during this battle's end
       attr_accessor :lifted    # PIF's own no_reviving rule while a blackout heals the living
       attr_accessor :pending   # this wild battle: [place, counts?]
+      attr_reader :exempt   # inside suspended { }: no rule applies
     end
 
     # Pinkan Island plays as in PIF (KIF::Rand.pinkan?): no rule applies there.
@@ -103,19 +104,29 @@ module KIF
       return name.empty? ? "Map #{map_id}" : name
     end
 
-    # Evolution lines of a Pokémon (both halves of a fusion)
+    # Evolution lines of a Pokémon (both halves of a fusion; a triple fusion counts as itself)
     def self.lines(pkmn)
-      dex = pkmn.species_data.id_number
-      ids = dex > NB_POKEMON ? [getBodyID(dex), getHeadID(dex, getBodyID(dex))] : [dex]
+      return species_lines(pkmn.species_data.id_number)
+    end
+
+    def self.species_lines(dex)
+      ids = dex > NB_POKEMON && !isTripleFusion?(dex) ? [getBodyID(dex), getHeadID(dex, getBodyID(dex))] : [dex]
       return ids.map { |n| (GameData::Species.get(n).get_baby_species rescue n) }
     end
 
+    # Every line you have: party, boxes, the Day Care, the Graveyard and what died
+    # (a released one isn't in the Graveyard, but it was yours)
     def self.owned_lines
       out = {}
       add = proc { |p| lines(p).each { |l| out[l] = true } if p && !p.egg? }
       $Trainer.party.each(&add)
       $PokemonStorage.maxBoxes.times { |b| next if $PokemonStorage[b].is_a?(StorageTransferBox); $PokemonStorage.maxPokemon(b).times { |i| add.call($PokemonStorage[b, i]) } }
       (state[:graveyard] || []).each { |g| add.call(g[:pokemon]) }
+      ((($PokemonGlobal.daycare rescue nil) || []).each { |s| add.call(s[0]) if s.is_a?(Array) })
+      (state[:deaths] || []).each do |d|
+        sp = GameData::Species.try_get(d[:species])
+        species_lines(sp.id_number).each { |l| out[l] = true } if sp
+      end
       return out
     end
 
@@ -136,15 +147,52 @@ module KIF
       (state[:places] ||= {})[place] = foes.map { |p| p.species }
     end
 
+    # PvP and friendly battles (NSL-27): while the block runs no rule applies:
+    # nobody is buried, no place is used, a loss isn't a whiteout, and PIF's own
+    # No reviving decides who is healed. The party's HP, status and PP are put
+    # back afterwards (restore: false when the battle is fought with copies).
+    #   KIF::Nuzlocke.suspended { ...the battle... }
+    def self.suspended(restore: true)
+      snap = restore ? $Trainer.party.compact.reject(&:egg?).map { |p| [p, p.hp, p.status, p.statusCount, p.moves.map(&:pp)] } : nil
+      was_exempt, was_lifted = @exempt, lifted
+      @exempt = true
+      self.lifted = true
+      return yield
+    ensure
+      begin
+        (snap || []).each do |p, hp, status, count, pps|
+          p.instance_variable_set(:@hp, hp)   # (the setters refuse a fainted Pokémon)
+          p.instance_variable_set(:@status, status)
+          p.instance_variable_set(:@statusCount, count)
+          p.moves.each_with_index { |m, k| m.pp = pps[k] if pps[k] }
+        end
+      rescue StandardError => e
+        KIF.log("Nuzlocke: party not restored after a suspended battle (#{e.class}: #{e.message})")
+      end
+      @exempt = was_exempt
+      self.lifted = was_lifted
+    end
+
+    # Gift Pokémon: Counts. gift_call runs the adder and then judges its Pokémon; with
+    # Soul Link linked it finds the Pokémon the call added, so the place pairs (NSL-02)
+    def self.gift_call(pkmn)
+      linking = on? && $PokemonSystem.ch_nz_gifts == 1 && defined?(KIF::SoulLink) && KIF::SoulLink.linked?
+      ret, got = linking ? KIF::SoulLink.watching { yield } : [yield, nil]
+      gift_received(got || pkmn) if ret
+      return ret
+    end
+
     # Gift Pokémon: Counts
     def self.gift_received(pkmn, trade = false)
-      return unless on? && $PokemonSystem.ch_nz_gifts == 1 && $game_map
+      return unless on? && $game_map
       return if @unfusing   # PIF's Pinkan Island unfuse adds a half with pbAddPokemon
-      return if !trade && only_pokemon?   # the starter
+      return if !trade && only_pokemon?   # the starter (Soul Link pairs it: SoulLink.starter_check)
+      return unless $PokemonSystem.ch_nz_gifts == 1
       place = place_name($game_map.map_id)
       return if (state[:places] || {})[place]
       (state[:places] ||= {})[place] = [pkmn.is_a?(Pokemon) ? pkmn.species : pkmn]
       KIF.log("Nuzlocke: a gift used up #{place}")
+      KIF::SoulLink.place_used(place, pkmn) if defined?(KIF::SoulLink)
     rescue => e
       KIF.log("Nuzlocke: gift check failed (#{e.class}: #{e.message})")
     end
@@ -184,6 +232,13 @@ module KIF
     def self.death_place(p)
       g = (state[:graveyard] || []).find { |e| e[:pokemon].equal?(p) }
       return g ? g[:place] : "?"
+    end
+
+    # the Graveyard line for one Pokémon: where it died, and the link when that is why
+    def self.death_text(p)
+      g = (state[:graveyard] || []).find { |e| e[:pokemon].equal?(p) }
+      return _INTL("{1} died at {2}.", p.name, g ? g[:place] : "?") unless g && g[:why]
+      return _INTL("{1} died at {2}: {3}.", p.name, g[:place], g[:why])
     end
 
     #---------------------------------------------------------------------------
@@ -232,12 +287,23 @@ module KIF
       save_data[:player].kif_nz_failed = true if preview && save_data[:player]
     end
 
+    # The locked save can't be loaded, so its Soul Link events (the run over, deaths) reach an
+    # offline partner from here: Share Soul Link code (NSL-01)
     def self.locked_menu
       loop do
-        cmd = pbMessage(_INTL("This Nuzlocke run is over and the save is locked."),
-                        [_INTL("View Graveyard"), _INTL("Back")], 2)
-        break unless cmd == 0
-        view_graveyard_of(preview)
+        share = defined?(KIF::SoulLink) && KIF::SoulLink.saved_unsent(preview) > 0
+        cmds = [_INTL("View Graveyard")]
+        cmds << _INTL("Share Soul Link code") if share
+        cmds << _INTL("Back")
+        cmd = pbMessage(_INTL("This Nuzlocke run is over and the save is locked."), cmds, cmds.length)
+        if cmd == 0
+          view_graveyard_of(preview)
+        elsif share && cmd == 1
+          st = KIF::SoulLink.saved_state(preview)
+          KIF::SoulLink::Menu.share_codes(st, st[:partner_name].to_s, st[:my_seq].to_i - st[:acked].to_i)
+        else
+          break
+        end
       end
     end
 
@@ -266,10 +332,11 @@ module KIF
       $Trainer.party.select { |p| p && !p.egg? && p.fainted? && !p.kif_nz_dead }.each { |p| bury(p) }
     end
 
-    def self.bury(p)
+    # why: set when the link killed it ("linked to Alex's Flutter", "no pair"), shown in the Graveyard
+    def self.bury(p, why = nil)
       p.kif_nz_dead = true
       entry = { :name => p.name, :species => p.species, :level => p.level, :place => place_name($game_map.map_id),
-                :fusion => p.species_data.id_number > NB_POKEMON, :pokemon => p }
+                :fusion => p.species_data.id_number > NB_POKEMON, :why => why, :pokemon => p }
       (state[:deaths] ||= []) << entry.reject { |k, _| k == :pokemon }
       KIF.log("Nuzlocke: #{p.name} (#{p.species}, Lv. #{p.level}) died at #{entry[:place]}")
       @to_bury = (@to_bury || []) << entry
@@ -411,8 +478,7 @@ class KifGraveyardScreen < PokemonStorageScreen
       end
       pokemon = @storage[selected[0], selected[1]]
       next unless pokemon
-      cmd = pbShowCommands(_INTL("{1} died at {2}.", pokemon.name, KIF::Nuzlocke.death_place(pokemon)),
-                           [_INTL("Summary"), _INTL("Cancel")])
+      cmd = pbShowCommands(KIF::Nuzlocke.death_text(pokemon), [_INTL("Summary"), _INTL("Cancel")])
       pbSummary(selected, nil) if cmd == 0
     end
     @scene.pbCloseBox
@@ -563,7 +629,7 @@ class PokeBattle_Battle
 
   def pbStartBattle
     KIF::Nuzlocke.pending = nil
-    if KIF::Nuzlocke.on? && wildBattle? && KIF::Nuzlocke.started?
+    if KIF::Nuzlocke.on? && !KIF::Nuzlocke.exempt && wildBattle? && KIF::Nuzlocke.started?
       begin
         foes = pbParty(1).compact
         place, verdict = KIF::Nuzlocke.judge(foes)
@@ -614,8 +680,19 @@ class PokeBattle_SafariZone
       end
     end
     ret = kif_nz_safari_pbStartBattle
-    KIF::Nuzlocke.use_place(@kif_nz_place, @party2.compact) if ret == 4 && @kif_nz == :first && KIF::Nuzlocke.on?
+    if ret == 4 && @kif_nz == :first && KIF::Nuzlocke.on?
+      KIF::Nuzlocke.use_place(@kif_nz_place, @party2.compact)
+      KIF::SoulLink.place_used(@kif_nz_place, (@kif_nz_caught || []).first) if defined?(KIF::SoulLink)   # the catch pairs (NSL-02)
+    end
     return ret
+  end
+
+  # the Pokémon thrown for and caught (the objects that are stored)
+  alias kif_nz_safari_record pbRecordAndStoreCaughtPokemon unless method_defined?(:kif_nz_safari_record)
+
+  def pbRecordAndStoreCaughtPokemon(*args)
+    @kif_nz_caught = (@caughtPokemon || []).dup
+    return kif_nz_safari_record(*args)
   end
 
   attr_reader :kif_nz, :kif_nz_place
@@ -644,33 +721,23 @@ alias kif_nz_pbGenerateEgg pbGenerateEgg unless defined?(kif_nz_pbGenerateEgg)
 alias kif_nz_pbAddPokemonID pbAddPokemonID unless defined?(kif_nz_pbAddPokemonID)
 
 def pbAddPokemonID(pkmn, *args)
-  ret = kif_nz_pbAddPokemonID(pkmn, *args)
-  KIF::Nuzlocke.gift_received(pkmn) if ret
-  return ret
+  return KIF::Nuzlocke.gift_call(pkmn) { kif_nz_pbAddPokemonID(pkmn, *args) }
 end
 
 def pbAddPokemon(pkmn, *args)
-  ret = kif_nz_pbAddPokemon(pkmn, *args)
-  KIF::Nuzlocke.gift_received(pkmn) if ret
-  return ret
+  return KIF::Nuzlocke.gift_call(pkmn) { kif_nz_pbAddPokemon(pkmn, *args) }
 end
 
 def pbAddToParty(pkmn, *args)
-  ret = kif_nz_pbAddToParty(pkmn, *args)
-  KIF::Nuzlocke.gift_received(pkmn) if ret
-  return ret
+  return KIF::Nuzlocke.gift_call(pkmn) { kif_nz_pbAddToParty(pkmn, *args) }
 end
 
 def pbAddForeignPokemon(pkmn, *args)
-  ret = kif_nz_pbAddForeignPokemon(pkmn, *args)
-  KIF::Nuzlocke.gift_received(pkmn) if ret
-  return ret
+  return KIF::Nuzlocke.gift_call(pkmn) { kif_nz_pbAddForeignPokemon(pkmn, *args) }
 end
 
 def pbGenerateEgg(pkmn, *args)
-  ret = kif_nz_pbGenerateEgg(pkmn, *args)
-  KIF::Nuzlocke.gift_received(pkmn) if ret
-  return ret
+  return KIF::Nuzlocke.gift_call(pkmn) { kif_nz_pbGenerateEgg(pkmn, *args) }
 end
 # PIF's own aliases of pbGenerateEgg (event scripts) point at the hook too
 alias pbAddEgg pbGenerateEgg
@@ -679,6 +746,11 @@ alias pbGenEgg pbGenerateEgg
 alias kif_nz_pbStartTrade pbStartTrade unless defined?(kif_nz_pbStartTrade)
 
 def pbStartTrade(pokemonIndex, newpoke, *args)
+  msg = defined?(KIF::SoulLink) && KIF::SoulLink.leave_refusal($Trainer.party[pokemonIndex], :trade)
+  if msg   # (the choosers keep a linked Pokémon out already; this stops a scripted trade)
+    pbMessage(msg)
+    return nil
+  end
   ret = kif_nz_pbStartTrade(pokemonIndex, newpoke, *args)
   KIF::Nuzlocke.gift_received($Trainer.party[pokemonIndex] || newpoke, true)
   return ret
@@ -733,7 +805,7 @@ alias kif_nz_pbAfterBattle pbAfterBattle unless defined?(kif_nz_pbAfterBattle)
 # doesn't black out (canLose battles, rematches, the Bug Contest, a partner
 # winning alone). Self Battle fights with copies: nothing to bury.
 def pbAfterBattle(decision, canLose)
-  nz = KIF::Nuzlocke.on? && KIF::Nuzlocke.started? && !(defined?(KIF::SelfBattle) && KIF::SelfBattle.instance_variable_get(:@active))
+  nz = KIF::Nuzlocke.on? && !KIF::Nuzlocke.exempt && KIF::Nuzlocke.started? && !(defined?(KIF::SelfBattle) && KIF::SelfBattle.instance_variable_get(:@active))
   if nz
     begin
       place, foes = KIF::Nuzlocke.pending
@@ -763,7 +835,7 @@ end
 alias kif_nz_pbStartOver pbStartOver unless defined?(kif_nz_pbStartOver)
 
 def pbStartOver(*args)
-  if KIF::Nuzlocke.on? && KIF::Nuzlocke.started? && $Trainer
+  if KIF::Nuzlocke.on? && !KIF::Nuzlocke.exempt && KIF::Nuzlocke.started? && $Trainer
     KIF::Nuzlocke.started_over = true
     return if KIF::Nuzlocke.whiteout == :title
     # the living are healed as usual; the dead stay dead (Pokemon#heal)
@@ -811,12 +883,77 @@ def pbUnfuse(pokemon, scene, *args)
     scene.pbDisplay(_INTL("Nuzlocke: {1} is dead and can't be unfused.", pokemon.name))
     return false
   end
+  # Soul Link's Fused mode makes a fusion of the pair: unfusing it would give an extra Pokémon (NSL-07)
+  if KIF::Nuzlocke.on? && pokemon && pokemon.kif_sl_fused && defined?(KIF::SoulLink) && KIF::SoulLink.linked?
+    scene.pbDisplay(_INTL("Soul Link: {1} was fused by the link and can't be unfused.", pokemon.name))
+    return false
+  end
   KIF::Nuzlocke.instance_variable_set(:@unfusing, true)
   begin
     return kif_nz_pbUnfuse(pokemon, scene, *args)
   ensure
     KIF::Nuzlocke.instance_variable_set(:@unfusing, false)
   end
+end
+
+# A linked Pokémon only leaves its pair by dying: no release (one or many), no NPC trade,
+# and not to PIF's Transfer Box, which every other save can take from (NSL-05)
+class PokemonStorageScreen
+  alias kif_nz_pbRelease pbRelease unless method_defined?(:kif_nz_pbRelease)
+  alias kif_nz_pbReleaseMulti pbReleaseMulti unless method_defined?(:kif_nz_pbReleaseMulti)
+  alias kif_nz_pbPlace pbPlace unless method_defined?(:kif_nz_pbPlace)
+  alias kif_nz_pbSwap pbSwap unless method_defined?(:kif_nz_pbSwap)
+
+  def pbRelease(selected, heldpoke)
+    pokemon = heldpoke || (@storage[selected[0], selected[1]] rescue nil)
+    msg = defined?(KIF::SoulLink) && KIF::SoulLink.leave_refusal(pokemon, :release)
+    if msg
+      pbDisplay(msg)
+      return false
+    end
+    return kif_nz_pbRelease(selected, heldpoke)
+  end
+
+  # the multi-select Release (outside Debug too) deletes the whole selection
+  def pbReleaseMulti(box)
+    if defined?(KIF::SoulLink)
+      msg = (getMultiSelection(box, nil) rescue []).map { |i| KIF::SoulLink.leave_refusal(@storage[box, i], :release) }.compact.first
+      if msg
+        pbDisplay(msg)
+        return false
+      end
+    end
+    return kif_nz_pbReleaseMulti(box)
+  end
+
+  def pbPlace(selected)
+    return if kif_nz_transfer_refused?(selected)
+    return kif_nz_pbPlace(selected)
+  end
+
+  def pbSwap(selected)
+    return if kif_nz_transfer_refused?(selected)
+    return kif_nz_pbSwap(selected)
+  end
+
+  # the Pokémon in hand would go into the Transfer Box and it is linked
+  def kif_nz_transfer_refused?(selected)
+    return false unless @heldpkmn && @scene.respond_to?(:inTransferBox) && @scene.inTransferBox && selected[0] != -1
+    msg = defined?(KIF::SoulLink) && KIF::SoulLink.leave_refusal(@heldpkmn, :transfer)
+    return false unless msg
+    pbDisplay(msg)
+    return true
+  end
+end
+
+alias kif_nz_pbChooseTradablePokemon pbChooseTradablePokemon unless defined?(kif_nz_pbChooseTradablePokemon)
+
+def pbChooseTradablePokemon(variableNumber, nameVarNumber, ableProc = nil, allowIneligible = false)
+  if defined?(KIF::SoulLink) && KIF::Nuzlocke.on? && KIF::SoulLink.linked?
+    inner = ableProc
+    ableProc = proc { |pkmn| !KIF::SoulLink.protected?(pkmn) && (inner ? inner.call(pkmn) : true) }
+  end
+  return kif_nz_pbChooseTradablePokemon(variableNumber, nameVarNumber, ableProc, allowIneligible)
 end
 
 #-------------------------------------------------------------------------------

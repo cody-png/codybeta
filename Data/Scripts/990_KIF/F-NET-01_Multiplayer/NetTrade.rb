@@ -99,6 +99,7 @@ module KIF
       p.obtain_text = KIF::Coop::Mon.text(x["ot_t"], 60).delete("\n") if x["ot_t"].is_a?(String)
       fm = x["fm"].is_a?(Array) ? x["fm"].first(20).map { |m| KIF::Coop::Mon.sym(m, GameData::Move) }.compact : []
       p.first_moves = fm unless fm.empty?
+      return nil if defined?(KIF::Nuzlocke) && KIF::Nuzlocke.on? && !p.egg? && p.hp <= 0   # a dead Pokémon can't come back by trade (NSL-04)
       return p
     rescue StandardError => e
       log("an offer didn't fit (#{e.class}: #{e.message})")
@@ -167,6 +168,7 @@ module KIF
       $Trainer.stats.incr_nb_trades if $Trainer.respond_to?(:stats) && $Trainer.stats.respond_to?(:incr_nb_trades)
       book[st[:id]] = [:pending, Marshal.load(Marshal.dump(st[:mine])), [box, i], p.personalID]
       $PokemonStorage[box, i] = p
+      KIF::Nuzlocke.gift_received(p, true) if defined?(KIF::Nuzlocke)   # Gift Pokémon: Counts applies to a trade (NSL-04)
       st[:done] = true
       changed
       log("#{st[:id]}: gave #{st[:mine].species} for #{p.species}")
@@ -334,6 +336,13 @@ module KIF
       return unless p && @st
       if loc[0] == -1 && !p.egg? && p.hp > 0 && $Trainer.able_pokemon_count <= 1
         return pbMessage(_INTL("That's your last Pokémon that can battle."))
+      end
+      # Nuzlocke: not a dead Pokémon; Soul Link: not one linked to its pair (NSL-04)
+      if defined?(KIF::Nuzlocke) && KIF::Nuzlocke.on? && !p.egg? && (p.hp <= 0 || p.kif_nz_dead)
+        return pbMessage(_INTL("{1} is dead, so it can't be traded.", p.name))
+      end
+      if defined?(KIF::SoulLink) && (msg = KIF::SoulLink.leave_refusal(p, :trade))
+        return pbMessage(msg)
       end
       offer(p, loc)
     end

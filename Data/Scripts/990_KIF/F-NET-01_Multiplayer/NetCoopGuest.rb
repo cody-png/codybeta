@@ -618,8 +618,10 @@ module KIF
       end
 
       def after_battle
-        if !@caught.empty? && @nz && @nz[1] == :first && KIF::Nuzlocke.on?
-          KIF::Nuzlocke.pending = [@nz[0], @mirror.pbParty(1).compact]   # this player's catch uses up the place
+        # this player's catch uses up the place, and so does a miss both share when the host is the Soul Link partner
+        if @nz && @nz[1] == :first && KIF::Nuzlocke.on? &&
+           (!@caught.empty? || (defined?(KIF::SoulLink) && KIF::SoulLink.shared_miss?(@nz[0], @decision)))
+          KIF::Nuzlocke.pending = [@nz[0], @mirror.pbParty(1).compact]
         end
         d = @decision || 0
         safe = @can_lose || d == 0 || @aborted ? true : false

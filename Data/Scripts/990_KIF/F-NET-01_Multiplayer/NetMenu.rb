@@ -107,7 +107,9 @@ module KIF
       @local = PortMap.local_ip
       @pm_thread = Thread.new { PortMap.open(port, local: @local) }
       @pm_thread.report_on_exception = false
-      @lan = LAN.responder(my_name, lan_code, full: proc { s.lobby? && s.full? }) if lan_code   # a lobby with no place left is not listed
+      if lan_code   # a lobby with no place left is not listed
+        @lan = s.respond_to?(:lobby?) && s.lobby? ? LAN.responder(my_name, lan_code, full: proc { s.full? }) : LAN.responder(my_name, lan_code)
+      end
       log("hosting on port #{port}")
       return port
     end

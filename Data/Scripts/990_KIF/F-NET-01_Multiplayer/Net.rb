@@ -3,7 +3,9 @@
 # (new in KIF 1.3, 2026-10-23; design: Claude Docs/Base KIF/MULTIPLAYER_PLAN.md)
 #
 # Peer to peer, no server: one game hosts (TCP 52411, or the next free of
-# 52412-52415), the other joins with a join code. Optional community relay
+# 52412-52415), the other joins with a join code. A host can take two friends
+# (Session#max_peers = 2, Options > Players): a lobby of three, guests talking
+# only to the host. Optional community relay
 # (Tools/kif_relay.rb) for players who can't host; none is built in.
 # Or over Steam (NetSteam.rb, Session#host_steam): the same frames, each one
 # Steam message, between members of a friends-only lobby.
@@ -1043,8 +1045,11 @@ module KIF
     # A session: hosting (one partner in v1), joining, or either through a
     # relay or Steam. Events from #poll:
     #   [:join_request, name]   (host) someone with the code: #accept or #decline
-    #   [:connected, name]      handshake done, partner said hello
-    #   [:message, type, hash]  a checked message
+    #   [:connected, name, slot] handshake done, partner said hello (the host is slot 0, its guests 1 and 2)
+    #   [:message, type, hash, from]  a checked message, from a slot (a lobby of three: also what the host
+    #                           passed on from the other guest; see TYPES["ro"])
+    #   [:peer_joined, slot, name, version]  (a guest) the host's roster has another player
+    #   [:peer_left, slot, why, name]  (a lobby of three) one player is gone, the others go on
     #   [:disconnected, why]    :bye, :timeout, :closed, :error, :flood,
     #                           :oversized, :stalled
     #   [:failed, why]          joining failed: :unreachable, :code, :busy,

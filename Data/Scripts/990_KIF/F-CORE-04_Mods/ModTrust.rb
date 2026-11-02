@@ -63,6 +63,7 @@ module KIF
       @reports = {}
       @pcache = {}
       @notices = []
+      @noticed = {}
       @lists = nil
       @protection = nil
       @dirty = false

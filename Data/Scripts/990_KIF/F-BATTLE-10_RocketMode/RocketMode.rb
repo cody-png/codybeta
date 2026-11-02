@@ -151,8 +151,9 @@ end
 # EBDX (660_EBDX/012_EBDX_BattleHooks.rb) wraps pbThrowPokeBall on
 # PokeBattle_Battle and took its alias of PIF's method before this file
 # loaded, so the copy above was never reached (stealing was always
-# deflected). Its alias now calls the copy above.
-KIF.guard_base("660_EBDX/012_EBDX_BattleHooks.rb", 4120792821,
+# deflected). Its alias now calls the copy above. (The CRC is of that file as of
+# 2026-11-01; only its pbReplace lines changed since the port, the wrapper did not.)
+KIF.guard_base("660_EBDX/012_EBDX_BattleHooks.rb", 2811849832,
                "PokeBattle_Battle#pbThrowPokeBall (EBDX wrapper, RocketMode.rb)")
 
 class PokeBattle_Battle

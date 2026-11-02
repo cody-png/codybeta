@@ -4,7 +4,7 @@
 # Options > Mods: a short badge on every mod (OK, CHECK, RISK, NEEDS OK,
 # TAMPERED), "What it can do", "Allow anything", "Blocked actions" and, for a
 # mod KIF is holding back, "Review and allow". "Mod protection" and "About mod
-# safety" are in Options > Others. A one-time notice on the map when a new or
+# safety" are in Options > System. A one-time notice on the map when a new, held or
 # changed mod needs a look or the guard stopped something.
 # Existing option rows and pbMessage lists only; no new drawing code.
 #===============================================================================

@@ -166,7 +166,7 @@ module KIF
 
       # ModGuard.rb and ModTrust.rb never decide who is calling
       def own_file?(path)
-        return false unless path.is_a?(String) && path.end_with?("/ModTrust.rb")
+        return false unless path.is_a?(String) && File.basename(path) == "ModTrust.rb"
         return File.dirname(path) == File.dirname(THIS_FILE)
       end
 

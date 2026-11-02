@@ -36,7 +36,7 @@ module KIF
       def self.key_from_caller(locs)
         refresh_roots_once
         # the API's own frames (a registry helper that calls API.on) do not decide
-        locs = locs.drop_while { |l| (l.path || "").include?("F-CORE-10_ModAPI") }
+        locs = locs.drop_while { |l| KIF::ModContract.script_in?(l.path, "F-CORE-10_ModAPI") }
         k = KIF::ModContract.caller_owner(locs)
         return k if k
         cur = (defined?(KIF::Mods) && KIF::Mods.respond_to?(:current)) ? KIF::Mods.current : nil

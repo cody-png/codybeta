@@ -83,6 +83,38 @@ module KIF
       return d ? path.start_with?(d) : false
     end
 
+    # The real game's loader labels every script with its bare file name
+    # ("030_Hook.rb"); the kit and a mod's `load` give a full path. KIF's own
+    # files are therefore known by a path part OR by a bare name found in
+    # KIF's script folders (looked up once).
+    def self.script_names
+      return @script_names if @script_names
+      base = (defined?(KIF::Features) && KIF::Features.respond_to?(:root)) ? File.dirname(KIF::Features.root.to_s) : File.join("Data", "Scripts")
+      h = {}
+      %w[990_KIF 660_EBDX 661_BossUIHooks].each do |d|
+        Dir.glob(File.join(base, d, "**", "*.rb")).each { |f| (h[File.basename(f)] ||= []) << f[(base.length + 1)..-1] }
+      end
+      return @script_names = h
+    rescue StandardError
+      return {}
+    end
+
+    def self.bare_label?(path)
+      s = path.to_s
+      return s.end_with?(".rb") && !s.include?("/") && !s.include?("\\")
+    end
+
+    # Is this file (a source_location / frame path) one of KIF's own scripts?
+    # part: a folder or file name it must be under, e.g. "F-CORE-10_ModAPI"
+    # (nil: any of 990_KIF, 660_EBDX).
+    def self.script_in?(path, part = nil)
+      s = path.to_s
+      if bare_label?(s)
+        return (script_names[s] || []).any? { |r| part ? r.include?(part) : (r.start_with?("990_KIF") || r.start_with?("660_EBDX")) }
+      end
+      return part ? s.include?(part) : (s.include?("990_KIF") || s.include?("660_EBDX"))
+    end
+
     # The mod a call belongs to: the NEAREST frame that is not transparent
     # decides. Under a mod root -> that mod. KIF's or the game's code (Safe.rb
     # included) -> nil, which means "not a mod, allowed". Why the nearest and not

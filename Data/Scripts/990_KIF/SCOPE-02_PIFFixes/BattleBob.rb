@@ -8,14 +8,16 @@
 # counter, so every frame was frame 0 and the sprite sat still, 1 px off.
 # The idle bob now runs on the game's frame count (the same value on every
 # call in a frame, so EBDX updating a sprite twice a frame doesn't speed it up).
-# Choosing and targeted sprites keep the scene's counter, and the option is
-# still read by PIF's code: Off = no bob.
+# Choosing and targeted sprites keep the scene's counter; with the option Off
+# none of them move (the choosing sprite's 2 px bob ignored the option).
 #===============================================================================
 class PokemonBattlerSprite
   alias kif_bob_update update unless method_defined?(:kif_bob_update) || private_method_defined?(:kif_bob_update)
   def update(frameCounter = 0, *rest)
     scene_counter = frameCounter
     frameCounter = Graphics.frame_count unless @selected == 1
+    # Off: the player's sprite stops its 2 px bob while the command menu is up too (counter 0 = no step)
+    frameCounter = 0 if @selected == 1 && $PokemonSystem && $PokemonSystem.nobattlemovement
     ret = kif_bob_update(frameCounter, *rest)
     # a targeted sprite bobs on the game's count too, but PIF's blink keeps the scene's counter
     if @selected == 2 && @spriteVisible

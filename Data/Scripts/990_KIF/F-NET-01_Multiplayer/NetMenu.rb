@@ -299,6 +299,25 @@ module KIF
       steam_leftovers(sl) if sl
     end
 
+    # every frame, wherever the game loops (Graphics.update): a lobby host in the Bag, a menu or a long event still
+    # passes frames between its two guests, else the guest-vs-guest match hears nothing. Does nothing on the map (Net.update
+    # just ran), for a guest, or with fewer than two guests; see Session#pump_due?
+    def self.pump
+      s = @session
+      return if @pumping || s.nil? || !s.respond_to?(:pump_due?) || !s.pump_due?
+      @pumping = true
+      begin
+        sl = steam.ready? ? steam : nil
+        sl&.pump
+        s.pump
+        steam_leftovers(sl) if sl
+      rescue StandardError => e
+        log("relay pump failed (#{e.class}: #{e.message})")
+      ensure
+        @pumping = false
+      end
+    end
+
     def self.poll_session
       if @pm.nil? && @pm_thread && !@pm_thread.alive?
         @pm = (@pm_thread.value rescue nil) || { status: :closed }
@@ -1250,5 +1269,18 @@ KIF::PauseMenu.add(:kif_multiplayer, "Multiplayer", icon: "menuIcons/PLAYER", or
   })
 
 Events.onMapUpdate += proc { |_sender, _e| KIF::Net.map_update }
+
+# the lobby host's relay (Net.pump) outside the map too
+module Graphics
+  class << self
+    alias kif_netpump_update update unless method_defined?(:kif_netpump_update)
+
+    def update(*args)
+      r = kif_netpump_update(*args)
+      KIF::Net.pump
+      return r
+    end
+  end
+end
 
 at_exit { KIF::Net.shutdown rescue nil }

@@ -160,13 +160,19 @@ module KIF
       orig = $Trainer.party
       begin
         $Trainer.party = mine   # (the pick works on the trainer's party: the real one is put back below)
-        return nil unless PokemonSelection.choose(n, n, true, true)
+        @pick_fainted = true    # (a match uses healed copies: a fainted Pokemon may be picked)
+        unless PokemonSelection.choose(n, n, true, true)
+          return PokemonSelection.hasValidTeam?(n, n, true, true) ? nil : []   # [] is not a cancel: too few can take part, the caller says so
+        end
         return $Trainer.party.compact.first(n)
       ensure
+        @pick_fainted = false
         PokemonSelection.restore
         $Trainer.party = orig
       end
     end
+
+    def self.pick_fainted; @pick_fainted ? true : false; end
 
     def self.choose_number(text, min, max, cur)
       p = ChooseNumberParams.new
@@ -213,7 +219,7 @@ module KIF
       l = pbMessage(_INTL("Level rule?"), [_INTL("Levels as they are"), _INTL("All level 50"), _INTL("All level 100"), _INTL("Cancel")], 4)
       return unless l.is_a?(Integer) && l >= 0 && l <= 2
       team = pick_team(n) or return
-      return pbMessage(_INTL("You need at least {1} Pokemon that are not Eggs for that.", min)) if team.length < min
+      return pbMessage(_INTL("You need at least {1} Pokemon that can take part. Eggs and buried Pokemon can't.", min)) if team.length < min
       n = team.length   # (a smaller team than asked for: the friend brings no more than that)
       id = next_id
       return unless post("co_vs", { "id" => id, "fmt" => fmt, "n" => n, "lv" => LEVELS[l] }, with)
@@ -357,7 +363,7 @@ module KIF
           st[:declines] += 1
           st[:mute] = KIF::Net.now + 60 if st[:declines] >= 2   # two No answers: no more questions for a minute
         end
-        pbMessage(_INTL("You need at least {1} Pokemon that are not Eggs for that.", min)) if few
+        pbMessage(_INTL("You need at least {1} Pokemon that can take part. Eggs and buried Pokemon can't.", min)) if few
         return reply(c[:id], 0, few ? "few" : "no", with)
       end
       st[:declines] = 0
@@ -658,9 +664,21 @@ module KIF
         super
         connected?   # notices a dropped line
         return unless @battle.decision == 0 && (@lost || @auto || @gone)
-        if @lost
+        # Between two guests the lobby host passes every frame on, so this game can't always tell the other player's fault
+        # from the host's. A lost line with the host still there (the roster says the player left) is the player's: a win.
+        # The line to the host gone, or a silent player while the host's game has said nothing for a few roster beats
+        # (it is in a menu or stalled; its thread still answers pings), is nobody's: no result. A host from before the roster
+        # beat (host_quiet nil) is taken as answering.
+        relay = PvP.relayed?(@slot)
+        q = relay && @s.respond_to?(:host_quiet) ? @s.host_quiet : nil
+        down = relay && !@s.connected?
+        stale = q && q > 3 * @s.roster_every
+        if @lost && !down
           @battle.pbDisplayPaused(_INTL("{1} lost the connection. You win.", @name))
           @battle.decision = 1
+        elsif down || (@gone && stale)
+          @battle.pbDisplayPaused(_INTL("{1} can't be reached through the lobby host's game. The match ends with no result.", @name))
+          @battle.decision = 3
         elsif @gone
           @battle.pbDisplayPaused(_INTL("{1} is not answering. You win.", @name))
           @battle.decision = 1
@@ -935,6 +953,18 @@ module KIF
       end
     end
   end
+end
+
+# The base PokemonSelection.choose builds its rules without its acceptFainted argument, so a party with fainted
+# Pokemon had too few to pick from and the pick ended at once (a silent No). The match pick asks for them
+# (PvP.pick_team sets the flag for its own call only).
+module PokemonSelection
+  module KifPvpFainted
+    def rules(min = 1, max = 6, canCancel = false, acceptFainted = false)
+      return super(min, max, canCancel, acceptFainted || KIF::PvP.pick_fainted)
+    end
+  end
+  singleton_class.prepend(KifPvpFainted) unless singleton_class.include?(KifPvpFainted)
 end
 
 # no autosave while a match runs on this game (a win autosaves in a normal trainer battle)

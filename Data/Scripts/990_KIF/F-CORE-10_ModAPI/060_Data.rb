@@ -68,7 +68,7 @@ module KIF
           return v
         when Symbol then return convert(v.to_s, depth)
         when String
-          s = v.encoding == Encoding::UTF_8 ? v : v.dup.force_encoding("UTF-8")
+          s = v.encoding.name == "UTF-8" ? v : v.dup.force_encoding("UTF-8") # not Encoding::UTF_8: JoiPlay rewrites that constant
           raise Bad, "text is not valid UTF-8" unless s.valid_encoding?
           raise Bad, "text longer than #{MAX_STRING} bytes" if s.bytesize > MAX_STRING
           return s.dup

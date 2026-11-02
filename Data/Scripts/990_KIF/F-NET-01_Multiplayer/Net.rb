@@ -94,6 +94,8 @@ module KIF
     RELAY_WAIT    = 120  # seconds a joiner waits for a relay to pair it (the relay answers at once when the host is there)
     MAX_ESCAPES   = 8_000 # backslashes in one message (each letter outside ASCII is one); a 64 KB string of them takes 50 ms to unescape
     BACKLOG       = 64   # events waiting for Net.update: nothing more is read from the line meanwhile
+    PUMP_GAP      = 0.05 # seconds the game may go without polling before a lobby host's relay pump reads the lines (Net.update runs every map frame)
+    ROSTER_EVERY  = 2.0  # seconds: a lobby host with both guests in sends the roster again (the game thread, so it shows its game is passing frames on)
     ASK_LIMIT     = 3    # "Let <name> join?" prompts a minute; more visitors are told "wait"
     DECLINE_WAIT  = 600  # seconds an address that was told No is turned away
     MAX_GUESTS    = 2    # a lobby is the host and up to two guests, never more
@@ -1080,7 +1082,7 @@ module KIF
 
     class Session
       attr_reader :role, :port, :via, :ports, :secret, :room, :relay, :lobby, :steam, :max_peers
-      attr_accessor :ping_every, :timeout, :handshake_timeout, :answer_timeout, :hs_limit, :name, :ver
+      attr_accessor :ping_every, :timeout, :handshake_timeout, :answer_timeout, :hs_limit, :name, :ver, :roster_every
       attr_accessor :wave_at   # when the partner's last hello was shown (NetMenu)
 
       def initialize(name, ver)
@@ -1106,6 +1108,9 @@ module KIF
         @line = nil              # the first of them (kept for the tests and old callers; see relink)
         @max_peers = 1           # guests the host takes: 1, or 2 for a lobby of three (Session#max_peers=)
         @roster = nil            # a guest in a lobby: { slot => [name, version] } as the host last said (the host is 0)
+        @roster_every = ROSTER_EVERY
+        @roster_at = 0.0
+        @host_seen_at = nil      # a guest: when the host's game last sent a roster (it does so while it polls)
         @my_slot = nil
         @pending = []            # host: handshakes still running
         @servers = []
@@ -1359,6 +1364,7 @@ module KIF
       # Never waits: takes what the threads left and moves the state on. Works
       # for about POLL_BUDGET and leaves the rest queued for the next call.
       def poll
+        @polled_at = Net.now
         out = @later
         @later = []
         steam_events(out) if @via == :steam && @state != :closed
@@ -1387,6 +1393,24 @@ module KIF
 
       # events Net.update had no time for: first in the next poll
       def defer(list); @later = list + @later; end
+
+      # A lobby host with both guests in whose game has not polled for PUMP_GAP (the Bag, a menu, a long event: Net.update
+      # only runs on the map and in the Multiplayer screens): the lines are read so frames still pass between the guests
+      # (Net.pump, once a frame from Graphics.update). It is poll itself, so the stamp, quotas and allow-list are the same;
+      # what is for this game's own features is kept for the next Net.update, nothing is dispatched here.
+      def pump_due?
+        return false unless @role == :host && lobby? && Net.now - (@polled_at || 0.0) >= PUMP_GAP
+        return @lines.count { |l| l.st == :connected } > 1
+      end
+
+      def pump
+        evs = poll
+        defer(evs) unless evs.empty?
+      end
+
+      # a guest in a lobby: seconds since the host's game last said the roster, nil if it never did (a host from before
+      # that: nothing is known). Longer than a few roster_every: the host's game is not passing frames on.
+      def host_quiet; @host_seen_at ? Net.now - @host_seen_at : nil; end
 
       private
 
@@ -1473,6 +1497,7 @@ module KIF
       # host: the players, to every guest (who each get their own slot in it)
       def send_roster
         return unless lobby?
+        @roster_at = Net.now
         ins = @lines.select { |l| l.st == :connected }
         list = [[0, @name, @ver]] + ins.map { |l| [l.slot, l.name, l.ver] }
         ins.each { |l| l.conn.send_msg({ "t" => "ro", "me" => l.slot, "p" => list }) }
@@ -1770,6 +1795,7 @@ module KIF
         end
         return bad_frame(line, out, "ro without the host or this player") unless seen.key?(0) && seen.key?(me)
         old = @roster || { 0 => [line.name, line.ver], me => [@name, @ver] }
+        @host_seen_at = Net.now
         @roster = seen
         @my_slot = me
         (seen.keys - old.keys - [me]).each { |s| out << [:peer_joined, s, seen[s][0], seen[s][1]] }
@@ -1927,6 +1953,9 @@ module KIF
           drop_pending(l)
         end
         @lines.dup.each { |l| check_line(l, now, out) }
+        # a lobby host with both guests in says the roster again now and then, from here (the game thread): a guest in a
+        # match with the other guest sees from it that the host's game still passes frames on (host_quiet)
+        send_roster if lobby? && now - @roster_at >= @roster_every && @lines.count { |l| l.st == :connected } > 1
       end
 
       def check_line(l, now, out)

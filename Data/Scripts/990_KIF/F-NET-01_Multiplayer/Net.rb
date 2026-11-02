@@ -3,7 +3,9 @@
 # (new in KIF 1.3, 2026-10-23; design: Claude Docs/Base KIF/MULTIPLAYER_PLAN.md)
 #
 # Peer to peer, no server: one game hosts (TCP 52411, or the next free of
-# 52412-52415), the other joins with a join code. Optional community relay
+# 52412-52415), the other joins with a join code. A host can take two friends
+# (Session#max_peers = 2, Options > Players): a lobby of three, guests talking
+# only to the host. Optional community relay
 # (Tools/kif_relay.rb) for players who can't host; none is built in.
 # Or over Steam (NetSteam.rb, Session#host_steam): the same frames, each one
 # Steam message, between members of a friends-only lobby.
@@ -94,6 +96,11 @@ module KIF
     BACKLOG       = 64   # events waiting for Net.update: nothing more is read from the line meanwhile
     ASK_LIMIT     = 3    # "Let <name> join?" prompts a minute; more visitors are told "wait"
     DECLINE_WAIT  = 600  # seconds an address that was told No is turned away
+    MAX_GUESTS    = 2    # a lobby is the host and up to two guests, never more
+    FWD_FRAMES    = 120  # frames a second the host passes on for one guest (twice that at once)
+    FWD_BYTES     = 262_144  # ... and bytes a second
+    FWD_VALUES    = 3_500    # ... and values to read a second (Net.cost; the receiving line's own budget is VALUE_RATE: room is left for the host's own frames), 10,000 at once
+    FWD_MAX       = 60_000   # a frame longer than this is never passed on (it must fit MAX_FRAME with its stamp)
     # The parser's time goes with the number of values in a message (2-5 us each for numbers, long numbers,
     # floats, texts, escapes and table keys alike), not with its bytes: Net.cost counts them from the text.
     # An honest message has a few hundred (a co-op start about 150, 24 battle events 750); the biggest the
@@ -131,7 +138,23 @@ module KIF
     TYPE_NODES = {}
     FRAME_SLACK = 256   # bytes (and 32 nodes) a newer version's extra field may need
     FREE_NODES = MAX_VALUES
-    NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined }
+    NO_WHY = { "code" => :code, "busy" => :busy, "wait" => :wait, "declined" => :declined, "full" => :full, "removed" => :removed }
+
+    # A lobby of three (Session#max_peers = 2) is a star: guests talk only to the host. The host sends each
+    # guest "ro" (the players: [slot, name, version], and which slot the guest is: the host is 0, the guests
+    # 1 and 2). A guest that wants a frame to reach the other guest names it ("to": slot, only for the types
+    # in FORWARD) or sends a BROADCAST type with no "to" (the host's game gets it too). The host builds a NEW
+    # frame from the checked fields, stamps it "f" (the slot of the line it came in on) and signs it for the
+    # other guest's line: a guest can neither write "f" nor reach the other guest's line. What only the host
+    # may say (hello, ping, bye, no, ro, co_rules) is never passed on, and a guest never gets "f" on those.
+    TYPES["ro"] = { "me" => [Integer, 1, 2], "p" => [Array, 3] }
+    TYPE_MAX["ro"] = 800
+    TYPE_NODES["ro"] = 40
+    BROADCAST = %w[wave pr_at pr_look pr_do co_pact co_st mod_ls sl_hello].freeze
+    FORWARD = (BROADCAST + %w[tr_ask tr_no tr_done tr_offer tr_ok tr_go tr_sync sl_link sl_up sl_party sp_get sp_img
+                              co_ask co_join co_no co_begin co_ev co_cmd co_act co_sw co_swr co_skip co_end co_undo
+                              co_lock co_int co_vs co_vsr mod_sh]).freeze
+    HOST_ALL = (BROADCAST + %w[co_rules]).freeze   # what the host's game may post with 2 guests in and no "to"
 
     # What reading a message will cost the game thread, counted from its text before it is parsed:
     # one for each place a value starts ([ { , :), a quarter for each backslash escape (slow to unescape).
@@ -984,6 +1007,7 @@ module KIF
     #---------------------------------------------------------------------------
     class Line
       attr_accessor :conn, :hs, :started, :bad, :rx_seq, :ke, :nj, :nh, :my_nonce, :x, :xe, :hint, :gone, :key
+      attr_accessor :slot, :st, :name, :ver, :asked_at   # past the handshake: who (0 host, 1 and 2 guests) and where it stands
 
       def initialize(conn)
         @conn = conn
@@ -993,6 +1017,21 @@ module KIF
         @gone = false
         @budget = VALUE_BURST   # what the messages may still cost to read
         @budget_at = @started
+      end
+
+      # false when this guest has the host pass on more than FWD_FRAMES frames, FWD_BYTES bytes or FWD_VALUES values
+      # (what the other guest's game must read) a second (burst: twice the frames and bytes, 10,000 values)
+      def fwd_pay(bytes, cost = 0, at = Net.now)
+        @fw_at ||= at
+        @fw_n ||= FWD_FRAMES * 2.0
+        @fw_b ||= FWD_BYTES * 2.0
+        @fw_v ||= 10_000.0
+        dt = [at - @fw_at, 0].max
+        @fw_n = [@fw_n + dt * FWD_FRAMES, FWD_FRAMES * 2.0].min - 1
+        @fw_b = [@fw_b + dt * FWD_BYTES, FWD_BYTES * 2.0].min - bytes
+        @fw_v = [@fw_v + dt * FWD_VALUES, 10_000.0].min - cost
+        @fw_at = at
+        return @fw_n >= 0 && @fw_b >= 0 && @fw_v >= 0
       end
 
       # false when the partner's messages cost more than the budget lets them. `at` is when
@@ -1010,8 +1049,11 @@ module KIF
     # A session: hosting (one partner in v1), joining, or either through a
     # relay or Steam. Events from #poll:
     #   [:join_request, name]   (host) someone with the code: #accept or #decline
-    #   [:connected, name]      handshake done, partner said hello
-    #   [:message, type, hash]  a checked message
+    #   [:connected, name, slot] handshake done, partner said hello (the host is slot 0, its guests 1 and 2)
+    #   [:message, type, hash, from]  a checked message, from a slot (a lobby of three: also what the host
+    #                           passed on from the other guest; see TYPES["ro"])
+    #   [:peer_joined, slot, name, version]  (a guest) the host's roster has another player
+    #   [:peer_left, slot, why, name]  (a lobby of three) one player is gone, the others go on
     #   [:disconnected, why]    :bye, :timeout, :closed, :error, :flood,
     #                           :oversized, :stalled
     #   [:failed, why]          joining failed: :unreachable, :code, :busy,
@@ -1028,8 +1070,16 @@ module KIF
     # joiner talks only to the lobby's owner (the friend picked), and
     # leaving the lobby ends it.
     #---------------------------------------------------------------------------
+    # One player of a session, for code that tells players apart by object (Soul Link)
+    class Peer
+      attr_reader :slot, :session
+      def initialize(session, slot); @session = session; @slot = slot; end
+      def name; @session.name_of(@slot); end
+      def connected?; @session.connected? && !@session.name_of(@slot).nil?; end
+    end
+
     class Session
-      attr_reader :role, :partner, :partner_ver, :port, :via, :ports, :secret, :room, :relay, :lobby, :steam
+      attr_reader :role, :port, :via, :ports, :secret, :room, :relay, :lobby, :steam, :max_peers
       attr_accessor :ping_every, :timeout, :handshake_timeout, :answer_timeout, :hs_limit, :name, :ver
       attr_accessor :wave_at   # when the partner's last hello was shown (NetMenu)
 
@@ -1052,7 +1102,11 @@ module KIF
         @prompts = []            # when the player was asked "Let <name> join?" (the last minute)
         @wrong_logged = 0
         @strangers = 0
-        @line = nil              # the partner's line (a joiner's only line)
+        @lines = []              # lines past the handshake: a joiner's only line, a host's guests (slots 1 and 2)
+        @line = nil              # the first of them (kept for the tests and old callers; see relink)
+        @max_peers = 1           # guests the host takes: 1, or 2 for a lobby of three (Session#max_peers=)
+        @roster = nil            # a guest in a lobby: { slot => [name, version] } as the host last said (the host is 0)
+        @my_slot = nil
         @pending = []            # host: handshakes still running
         @servers = []
         @threads = []
@@ -1066,19 +1120,69 @@ module KIF
       def conn; l = @line || @pending.last; l && l.conn; end
 
       def connected?; @state == :connected; end
-      def asking?; @state == :asking; end
+      def asking?; @lines.any? { |l| l.st == :asking }; end
       def hosting?; @role == :host && @state != :closed && @state != :idle; end
+
+      # 1 (a pair, as always) or 2 guests (a lobby of three). Over a relay the room holds two players.
+      def max_peers=(n)
+        @max_peers = n.to_i >= 2 ? MAX_GUESTS : 1
+      end
+
+      # a host that takes more than one guest keeps its state from its lines (see sync_state)
+      def lobby?; @role == :host && @max_peers > 1 && @via != :relay; end
+
+      # the first guest's name (a joiner: the host's); nil when nobody is in
+      def partner; l = @lines.find { |x| x.st == :connected } || @lines.first; (l && l.name) || @partner; end
+      def partner_ver; l = @lines.find { |x| x.st == :connected } || @lines.first; (l && l.ver) || @partner_ver; end
+
+      def my_slot; @role == :host ? 0 : (@my_slot || 1); end
+
+      # the other players that are in: [[slot, name, version], ...] (the host is slot 0)
+      def peers
+        if @role == :host
+          @lines.select { |l| l.st == :connected }.map { |l| [l.slot, l.name, l.ver] }
+        elsif @roster
+          @roster.reject { |s, _| s == my_slot }.map { |s, (n, v)| [s, n, v] }
+        else
+          l = @line
+          connected? && l ? [[0, l.name, l.ver]] : []
+        end
+      end
+
+      def name_of(slot); pr = peers.find { |s, _, _| s == slot }; pr && pr[1]; end
+
+      # a player in the session as an object with a stable identity (Soul Link keeps its partner's by it)
+      def peer(slot); (@peer_refs ||= {})[slot] ||= Peer.new(self, slot); end
+
+      # host: the name of the player the question "Let <name> join?" is for
+      def asking_name; l = @lines.find { |x| x.st == :asking }; l && l.name; end
+
+      # host: no place left (the code is used up)
+      def full?; @lines.count { |l| l.st == :connected } >= (lobby? ? @max_peers : 1); end
+
+      # host: take a guest out. It is told, and its address waits DECLINE_WAIT s.
+      def kick(slot)
+        l = @lines.find { |x| x.slot == slot && x.st == :connected } or return false
+        l.conn.send_msg({ "t" => "no", "why" => "removed" })
+        @fails[Net.addr_key(l.conn.addr)] = [MAX_BAD, Net.now + DECLINE_WAIT] unless @via == :relay
+        line_ended(l, :removed, @later)
+        return true
+      end
 
       # false when the thread that takes visitors is gone
       def accept_alive?; @acceptors.any?(&:alive?); end
 
       # host: let the asking player in
       def accept
-        return false unless asking?
-        @line.conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
-        @state = :connected
-        @later << [:connected, @partner]
-        renew_secrets if @via == :direct   # the code is used up: whoever saw it later needs a new one (the host screen shows it)
+        line = @lines.find { |l| l.st == :asking } or return false
+        line.conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
+        go(line, :connected)
+        @later << [:connected, line.name, line.slot]
+        send_roster if lobby?
+        steam_players
+        # the code is used up: whoever saw it later needs a new one (the host screen shows it). In a lobby the
+        # second friend has the same code, so it lasts until a guest leaves (see line_ended).
+        renew_secrets if @via == :direct && !lobby?
         return true
       end
 
@@ -1086,16 +1190,16 @@ module KIF
       # the address (an IPv6 /64) is turned away for DECLINE_WAIT s and the code is
       # new, as after a join: whoever saw it later can't come back from another
       # address. Nothing of that after a timeout: nobody was there.
-      def decline(timed_out = false)
-        return false unless asking?
-        Net.log("said no to #{@partner}")
+      def decline(timed_out = false, line = nil)
+        line ||= @lines.find { |l| l.st == :asking } or return false
+        Net.log("said no to #{line.name}")
         unless timed_out
-          @fails[Net.addr_key(@line.conn.addr)] = [MAX_BAD, Net.now + DECLINE_WAIT] unless @via == :relay
+          @fails[Net.addr_key(line.conn.addr)] = [MAX_BAD, Net.now + DECLINE_WAIT] unless @via == :relay
           renew_secrets if @via == :direct
         end
         @no_log << Net.now
-        @line.conn.send_msg({ "t" => "no", "why" => "declined" })
-        drop_line(true)
+        line.conn.send_msg({ "t" => "no", "why" => "declined" })
+        drop_line(true, line)
         @partner = nil
         @state = :closed if @via == :relay   # the relay room is used up
         return true
@@ -1195,16 +1299,43 @@ module KIF
         steam.join_lobby(lobby)
       end
 
-      def post(type, fields = {})
+      # to: a slot (0 is the host). The host with no `to` sends to every guest, but only a type in HOST_ALL
+      # when two are in (any other type needs a target: false, so a caller that forgot is found). A guest
+      # with no `to` sends to the host; a BROADCAST type is passed on to the other guest too. A guest's
+      # `to` another guest goes through the host, for the types in FORWARD.
+      def post(type, fields = nil, to: nil, **more)   # (post("x", "a" => 1) puts the fields in `more`)
         return false unless connected?
-        msg = Net.check_fields(type, fields.merge("t" => type)) or return false
-        @line.conn.send_msg(msg)
+        msg = Net.check_fields(type, (fields || {}).merge(more).merge("t" => type)) or return false
+        if @role == :host
+          ins = @lines.select { |l| l.st == :connected }
+          if to
+            l = ins.find { |x| x.slot == to } or return false
+            l.conn.send_msg(msg)
+            return true
+          end
+          if ins.length > 1 && !HOST_ALL.include?(type)
+            Net.log("#{type} needs a player to go to") unless (@no_target ||= {})[type]
+            @no_target[type] = true
+            return false
+          end
+          ins.each { |l| l.conn.send_msg(msg) }
+          return !ins.empty?
+        end
+        l = @line or return false
+        if to && to != 0
+          return false unless FORWARD.include?(type) && @roster && @roster.key?(to) && to != my_slot
+          msg = msg.merge("to" => to)
+        elsif to == 0
+          msg = msg.merge("to" => 0)
+        end
+        l.conn.send_msg(msg)
         return true
       end
 
       def close
-        @line.conn.close(connected?) if @line
-        @line = nil
+        @lines.each { |l| l.conn.close(l.st == :connected) }
+        @lines = []
+        relink
         @pending.each { |l| l.conn.close(false) }
         @pending = []
         if @lobby && @steam
@@ -1242,7 +1373,7 @@ module KIF
         end
         stop_at = Net.now + POLL_BUDGET
         catch(:budget) do
-          ([@line] + @pending).compact.each do |line|
+          (@lines + @pending).each do |line|
             until line.gone || out.length >= BACKLOG
               f = line.conn.next_frame or break
               f.is_a?(Array) ? line_ended(line, f[1] || :closed, out) : frame(line, f, out)
@@ -1317,6 +1448,54 @@ module KIF
         return Line.new(conn)
       end
 
+      # @line is the first line past the handshake
+      def relink; @line = @lines.first; end
+
+      def add_line(line)
+        @lines << line
+        relink
+      end
+
+      # a line's place in the conversation; the session's own state follows (a lobby host's from all its lines)
+      def go(line, st)
+        line.st = st
+        lobby? ? sync_state : (@state = st)
+      end
+
+      def sync_state
+        return if [:idle, :closed, :connecting].include?(@state)
+        @state = if @lines.any? { |l| l.st == :connected } then :connected
+                 elsif @lines.any? { |l| l.st == :asking } then :asking
+                 elsif @lines.empty? then :listening
+                 else :handshake end
+      end
+
+      # host: the players, to every guest (who each get their own slot in it)
+      def send_roster
+        return unless lobby?
+        ins = @lines.select { |l| l.st == :connected }
+        list = [[0, @name, @ver]] + ins.map { |l| [l.slot, l.name, l.ver] }
+        ins.each { |l| l.conn.send_msg({ "t" => "ro", "me" => l.slot, "p" => list }) }
+      end
+
+      # Steam host: the lobby tag friends see ("2 of 3")
+      def steam_players
+        return unless @via == :steam && @role == :host && @lobby
+        @steam.set_lobby_data(@lobby, "pl", (1 + @lines.count { |l| l.st == :connected }).to_s)
+      end
+
+      # host: the later joiner of a name that is taken (case aside) is "Red 2": names tell the players apart in battle text
+      def unique_name(line)
+        taken = ([@name] + @lines.reject { |l| l.equal?(line) }.map(&:name)).compact.map(&:downcase)
+        base = line.name
+        return base unless taken.include?(base.downcase)
+        (2..3).each do |i|
+          cand = "#{base[0, 21]} #{i}"
+          return cand unless taken.include?(cand.downcase)
+        end
+        return base
+      end
+
       def refuse(sock, why)
         (sock.write(Wire.frame(Wire.json({ "t" => "no", "why" => why }))) rescue nil)
         (sock.close rescue nil)
@@ -1325,14 +1504,15 @@ module KIF
       def accepted(sock, out)
         if @role == :join || @via == :relay
           return (sock.close rescue nil) unless @state == :connecting
-          @line = new_line(Conn.new(sock))
-          @state = :handshake
+          line = new_line(Conn.new(sock))
+          add_line(line)
+          go(line, :handshake)
           if @via == :relay
-            @line.hs = :relay_wait
-            @line.conn.send_raw({ "t" => "relay", "room" => Crypto.hex(@room), "role" => @role.to_s })
+            line.hs = :relay_wait
+            line.conn.send_raw({ "t" => "relay", "room" => Crypto.hex(@room), "role" => @role.to_s })
           else
-            @line.conn.deadline = Net.now + @handshake_timeout
-            send_hi(@line)
+            line.conn.deadline = Net.now + @handshake_timeout
+            send_hi(line)
           end
           return
         end
@@ -1460,22 +1640,25 @@ module KIF
             admit(line) unless @via == :relay   # its hello waits for the player's answer
           else
             line.conn.send_msg({ "t" => "hello", "name" => @name, "ver" => @ver })
-            @state = :waiting
+            go(line, :waiting)
           end
         end
       end
 
-      # host: the proof was right. One partner at a time: a second one hears
-      # "busy" (signed, so only someone with the code hears it).
+      # host: the proof was right. One joiner is asked at a time, and a pair has one guest: a second one hears
+      # "busy" (signed, so only someone with the code hears it). A lobby that has its guests says "full".
       def admit(line)
         @pending.delete(line)
-        if @line
-          line.conn.send_msg({ "t" => "no", "why" => "busy" })
+        busy = @lines.any? { |l| l.st != :connected }   # someone's handshake or question is still running
+        taken = @lines.length >= (lobby? ? @max_peers : 1)
+        if busy || taken
+          line.conn.send_msg({ "t" => "no", "why" => (!busy && lobby?) ? "full" : "busy" })
           line.gone = true
           line.conn.finish
         else
-          @line = line
-          @state = :handshake
+          line.slot = (1..MAX_GUESTS).find { |s| @lines.none? { |l| l.slot == s } }
+          add_line(line)
+          go(line, :handshake)
         end
       end
 
@@ -1501,7 +1684,7 @@ module KIF
       end
 
       def signed(line, payload, out)
-        return unless line.equal?(@line)
+        return unless @lines.include?(line)
         seq, ct = line.conn.verify(payload)
         return bad_frame(line, out, "bad signature") unless seq
         return bad_frame(line, out, "old number") unless seq > line.rx_seq
@@ -1520,8 +1703,8 @@ module KIF
           return
         end
         # until the player has said yes only a short hello (once), no, bye or ping means anything: the rest is dropped unparsed
-        unless @state == :connected || (json.bytesize <= 1024 &&
-               (type == "hello" ? (@state == :handshake || @state == :waiting) : %w[ping bye no].include?(type)))
+        unless line.st == :connected || (json.bytesize <= 1024 &&
+               (type == "hello" ? (line.st == :handshake || line.st == :waiting) : %w[ping bye no].include?(type)))
           return bad_frame(line, out, "#{type} before the player said yes")
         end
         bytes, nodes = Net.frame_limits(type)
@@ -1535,31 +1718,110 @@ module KIF
         when "ping" then nil
         when "bye"  then line_ended(line, :bye, out)
         when "hello"
-          return unless @state == :handshake || @state == :waiting
-          @partner = Net.shown_name(msg["name"])
-          @partner_ver = Net.shown_ver(msg["ver"])
+          return unless line.st == :handshake || line.st == :waiting
+          line.name = Net.shown_name(msg["name"])
+          line.ver = Net.shown_ver(msg["ver"])
+          unless lobby?
+            @partner = line.name
+            @partner_ver = line.ver
+          end
           if @role == :host
             @no_log.reject! { |t| Net.now - t > 600 }
             if @no_log.length >= MAX_ASKS   # told no again and again: no more questions
               Net.log("not asking again (#{MAX_ASKS} no's in 10 minutes)")
               line.conn.send_msg({ "t" => "no", "why" => "declined" })
-              drop_line(true)
+              drop_line(true, line)
               @partner = nil
               @state = :closed if @via == :relay
               return
             end
-            @state = :asking
-            @asking_since = Net.now
+            line.name = unique_name(line) if lobby?
+            go(line, :asking)
+            line.asked_at = Net.now
             @prompts << Net.now
-            out << [:join_request, @partner]
+            out << [:join_request, line.name]
           else
-            @state = :connected
-            out << [:connected, @partner]
+            go(line, :connected)
+            out << [:connected, line.name, 0]
           end
         when "no"
-          give_up(out, [:failed, NO_WHY[msg["why"]] || :closed]) if @role == :join && @state != :connected
+          if @role == :join && line.st != :connected
+            give_up(out, [:failed, NO_WHY[msg["why"]] || :closed])
+          elsif @role == :join && msg["why"] == "removed"   # the host took this player out of the lobby
+            line_ended(line, :removed, out)
+          end
+        when "ro"
+          read_roster(line, msg, out)
         else
-          out << [:message, type, msg] if @state == :connected
+          pass_on(line, type, msg, h, json.bytesize, out, cost) if line.st == :connected
+        end
+      end
+
+      # a guest: the players in the lobby as the host says them. Anything that doesn't fit is a bad frame.
+      def read_roster(line, msg, out)
+        return bad_frame(line, out, "ro to a host") unless @role == :join
+        me, list = msg["me"], msg["p"]
+        seen = {}
+        list.each do |e|
+          ok = e.is_a?(Array) && e.length == 3 && e[0].is_a?(Integer) && e[0].between?(0, MAX_GUESTS) &&
+               e[1].is_a?(String) && e[2].is_a?(String) && !seen.key?(e[0])
+          return bad_frame(line, out, "ro doesn't fit") unless ok
+          seen[e[0]] = [Net.shown_name(e[1]), Net.shown_ver(e[2])]
+        end
+        return bad_frame(line, out, "ro without the host or this player") unless seen.key?(0) && seen.key?(me)
+        old = @roster || { 0 => [line.name, line.ver], me => [@name, @ver] }
+        @roster = seen
+        @my_slot = me
+        (seen.keys - old.keys - [me]).each { |s| out << [:peer_joined, s, seen[s][0], seen[s][1]] }
+        (old.keys - seen.keys - [me]).each { |s| out << [:peer_left, s, :left, old[s][0]] }
+      end
+
+      # A message from a connected line, with who it is from. The host stamps nothing on what its own game
+      # gets (the slot is in the event); a guest reads the host's stamp "f" on a frame that came from the
+      # other guest. See the comment at TYPES["ro"].
+      def pass_on(line, type, msg, h, bytes, out, cost = 0)
+        f, to = h["f"], h["to"]
+        if @role == :host
+          return bad_frame(line, out, "a guest stamped #{type}") unless f.nil?
+          return bad_frame(line, out, "#{type} to nowhere") unless to.nil? || (to.is_a?(Integer) && to.between?(0, MAX_GUESTS))
+          return bad_frame(line, out, "#{type} to itself") if to && to == line.slot
+          if to.nil? || to == 0
+            fan = to.nil? && lobby? && BROADCAST.include?(type)
+            return unless !fan || fwd_ok(line, bytes, out, cost)
+            out << [:message, type, msg, line.slot]
+            send_on(line, type, msg, nil) if fan
+          else
+            return bad_frame(line, out, "#{type} is not passed on") unless lobby? && FORWARD.include?(type)
+            return unless fwd_ok(line, bytes, out, cost)
+            send_on(line, type, msg, to)
+          end
+        else
+          return bad_frame(line, out, "#{type} sent to a guest") unless to.nil?
+          from = 0
+          unless f.nil?
+            ok = f.is_a?(Integer) && @roster && f != 0 && f != my_slot && @roster.key?(f) && FORWARD.include?(type)
+            return bad_frame(line, out, "#{type} from nobody") unless ok
+            from = f
+          end
+          out << [:message, type, msg, from]
+        end
+      end
+
+      # host: a guest may have FWD_FRAMES frames and FWD_BYTES a second passed on; a longer frame never is
+      def fwd_ok(line, bytes, out, cost = 0)
+        if bytes > FWD_MAX || !line.fwd_pay(bytes, cost, line.conn.arrived)
+          bad_frame(line, out, "too much to pass on")
+          return false
+        end
+        return true
+      end
+
+      # host: a NEW frame from the checked fields, stamped with the sender's slot, for the other guest's line
+      # (to nil: every other connected line)
+      def send_on(line, type, msg, to)
+        fwd = msg.merge("f" => line.slot)
+        @lines.each do |l|
+          l.conn.send_msg(fwd) if l.st == :connected && !l.equal?(line) && (to.nil? || l.slot == to)
         end
       end
 
@@ -1587,7 +1849,7 @@ module KIF
 
       def give_up(out, ev)
         out << ev
-        drop_line
+        @lines.dup.each { |l| drop_line(false, l) }
         @state = :closed
       end
 
@@ -1605,13 +1867,15 @@ module KIF
       end
 
       # the partner's line goes; a direct host goes on listening
-      def drop_line(gently = false)
-        if @line
-          @line.gone = true
-          gently ? @line.conn.finish : @line.conn.close(false)
+      def drop_line(gently = false, line = @line)
+        if line
+          line.gone = true
+          gently ? line.conn.finish : line.conn.close(false)
+          @lines.delete(line)
+          relink
         end
-        @line = nil
-        @state = :listening if @role == :host && @via != :relay
+        @state = :listening if @role == :host && @via != :relay && !lobby?
+        sync_state if lobby?
       end
 
       # A line that got the host's hi and went without a proof is a guess nobody
@@ -1632,15 +1896,21 @@ module KIF
 
       def line_ended(line, why, out)
         return if line.gone
-        unless line.equal?(@line)   # a handshake nobody finished: a scan, a stranger
+        unless @lines.include?(line)   # a handshake nobody finished: a scan, a stranger
           [:oversized, :flood].include?(why) ? (@hs_log << Net.now) : unproven(line)
           return drop_pending(line)
         end
-        was = @state
+        was = line.st
         return stranger_left(line, out) if @role == :host && @via == :relay && [:wait_hi, :wait_auth].include?(line.hs)
         hint = line.hint
-        drop_line
-        if was == :connected
+        drop_line(why == :removed, line)
+        if was == :connected && lobby?
+          out << [:peer_left, line.slot, why, line.name]
+          send_roster
+          steam_players
+          renew_secrets if @via == :direct   # a place is free: the guest who left has the old code
+          out << [:disconnected, why] unless @lines.any? { |l| l.st == :connected }   # the last guest is gone: the lobby is empty
+        elsif was == :connected
           out << [:disconnected, why]
           @partner = nil
         elsif @role == :join || @via == :relay
@@ -1656,21 +1926,25 @@ module KIF
           unproven(l)
           drop_pending(l)
         end
-        l = @line or return
+        @lines.dup.each { |l| check_line(l, now, out) }
+      end
+
+      def check_line(l, now, out)
+        return if l.gone
         # a relay that takes the connection and never answers (a joiner waits for the room's other player at most RELAY_WAIT; a host may wait longer)
-        return give_up(out, [:failed, :relay]) if @state == :handshake && l.hs == :relay_wait && @role == :join && now - l.started > RELAY_WAIT
-        if @state == :handshake && l.hs != :relay_wait && now - l.started > @handshake_timeout
+        return give_up(out, [:failed, :relay]) if l.st == :handshake && l.hs == :relay_wait && @role == :join && now - l.started > RELAY_WAIT
+        if l.st == :handshake && l.hs != :relay_wait && now - l.started > @handshake_timeout
           return give_up(out, [:failed, l.hint || :timeout]) if @role == :join
           return stranger_left(l, out) if @via == :relay && l.hs != :done
-          return @via == :relay ? give_up(out, [:failed, :timeout]) : drop_line
+          return @via == :relay ? give_up(out, [:failed, :timeout]) : drop_line(false, l)
         end
-        if @state == :asking && now - @asking_since > @answer_timeout
-          decline(true)
+        if l.st == :asking && now - l.asked_at > @answer_timeout
+          decline(true, l)
           return out << [:failed, :declined] if @state == :closed
           return
         end
-        return give_up(out, [:failed, :declined]) if @state == :waiting && now - l.started > @answer_timeout + @handshake_timeout
-        line_ended(l, :timeout, out) if [:connected, :asking, :waiting].include?(@state) && now - l.conn.last_rx > @timeout
+        return give_up(out, [:failed, :declined]) if l.st == :waiting && now - l.started > @answer_timeout + @handshake_timeout
+        line_ended(l, :timeout, out) if [:connected, :asking, :waiting].include?(l.st) && now - l.conn.last_rx > @timeout
       end
 
       #-------------------------------------------------------------------------
@@ -1701,9 +1975,9 @@ module KIF
         @threads << t
       end
 
-      def steam_conns; ([@line] + @pending).compact.map(&:conn).grep(SteamConn); end
+      def steam_conns; (@lines + @pending).map(&:conn).grep(SteamConn); end
       def steam_conn(peer); steam_conns.find { |c| c.peer == peer && !c.closed? }; end
-      def steam_line(peer); ([@line] + @pending).compact.find { |l| l.conn.is_a?(SteamConn) && l.conn.peer == peer }; end
+      def steam_line(peer); (@lines + @pending).find { |l| l.conn.is_a?(SteamConn) && l.conn.peer == peer }; end
 
       def steam_events(out)
         @steam.take(:lobby_created, :lobby_enter, :member, :session_request, :session_failed).each do |ev|
@@ -1752,7 +2026,7 @@ module KIF
           end
         end
         @asks.delete_if { |peer, t| steam_accept(peer) || Net.now - t > 5 } unless @asks.empty?
-        steam_hello(out) if @entered && !@line && @state == :connecting
+        steam_hello(out) if @entered && @lines.empty? && @state == :connecting
         if @state == :connecting && Net.now - @steam_t0 > @handshake_timeout
           give_up(out, [:failed, @role == :host ? :steam : (@entered ? :host_code : :unreachable)])
         end
@@ -1780,10 +2054,11 @@ module KIF
         return unless key && key.bytesize == 16
         @secret = key
         @peer = owner
-        @line = new_line(SteamConn.new(@steam, owner))
-        @state = :handshake
-        @line.conn.deadline = Net.now + @handshake_timeout
-        send_hi(@line)
+        line = new_line(SteamConn.new(@steam, owner))
+        add_line(line)
+        go(line, :handshake)
+        line.conn.deadline = Net.now + @handshake_timeout
+        send_hi(line)
       end
 
       # host: a message from a peer with no line yet (a joiner's first "hi")
@@ -1818,7 +2093,7 @@ module KIF
       # Host: answers askers on this network with its name and the port of
       # `code` (the rest of the code, the secret, stays home). One answer a
       # second to each asker, ten a second in all.
-      def responder(name, code, port: LAN_PORT)
+      def responder(name, code, port: LAN_PORT, full: nil)   # full: asked per question; true = no answer (a lobby with no place left)
         info = JoinCode.read(code)
         return nil unless info.is_a?(Hash) && info[:kind] != :relay
         nm = name.to_s[0, 24]
@@ -1843,6 +2118,7 @@ module KIF
               next
             end
             next unless data == ASK && from && Net.near?(from[3], info[:kind] == :v4 ? info[:ip] : nil)
+            next if full && (full.call rescue false)
             now = Net.now
             next if seen[from[3]] && now - seen[from[3]] < 1.0
             recent.reject! { |x| now - x > 1.0 }

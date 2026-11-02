@@ -8,7 +8,7 @@
 # challenged, over the co-op machinery (NetCoop*.rb): the guest plays the host's
 # log on its own battle screen, from the other side (battler i is the host's
 # i ^ 1), and sends back checked choices. Messages:
-#   co_vs  {id, fmt, n, lv}   challenge (fmt 0: cancelled); fmt 1 single, 2 double
+#   co_vs  {id, fmt, n, lv}   challenge (fmt 0: cancelled); fmt 1 single, 2 double, 3 triple
 #   co_vsr {id, ok, why}      the answer (why: busy, no, few)
 # After a yes the host sends co_ask (kind "pvp"), the other game answers co_join
 # with its team, and co_begin .. co_end run as in co-op.
@@ -32,7 +32,7 @@ module KIF
   module PvP
     ID = [Integer, 1, 1_000_000_000]
     # (plain fields only: Net.frame_limits gives these a few hundred bytes and 36 values)
-    { "co_vs"  => { "id" => ID, "fmt" => [Integer, 0, 2], "n" => [Integer, 1, 6], "lv" => [Integer, 0, 100] },
+    { "co_vs"  => { "id" => ID, "fmt" => [Integer, 0, 3], "n" => [Integer, 1, 6], "lv" => [Integer, 0, 100] },
       "co_vsr" => { "id" => ID, "ok" => [Integer, 0, 1], "why" => [String, 16] },
     }.each { |k, v| KIF::Net::TYPES[k] = v }
 
@@ -56,8 +56,29 @@ module KIF
 
     def self.log(msg); KIF::Net.log("pvp: #{msg}"); end
     def self.session; s = KIF::Net.session if KIF::Net.respond_to?(:session); s&.connected? ? s : nil; end
-    def self.partner; (s = session) ? KIF::Net.shown_name(s.partner) : "?"; end
-    def self.post(t, f = {}); (s = session) ? s.post(t, f) : false; end
+    def self.partner(slot = nil)
+      s = session or return "?"
+      n = slot && s.respond_to?(:name_of) ? s.name_of(slot) : nil
+      return KIF::Net.shown_name(n || s.partner)
+    end
+    def self.post(t, f = {}, slot = nil); (s = session) ? KIF::Net.post_to(s, t, f, slot) : false; end
+
+    # Who a match is with. The Multiplayer host's game runs every match, so a guest can only challenge the host,
+    # and the host picks one of its guests. nil: a game for two, or a stand-in session (the one partner).
+    def self.target
+      s = session
+      return nil unless s && s.respond_to?(:peers)
+      ps = s.peers
+      return nil if ps.empty?
+      return ps[0][0] if ps.length == 1
+      return KIF::Net.pick_peer(_INTL("Challenge who?")) if KIF::Coop.rules_host?
+      return 0
+    end
+
+    # the slot the match in this line is with (nil: the one partner)
+    def self.with_of(st)
+      return (st[:out] || st[:in] || st[:acc] || st[:go] || st[:ask] || {})[:with]
+    end
     def self.note(text); KIF::Net.notes << text unless KIF::Net.notes.include?(text); end
 
     # per connection: the challenge sent (:out), the one received (:in), a yes this game gave or got and
@@ -81,7 +102,7 @@ module KIF
     end
 
     def self.describe(fmt, n, lv)
-      return _INTL("{1}, {2}, {3}", fmt == 2 ? _INTL("Double battle") : _INTL("Single battle"),
+      return _INTL("{1}, {2}, {3}", fmt == 3 ? _INTL("Triple battle") : fmt == 2 ? _INTL("Double battle") : _INTL("Single battle"),
                    n == 1 ? _INTL("1 Pokemon each") : _INTL("{1} Pokemon each", n),
                    lv == 0 ? _INTL("levels as they are") : _INTL("all level {1}", lv))
     end
@@ -139,27 +160,30 @@ module KIF
     #---------------------------------------------------------------------------
     def self.menu_label
       st = line
-      return _INTL("Challenge: waiting for {1}", partner) if st && st[:out]
-      return _INTL("Challenge: {1} asked", partner) if st && st[:in]
+      return _INTL("Challenge: waiting for {1}", partner(st[:out][:with])) if st && st[:out]
+      return _INTL("Challenge: {1} asked", partner(st[:in][:with])) if st && st[:in]
+      return _INTL("Challenge") if session.respond_to?(:peers) && session.peers.length > 1
       return _INTL("Challenge {1}", partner)
     end
 
     def self.menu_pick(_scr = nil)
       st = line or return
       if (o = st[:out])
-        cancel(st) if pbConfirmMessage(_INTL("Cancel your challenge to {1}?", partner))
+        cancel(st) if pbConfirmMessage(_INTL("Cancel your challenge to {1}?", partner(o[:with])))
         return
       end
-      return pbMessage(_INTL("{1} has already asked you. Answer on the map.", partner)) if st[:in]
+      return pbMessage(_INTL("{1} has already asked you. Answer on the map.", partner(st[:in][:with]))) if st[:in]
       return pbMessage(_INTL("You can't start a match right now.")) if busy? || st[:go] || st[:acc]
-      who = partner
+      with = target
+      return if with.nil? && session.respond_to?(:peers) && session.peers.length > 1   # Back
+      who = partner(with)
       pbMessage(_INTL("A friendly match against {1}: no Exp, money or catches, and no Bag. You each bring your own Pokemon.", who))
       pbMessage(_INTL("{1}'s game runs the battle. A modified game could cheat, so only battle friends you trust.",
                       KIF::Coop.rules_host? ? $Trainer.name.to_s : who))
-      c = pbMessage(_INTL("Challenge {1}?", who), [_INTL("Single battle"), _INTL("Double battle"), _INTL("Cancel")], 3)
-      return unless c.is_a?(Integer) && c >= 0 && c <= 1
+      c = pbMessage(_INTL("Challenge {1}?", who), [_INTL("Single battle"), _INTL("Double battle"), _INTL("Triple battle"), _INTL("Cancel")], 4)
+      return unless c.is_a?(Integer) && c >= 0 && c <= 2
       fmt = c + 1
-      min = fmt == 2 ? 2 : 1
+      min = fmt
       n = choose_number(_INTL("How many Pokemon each?"), min, 6, 6) or return
       l = pbMessage(_INTL("Level rule?"), [_INTL("Levels as they are"), _INTL("All level 50"), _INTL("All level 100"), _INTL("Cancel")], 4)
       return unless l.is_a?(Integer) && l >= 0 && l <= 2
@@ -167,56 +191,56 @@ module KIF
       return pbMessage(_INTL("You need at least {1} Pokemon that are not Eggs for that.", min)) if team.length < min
       n = team.length   # (a smaller team than asked for: the friend brings no more than that)
       id = next_id
-      return unless post("co_vs", "id" => id, "fmt" => fmt, "n" => n, "lv" => LEVELS[l])
-      st[:out] = { id: id, fmt: fmt, n: n, lv: LEVELS[l], team: team, at: KIF::Net.now }
+      return unless post("co_vs", { "id" => id, "fmt" => fmt, "n" => n, "lv" => LEVELS[l] }, with)
+      st[:out] = { id: id, fmt: fmt, n: n, lv: LEVELS[l], team: team, at: KIF::Net.now, with: with }
       note(_INTL("Asked {1}: {2}.", who, describe(fmt, n, LEVELS[l])))
     end
 
     def self.cancel(st)
       o = st[:out] or return
       st[:out] = nil
-      post("co_vs", "id" => o[:id], "fmt" => 0, "n" => 1, "lv" => 0)
+      post("co_vs", { "id" => o[:id], "fmt" => 0, "n" => 1, "lv" => 0 }, o[:with])
     end
 
     #---------------------------------------------------------------------------
     # Messages (KIF::Coop.receive hands them over)
     #---------------------------------------------------------------------------
-    def self.receive(type, msg)
+    def self.receive(type, msg, from = nil)
       st = line or return
       case type
-      when "co_vs" then got_challenge(st, msg)
-      when "co_vsr" then got_answer(st, msg)
+      when "co_vs" then got_challenge(st, msg, from)
+      when "co_vsr" then got_answer(st, msg, from)
       end
     end
 
-    def self.reply(id, ok, why = ""); post("co_vsr", "id" => id, "ok" => ok, "why" => why); end
+    def self.reply(id, ok, why = "", slot = nil); post("co_vsr", { "id" => id, "ok" => ok, "why" => why }, slot); end
 
-    def self.got_challenge(st, m)
+    def self.got_challenge(st, m, from = nil)
       if m["fmt"] == 0   # taken back
-        st[:in] = nil if st[:in] && st[:in][:id] == m["id"]
-        st[:acc] = nil if st[:acc] && st[:acc][:id] == m["id"]
+        st[:in] = nil if st[:in] && st[:in][:id] == m["id"] && st[:in][:with] == from
+        st[:acc] = nil if st[:acc] && st[:acc][:id] == m["id"] && st[:acc][:with] == from
         return
       end
-      return unless LEVELS.include?(m["lv"]) && (m["fmt"] == 1 || m["n"] >= 2)
+      return unless LEVELS.include?(m["lv"]) && m["n"] >= m["fmt"]
       now = KIF::Net.now
       # at most one question at a time, and a short "busy" a few seconds apart (a stream of challenges costs this game almost nothing)
       if st[:in] || st[:go] || st[:acc] || busy? || now < st[:mute] || (st[:out] && KIF::Coop.rules_host?)
         return unless now - st[:busy_at] > 3.0
         st[:busy_at] = now
-        return reply(m["id"], 0, "busy")
+        return reply(m["id"], 0, "busy", from)
       end
       if st[:out]   # both challenged at once: the Multiplayer host's counts, this one is dropped
         st[:out] = nil
-        note(_INTL("{1} challenged you too. Answer theirs.", partner))
+        note(_INTL("{1} challenged you too. Answer theirs.", partner(from)))
       end
-      st[:in] = { id: m["id"], fmt: m["fmt"], n: m["n"], lv: m["lv"], at: now }
+      st[:in] = { id: m["id"], fmt: m["fmt"], n: m["n"], lv: m["lv"], at: now, with: from }
     end
 
-    def self.got_answer(st, m)
+    def self.got_answer(st, m, from = nil)
       o = st[:out]
-      return unless o && o[:id] == m["id"]
+      return unless o && o[:id] == m["id"] && o[:with] == from   # only the player that was asked answers
       st[:out] = nil
-      who = partner
+      who = partner(from)
       if m["ok"] != 1
         why = { "busy" => _INTL("{1} is busy.", who), "few" => _INTL("{1} has too few Pokemon for that.", who) }[m["why"]]
         return note(why || _INTL("{1} said no.", who))
@@ -230,12 +254,12 @@ module KIF
     end
 
     # the host's invite to join a match (KIF::Coop.guest_ask): only after a yes
-    def self.got_ask(msg)
+    def self.got_ask(msg, from = nil)
       s = session or return
       st = line
       a = st[:acc]
-      return s.post("co_no", "id" => msg["id"], "why" => "busy") if !a || KIF::Coop.rules_host? || busy? || msg["max"] != a[:n]
-      st[:ask] = msg
+      return post("co_no", { "id" => msg["id"], "why" => "busy" }, from) if !a || KIF::Coop.rules_host? || busy? || msg["max"] != a[:n] || a[:with] != from
+      st[:ask] = msg.merge("from" => from)
       st[:ask_at] = KIF::Net.now
     end
 
@@ -247,20 +271,20 @@ module KIF
       now = KIF::Net.now
       if (o = st[:out]) && now - o[:at] > @answer_wait
         cancel(st)
-        note(_INTL("{1} didn't answer.", partner))
+        note(_INTL("{1} didn't answer.", partner(o[:with])))
       end
       st[:acc] = nil if st[:acc] && now - st[:acc][:at] > 120
       st[:in] = nil if st[:in] && now - st[:in][:at] > @answer_wait + 15
       if (ask = st[:ask])
         if !st[:acc] || busy?
           st[:ask] = nil
-          return session&.post("co_no", "id" => ask["id"], "why" => "busy")
+          return post("co_no", { "id" => ask["id"], "why" => "busy" }, ask["from"])
         elsif KIF::Net.quiet?
           st[:ask] = nil
           return join(st, ask)
         elsif now - st[:ask_at] > @quiet_wait
           st[:ask] = nil
-          return session&.post("co_no", "id" => ask["id"], "why" => "busy")
+          return post("co_no", { "id" => ask["id"], "why" => "busy" }, ask["from"])
         end
       end
       return unless KIF::Net.quiet?
@@ -272,13 +296,14 @@ module KIF
     def self.ask_player(st)
       c = st[:in]
       st[:in] = nil
-      who = partner
+      with = c[:with]
+      who = partner(with)
       host = KIF::Coop.rules_host?
       pbMessage(_INTL("{1}'s game would run the battle. A modified game could cheat, so only accept friends you trust.", who)) unless host
       yes = pbConfirmMessage(_INTL("{1} challenges you: {2}. Accept?", who, describe(c[:fmt], c[:n], c[:lv])))
       return unless session
       team = yes ? pick_team(c[:n]) : nil
-      min = c[:fmt] == 2 ? 2 : 1
+      min = c[:fmt]
       few = team && team.length < min
       if !team || few
         unless few   # (a No, or a pick cancelled)
@@ -286,11 +311,11 @@ module KIF
           st[:mute] = KIF::Net.now + 60 if st[:declines] >= 2   # two No answers: no more questions for a minute
         end
         pbMessage(_INTL("You need at least {1} Pokemon that are not Eggs for that.", min)) if few
-        return reply(c[:id], 0, few ? "few" : "no")
+        return reply(c[:id], 0, few ? "few" : "no", with)
       end
       st[:declines] = 0
-      go = { id: c[:id], fmt: c[:fmt], n: c[:n], lv: c[:lv], team: team, at: KIF::Net.now }
-      return unless reply(c[:id], 1)
+      go = { id: c[:id], fmt: c[:fmt], n: c[:n], lv: c[:lv], team: team, at: KIF::Net.now, with: with }
+      return unless reply(c[:id], 1, "", with)
       host ? st[:go] = go : st[:acc] = go
     end
 
@@ -302,24 +327,26 @@ module KIF
       st[:go] = nil
       s = session
       return unless go && s && KIF::Coop.rules_host?
+      with = go[:with]
       if busy?   # (the other game waits for an invite that will not come: told so)
-        post("co_vs", "id" => go[:id], "fmt" => 0, "n" => 1, "lv" => 0)
+        post("co_vs", { "id" => go[:id], "fmt" => 0, "n" => 1, "lv" => 0 }, with)
         return note(_INTL("You can't start the match right now."))
       end
       id = next_id
-      KIF::Coop.instance_eval { @host_box.clear; @host_id = id }
+      KIF::Coop.instance_eval { @host_box.clear; @host_id = id; @host_slots = with ? [with] : nil }
       reply = nil
       begin
-        s.post("co_ask", "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => "pvp", "max" => go[:n])
+        post("co_ask", { "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => "pvp", "max" => go[:n] }, with)
         KIF::Coop.wait_map(@join_wait) { reply = KIF::Coop.take_host(id, %w[co_join co_no]) }
         join = reply && reply[0] == "co_join" ? read_join(reply[1], go) : nil
+        join[:slot] = with if join
         unless join
-          who = partner
+          who = partner(with)
           if !reply then pbMessage(_INTL("{1} didn't join.", who))
           elsif reply[0] == "co_no" then pbMessage(_INTL("{1} is busy.", who))
           else pbMessage(_INTL("{1}'s team has moves or Pokemon this game doesn't have (a mod's, or another KIF's), or doesn't fit the match.", who))
           end
-          s.post("co_end", "id" => id, "d" => { "x" => reply && reply[0] == "co_join" ? "party" : "late" }) if session
+          post("co_end", { "id" => id, "d" => { "x" => reply && reply[0] == "co_join" ? "party" : "late" } }, with) if session
           return
         end
         join[:id] = id
@@ -333,7 +360,7 @@ module KIF
       list = msg["party"]
       return nil unless list.is_a?(Array) && list.length.between?(1, go[:n])
       party = list.map { |h| load_strict(h) }
-      return nil if party.any?(&:nil?) || (go[:fmt] == 2 && party.length < 2)
+      return nil if party.any?(&:nil?) || party.length < go[:fmt]
       return { party: party, name: KIF::Net.shown_name(msg["name"]), type: KIF::Coop::Mon.partner_type(msg["type"]),
                tid: msg["tid"].is_a?(Integer) ? msg["tid"] : 0, bag: {} }
     end
@@ -362,7 +389,7 @@ module KIF
 
     # Runs the match on this game (the Multiplayer host). Own runner, not pbTrainerBattleCore: no pbAfterBattle.
     def self.battle(s, join, go)
-      dbl = go[:fmt] == 2
+      dbl = go[:fmt] >= 2   # (a double or a triple: the battle's size is named below)
       lv = go[:lv]
       decision = 0
       host = nil
@@ -382,14 +409,14 @@ module KIF
         battle = PokeBattle_Battle.new(pbNewBattleScene, mine, foe, [$Trainer], [trainer])
         battle.party1starts = [0]
         battle.party2starts = [0]
-        setBattleRule(dbl ? "double" : "single", "canLose", "noexp", "nomoney", "cannotrun", "setstyle")
+        setBattleRule(%w[single double triple][go[:fmt] - 1], "canLose", "noexp", "nomoney", "cannotrun", "setstyle")
         pbPrepareBattle(battle)
         $PokemonTemp.clearBattleRules
         battle.switchStyle = false
         host = Host.new(s, join)
         host.attach(battle)
         Audio.me_stop
-        log("match #{join[:id]} with #{join[:name]} (#{dbl ? 'double' : 'single'}, #{mine.length} v #{foe.length}, level rule #{lv})")
+        log("match #{join[:id]} with #{join[:name]} (#{%w[single double triple][go[:fmt] - 1]}, #{mine.length} v #{foe.length}, level rule #{lv})")
         pbBattleAnimation(pbGetTrainerBattleBGM([trainer]), dbl ? 3 : 1, [trainer]) {
           pbSceneStandby { decision = battle.pbStartBattle }
         }
@@ -438,15 +465,16 @@ module KIF
       s = session or return
       a = st[:acc]
       st[:acc] = nil
-      s.post("co_join", join_msg(ask["id"], a[:team]))
+      post("co_join", join_msg(ask["id"], a[:team]), a[:with])
       g = Guest.new(s, ask["id"], $Trainer, a[:team].map { |p| ready(p, a[:lv]) }.compact)
+      g.runner = a[:with]
       KIF::Coop.guest = g
       @running = true
       begin
         g.run
       rescue StandardError, SystemStackError => e
         log("match screen failed (#{e.class}: #{e.message})")
-        (s.post("co_act", "id" => ask["id"], "d" => { "b" => -1, "a" => "auto" }) rescue nil)
+        (post("co_act", { "id" => ask["id"], "d" => { "b" => -1, "a" => "auto" } }, a[:with]) rescue nil)
       ensure
         KIF::Coop.guest = nil
         @running = false
@@ -629,7 +657,7 @@ module KIF
       def build(d)
         return false unless d.is_a?(Hash)
         sz = d["sz"]
-        return false unless sz.is_a?(Array) && sz.length == 2 && sz[0] == sz[1] && [1, 2].include?(sz[0])
+        return false unless sz.is_a?(Array) && sz.length == 2 && sz[0] == sz[1] && [1, 2, 3].include?(sz[0])
         @hn = int(d["gs"], 1, 6) or return false
         @gn = int(d["gn"], 1, 6) or return false
         return false unless @gn == @party.length && d["hp"].is_a?(Array) && d["hp"].length == @hn

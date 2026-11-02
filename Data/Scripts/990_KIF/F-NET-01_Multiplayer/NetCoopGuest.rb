@@ -29,15 +29,18 @@ module KIF
       MAX_PAUSED  = 1500   # messages that wait for a key press in one battle
       MAX_BOX     = 300    # frames waiting for this game's thread
 
-      def initialize(session, id, trainer, view = nil, bag: nil, max: 0)
+      attr_accessor :runner   # the lobby slot of the player whose battle this is (nil: the one partner of a game for two)
+
+      def initialize(session, id, trainer, view = nil, bag: nil, max: 0, runner: nil)
         @s = session
+        @runner = runner
         @id = id
         @trainer = trainer
         @party = KIF::Coop.join_party(trainer, max)   # the Pokémon sent with co_join, in that order
         @max = max.to_i > 0 && @party.length < trainer.party.length ? max.to_i : nil   # told at the start
         @bag = bag || (trainer.equal?($Trainer) ? $PokemonBag : nil)
         @view = view
-        @host_name = session.partner.to_s
+        @host_name = ((runner && session.respond_to?(:name_of) && session.name_of(runner)) || session.partner).to_s
         @box = []
         @done = @begun = @started = @lost = false
         @caught = []
@@ -70,7 +73,12 @@ module KIF
       def begun?; @begun; end
       def stopped?; @stopped ? true : false; end   # this game left (the host stopped, flooded, or the player left)
       def lost; @lost = true; end
-      def lost?; @lost || !@s.connected?; end
+      def lost?; @lost || !@s.connected? || !runner_in?; end
+
+      # false when the runner left the lobby while this game's own line (to the lobby host) is fine
+      def runner_in?; @runner.nil? || !@s.respond_to?(:peers) || @s.peers.any? { |sl, _, _| sl == @runner }; end
+
+      def gpost(type, fields); KIF::Net.post_to(@s, type, fields, @runner); end
       def session; @s; end
 
       # the host stopped waiting for this request (co_cmd or co_sw): its AI chose
@@ -121,7 +129,7 @@ module KIF
         @aborted = @stopped = true
         @decision = 0
         @done = true
-        (@s.post("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" }) rescue nil)
+        (gpost("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" }) rescue nil)
         (@view.message(_INTL("{1}'s game stopped working with this one. You left the battle.", @host_name)) rescue nil) if @view && @begun && !quiet
       end
 
@@ -186,7 +194,7 @@ module KIF
         return unless req && !@done && !lost?
         KIF::Net.update if KIF::Net.session.equal?(@s)
         return if lock_at(req) || skipped?(req) || ended?   # already used (or chosen for): nothing to change
-        @s.post("co_undo", "id" => @id, "d" => { "b" => req["b"], "t" => req["t"] })
+        gpost("co_undo", "id" => @id, "d" => { "b" => req["b"], "t" => req["t"] })
         answer_command(req, true)
       end
 
@@ -215,7 +223,34 @@ module KIF
       #-------------------------------------------------------------------------
       # Places: the two player-side slots swap (this player is the player here)
       #-------------------------------------------------------------------------
-      def bat(i); (i.is_a?(Integer) && i.even? && i <= 2) ? 2 - i : i; end
+      # The battle's players in this copy's order, as the host numbers them (0 the runner, 1 and 2 the guests): this
+      # player first, then the runner, then the other guest. A game for two: [1, 0], the two places swap. For three
+      # it is a cycle for the second guest ([2, 0, 1]), so going to this copy's places and back differ.
+      def ord; @ord || [1, 0]; end
+
+      # the lobby slot of the player that is place `idx` in this copy (1: the runner), for that player's look
+      def owner_slot(idx)
+        return @runner unless @ord
+        o = @ord[idx] or return nil
+        sl = @owner_slots && @owner_slots[o]
+        return sl.is_a?(Integer) ? sl : nil
+      end
+
+      # a host battler index -> this copy's (a PvP match overrides this: the two sides swap)
+      def bat(i)
+        return i unless i.is_a?(Integer) && i >= 0 && i.even? && i / 2 < ord.length
+        return 2 * ord.index(i / 2)
+      end
+
+      def to_mirror(i); bat(i); end
+
+      # this copy's battler index -> the host's (what is sent back: a target, a ball's target). In a game for two
+      # (and a match) going there and back is the same swap.
+      def to_host(i)
+        return bat(i) unless @ord
+        return i unless i.is_a?(Integer) && i >= 0 && i.even? && i / 2 < ord.length
+        return 2 * ord[i / 2]
+      end
 
       # a host battler index -> this copy's, or nil
       def bat_checked(i)
@@ -225,12 +260,14 @@ module KIF
 
       def battler(i); (mi = bat_checked(i)) ? @mirror.battlers[mi] : nil; end
 
-      # a host party index -> this copy's (side 0: this player's team first)
+      # a host party index -> this copy's (side 0: this player's team first, then the runner's, then the other guest's)
       def party_index(pi, side)
         return nil unless pi.is_a?(Integer) && pi >= 0
         return (pi < @mirror.pbParty(1).length ? pi : nil) if side == 1
         return nil if pi >= @hn + @gn
-        return pi < @hn ? @gn + pi : pi - @hn
+        return (pi < @hn ? @gn + pi : pi - @hn) unless @hstart   # a game for two
+        o = @hstart.rindex { |s| s <= pi }
+        return @mstart[o] + pi - @hstart[o]
       end
 
       def own?(mp); mp.is_a?(Integer) && mp >= 0 && mp < @gn; end
@@ -268,9 +305,9 @@ module KIF
       def reply_auto(type, msg)
         d = msg["d"].is_a?(Hash) ? msg["d"] : {}
         if type == "co_cmd"
-          @s.post("co_act", "id" => @id, "d" => { "b" => d["b"], "t" => d["t"], "a" => "auto" })
+          gpost("co_act", "id" => @id, "d" => { "b" => d["b"], "t" => d["t"], "a" => "auto" })
         elsif type == "co_sw"
-          @s.post("co_swr", "id" => @id, "d" => { "n" => d["n"], "p" => -2 })
+          gpost("co_swr", "id" => @id, "d" => { "n" => d["n"], "p" => -2 })
         end
       end
 
@@ -289,7 +326,7 @@ module KIF
         KIF::Coop.log("couldn't build #{@host_name}'s battle here; the game fights for this player")
         @mirror = nil
         @view = AutoView.new(self)
-        @s.post("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" })
+        gpost("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" })
       end
 
       # the host's battle music (gym leader, rival, legendary...) when this game has the file
@@ -312,12 +349,43 @@ module KIF
       def build(d)
         return false unless d.is_a?(Hash)
         sz = d["sz"]
-        return false unless sz.is_a?(Array) && sz.length == 2 && sz[0] == 2 && sz[1].is_a?(Integer) && sz[1].between?(1, 3)
+        three = d["pp"].is_a?(Array)   # a game for three
+        return false unless sz.is_a?(Array) && sz.length == 2 && sz[0] == (three ? 3 : 2) && sz[1].is_a?(Integer) && sz[1].between?(1, 3)
         @top_level = @party.map { |p| p.level.to_i }.max   # (Exp and prizes are held to this team as it is now)
-        @hn = int(d["gs"], 1, 6) or return false
         @gn = int(d["gn"], 1, 6) or return false
-        return false unless @gn == @party.length && d["hp"].is_a?(Array) && d["hp"].length == @hn
-        host_party = d["hp"].map { |h| load_mon(h) }
+        return false unless @gn == @party.length
+        if three
+          me = d["me"]
+          return false unless me.is_a?(Integer) && [1, 2].include?(me) && d["pp"].length == 3 && d["tn"].is_a?(Array) && d["tn"].length == 3
+          return false unless d["pp"].all? { |l| l.is_a?(Array) && l.length.between?(1, 6) } && d["pp"][me].length == @gn
+          parties = d["pp"].each_with_index.map { |l, o| o == me ? @party : l.map { |h| load_mon(h) } }
+          return false if parties.flatten.include?(nil)
+          @ord = [me, 0, 3 - me]
+          sizes = parties.map(&:length)
+          @hstart = [0, sizes[0], sizes[0] + sizes[1]]
+          @mstart = []
+          run = 0
+          @ord.each { |o| @mstart[o] = run; run += sizes[o] }
+          @hn = run - @gn
+          trainers = @ord.map do |o|
+            next @trainer if o == me
+            t = trainer_from(d["tn"][o]) or return false
+            t.trainer_type = Mon.partner_type(d["tn"][o]["ty"])
+            t.party = parties[o]
+            t.define_singleton_method(:full_name) { name }   # "Monto sent out ...", not with a trainer class
+            t
+          end
+          @names = d["tn"].map { |t| Mon.name(t["n"]) }
+          @owner_slots = d["os"] if d["os"].is_a?(Array) && d["os"].length == 3 && d["os"].all? { |x| x.is_a?(Integer) && x.between?(0, 2) }
+          @me_name = KIF::Net.shown_name(@trainer.name.to_s[0, 24])
+          host_party = @ord[1..-1].flat_map { |o| parties[o] }
+        else
+          @ord = nil
+          @hstart = @mstart = nil
+          @hn = int(d["gs"], 1, 6) or return false
+          return false unless d["hp"].is_a?(Array) && d["hp"].length == @hn
+          host_party = d["hp"].map { |h| load_mon(h) }
+        end
         # a wild battle has as many foes as its side has places; a trainer team has six at most
         # (24 foes with two tag trainers doubled, 36 at x3: more is refused)
         fp = d["fp"].is_a?(Array) && d["fp"].length.between?(1, 36) ? d["fp"] : []
@@ -333,6 +401,7 @@ module KIF
         host.trainer_type = Mon.partner_type(d["ht"]["ty"])
         host.party = host_party
         host.define_singleton_method(:full_name) { name }   # "Monto sent out ...", not with a trainer class
+        trainers ||= [@trainer, host]
         t = d["tev"]
         @tev = t if t.is_a?(Array) && t.length == 2 && t.all? { |x| x.is_a?(Integer) && x.between?(1, 99_999) }
         opp = nil
@@ -349,10 +418,10 @@ module KIF
         return false if opp && fs.each_with_index.any? { |a, i| (fs[i + 1] || foes.length) - a > 18 }   # a team has six at most, 18 with the co-op trainer teams at x3 (KIF::Teams)
         opp&.each_with_index { |t, i| t.party = foes[(fs[i] || 0)...(fs[i + 1] || foes.length)] }
         @view.make_scene if @view.respond_to?(:make_scene)
-        m = PokeBattle_Battle.new(@view.scene, @party + host_party, foes, [@trainer, host], opp)
-        m.party1starts = [0, @gn]
+        m = PokeBattle_Battle.new(@view.scene, @party + host_party, foes, trainers, opp)
+        m.party1starts = three ? @ord.map { |o| @mstart[o] } : [0, @gn]
         m.party2starts = fs
-        m.instance_variable_set(:@sideSizes, [2, sz[1]])
+        m.instance_variable_set(:@sideSizes, [three ? 3 : 2, sz[1]])
         m.backdrop = d["bd"] if d["bd"].is_a?(String) && d["bd"] =~ /\A[A-Za-z0-9_ ]{1,40}\z/
         m.backdrop = "Field" if m.backdrop.to_s.empty?
         m.backdropBase = d["bb"] if d["bb"].is_a?(String) && d["bb"] =~ /\A[A-Za-z0-9_ ]{1,40}\z/
@@ -513,7 +582,7 @@ module KIF
         @picked_slots << a["p"] if a["a"] == "switch" && a["p"].is_a?(Integer)
         it = b && a["a"] != "auto" ? pick_text(b, a) : nil
         a = a.merge("it" => it) if it
-        @s.post("co_act", "id" => @id, "d" => a.merge("b" => d["b"], "t" => d["t"]))
+        gpost("co_act", "id" => @id, "d" => a.merge("b" => d["b"], "t" => d["t"]))
         if a["a"] == "auto" || a["a"] == "run"
           @view.waiting(false)
         else
@@ -558,7 +627,7 @@ module KIF
         end
         return if ended?
         p >= 0 ? @picked_slots << p : (credit if own && p == -2 && KIF::Coop.auto_battle?)
-        @s.post("co_swr", "id" => @id, "d" => { "n" => d["n"], "p" => p })
+        gpost("co_swr", "id" => @id, "d" => { "n" => d["n"], "p" => p })
         @view.waiting
       end
 
@@ -794,7 +863,7 @@ module KIF
           end
           @view = AutoView.new(self)
           @mirror&.instance_variable_set(:@scene, @view.scene)
-          @s.post("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" })
+          gpost("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" })
           @view.start
         end
         started!
@@ -911,7 +980,29 @@ module KIF
         t = Mon.text(t)
         m = @g.mirror or return t
         own, host = m.battlers.select { |b| b && b.index.even? }.partition { |b| @g.own_pk?(b.pokemon) }.map { |l| l.map(&:name) }
+        return three_text(t, m, own) if @g.ord.length == 3
         return sent_out(t, own, host) || t.split("\n", -1).map { |line| ally_line(line, own, host) }.join("\n")
+      end
+
+      # A game for three. The runner's text calls this player's Pokémon "<this player>'s X" and its own by name; here
+      # this player's are plain and the runner's are "<runner>'s X". The other guest's are "<name>'s X" on both.
+      # Send-out lines: "<this player> sent out A!" -> "Go! A!"; the runner's "Go! B!" -> "<runner> sent out B!".
+      def three_text(t, m, own)
+        me = @g.instance_variable_get(:@me_name).to_s
+        names = @g.instance_variable_get(:@names) || []
+        run = names[0].to_s
+        mine_pk = m.battlers.select { |b| b && b.index.even? && !@g.own_pk?(b.pokemon) && m.pbGetOwnerIndexFromBattlerIndex(b.index) == 1 }.map(&:name)   # (the runner's: the next place)
+        t.split("\n", -1).map do |line|
+          if line =~ /\A#{Regexp.escape(_INTL("{1} sent out {2}!", me, "KIFXXX")).sub("KIFXXX", "(.+)")}\z/
+            _INTL("Go! {1}!", $1)
+          elsif (mm = line.match(/\A#{Regexp.escape(_INTL("Go! {1}!", "KIFXXX")).sub("KIFXXX", "(.+)")}\z/))
+            _INTL("{1} sent out {2}!", run, mm[1])
+          else
+            own.each { |x| line = line.gsub(_INTL("{1}'s {2}", me, x), x) }
+            n = mine_pk.find { |x| line =~ /\A#{Regexp.escape(x)}[ ']/ }
+            n ? _INTL("{1}'s {2}", run, n) + line[n.length..-1] : line
+          end
+        end.join("\n")
       end
 
       # "<this player> sent out A!\nGo! B!" -> "<host> sent out B!\nGo! A!", or nil
@@ -1088,7 +1179,7 @@ module KIF
           unless @g.mirror.singleBattle?
             t = call(:pbChooseTarget, mi, b.moves[k].pbTarget(b))
             next false unless t.is_a?(Integer) && t >= 0
-            tg = @g.bat(t)
+            tg = @g.to_host(t)
           end
           ret = { "a" => "move", "m" => k, "tg" => tg }
           next true
@@ -1129,7 +1220,7 @@ module KIF
           next false if [1, 2, 3, 6, 7, 8].include?(use) && !m.pbCanUseItemOnPokemon?(item, pk, bt, isc)
           next false unless ItemHandlers.triggerCanUseInBattle(item, pk, bt, im, true, m, isc)
           ret = { "a" => "item", "i" => item.to_s, "p" => ip, "mv" => im }
-          ret["tb"] = @g.bat(ip) if [4, 9].include?(use)
+          ret["tb"] = @g.to_host(ip) if [4, 9].include?(use)
           next true
         end
         return ret

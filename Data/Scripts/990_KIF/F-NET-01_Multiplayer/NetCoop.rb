@@ -103,7 +103,11 @@ module KIF
     @cmd_wait   = 90.0   # host: the partner picks a move
     @sw_wait    = 60.0   # host: the partner picks a replacement
     @want = false        # I picked Fight together
-    @their = false       # the partner did
+    @their = false       # the partner did (in a lobby of three: someone did)
+    @their_by = {}       # slot => true: who said yes (a lobby of three; empty in a game for two)
+    @their_maps = {}     # slot => the map they are on
+    @host_slots = nil    # the slots asked to the battle this game starts (only they may answer it)
+    @ask_from = nil      # the slot the invite in @ask came from
     @host_box = []
     @notes = []
     @host_id = nil       # the battle this game started or is hosting: only its replies are kept (HOST_TYPES)
@@ -117,7 +121,7 @@ module KIF
       attr_accessor :ask_wait, :quiet_wait, :begin_wait, :cmd_wait, :sw_wait
       attr_reader :host_id
       attr_accessor :guest        # the guest battle running in this game
-      attr_reader :want, :their, :their_map, :host_box, :notes
+      attr_reader :want, :their, :their_map, :host_box, :notes, :their_by, :their_maps
     end
 
     def self.log(msg); KIF::Net.log("co-op: #{msg}"); end
@@ -133,7 +137,34 @@ module KIF
       return @want && @their ? true : false
     end
 
-    def self.partner; session ? session.partner.to_s : "?"; end
+    # the name of the player in `slot` (nil: the one partner of a game for two)
+    def self.name_for(slot)
+      s = session
+      n = slot && s && s.respond_to?(:name_of) ? s.name_of(slot) : nil
+      return n || (s ? s.partner.to_s : "?")
+    end
+
+    # who this game fights together with: the players who said yes ("Alex and Monto"), else the one partner
+    def self.partner(slot = nil)
+      return name_for(slot) if slot
+      return session ? session.partner.to_s : "?" if @their_by.empty?
+      return @their_by.keys.sort.map { |sl| name_for(sl) }.join(" and ")
+    end
+
+    # post to a slot (a lobby of three) or the one partner
+    def self.say(type, fields, slot)
+      s = session or return false
+      return KIF::Net.post_to(s, type, fields, slot)
+    end
+
+    # the slots a battle that starts here asks: said yes and on this map; [nil] is the one partner of a game for two
+    def self.ready_slots
+      m = $game_map && $game_map.map_id
+      if @their_by.empty?
+        return (@their_map && m && @their_map != m) ? [] : [nil]   # (the caller checked on?)
+      end
+      return @their_by.keys.sort.select { |sl| @their_maps[sl].nil? || m.nil? || @their_maps[sl] == m }
+    end
 
     # this player's Auto-Battle: the host's AI picks for this player's Pokémon
     def self.auto_battle?
@@ -145,9 +176,29 @@ module KIF
     def self.on_connect(_s = nil)
       @want = @their = @ask_pact = false
       @their_map = @sent_map = @ask = @rules = @rules_sent = nil
-      @host_id = @pact_after = @no_asks_until = nil
+      @host_id = @pact_after = @no_asks_until = @host_slots = @ask_from = nil
+      @their_by = {}
+      @their_maps = {}
       @told = {}
       @host_box.clear
+    end
+
+    # a player joined a game that goes on (a lobby of three): they hear what this player said
+    def self.on_peer_joined(slot)
+      s = session or return
+      return unless @want
+      KIF::Net.post_to(s, "co_pact", { "on" => 1 }, slot)
+      send_status(slot)
+    end
+
+    # a player left: what they said goes; a battle run by them ends for this game
+    def self.on_peer_left(slot)
+      @their_by.delete(slot)
+      @their_maps.delete(slot)
+      @their = !@their_by.empty?
+      @ask = nil if @ask_from == slot
+      @host_box.reject! { |_t, _m, f| f == slot }
+      @guest&.lost if @guest && @guest.runner == slot
     end
 
     # a note shown once a connection (on the map, KIF::Net.notes)
@@ -174,12 +225,12 @@ module KIF
       send_status if @want
     end
 
-    def self.send_status
+    def self.send_status(slot = nil)
       s = session or return
       return unless $game_map
       @sent_map = $game_map.map_id
-      s.post("co_st", "map" => @sent_map)
-      send_rules
+      KIF::Net.post_to(s, "co_st", { "map" => @sent_map }, slot)
+      send_rules(slot)
     end
 
     #---------------------------------------------------------------------------
@@ -195,13 +246,13 @@ module KIF
     end
 
     # the host sends its settings with its status, and again when they changed
-    def self.send_rules
+    def self.send_rules(slot = nil)
       s = session or return
       return unless rules_host? && $PokemonSystem
       r = my_rules
-      return if r == @rules_sent
+      return if r == @rules_sent && slot.nil?
       @rules_sent = r
-      s.post("co_rules", "r" => r)
+      KIF::Net.post_to(s, "co_rules", { "r" => r }, slot)
     end
 
     # checked settings from the host: known names, Integers in range
@@ -321,7 +372,7 @@ module KIF
 
     # the row on the Multiplayer connected screen
     def self.menu_label
-      return _INTL("Fight together: On") if on?
+      return (@their_by.length > 1 ? _INTL("Fight together: On ({1})", partner) : _INTL("Fight together: On")) if on?
       return _INTL("Fight together: {1} asked", partner) if @their && !@want
       return _INTL("Fight together: Asked") if @want
       return _INTL("Fight together: Off")
@@ -362,31 +413,43 @@ module KIF
     #---------------------------------------------------------------------------
     # Messages from the partner's game (KIF::Net.update)
     #---------------------------------------------------------------------------
-    def self.receive(type, msg)
+    # from: the sender's slot (a lobby of three; 0 is the host), nil: the one partner of a game for two. What
+    # a message does is bound to its sender: a battle's messages only count from the player who runs it (or,
+    # for the runner, from the players it asked), and the settings only from the host.
+    def self.receive(type, msg, from = nil)
       case type
       when "co_pact"
-        was = @their
-        @their = msg["on"] == 1
+        on = msg["on"] == 1
+        if from.nil?
+          was_one = @their
+          @their = on
+        else
+          was_one = @their_by[from] ? true : false
+          on ? @their_by[from] = true : @their_by.delete(from)
+          @their = !@their_by.empty?
+        end
         # the question comes back no sooner than 2 minutes after a No (a partner flipping this at 400 a second)
         @ask_pact = @their && !@want && KIF::Net.now >= (@pact_after || 0)
-        note(_INTL("{1} stopped fighting together.", partner)) if was && !@their && @want
-        note(_INTL("You now fight together with {1}.", partner)) if !was && @their && @want   # the answer to this player's ask
-        send_status if @their
-      when "co_st" then @their_map = msg["map"]
-      when "co_rules" then @rules = read_rules(msg["r"]) unless rules_host?
-      when "co_int" then @guest&.intent_from(msg)
-      when "co_vs", "co_vsr" then KIF::PvP.receive(type, msg) if defined?(KIF::PvP)   # a friendly match (NetPvp.rb)
-      when "co_ask" then guest_ask(msg)
+        note(_INTL("{1} stopped fighting together.", partner(from))) if was_one && !on && @want
+        note(_INTL("You now fight together with {1}.", partner(from))) if !was_one && on && @want   # the answer to this player's ask
+        send_status(from) if on
+      when "co_st"
+        @their_map = msg["map"]
+        @their_maps[from] = msg["map"] if from
+      when "co_rules" then @rules = read_rules(msg["r"]) unless rules_host? || (from && from != 0)   # only the host's settings count
+      when "co_int" then @guest.intent_from(msg) if @guest && (from.nil? || @guest.runner.nil? || @guest.runner == from)
+      when "co_vs", "co_vsr" then KIF::PvP.receive(type, msg, from) if defined?(KIF::PvP)   # a friendly match (NetPvp.rb)
+      when "co_ask" then guest_ask(msg, from)
       when *HOST_TYPES
-        # only this game's own battle start or running battle: a stream of these piled up in memory
-        if @host_id && msg["id"] == @host_id
-          @host_box << [type, msg]
+        # only this game's own battle start or running battle, and only from a player it asked: a stream of these piled up in memory
+        if @host_id && msg["id"] == @host_id && (from.nil? || @host_slots.nil? || @host_slots.include?(from))
+          @host_box << [type, msg, from]
           @host_box.shift while @host_box.length > 32
         end
       when *GUEST_TYPES
         if @guest
-          @guest.feed(type, msg)
-        elsif type == "co_end" && @ask && @ask["id"] == msg["id"]
+          @guest.feed(type, msg) if from.nil? || @guest.runner.nil? || @guest.runner == from   # not a word from the other guest
+        elsif type == "co_end" && @ask && @ask["id"] == msg["id"] && (from.nil? || @ask_from.nil? || @ask_from == from)
           @ask = nil   # the host gave up before this game was free
         end
       end
@@ -404,10 +467,10 @@ module KIF
       return nil
     end
 
-    def self.partner_look(scene)
+    def self.partner_look(scene, idx = 1)
       b = scene.instance_variable_get(:@battle) or return nil
       return nil unless b.instance_variable_get(:@kif_coop) || (@guest && @guest.mirror.equal?(b))
-      return defined?(KIF::Presence) ? KIF::Presence.ghost&.look : nil
+      return defined?(KIF::Presence) ? KIF::Presence.ghost(partner_key(b, idx))&.look : nil
     end
 
     #---------------------------------------------------------------------------
@@ -422,14 +485,24 @@ module KIF
       return false
     end
 
-    def self.guest_ask(msg)
+    # the slot of the other player in this battle (the runner, for a guest; the guest, for a runner), or nil
+    def self.partner_key(battle, idx = 1)
+      h = battle.instance_variable_get(:@kif_coop)
+      return ((x = h.host_of(idx)) ? x.slot : nil) if h.is_a?(HostGroup)
+      return h.slot if h && h.respond_to?(:slot)
+      return @guest.owner_slot(idx) if @guest && @guest.mirror.equal?(battle)
+      return nil
+    end
+
+    def self.guest_ask(msg, from = nil)
       s = session or return
-      return KIF::PvP.got_ask(msg) if msg["kind"] == "pvp" && defined?(KIF::PvP)   # a friendly match has its own checks
-      return s.post("co_no", "id" => msg["id"], "why" => "off") unless on?
+      return KIF::PvP.got_ask(msg, from) if msg["kind"] == "pvp" && defined?(KIF::PvP)   # a friendly match has its own checks
+      return say("co_no", { "id" => msg["id"], "why" => "off" }, from) unless on? && (from.nil? || @their_by.empty? || @their_by[from])   # only a player I fight together with
       # busy, or the last invite from this partner never became a battle (5 minutes of "busy")
-      return s.post("co_no", "id" => msg["id"], "why" => "busy") if @guest || @ask || @hosting || $game_temp&.in_battle ||
-                                                                 cannot_join? || KIF::Net.now < (@no_asks_until || 0)
+      return say("co_no", { "id" => msg["id"], "why" => "busy" }, from) if @guest || @ask || @hosting || $game_temp&.in_battle ||
+                                                                       cannot_join? || KIF::Net.now < (@no_asks_until || 0)
       @ask = msg
+      @ask_from = from
       @ask_at = KIF::Net.now
     end
 
@@ -445,17 +518,18 @@ module KIF
               elsif cannot_join? then "busy"
               elsif ($Trainer.able_pokemon_count rescue 0) == 0 then "fainted"
               end
+        from = @ask_from
         if why
           @ask = nil
-          return s.post("co_no", "id" => ask["id"], "why" => why)
+          return say("co_no", { "id" => ask["id"], "why" => why }, from)
         end
         unless KIF::Net.quiet?
           return unless KIF::Net.now - @ask_at > @quiet_wait
           @ask = nil
-          return s.post("co_no", "id" => ask["id"], "why" => "busy")
+          return say("co_no", { "id" => ask["id"], "why" => "busy" }, from)
         end
         @ask = nil
-        return join_battle(s, ask)
+        return join_battle(s, ask, from)
       end
       ask_pact if @ask_pact && KIF::Net.quiet?
     end
@@ -501,26 +575,26 @@ module KIF
       return {}
     end
 
-    def self.join_battle(s, ask)
+    def self.join_battle(s, ask, from = nil)
       max = ask["max"].to_i
-      s.post("co_join", join_data(ask["id"], $Trainer, max))
-      log("joining #{partner}'s battle #{ask['id']}#{max > 0 ? " (#{max} Pokémon each)" : ''}")
-      g = Guest.new(s, ask["id"], $Trainer, max: max)
+      say("co_join", join_data(ask["id"], $Trainer, max), from)
+      log("joining #{partner(from)}'s battle #{ask['id']}#{max > 0 ? " (#{max} Pokémon each)" : ''}")
+      g = Guest.new(s, ask["id"], $Trainer, max: max, runner: from)
       @guest = g
       begin
         g.run
       rescue StandardError, SystemStackError => e
         log("guest battle failed (#{e.class}: #{e.message})")
-        (s.post("co_act", "id" => ask["id"], "d" => { "a" => "auto", "b" => -1 }) rescue nil)
+        (say("co_act", { "id" => ask["id"], "d" => { "a" => "auto", "b" => -1 } }, from) rescue nil)
       ensure
         @guest = nil
         # an invite that never became a battle: the next ones from this partner wait 5 minutes
         if g && !g.begun? && !g.done
           @no_asks_until = KIF::Net.now + 300
-          tell(:ask_flood, _INTL("{1} asked you to join a battle that did not start. Their invites are ignored for 5 minutes.", partner))
+          tell(:ask_flood, _INTL("{1} asked you to join a battle that did not start. Their invites are ignored for 5 minutes.", partner(from)))
         elsif g && g.stopped?   # left because the host went silent or flooded, or the player pressed B: the next invite waits too
           @no_asks_until = KIF::Net.now + 300
-          tell(:ask_stopped, _INTL("You left {1}'s battle. Their invites are ignored for 5 minutes.", partner))
+          tell(:ask_stopped, _INTL("You left {1}'s battle. Their invites are ignored for 5 minutes.", partner(from)))
         end
       end
     end
@@ -529,61 +603,101 @@ module KIF
     # Host: ask the partner to join a battle that is starting here.
     # A Hash (party, name, type, tid, id) or nil (fight alone)
     #---------------------------------------------------------------------------
-    def self.invite(kind)
-      s = session or return nil
-      return nil if @their_map && $game_map && @their_map != $game_map.map_id
+    def self.invite(kind); invite_all(kind, 1).first; end   # a battle for two: one player is asked
+
+    # Asks the players who said yes and are on this map (at most 2). A list of what each brought (a Hash: party,
+    # name, type, tid, bag, slot, id), in slot order; empty: this player fights alone. The answers come in
+    # together inside ask_wait.
+    #
+    # patient: a battle right after a triple one (two trainers who spotted three players): a friend still in the
+    # last battle's Exp and level-up screens says busy; it is asked again every second for 15 s, so nobody sits out.
+    def self.invite_all(kind, limit = 2, patient: false)
+      s = session or return []
+      slots = ready_slots.first(limit)
+      return [] if slots.empty?
       @next_id = ((@next_id || (Random.rand(1000) * 1000)) + 1) % 1_000_000_000
       @next_id = 1 if @next_id == 0
       id = @next_id
       @host_box.clear
       @host_id = id
+      @host_slots = slots.all?(&:nil?) ? nil : slots.compact   # nil: a game for two where nobody is named (anyone)
       max = team_limit
-      s.post("co_ask", "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => kind.to_s, "max" => max)
-      reply = nil
+      ask = { "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => kind.to_s, "max" => max }
+      slots.each { |sl| say("co_ask", ask, sl) }
+      replies = {}
       crossed = nil
-      wait_map(@ask_wait) do
-        reply = take_host(id, %w[co_join co_no])
+      crossed_from = nil
+      asked_at = KIF::Net.now
+      told = false
+      key_of = ->(sl) { slots == [nil] ? nil : sl }   # (a game for two where nobody is named: whoever answers)
+      wait_map(@ask_wait + (patient ? 15 : 0)) do
+        while (r = take_host(id, %w[co_join co_no]))
+          key = key_of.call(slots == [nil] ? nil : r[2])
+          replies[key] = r if !replies.key?(key) || (patient && replies[key][0] == "co_no" && r[0] == "co_join")
+        end
+        if patient   # a friend that was busy is asked again
+          busy = slots.select { |sl| (r = replies[key_of.call(sl)]) && r[0] == "co_no" && r[1]["why"] == "busy" }
+          unless busy.empty?
+            if !told
+              told = true
+              (pbMessage(_INTL("Waiting for {1}...\\wtnp[30]", busy.map { |sl| partner(sl) }.join(" and "))) rescue nil)
+            end
+            if KIF::Net.now - asked_at > 1.0
+              asked_at = KIF::Net.now
+              busy.each { |sl| replies.delete(key_of.call(sl)); say("co_ask", ask, sl) }
+            end
+          end
+        end
         # both started a battle at once (crossed invites): the Multiplayer
         # host's battle is the shared one; the other game joins it first
-        if !reply && @ask
+        if replies.empty? && @ask
           if rules_host?
-            s.post("co_no", "id" => @ask["id"], "why" => "busy")
+            say("co_no", { "id" => @ask["id"], "why" => "busy" }, @ask_from)
             @ask = nil
           else
             crossed = @ask
+            crossed_from = @ask_from
             @ask = nil
           end
         end
-        reply || crossed
+        (replies.length >= slots.length && !(patient && replies.values.any? { |r| r[0] == "co_no" && r[1]["why"] == "busy" })) || crossed
       end
       if crossed
-        log("crossed invites: joining #{partner}'s battle #{crossed['id']} first")
-        s.post("co_end", "id" => id, "d" => { "x" => "late" })
-        join_battle(s, crossed)
-        return nil
+        log("crossed invites: joining #{partner(crossed_from)}'s battle #{crossed['id']} first")
+        slots.each { |sl| say("co_end", { "id" => id, "d" => { "x" => "late" } }, sl) }
+        join_battle(s, crossed, crossed_from)
+        return []
       end
-      unless reply && reply[0] == "co_join"
-        log("#{partner} didn't join (#{reply ? reply[1]['why'] : 'no answer'})")
-        s.post("co_end", "id" => id, "d" => { "x" => "late" }) if !reply && session
-        pbMessage(_INTL("{1} didn't join this battle.", partner))   # instead of a silent wait, then a battle alone
-        return nil
+      joins = []
+      slots.each do |sl|
+        reply = replies[sl]
+        who = partner(sl)
+        unless reply && reply[0] == "co_join"
+          log("#{who} didn't join (#{reply ? reply[1]['why'] : 'no answer'})")
+          say("co_end", { "id" => id, "d" => { "x" => "late" } }, sl) if !reply && session
+          (slots.length == 1 ? pbMessage(_INTL("{1} didn't join this battle.", who)) : note(_INTL("{1} didn't join this battle.", who)))   # instead of a silent wait, then a battle alone
+          next
+        end
+        join = read_join(reply[1], max, sl)
+        unless join
+          log("#{who}'s party didn't fit; fighting without them")
+          tell([:party, sl], _INTL("{1}'s team has a Pokémon this game doesn't have (a mod's, or another KIF's), so you fight without them.", who))
+          say("co_end", { "id" => id, "d" => { "x" => "party" } }, sl)
+          next
+        end
+        join[:id] = id
+        join[:slot] = sl
+        joins << join
       end
-      join = read_join(reply[1], max)
-      unless join
-        log("#{partner}'s party didn't fit; fighting alone")
-        tell(:party, _INTL("{1}'s team has a Pokémon this game doesn't have (a mod's, or another KIF's), so you fight alone.", partner))
-        session&.post("co_end", "id" => id, "d" => { "x" => "party" })
-        return nil
-      end
-      join[:id] = id
-      return join
+      @host_slots = joins.map { |j| j[:slot] }.compact if @host_slots
+      return joins
     end
 
-    def self.read_join(msg, max = 0)
+    def self.read_join(msg, max = 0, slot = nil)
       party = msg["party"].first(max > 0 ? max : 6).map { |h| Mon.load(h, true) }
       return nil if party.empty? || party.any?(&:nil?) || party.none? { |p| p.able? }
       if party.any? { |p| p.instance_variable_get(:@kif_coop_lost) }
-        tell(:lost, _INTL("Some of {1}'s Pokémon have moves, Abilities or items this game doesn't have (a mod's, or another KIF's). Here they fight without them.", partner))
+        tell([:lost, slot], _INTL("Some of {1}'s Pokémon have moves, Abilities or items this game doesn't have (a mod's, or another KIF's). Here they fight without them.", partner(slot)))
       end
       type = Mon.partner_type(msg["type"])
       return { party: party, name: KIF::Net.shown_name(msg["name"]), type: type, tid: msg["tid"], bag: read_bag(msg["items"]) }
@@ -601,9 +715,10 @@ module KIF
     end
 
     # the first message of these types for this battle (older ones are dropped)
-    def self.take_host(id, types)
-      @host_box.reject! { |_t, m| m["id"] != id }
-      i = @host_box.index { |t, _m| types.include?(t) }
+    # from: only a message from that slot (a lobby of three: each guest's Host takes its own player's answers)
+    def self.take_host(id, types, from = nil)
+      @host_box.reject! { |_t, m, _f| m["id"] != id }
+      i = @host_box.index { |t, _m, f| types.include?(t) && (from.nil? || f.nil? || f == from) }
       return i ? @host_box.delete_at(i) : nil
     end
 
@@ -935,12 +1050,13 @@ class PokeBattle_Scene
   def pbCreateTrainerBackSprite(idxTrainer, trainerType, numTrainers = 1)
     ret = kif_coop_pbCreateTrainerBackSprite(idxTrainer, trainerType, numTrainers)
     kif_coop_partner_look(idxTrainer)
+    @sprites["player_3"].x += 100 if idxTrainer == 2 && @sprites["player_3"]   # PIF draws every partner at one place: the third is beside the second
     return ret
   end
 
   def kif_coop_partner_look(idx)
-    return unless idx == 1 && (look = KIF::Coop.partner_look(self))
-    sp = @sprites["player_2"] or return
+    return unless idx >= 1 && idx <= 2 && (look = KIF::Coop.partner_look(self, idx))
+    sp = @sprites["player_#{idx + 1}"] or return
     ab = generate_front_trainer_sprite_bitmap(false, nil, look["clothes"], look["hat"], look["hat2"], look["hair"],
                                               look["skin"], look["hc"], look["tc"], look["cc"], look["t2c"], false)
     return unless ab && ab.bitmap

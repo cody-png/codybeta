@@ -75,6 +75,7 @@ module KIF
     @bucket  = [BUCKET_MAX.to_f, nil]
     @pending = {}   # hash => time asked
     @sent    = []   # times pictures were sent (rate)
+    @sent_by = {}   # the same for each asker in a lobby of three (slot => times)
 
     class << self
       attr_reader :served, :pending
@@ -89,6 +90,7 @@ module KIF
 
     def self.on_connect(_s = nil)
       @pending.clear
+      @sent_by.clear
       @mem.clear
       @hashes.clear   # sprite packs may have changed between sessions
     end
@@ -430,22 +432,26 @@ module KIF
       @pending.reject! { |_x, at| KIF::Net.now - at >= 30 }   # (asked of a partner that never answers)
       return false if @pending.length >= 32
       @pending[x] = KIF::Net.now
+      slots = s.respond_to?(:peers) ? s.peers.map(&:first) : []
+      return slots.map { |sl| s.post("sp_get", { "x" => x }, to: sl) }.any? if slots.length > 1   # the picture is whoever's it is: all are asked, the hash tells the right one
       return s.post("sp_get", "x" => x)
     end
 
-    def self.receive(s, type, msg)
+    # from: the sender's slot in a lobby of three; nil: the one partner
+    def self.receive(s, type, msg, from = nil)
       case type
       when "sp_get"
         x = msg["x"]
         e = @served[x] or return
         now = KIF::Net.now
-        @sent.reject! { |t| now - t > 10 }
+        sent = from ? (@sent_by[from] ||= []) : @sent   # each asker has its own 20 in 10 seconds
+        sent.reject! { |t| now - t > 10 }
         e[3] = (e[3] || []).reject { |t| now - t > 10 }
-        return log("too many pictures asked for; one not sent") if @sent.length >= 20 || e[3].length >= 6
-        @sent << now
+        return log("too many pictures asked for; one not sent") if sent.length >= 20 || e[3].length >= 6
+        sent << now
         e[3] << now
         e[2] ||= [png(e[0])].pack("m0")   # encoded once per picture
-        s.post("sp_img", "x" => x, "png" => e[2], "c" => e[1].to_s)
+        KIF::Net.post_to(s, "sp_img", { "x" => x, "png" => e[2], "c" => e[1].to_s }, from)
       when "sp_img"
         x = msg["x"]
         return log("a picture this game didn't ask for; ignored") unless @pending.delete(x)

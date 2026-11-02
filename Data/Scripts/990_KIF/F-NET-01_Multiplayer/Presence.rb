@@ -167,6 +167,12 @@ module KIF
       def update; @ghosts.each_value(&:update); end
       def close; @ghosts.each_value(&:retire); @ghosts.clear; end
 
+      # a new player is in: what was sent is sent again (the others skip an unchanged look)
+      def resend; @sent = nil; @look_sent = nil; end
+
+      # a player left: only their ghost goes
+      def drop(key); g = @ghosts.delete(key); g.retire if g; end
+
       private
 
       def at(st)
@@ -606,7 +612,12 @@ module KIF
       attr_reader :link
     end
 
-    def self.ghost(key = :partner); @link && @link.ghosts[key]; end
+    # the partner's ghost; with no key the first one (the only one in a game for two)
+    def self.ghost(key = nil)
+      return nil unless @link
+      return @link.ghosts[key] if key
+      return @link.ghosts[:partner] || @link.ghosts.values.first
+    end
 
     def self.retire(bitmaps); @retired.concat(bitmaps); end
 
@@ -645,9 +656,11 @@ module KIF
       oops(e)
     end
 
-    def self.receive(type, msg)
+    # from: the sender's slot (a lobby of three keeps a ghost for each); nil: the one partner
+    def self.receive(type, msg, from = nil)
       s = KIF::Net.session
-      (@link ||= Link.new).receive(type, msg, s ? s.partner : "")
+      name = from && s.respond_to?(:name_of) ? s.name_of(from) : nil
+      (@link ||= Link.new).receive(type, msg, name || (s ? s.partner : "").to_s, from || :partner)
     rescue StandardError => e
       oops(e)
     end
@@ -735,6 +748,16 @@ module KIF
 
     def self.on_disconnect; drop; end
 
+    # a player joined a game that goes on: they get everything again; a player left: their ghost goes
+    def self.on_peer_joined(_slot)
+      return unless @link
+      @link.resend
+      s = KIF::Net.session
+      s.post("pr_do", "a" => @doing) if @doing && s && s.connected?
+    end
+
+    def self.on_peer_left(slot); @link.drop(slot) if @link; end
+
     def self.drop
       @link.close if @link
       @link = nil
@@ -781,8 +804,8 @@ module KIF
     end
 
     # "Alex is in Route 3." for the Multiplayer screen, or nil
-    def self.where_line(name)
-      g = ghost or return nil
+    def self.where_line(name, slot = nil)
+      g = ghost(slot) or return nil
       return nil unless g.map_id
       d = doing_label(g.doing)
       return _INTL("{1} is on this map ({2}).", name, d) if d && $game_map && g.map_id == $game_map.map_id

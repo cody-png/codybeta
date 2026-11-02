@@ -1,32 +1,44 @@
 #===============================================================================
-# F-NET-01 – Multiplayer: PvP, a friendly match against the friend you are
-# connected to (Multiplayer > Challenge <name>)
+# F-NET-01 – Multiplayer: PvP, a friendly match against another player in the
+# game you are connected to (Multiplayer > Challenge <name>)
 #
-# One player challenges (format Single or Double, how many Pokemon each, an
-# optional level rule: all 50 or all 100); the other says yes or no at a quiet
-# moment on the map. Then the Multiplayer HOST's game runs the battle, whoever
-# challenged, over the co-op machinery (NetCoop*.rb): the guest plays the host's
-# log on its own battle screen, from the other side (battler i is the host's
-# i ^ 1), and sends back checked choices. Messages:
+# One player challenges (format Single, Double or Triple, how many Pokemon each,
+# an optional level rule: all 50 or all 100); the other says yes or no at a quiet
+# moment on the map. Then the CHALLENGER's game runs the battle (whoever it is:
+# the Multiplayer host or a guest) over the co-op machinery (NetCoop*.rb): the
+# other player plays the runner's log on its own battle screen, from the other
+# side (battler i is the runner's i ^ 1), and sends back checked choices. In a
+# lobby of three the third player is not part of it. Two guests fight through the
+# lobby host, which passes their frames on (Net.rb, FORWARD: the same hop-by-hop
+# line each way); the host's own game plays on as usual. Messages:
 #   co_vs  {id, fmt, n, lv}   challenge (fmt 0: cancelled); fmt 1 single, 2 double, 3 triple
 #   co_vsr {id, ok, why}      the answer (why: busy, no, few)
-# After a yes the host sends co_ask (kind "pvp"), the other game answers co_join
-# with its team, and co_begin .. co_end run as in co-op.
+# After a yes the runner sends co_ask (kind "pvp"), the other game answers co_join
+# with its team, and co_begin .. co_end run as in co-op. Every one of these
+# messages counts only from the player the match is with (the slot the frame
+# came from), so a third player's frames do nothing.
 #
 # Both games fight with COPIES of the picked Pokemon, so nothing about a real
 # Pokemon changes: no Exp, EVs, money, catches, items or evolutions. The match
 # is not a normal trainer battle (no pbAfterBattle): no Nuzlocke burial or Soul
 # Link event, no whiteout (so no DeathLink), no autosave, no battle counter of
 # the Archipelago traps. The Bag and balls are off, Auto-Battle and "let the
-# game choose" are off, Level Caps do not apply, and the host's settings count.
-# Run is a forfeit. A player who does not choose in PvP.pick_wait seconds has
-# that turn picked by the game's AI; one whose line drops, or whose game can't
-# show the battle, loses to the other. The guest's team is rebuilt strictly
-# (PvP.load_strict): stats worked out here, EVs capped, an ability its species
-# can't have dropped, a team with a move, ability or item this game lacks refused.
+# game choose" are off, Level Caps do not apply, and the Multiplayer host's
+# gameplay settings count. Run is a forfeit. A player who does not choose in
+# PvP.pick_wait seconds has that turn picked by the game's AI; one whose line
+# drops, or whose game can't show the battle, loses to the other; so does one
+# the runner hears nothing from for PvP.silence seconds (the other game sends a
+# "still here" every PvP.beat_every seconds from a thread, so a stalled lobby
+# host that stops passing frames on ends the match too). The other player's team
+# is rebuilt strictly (PvP.load_strict): stats worked out here, EVs capped, an
+# ability its species can't have dropped, a team with a move, ability or item
+# this game lacks refused.
 #
-# The host's game decides everything in the battle, so a modified host could
-# cheat: matches are for friends (the join code), and the screen says so.
+# The runner's game decides everything in the battle, so a modified runner could
+# cheat: matches are for friends (the join code), and the screen says so. Between
+# two guests the lobby host also reads every frame and could change it unseen:
+# frames are signed for each line (guest to host, host to guest), not from one
+# guest to the other.
 #===============================================================================
 module KIF
   module PvP
@@ -45,12 +57,14 @@ module KIF
     @quiet_wait  = 12.0   # the other game waits this long for a quiet moment to join
     @pick_wait   = 60.0   # a player picks a move in this long, else the AI picks that turn
     @sw_wait     = 45.0   # ... a replacement
+    @silence     = 30.0   # the runner hears nothing from the other game for this long: that player forfeits
+    @beat_every  = 5.0    # the other game says "still here" this often (from a thread, so a menu or a long message doesn't stop it)
     @running = false
     @line = nil
     @next_id = nil
 
     class << self
-      attr_accessor :answer_wait, :join_wait, :quiet_wait, :pick_wait, :sw_wait
+      attr_accessor :answer_wait, :join_wait, :quiet_wait, :pick_wait, :sw_wait, :silence, :beat_every
       def running?; @running; end
     end
 
@@ -63,16 +77,27 @@ module KIF
     end
     def self.post(t, f = {}, slot = nil); (s = session) ? KIF::Net.post_to(s, t, f, slot) : false; end
 
-    # Who a match is with. The Multiplayer host's game runs every match, so a guest can only challenge the host,
-    # and the host picks one of its guests. nil: a game for two, or a stand-in session (the one partner).
+    # Who a match is with: the one other player, or (a lobby of three) the one picked from the others, the host
+    # and the other guest alike. nil: a stand-in session (the one partner), or Back.
     def self.target
       s = session
       return nil unless s && s.respond_to?(:peers)
       ps = s.peers
       return nil if ps.empty?
       return ps[0][0] if ps.length == 1
-      return KIF::Net.pick_peer(_INTL("Challenge who?")) if KIF::Coop.rules_host?
-      return 0
+      return KIF::Net.pick_peer(_INTL("Challenge who?"))
+    end
+
+    # this player's lobby slot (0 the host); a stand-in session has none: the host's role says
+    def self.my_slot
+      s = session
+      return s.my_slot if s && s.respond_to?(:my_slot)
+      return KIF::Coop.rules_host? ? 0 : 1
+    end
+
+    # a match between two guests: the lobby host passes every frame on
+    def self.relayed?(with)
+      return with.is_a?(Integer) && with != 0 && my_slot != 0
     end
 
     # the slot the match in this line is with (nil: the one partner)
@@ -178,8 +203,8 @@ module KIF
       return if with.nil? && session.respond_to?(:peers) && session.peers.length > 1   # Back
       who = partner(with)
       pbMessage(_INTL("A friendly match against {1}: no Exp, money or catches, and no Bag. You each bring your own Pokemon.", who))
-      pbMessage(_INTL("{1}'s game runs the battle. A modified game could cheat, so only battle friends you trust.",
-                      KIF::Coop.rules_host? ? $Trainer.name.to_s : who))
+      pbMessage(_INTL("Your game runs the battle, and {1}'s game plays it from the other side. A modified game could cheat, so only battle friends you trust.", who))
+      pbMessage(relay_line) if relayed?(with)
       c = pbMessage(_INTL("Challenge {1}?", who), [_INTL("Single battle"), _INTL("Double battle"), _INTL("Triple battle"), _INTL("Cancel")], 4)
       return unless c.is_a?(Integer) && c >= 0 && c <= 2
       fmt = c + 1
@@ -194,6 +219,13 @@ module KIF
       return unless post("co_vs", { "id" => id, "fmt" => fmt, "n" => n, "lv" => LEVELS[l] }, with)
       st[:out] = { id: id, fmt: fmt, n: n, lv: LEVELS[l], team: team, at: KIF::Net.now, with: with }
       note(_INTL("Asked {1}: {2}.", who, describe(fmt, n, LEVELS[l])))
+    end
+
+    # said to both guests of a match through the lobby host
+    def self.relay_line
+      s = session
+      h = s && s.respond_to?(:name_of) ? s.name_of(0) : nil
+      return _INTL("{1}'s game passes the match on between you two, so {1} could read or change it. Only battle where you all trust each other.", KIF::Net.shown_name(h || "The host"))
     end
 
     def self.cancel(st)
@@ -223,13 +255,19 @@ module KIF
       end
       return unless LEVELS.include?(m["lv"]) && m["n"] >= m["fmt"]
       now = KIF::Net.now
+      o = st[:out]
       # at most one question at a time, and a short "busy" a few seconds apart (a stream of challenges costs this game almost nothing)
-      if st[:in] || st[:go] || st[:acc] || busy? || now < st[:mute] || (st[:out] && KIF::Coop.rules_host?)
+      # (a challenge of this game's own that waits for someone else's answer is one question too)
+      busy_now = st[:in] || st[:go] || st[:acc] || busy? || now < st[:mute]
+      # both challenged each other at once: the lower slot's challenge counts (both games work it out the same), the higher one is dropped
+      them = from || (my_slot == 0 ? 1 : 0)   # (a stand-in session has no slots: the one partner)
+      crossed = o && o[:with] == from && them < my_slot
+      if busy_now || (o && !crossed)
         return unless now - st[:busy_at] > 3.0
         st[:busy_at] = now
         return reply(m["id"], 0, "busy", from)
       end
-      if st[:out]   # both challenged at once: the Multiplayer host's counts, this one is dropped
+      if crossed
         st[:out] = nil
         note(_INTL("{1} challenged you too. Answer theirs.", partner(from)))
       end
@@ -246,19 +284,15 @@ module KIF
         return note(why || _INTL("{1} said no.", who))
       end
       note(_INTL("{1} said yes.", who))
-      if KIF::Coop.rules_host?
-        st[:go] = o
-      else
-        st[:acc] = o.merge(at: KIF::Net.now)   # the host's invite comes next
-      end
+      st[:go] = o   # this game runs the match
     end
 
-    # the host's invite to join a match (KIF::Coop.guest_ask): only after a yes
+    # the runner's invite to join a match (KIF::Coop.guest_ask): only after a yes, only from the player that was said yes to
     def self.got_ask(msg, from = nil)
       s = session or return
       st = line
       a = st[:acc]
-      return post("co_no", { "id" => msg["id"], "why" => "busy" }, from) if !a || KIF::Coop.rules_host? || busy? || msg["max"] != a[:n] || a[:with] != from
+      return post("co_no", { "id" => msg["id"], "why" => "busy" }, from) if !a || busy? || msg["max"] != a[:n] || a[:with] != from
       st[:ask] = msg.merge("from" => from)
       st[:ask_at] = KIF::Net.now
     end
@@ -269,6 +303,7 @@ module KIF
     def self.map_tick
       st = line or return
       now = KIF::Net.now
+      gone(st)
       if (o = st[:out]) && now - o[:at] > @answer_wait
         cancel(st)
         note(_INTL("{1} didn't answer.", partner(o[:with])))
@@ -292,14 +327,26 @@ module KIF
       run_hosted(st) if st[:go] && KIF::Net.quiet?
     end
 
+    # a challenge, an answer or an invite whose player has left the lobby (the others go on) is dropped
+    def self.gone(st)
+      s = session
+      return unless s && s.respond_to?(:peers)
+      ps = s.peers
+      return if ps.empty?
+      %i[out in acc go].each do |k|
+        w = st[k] && st[k][:with]
+        st[k] = nil if w && ps.none? { |sl, _n, _v| sl == w }
+      end
+    end
+
     # the friend challenged: a question at a quiet moment
     def self.ask_player(st)
       c = st[:in]
       st[:in] = nil
       with = c[:with]
       who = partner(with)
-      host = KIF::Coop.rules_host?
-      pbMessage(_INTL("{1}'s game would run the battle. A modified game could cheat, so only accept friends you trust.", who)) unless host
+      pbMessage(_INTL("{1}'s game would run the battle. A modified game could cheat, so only accept friends you trust.", who))
+      pbMessage(relay_line) if relayed?(with)
       yes = pbConfirmMessage(_INTL("{1} challenges you: {2}. Accept?", who, describe(c[:fmt], c[:n], c[:lv])))
       return unless session
       team = yes ? pick_team(c[:n]) : nil
@@ -316,17 +363,17 @@ module KIF
       st[:declines] = 0
       go = { id: c[:id], fmt: c[:fmt], n: c[:n], lv: c[:lv], team: team, at: KIF::Net.now, with: with }
       return unless reply(c[:id], 1, "", with)
-      host ? st[:go] = go : st[:acc] = go
+      st[:acc] = go   # the challenger's game runs the match: its invite comes next
     end
 
     #---------------------------------------------------------------------------
-    # The Multiplayer host: invite, read the team, run the match
+    # The challenger (the Multiplayer host or a guest): invite, read the team, run the match
     #---------------------------------------------------------------------------
     def self.run_hosted(st)
       go = st[:go]
       st[:go] = nil
       s = session
-      return unless go && s && KIF::Coop.rules_host?
+      return unless go && s
       with = go[:with]
       if busy?   # (the other game waits for an invite that will not come: told so)
         post("co_vs", { "id" => go[:id], "fmt" => 0, "n" => 1, "lv" => 0 }, with)
@@ -336,7 +383,9 @@ module KIF
       KIF::Coop.instance_eval { @host_box.clear; @host_id = id; @host_slots = with ? [with] : nil }
       reply = nil
       begin
-        post("co_ask", { "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => "pvp", "max" => go[:n] }, with)
+        unless post("co_ask", { "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => "pvp", "max" => go[:n] }, with)   # (gone from the lobby)
+          return note(_INTL("{1} is not in the game any more.", partner(with)))
+        end
         KIF::Coop.wait_map(@join_wait) { reply = KIF::Coop.take_host(id, %w[co_join co_no]) }
         join = reply && reply[0] == "co_join" ? read_join(reply[1], go) : nil
         join[:slot] = with if join
@@ -387,7 +436,7 @@ module KIF
       return nil
     end
 
-    # Runs the match on this game (the Multiplayer host). Own runner, not pbTrainerBattleCore: no pbAfterBattle.
+    # Runs the match on this game (the challenger's). Own runner, not pbTrainerBattleCore: no pbAfterBattle.
     def self.battle(s, join, go)
       dbl = go[:fmt] >= 2   # (a double or a triple: the battle's size is named below)
       lv = go[:lv]
@@ -398,7 +447,7 @@ module KIF
       $PokemonSystem.autobattler = 0 if auto
       waits = [KIF::Coop.cmd_wait, KIF::Coop.sw_wait]
       KIF::Coop.cmd_wait, KIF::Coop.sw_wait = @pick_wait, @sw_wait
-      suspended do
+      KIF::Coop.with_rules { suspended do
         mine = go[:team].map { |p| ready(p, lv) }.compact
         foe = join[:party].map { |p| ready(p, lv) }.compact
         trainer = NPCTrainer.new(join[:name], join[:type])
@@ -421,7 +470,7 @@ module KIF
           pbSceneStandby { decision = battle.pbStartBattle }
         }
         Input.update
-      end
+      end }   # (the Multiplayer host's gameplay settings count, as in every shared battle)
       result(decision, join[:name])
     rescue StandardError, SystemStackError => e
       log("match failed (#{e.class}: #{e.message})")
@@ -454,7 +503,7 @@ module KIF
     end
 
     #---------------------------------------------------------------------------
-    # The other game: join the host's match
+    # The other game: join the runner's match
     #---------------------------------------------------------------------------
     def self.join_msg(id, team)
       return { "id" => id, "name" => $Trainer.name.to_s[0, 24], "type" => $Trainer.trainer_type.to_s[0, 48],
@@ -466,17 +515,18 @@ module KIF
       a = st[:acc]
       st[:acc] = nil
       post("co_join", join_msg(ask["id"], a[:team]), a[:with])
-      g = Guest.new(s, ask["id"], $Trainer, a[:team].map { |p| ready(p, a[:lv]) }.compact)
-      g.runner = a[:with]
+      g = Guest.new(s, ask["id"], $Trainer, a[:team].map { |p| ready(p, a[:lv]) }.compact, nil, runner: a[:with])
       KIF::Coop.guest = g
       @running = true
       begin
+        g.beat_start
         g.run
       rescue StandardError, SystemStackError => e
         log("match screen failed (#{e.class}: #{e.message})")
         (post("co_act", { "id" => ask["id"], "d" => { "b" => -1, "a" => "auto" } }, a[:with]) rescue nil)
       ensure
         KIF::Coop.guest = nil
+        g.beat_stop
         @running = false
       end
     end
@@ -571,10 +621,22 @@ module KIF
         KIF::Coop.log("lost #{@name} during the match")
       end
 
-      # a pick of "forfeit" ends the wait at once
+      # A pick of "forfeit" ends the wait at once, and so does a silence of PvP.silence seconds: that player forfeits (its
+      # game, its line or the lobby host that passes the frames on has stopped). Any frame of this match from that player
+      # is a sign of life; its "still here" (see Guest#beat_start) is only that, so it is not kept (the box holds 32).
       def collect
-        r = super
-        return r || @answers.values.any? { |a| a["a"] == "forfeit" }
+        note_life
+        r = super || @answers.values.any? { |a| a["a"] == "forfeit" }
+        return r if r || @pending.empty? || KIF::Net.now - (@heard ||= KIF::Net.now) <= PvP.silence
+        @gone = true
+        return true
+      end
+
+      def note_life
+        box = KIF::Coop.host_box
+        mine = box.select { |_t, m, f| m["id"] == @id && (f.nil? || @slot.nil? || f == @slot) }
+        @heard = KIF::Net.now unless mine.empty?
+        box.reject! { |t, m, _f| t == "co_act" && m["d"].is_a?(Hash) && m["d"]["a"] == "beat" && mine.any? { |x| x[1].equal?(m) } }
       end
 
       # the other player picks Run: they forfeit; no items
@@ -591,11 +653,16 @@ module KIF
 
       # the match is over for a player whose line dropped (the other wins) or whose game can't show it (no result)
       def take_commands
+        @heard = KIF::Net.now   # (the silence counts from the start of this wait: the frames of a long message of this game are read first)
+        @gone = false
         super
         connected?   # notices a dropped line
-        return unless @battle.decision == 0 && (@lost || @auto)
+        return unless @battle.decision == 0 && (@lost || @auto || @gone)
         if @lost
           @battle.pbDisplayPaused(_INTL("{1} lost the connection. You win.", @name))
+          @battle.decision = 1
+        elsif @gone
+          @battle.pbDisplayPaused(_INTL("{1} is not answering. You win.", @name))
           @battle.decision = 1
         else
           @battle.pbDisplayPaused(_INTL("{1}'s game can't show the battle. The match is over.", @name))
@@ -619,13 +686,34 @@ module KIF
     # The other player's side of the battle: the host's battle from the other side
     #---------------------------------------------------------------------------
     class Guest < KIF::Coop::Guest
-      # party: copies of the picked Pokemon (at the level rule)
-      def initialize(session, id, trainer, party, view = nil)
-        super(session, id, trainer, view)
+      # party: copies of the picked Pokemon (at the level rule); runner: the lobby slot of the player whose game runs the match
+      def initialize(session, id, trainer, party, view = nil, runner: nil)
+        super(session, id, trainer, view, runner: runner)
         @party = party
         @max = nil
         @view ||= View.new(self)
       end
+
+      # "Still here" to the runner every PvP.beat_every seconds, from a thread (a menu or a message that waits for a key
+      # doesn't stop it): the runner counts a player it hears nothing from as gone (PvP.silence). It only queues a frame.
+      def beat_start
+        @beat = Thread.new do
+          at = KIF::Net.now
+          until @done || @stopped
+            sleep 0.1
+            next if KIF::Net.now - at < PvP.beat_every
+            at = KIF::Net.now
+            begin
+              gpost("co_act", "id" => @id, "d" => { "a" => "beat" })   # (no "b": -1 means "can't show the battle" to a replacement wait)
+            rescue StandardError
+              nil
+            end
+          end
+        end
+        @beat.report_on_exception = false
+      end
+
+      def beat_stop; (@beat.kill rescue nil) if @beat; @beat = nil; end
 
       def intent; nil; end
 

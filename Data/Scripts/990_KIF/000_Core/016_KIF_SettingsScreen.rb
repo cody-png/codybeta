@@ -1093,6 +1093,24 @@ class KifSettingsScreen
     return :arrows
   end
 
+  # The name a row has room for: it stops before the chip drawn in its row (long
+  # mod names ran under the OPEN chip, and under a mod's OK / RISK badge, which
+  # sits left of the Off / On choice and hid the last letters).
+  def row_label(r, x, mode)
+    label = r.label
+    badge = r.opt.respond_to?(:kif_badge) ? r.opt.kif_badge : nil
+    if mode == :button
+      chip = PF.width(PF::TINY, PF.utf8((badge ? badge[0] : _INTL("OPEN")).to_s)) + 12
+      return PF.fit(PF::ROW, label, VAL_X1 - x - chip - 10)
+    end
+    if badge && mode == :beside && KIF::SettingsScreen.choices?(r.opt)
+      seg = r.opt.values.sum { |v| PF.width(PF::TEXT, PF.utf8(v.to_s)) + 12 }
+      chip = PF.width(PF::TINY, PF.utf8(badge[0].to_s)) + 12
+      return PF.fit(PF::ROW, label, VAL_X1 - seg - 8 - chip - 8 - x)
+    end
+    return label
+  end
+
   def row_h(r)
     return HEAD_H if r.kind == :head
     return value_mode(r) == :below ? ROW_H + LINE2_H : ROW_H
@@ -1157,13 +1175,7 @@ class KifSettingsScreen
         b.fill_rect(x - 9, y + 13, 6, 1, LINE)
       end
       rrect(b, x - 9, y + 10, x - 5, y + 14, 1, DOTC) if changed?(r)
-      label = r.label
-      # a button row's name stops before its OPEN chip (long mod names ran under it)
-      if mode == :button
-        badge = r.opt.respond_to?(:kif_badge) ? r.opt.kif_badge : nil
-        chip = PF.width(PF::TINY, PF.utf8((badge ? badge[0] : _INTL("OPEN")).to_s)) + 12
-        label = PF.fit(PF::ROW, label, VAL_X1 - x - chip - 10)
-      end
+      label = row_label(r, x, mode)
       grey = KIF::SettingsScreen.grey_reason(r.opt)
       text(b, x, y - 1, 330, 26, label, grey ? DIM : TXT, PF::ROW)
       if locked_by(r.opt) || grey

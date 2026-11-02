@@ -264,9 +264,10 @@ module KIF
         return "#{klass.name || klass.object_id}#{single ? '.' : '#'}#{name}"
       end
 
+      # (a bare file name counts when KIF has a script of that name: see ModContract.script_in?)
       def self.kif_source?(um)
         loc = um.source_location
-        return loc ? (loc[0].to_s.include?("990_KIF") || loc[0].to_s.include?("660_EBDX")) : false
+        return loc ? KIF::ModContract.script_in?(loc[0]) : false
       end
 
       def self.own_method?(m, name)
@@ -313,10 +314,11 @@ module KIF
           tc.prepend(mod) unless tc.ancestors.include?(mod)
         else
           below = method_below(tc, name)
+          raise NameError, "#{key} is already wrapped" if ours?(below)   # never wrap a wrapper
           pt.alias_name = :"kifapi_#{name}_#{@alias_n += 1}"
           tc.send(:define_method, pt.alias_name, below)
           tc.send(:private, pt.alias_name)
-          define_wrapper(tc, name, pt)
+          define_wrapper(tc, name, pt, below)
           tc.send(vis, name) unless vis == :public
         end
         @forms[key] = form
@@ -336,19 +338,55 @@ module KIF
       end
 
       # The wrapper. With no hook on the point it is one call and one array test.
-      def self.define_wrapper(owner, name, point)
+      # Hard stop: a wrapper that is entered MAX_DEPTH times inside itself (a
+      # bad method table made it call itself) switches the point off for good,
+      # logs once and runs the base method (base: the method below, kept at
+      # install) from then on, so a loop can never take the game down.
+      MAX_DEPTH = 200 unless const_defined?(:MAX_DEPTH)
+
+      def self.define_wrapper(owner, name, point, base = nil)
+        depth = 0
+        off = false
         if point.form == :alias
           als = point.alias_name
           owner.send(:define_method, name) do |*args, **kw, &blk|
-            return send(als, *args, **kw, &blk) if point.subs.empty?
-            KIF::API::Hook.run(point, self, args, kw, blk) { |a, k, b| send(als, *a, **k, &b) }
+            return base.bind_call(self, *args, **kw, &blk) if off
+            depth += 1
+            begin
+              if depth > MAX_DEPTH
+                off = true
+                KIF::API::Hook.loop_stopped(point)
+                return base.bind_call(self, *args, **kw, &blk)
+              end
+              return send(als, *args, **kw, &blk) if point.subs.empty?
+              KIF::API::Hook.run(point, self, args, kw, blk) { |a, k, b| send(als, *a, **k, &b) }
+            ensure
+              depth -= 1
+            end
           end
         else
           owner.send(:define_method, name) do |*args, **kw, &blk|
-            return super(*args, **kw, &blk) if point.subs.empty?
-            KIF::API::Hook.run(point, self, args, kw, blk) { |a, k, b| super(*a, **k, &b) }
+            return super(*args, **kw, &blk) if off
+            depth += 1
+            begin
+              if depth > MAX_DEPTH
+                off = true
+                KIF::API::Hook.loop_stopped(point)
+                return super(*args, **kw, &blk)
+              end
+              return super(*args, **kw, &blk) if point.subs.empty?
+              KIF::API::Hook.run(point, self, args, kw, blk) { |a, k, b| super(*a, **k, &b) }
+            ensure
+              depth -= 1
+            end
           end
         end
+        (@wrap_locs ||= {})[owner.instance_method(name).source_location] = true   # (see ours?)
+      end
+
+      def self.loop_stopped(point)
+        point.bypassed = true
+        API.say("loop:#{point.key}", "Hook engine: #{point.key} called itself over and over; its hooks are off and the game's own method runs")
       end
 
       #-------------------------------------------------------------------------
@@ -408,9 +446,11 @@ module KIF
       #-------------------------------------------------------------------------
       # Repairs
       #-------------------------------------------------------------------------
+      # A wrapper is known by where its block was defined ([label, line], whatever
+      # label the loader gave the file: define_wrapper records it).
       def self.ours?(um)
         loc = um.source_location
-        return loc ? (File.basename(loc[0].to_s) == WRAPPER_FILE && loc[0].to_s.include?("F-CORE-10_ModAPI")) : false
+        return loc ? (@wrap_locs ||= {}).key?(loc) : false
       end
 
       # is our wrapper still in the method table (as the method or as a copy someone aliased)?
@@ -419,10 +459,20 @@ module KIF
         if pt.form == :prepend
           return tc.ancestors.include?(pt.prepend_mod) && own_method?(pt.prepend_mod, pt.name) && ours?(pt.prepend_mod.instance_method(pt.name))
         end
-        ([tc] + tc.ancestors.take_while { |a| !a.equal?(tc) }).each do |m|
+        # (what walks the real method chain: prepended modules in front of the
+        # class do not hide our wrapper, whoever they belong to)
+        mine = [tc] + tc.ancestors.take_while { |a| !a.equal?(tc) }
+        um = (tc.instance_method(pt.name) rescue nil)
+        while um && mine.any? { |m| m.equal?(um.owner) }
+          return true if ours?(um)
+          um = um.super_method
+        end
+        # an old-style mod moved our wrapper to another name (alias old_x x; def x ...)
+        mine.each do |m|
           (m.instance_methods(false) + m.private_instance_methods(false)).each do |n|
             next if n == pt.alias_name
             um = (m.instance_method(n) rescue nil)
+            um = um.super_method while um && !um.owner.equal?(m)
             return true if um && um.original_name == pt.name && ours?(um)
           end
         end
@@ -448,9 +498,14 @@ module KIF
               KIF.log("Mod #{Attribution.display(who)} replaced #{text(pt.klass, pt.name, pt.single)}; hooks and events on it stopped")
               out << pt
             elsif pt.form == :alias
-              tc.send(:define_method, pt.alias_name, method_below(tc, pt.name))
+              below = method_below(tc, pt.name)
+              if ours?(below)   # (never wrap a wrapper: the alias would point at itself)
+                API.say("heal:#{pt.key}", "Hook engine: #{pt.key} is wrapped already; left alone")
+                next
+              end
+              tc.send(:define_method, pt.alias_name, below)
               tc.send(:private, pt.alias_name)
-              define_wrapper(tc, pt.name, pt)
+              define_wrapper(tc, pt.name, pt, below)
               tc.send(pt.vis, pt.name) unless pt.vis == :public
               out << pt
             end

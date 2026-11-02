@@ -37,6 +37,7 @@ module KIF
     @reports ||= {}
     @pcache ||= {}
     @notices ||= []
+    @noticed ||= {}   # mod id => true once its "did not start" notice was queued this start
     @lists ||= nil
 
     def self.about_text; return ABOUT; end
@@ -100,6 +101,7 @@ module KIF
       @reports = {}
       @pcache = {}
       @notices = []
+      @noticed = {}
       @lists = nil
       h = read_file
       @first_run = h.nil? && !File.file?(path)
@@ -165,7 +167,18 @@ module KIF
     def self.gate(e)
       why = gate_check(e)
       return nil if why && %i[off warn].include?(KIF::ModGuard.mode)
+      notice_held(e) if why
       return why
+    end
+
+    # a held mod gets one notice on the map per start (new or changed ones get theirs in evaluate)
+    def self.notice_held(e)
+      @noticed ||= {}
+      return if @noticed[e.id]
+      @noticed[e.id] = true
+      rec = mods[e.id]
+      what = rec && %w[held revoked].include?(rec["state"]) ? held_what(rec) : "KIF could not check it"
+      @notices << [e.id, _INTL("{1} did not start: {2}.", e.name, what)]
     end
 
     def self.gate_check(e)
@@ -262,15 +275,16 @@ module KIF
       return h
     end
 
+    def self.held_what(rec)
+      return rec["reason"].to_s if rec["state"] == "revoked"
+      rep = KIF::ModCheck::Report.from_h(rec["scan"])
+      first = rep.lines(1)[0].to_s.sub(/ \(.*\z/, "")
+      return first.empty? ? "needs a look" : first.sub(/\A./) { |c| c.downcase }
+    end
+
     def self.held_reason(e, rec)
       return nil unless %w[held revoked].include?(rec["state"])
-      what = if rec["state"] == "revoked" then rec["reason"].to_s
-             else
-               rep = KIF::ModCheck::Report.from_h(rec["scan"])
-               first = rep.lines(1)[0].to_s.sub(/ \(.*\z/, "")
-               first.empty? ? "needs a look" : first.sub(/\A./) { |c| c.downcase }
-             end
-      return _INTL("Needs your OK: {1}. Open Options > Mods to review it.", what)
+      return _INTL("Needs your OK: {1}. Open Options > Mods to review it.", held_what(rec))
     end
 
     #---------------------------------------------------------------------------

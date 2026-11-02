@@ -99,6 +99,7 @@ module KIF
     MAX_GUESTS    = 2    # a lobby is the host and up to two guests, never more
     FWD_FRAMES    = 120  # frames a second the host passes on for one guest (twice that at once)
     FWD_BYTES     = 262_144  # ... and bytes a second
+    FWD_VALUES    = 3_500    # ... and values to read a second (Net.cost; the receiving line's own budget is VALUE_RATE: room is left for the host's own frames), 10,000 at once
     FWD_MAX       = 60_000   # a frame longer than this is never passed on (it must fit MAX_FRAME with its stamp)
     # The parser's time goes with the number of values in a message (2-5 us each for numbers, long numbers,
     # floats, texts, escapes and table keys alike), not with its bytes: Net.cost counts them from the text.
@@ -1018,16 +1019,19 @@ module KIF
         @budget_at = @started
       end
 
-      # false when this guest has the host pass on more than FWD_FRAMES frames or FWD_BYTES a second (burst: twice that)
-      def fwd_pay(bytes, at = Net.now)
+      # false when this guest has the host pass on more than FWD_FRAMES frames, FWD_BYTES bytes or FWD_VALUES values
+      # (what the other guest's game must read) a second (burst: twice the frames and bytes, 10,000 values)
+      def fwd_pay(bytes, cost = 0, at = Net.now)
         @fw_at ||= at
         @fw_n ||= FWD_FRAMES * 2.0
         @fw_b ||= FWD_BYTES * 2.0
+        @fw_v ||= 10_000.0
         dt = [at - @fw_at, 0].max
         @fw_n = [@fw_n + dt * FWD_FRAMES, FWD_FRAMES * 2.0].min - 1
         @fw_b = [@fw_b + dt * FWD_BYTES, FWD_BYTES * 2.0].min - bytes
+        @fw_v = [@fw_v + dt * FWD_VALUES, 10_000.0].min - cost
         @fw_at = at
-        return @fw_n >= 0 && @fw_b >= 0
+        return @fw_n >= 0 && @fw_b >= 0 && @fw_v >= 0
       end
 
       # false when the partner's messages cost more than the budget lets them. `at` is when
@@ -1749,7 +1753,7 @@ module KIF
         when "ro"
           read_roster(line, msg, out)
         else
-          pass_on(line, type, msg, h, json.bytesize, out) if line.st == :connected
+          pass_on(line, type, msg, h, json.bytesize, out, cost) if line.st == :connected
         end
       end
 
@@ -1775,7 +1779,7 @@ module KIF
       # A message from a connected line, with who it is from. The host stamps nothing on what its own game
       # gets (the slot is in the event); a guest reads the host's stamp "f" on a frame that came from the
       # other guest. See the comment at TYPES["ro"].
-      def pass_on(line, type, msg, h, bytes, out)
+      def pass_on(line, type, msg, h, bytes, out, cost = 0)
         f, to = h["f"], h["to"]
         if @role == :host
           return bad_frame(line, out, "a guest stamped #{type}") unless f.nil?
@@ -1783,12 +1787,12 @@ module KIF
           return bad_frame(line, out, "#{type} to itself") if to && to == line.slot
           if to.nil? || to == 0
             fan = to.nil? && lobby? && BROADCAST.include?(type)
-            return unless !fan || fwd_ok(line, bytes, out)
+            return unless !fan || fwd_ok(line, bytes, out, cost)
             out << [:message, type, msg, line.slot]
             send_on(line, type, msg, nil) if fan
           else
             return bad_frame(line, out, "#{type} is not passed on") unless lobby? && FORWARD.include?(type)
-            return unless fwd_ok(line, bytes, out)
+            return unless fwd_ok(line, bytes, out, cost)
             send_on(line, type, msg, to)
           end
         else
@@ -1804,8 +1808,8 @@ module KIF
       end
 
       # host: a guest may have FWD_FRAMES frames and FWD_BYTES a second passed on; a longer frame never is
-      def fwd_ok(line, bytes, out)
-        if bytes > FWD_MAX || !line.fwd_pay(bytes, line.conn.arrived)
+      def fwd_ok(line, bytes, out, cost = 0)
+        if bytes > FWD_MAX || !line.fwd_pay(bytes, cost, line.conn.arrived)
           bad_frame(line, out, "too much to pass on")
           return false
         end

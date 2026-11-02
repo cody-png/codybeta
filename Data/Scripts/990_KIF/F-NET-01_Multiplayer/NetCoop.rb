@@ -608,7 +608,10 @@ module KIF
     # Asks the players who said yes and are on this map (at most 2). A list of what each brought (a Hash: party,
     # name, type, tid, bag, slot, id), in slot order; empty: this player fights alone. The answers come in
     # together inside ask_wait.
-    def self.invite_all(kind, limit = 2)
+    #
+    # patient: a battle right after a triple one (two trainers who spotted three players): a friend still in the
+    # last battle's Exp and level-up screens says busy; it is asked again every second for 15 s, so nobody sits out.
+    def self.invite_all(kind, limit = 2, patient: false)
       s = session or return []
       slots = ready_slots.first(limit)
       return [] if slots.empty?
@@ -619,14 +622,31 @@ module KIF
       @host_id = id
       @host_slots = slots.all?(&:nil?) ? nil : slots.compact   # nil: a game for two where nobody is named (anyone)
       max = team_limit
-      slots.each { |sl| say("co_ask", { "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => kind.to_s, "max" => max }, sl) }
+      ask = { "id" => id, "map" => ($game_map ? $game_map.map_id : 0), "kind" => kind.to_s, "max" => max }
+      slots.each { |sl| say("co_ask", ask, sl) }
       replies = {}
       crossed = nil
       crossed_from = nil
-      wait_map(@ask_wait) do
+      asked_at = KIF::Net.now
+      told = false
+      key_of = ->(sl) { slots == [nil] ? nil : sl }   # (a game for two where nobody is named: whoever answers)
+      wait_map(@ask_wait + (patient ? 15 : 0)) do
         while (r = take_host(id, %w[co_join co_no]))
-          key = slots == [nil] ? nil : r[2]   # (a game for two where nobody is named: whoever answers)
-          replies[key] = r unless replies.key?(key)
+          key = key_of.call(slots == [nil] ? nil : r[2])
+          replies[key] = r if !replies.key?(key) || (patient && replies[key][0] == "co_no" && r[0] == "co_join")
+        end
+        if patient   # a friend that was busy is asked again
+          busy = slots.select { |sl| (r = replies[key_of.call(sl)]) && r[0] == "co_no" && r[1]["why"] == "busy" }
+          unless busy.empty?
+            if !told
+              told = true
+              (pbMessage(_INTL("Waiting for {1}...\\wtnp[30]", busy.map { |sl| partner(sl) }.join(" and "))) rescue nil)
+            end
+            if KIF::Net.now - asked_at > 1.0
+              asked_at = KIF::Net.now
+              busy.each { |sl| replies.delete(key_of.call(sl)); say("co_ask", ask, sl) }
+            end
+          end
         end
         # both started a battle at once (crossed invites): the Multiplayer
         # host's battle is the shared one; the other game joins it first
@@ -640,7 +660,7 @@ module KIF
             @ask = nil
           end
         end
-        replies.length >= slots.length || crossed
+        (replies.length >= slots.length && !(patient && replies.values.any? { |r| r[0] == "co_no" && r[1]["why"] == "busy" })) || crossed
       end
       if crossed
         log("crossed invites: joining #{partner(crossed_from)}'s battle #{crossed['id']} first")

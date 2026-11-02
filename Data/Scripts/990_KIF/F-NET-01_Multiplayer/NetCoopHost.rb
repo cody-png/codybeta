@@ -119,7 +119,7 @@ module KIF
     end
 
     def self.host_battle(kind, nfoes, ntrainers = 1)
-      joins = invite_all(kind, 2)
+      joins = invite_all(kind, 2, patient: !@last_triple.nil? && KIF::Net.now - @last_triple < 30)
       if joins.length == 2 && ntrainers > 1   # several trainers on the other side: the engine allows two players against them, not three
         say("co_end", { "id" => joins[1][:id], "d" => { "x" => "late" } }, joins[1][:slot])
         note(_INTL("{1} sat this battle out: more than one trainer is on the other side.", joins[1][:name]))
@@ -160,6 +160,7 @@ module KIF
       ensure
         $PokemonGlobal.partner = old
         @pending_host = @battle_host = @host_id = @second_ally = nil
+        @last_triple = KIF::Net.now if three   # a battle right after this one waits for a friend who is still in its screens
         @hosting = false
         (host.finish(0, "abort") rescue nil)
       end

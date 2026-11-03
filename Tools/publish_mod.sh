@@ -157,6 +157,7 @@ if [ "$DIRECT" = 1 ]; then
       NAMES="${FIRST_BY:-someone else}"
       WHYNOT="The catalog's owners.txt has no line for $FOLDER, so the account that added the folder counts as its owner."
     fi
+    same "$LOGIN" "${UPSTREAM%%/*}" && MINE=1   # the catalog's own account (it can't fork its own repository, and it can push anywhere)
     if [ -z "$MINE" ]; then
       echo
       echo "This mod's owner on the catalog is ${NAMES:-nobody}; you are signed in as $LOGIN."

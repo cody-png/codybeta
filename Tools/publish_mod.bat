@@ -256,6 +256,8 @@ for %%o in (!OWNERS!) do (
 if not defined NAMES set "NAMES=nobody"
 set "WHYNOT=owners.txt in the catalog lists who may publish !FOLDER! straight away."
 :owner_decide
+rem the catalog's own account can't fork its own repository, and it can push anywhere
+for /f "delims=/" %%u in ("%UPSTREAM%") do if /i "%%u"=="!LOGIN!" set "MINE=1"
 if defined MINE goto :owner_mine
 echo.
 echo This mod's owner on the catalog is !NAMES!; you are signed in as !LOGIN!.

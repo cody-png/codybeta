@@ -45,3 +45,17 @@ if defined?(PokeBattle_SceneEBDX)
     end
   end
 end
+
+# PIF 6.9's Illusion handler asks the attacker who owns it (to redraw the
+# right type icons). Megas and KIF-ER break Illusion on a Mega Evolution with
+# no attacker, which was a NoMethodError on nil: the Pokémon's own side decides.
+module KIF
+  ILLUSION_HIT_6_9 = BattleHandlers::TargetAbilityOnHit[:ILLUSION] unless const_defined?(:ILLUSION_HIT_6_9)
+end
+if KIF::ILLUSION_HIT_6_9
+  BattleHandlers::TargetAbilityOnHit.add(:ILLUSION,
+    proc { |ability, user, target, move, battle|
+      KIF::ILLUSION_HIT_6_9.call(ability, user || target, target, move, battle)
+    }
+  )
+end

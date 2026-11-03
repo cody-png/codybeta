@@ -12,14 +12,15 @@
 #   * Headbutt trees
 # Those three are added here, using 6.8.2's Quick HMs option (no new option).
 #
-# Sweet Scent: 6.8.2 says "There appears to be nothing here..." whenever the
-# spot HAS encounters (if enctype ||). KIF fixed it to "if !enctype ||".
+# Sweet Scent: 6.8.2 said "There appears to be nothing here..." whenever the
+# spot HAS encounters. 6.9 fixed that; KIF keeps the message for a spot with no
+# encounter type, which 6.9 leaves silent.
 #
 # 6.8.2 adaptations: the three quick paths are wrappers that run the same
 # checks as 6.8.2 before acting; Sweet Scent is a guarded copy (whole-file CRC
 # of 004_Overworld_FieldMoves.rb also covers the checks copied above).
 #===============================================================================
-KIF.guard_base("012_Overworld/004_Overworld_FieldMoves.rb", 2424977901,
+KIF.guard_base("012_Overworld/004_Overworld_FieldMoves.rb", 3558859949,
                "pbRockClimb/pbSurfacing/pbHeadbutt checks, pbSweetScent")
 
 module KIF
@@ -83,7 +84,7 @@ def pbHeadbutt(event = nil)
   return true
 end
 
-# Copy of 6.8.2 pbSweetScent (004_Overworld_FieldMoves.rb) with KIF's fix
+# Copy of 6.9 pbSweetScent (004_Overworld_FieldMoves.rb) with KIF's fix
 def pbSweetScent
   if $game_screen.weather_type != :None
     pbMessage(_INTL("The sweet scent faded for some reason..."))
@@ -112,8 +113,11 @@ def pbSweetScent
   end
   viewport.dispose
   enctype = $PokemonEncounters.encounter_type
-  if !enctype || !$PokemonEncounters.encounter_possible_here? ||   # KIF: !enctype
-    !pbEncounter(enctype)
+  if enctype || !$PokemonEncounters.encounter_possible_here?
+    unless pbEncounter(enctype)
+      pbMessage(_INTL("There appears to be nothing here..."))
+    end
+  else   # KIF: a spot with no encounter type says so (6.9 stays silent here)
     pbMessage(_INTL("There appears to be nothing here..."))
   end
 end

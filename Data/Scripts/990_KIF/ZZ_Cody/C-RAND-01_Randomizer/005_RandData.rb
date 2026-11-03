@@ -610,8 +610,14 @@ module Game
     alias kif_rand_start_new start_new unless method_defined?(:kif_rand_start_new)
 
     def load(*args)
-      ret = kif_rand_load(*args)
+      KIF::Rand.loading += 1   # the picks made while the save is put on need its stamp (019_RandLegacy.rb)
       begin
+        ret = kif_rand_load(*args)
+      ensure
+        KIF::Rand.loading -= 1
+      end
+      begin
+        KIF::Rand.stamp_loaded
         KIF::Rand.sanitize_tables if $PokemonGlobal
         KIF::Rand.apply_data
       rescue => e
@@ -626,7 +632,9 @@ module Game
       rescue => e
         KIF.log("Randomizer data reset failed: #{e.message}")
       end
-      return kif_rand_start_new(*args)
+      ret = kif_rand_start_new(*args)
+      KIF::Rand.stamp_new
+      return ret
     end
   end
 end

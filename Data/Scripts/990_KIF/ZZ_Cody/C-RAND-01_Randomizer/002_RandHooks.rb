@@ -86,9 +86,9 @@ end
 
 # Faster shuffles: while a seeded shuffle runs, the two lookups PIF makes for
 # every candidate (base stat total, legendary check) are remembered per
-# Pokémon (KIF::Rand.memo_*). Outside shuffles nothing changes. (6.9's own
-# is_legendary answers a plain number from a table, so KIF's quick check for
-# numbers is gone; only the memo stays.)
+# Pokémon (KIF::Rand.memo_*). Outside shuffles nothing changes. A plain number
+# is answered by KIF's own decoder (019_RandLegacy.rb): 6.9's table misreads
+# some fusion numbers.
 class Object
   alias kif_rand_calcBaseStatsSum calcBaseStatsSum unless method_defined?(:kif_rand_calcBaseStatsSum) || private_method_defined?(:kif_rand_calcBaseStatsSum)
   alias kif_rand_is_legendary is_legendary unless method_defined?(:kif_rand_is_legendary) || private_method_defined?(:kif_rand_is_legendary)
@@ -102,6 +102,8 @@ class Object
   end
 
   def is_legendary(dex_num)
+    v = KIF::Rand.fast_legendary(dex_num)   # (019_RandLegacy.rb)
+    return v unless v.nil?
     v = KIF::Rand.memo_legend(dex_num)
     return v unless v.nil?
     return KIF::Rand.memo_legend_set(dex_num, kif_rand_is_legendary(dex_num))

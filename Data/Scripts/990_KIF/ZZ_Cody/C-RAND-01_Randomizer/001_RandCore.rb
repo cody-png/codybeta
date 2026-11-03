@@ -245,6 +245,8 @@ module KIF
     end
 
     def self.seed=(s)
+      # a new seed makes a new world: the current picking rules (019_RandLegacy.rb)
+      data[:alg] = ALG_NOW if data[:seed] && data[:seed] != s && data[:alg] == ALG_LEGACY
       data[:seed] = s
     end
 
@@ -578,6 +580,8 @@ module KIF
 
     @custom_list = nil
     def self.custom_list
+      old = legacy? ? legacy_list : nil   # a world made on PIF 6.8.2 keeps its sprite list (019_RandLegacy.rb)
+      return old if old
       path = Settings::CUSTOM_SPRITES_FILE_PATH
       mtime = File.exist?(path) ? File.mtime(path) : nil
       if !@custom_list || @custom_list[0] != mtime

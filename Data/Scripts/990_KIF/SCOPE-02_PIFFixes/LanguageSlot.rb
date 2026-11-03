@@ -31,7 +31,12 @@ end
 # (an alias, not a prepend: code that wraps File.open by aliasing it, as the kit's tests and mods do, would loop through a prepended one)
 class << File
   alias kif_lang_open open unless method_defined?(:kif_lang_open)
+end
 
+# The wrapper is defined from text with an "(eval" name: the mod guard looks past such frames, so a File.open that a mod
+# makes (also through FileUtils) is still judged by the mod's own file. Defined as plain code, this file's frame stood
+# between the mod and the guard's door and the guard took the caller for KIF (s_f_modapi_attacks: FileUtils.cp ran).
+File.singleton_class.class_eval(<<-'RUBY', "(eval LanguageSlot)", 1)
   def open(*args, **kw, &blk)
     if blk && !args.empty? && KIF::LanguageSlot.take?(args[0], args[1])
       path = args[0]
@@ -47,7 +52,7 @@ class << File
     end
     return kif_lang_open(*args, **kw, &blk)
   end
-end
+RUBY
 
 alias kif_lang_pbChooseLanguage pbChooseLanguage unless defined?(kif_lang_pbChooseLanguage)
 

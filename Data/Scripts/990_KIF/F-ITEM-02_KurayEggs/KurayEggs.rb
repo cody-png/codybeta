@@ -103,8 +103,8 @@ module KIF
                  "Egg with a Pokémon who's BST is between #{MINBSTSHOW[t]} and #{MAXBSTSHOW[t]}. 10x shiny odds.")
       end
       add.call("Legendary", BASE_PRICE * 5, "Egg with a LEGENDARY Pokémon. 10x shiny odds.")
-      # Port addition: 6.8.2's new species only
-      add.call("Hoenn", BASE_PRICE * 4, "Egg with a Pokémon new to PIF 6.8.2 (Dex 502-576). 10x shiny odds.")
+      # Port addition: the Hoenn species only (Dex 502-576)
+      add.call("Hoenn", BASE_PRICE * 4, "Egg with a Hoenn Pokémon (Dex 502-576). 10x shiny odds.")
       @defs = defs
       return defs
     end

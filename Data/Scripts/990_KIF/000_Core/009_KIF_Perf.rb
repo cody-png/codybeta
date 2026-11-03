@@ -250,7 +250,9 @@ module KIF
 end
 
 #-------------------------------------------------------------------------------
-# messages.dat read once at start-up, not twice. 6.8.2 loads it into the main
+# messages.dat read once at start-up, not twice. (Written for 6.8.2; 6.9 loads
+# messages.dat straight into the fallback table, 999_Main.rb:171, so there is
+# rarely anything left to hand over.) 6.8.2 loaded it into the main
 # table (999_Main.rb:171), then Game.set_up_system loads the language file
 # over it (001_StartGame.rb:110, "english.dat" - not shipped, so the main
 # table ends up empty), and the first text lookup then loads messages.dat
@@ -285,9 +287,9 @@ module KIF
     end
 
     #---------------------------------------------------------------------------
-    # Text tables kept ready to load. Decoding messages.dat (31 MB: XOR, then
-    # Marshal.load of ~4 million mostly empty entries, then the compacting
-    # above) takes ~2 s on a PC at every start; the same tables saved once
+    # Text tables kept ready to load. Decoding messages.dat (6.8 MB on PIF 6.9,
+    # 31 MB on 6.8.2: XOR, then Marshal.load of the tables, then the compacting
+    # above) took ~2 s on a PC at every start on 6.8.2; the same tables saved once
     # already compacted (zlib, ~1 MB) load in ~0.1 s. Remade when the file's
     # size or time changes; any problem reading it = the normal load.
     #---------------------------------------------------------------------------

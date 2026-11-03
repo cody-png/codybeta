@@ -1,3 +1,5 @@
+
+
 class OverworldPokemonEvent < Game_Event
 
   attr_accessor :species
@@ -13,6 +15,8 @@ class OverworldPokemonEvent < Game_Event
   attr_reader :part_of_pokeradar_chain
   attr_reader :noticed_player_once
   attr_reader :last_facing_direction
+
+  attr_reader :glow_in_the_dark
 
   DISTANCE_FOR_DESPAWN = 16
   FLEEING_BEHAVIORS = [:flee, :flee_flying, :teleport_away]
@@ -33,7 +37,7 @@ class OverworldPokemonEvent < Game_Event
     @disguised = false
     species_data = GameData::Species.get(@species)
 
-    @pokemon = Pokemon.new(@species, @level)
+    @pokemon = pbGenerateWildPokemon(@species,@level)#Pokemon.new(@species, @level)
     @behavior_species = getBehaviorSpecies(species_data)
 
     unless behavior_roaming
@@ -64,6 +68,7 @@ class OverworldPokemonEvent < Game_Event
     @current_state = :ROAMING # Possible values: :ROAMING, :NOTICED_PLAYER, :FLEEING
     @noticed_player_once = false
     @manual_ow_pokemon = false
+    @manual_appearance = nil #if this is set to something, it overrides the pokemon's normal appearance
     #@event.name = "OW/#{species.to_s}/#{level.to_s}"
     weather = $game_weather.get_current_map_weather if $game_weather
     if weather
@@ -86,6 +91,7 @@ class OverworldPokemonEvent < Game_Event
     @step_anime = @is_flying
     @forced_z = 300 if @is_flying && $PokemonGlobal.boat #@always_on_top = @is_flying
     @part_of_pokeradar_chain = is_pokeradar_chain
+    @pack_size = 0
     if @terrain == :Water
       set_swimming
     end
@@ -95,9 +101,26 @@ class OverworldPokemonEvent < Game_Event
       pbSEPlay("shiny", 60)
       playAnimation(Settings::SPARKLE_SHORT_ANIMATION_ID, @x, @y)
     end
+    if POKEMON_BEHAVIOR_DATA[@behavior_species][:hop_cliff]
+      @can_hop_cliff = true
+    end
     set_roaming_movement
     @last_facing_direction = @direction
+    setup_glow
     @setup_complete = true
+  end
+
+  def setup_glow
+    unless Settings::EXPERIMENTAL_FEATURES
+      @glow_in_the_dark = false
+      return
+    end
+
+    @glow_in_the_dark = POKEMON_BEHAVIOR_DATA[@behavior_species][:glow_in_the_dark]
+    if @glow_in_the_dark
+      @light_effect = LightEffect_PokemonGlow.new(self)
+      $scene.spriteset.addUserSprite(@light_effect)
+    end
   end
 
   def roll_for_special_encounters
@@ -114,6 +137,7 @@ class OverworldPokemonEvent < Game_Event
     species_data = GameData::Species.get(@species)
     initialize_sprite(@terrain, species_data)
   end
+
 
   def is_pokeradar_chain
     if $PokemonTemp.pokeradar
@@ -136,6 +160,15 @@ class OverworldPokemonEvent < Game_Event
     end
     @pokemon = Pokemon.new(@species, @level)
     return GameData::Species.get(@species)
+  end
+
+  def override_appearance(sprite_path)
+    set_sprite(sprite_path)
+    @manual_appearance =sprite_path
+  end
+
+  def cancel_appearance_override()
+    @manual_appearance =nil
   end
 
   def get_behavior_for_species(species, behavior_type)
@@ -190,10 +223,20 @@ class OverworldPokemonEvent < Game_Event
     return @species
   end
 
+
+  def getBodySpecies
+    is_fusion = isSpeciesFusion(@species)
+    if is_fusion
+      return GameData::Species.get(@species).get_body_species_symbol
+    end
+    return @species
+  end
   def initialize_sprite(terrain, species_data)
     @land_sprite = getOverworldLandPath(species_data, @pokemon.shiny?)
     @flying_sprite = getOverworldFlyingPath(species_data, @pokemon.shiny?)
     @swimming_sprite = getOverworldSwimmingPath(species_data, @pokemon.shiny?)
+
+    @idle_animation_sprite = getOverworldIdleAnimation(species_data,@is_flying, @pokemon.shiny?)
 
     @noticed_sprite = getOverworldNoticedPath(species_data, @pokemon.shiny?)
     @noticed_sprite = @flying_sprite if !@noticed_sprite && @flying_sprite
@@ -205,6 +248,13 @@ class OverworldPokemonEvent < Game_Event
     else
       initialize_land_sprite
     end
+  end
+
+  def pokemon
+    unless @pokemon
+      @pokemon = Pokemon.new(@species, @level)
+    end
+    return @pokemon
   end
 
   def initialize_water_sprite
@@ -228,7 +278,9 @@ class OverworldPokemonEvent < Game_Event
   def get_current_state
     return @current_state
   end
-
+  def is_eating?
+    return  @noticed_pokemon_behavior == :eat_pokeblock
+  end
   ####
   # ACTIONS
   # ###
@@ -252,7 +304,7 @@ class OverworldPokemonEvent < Game_Event
     return
   end
 
-  def flee(behavior)
+  def flee(behavior=nil)
     return if @pokemon.shiny?
     playCry(@species)
     pbSEPlay(SE_FLEE)
@@ -299,18 +351,31 @@ class OverworldPokemonEvent < Game_Event
     initialize_sprite(@terrain, species_data)
   end
 
-  def playDetectPlayerAnimation
-    return unless @current_state == :ROAMING
-    return unless noticed_state_different_from_roaming()
+  ANIMATION_OW_CURIOUS = 41
+  ANIMATION_OW_ANGRY = 42
+  ANIMATION_OW_EXCITED = 43
+  ANIMATION_OW_SURPRISED = 44
 
-    if @behavior_noticed == :curious
-      playAnimation(Settings::QUESTION_MARK_ANIMATION_ID, @x, @y)
-    elsif @behavior_noticed == :aggressive
-      playAnimation(Settings::ANGRY_ANIMATION_ID, @x, @y)
-    elsif @behavior_noticed == :semi_aggressive
-      playAnimation(Settings::ANGRY_SHORT_ANIMATION_ID, @x, @y)
+  def playDetectAnimation(behavior_noticed = @behavior_noticed, play_sound = true)
+    return unless @current_state == :ROAMING
+    return unless @behavior_noticed
+    #return unless noticed_state_different_from_roaming()
+
+    if behavior_noticed == :curious
+      pbSEPlay("Exclaim") if play_sound
+      playAnimation(ANIMATION_OW_CURIOUS, @x, @y)
+    elsif behavior_noticed == :aggressive
+      pbSEPlay("angry") if play_sound
+      playAnimation(ANIMATION_OW_ANGRY, @x, @y)
+    elsif behavior_noticed == :excited
+      pbSEPlay("Exclaim") if play_sound
+      playAnimation(ANIMATION_OW_EXCITED, @x, @y)
+    elsif behavior_noticed == :semi_aggressive
+      pbSEPlay("angry") if play_sound
+      playAnimation(ANIMATION_OW_ANGRY, @x, @y)
     else
-      playAnimation(Settings::EXCLAMATION_ANIMATION_ID, @x, @y)
+      pbSEPlay("Exclaim") if play_sound
+      playAnimation(ANIMATION_OW_SURPRISED, @x, @y)
     end
   end
 
@@ -323,13 +388,15 @@ class OverworldPokemonEvent < Game_Event
     distance = distance_from_player()
     is_near_player = distance <= @detection_radius
     if distance >= DISTANCE_FOR_DESPAWN
-      despawn unless @manual_ow_pokemon
+      despawn unless @manual_ow_pokemon || @pokemon.shiny?
     end
     if is_near_player
       if should_start_battle? # Battle
         if isRepelActive && pokemon_can_be_repelled
           playAnimation(Settings::EXCLAMATION_ANIMATION_ID, @x, @y)
           flee(@behavior_noticed)
+        elsif $PokemonTemp.overworld_safari
+              flee() unless is_eating?
         else
           overworldPokemonBattle
         end
@@ -337,7 +404,8 @@ class OverworldPokemonEvent < Game_Event
         # check for noticed
         if @current_state == :ROAMING
           if check_detect_trainer
-            playDetectPlayerAnimation
+            playDetectAnimation
+            @target = :player
             breakDisguise if @disguised
             @noticed_player_once = true
             update_state(:NOTICED_PLAYER)
@@ -345,7 +413,7 @@ class OverworldPokemonEvent < Game_Event
         end
       end
     else
-      if @current_state != :ROAMING
+      if @current_state != :ROAMING && @current_state != :NOTICED_POKEMON
         update_state(:ROAMING)
         back_to_roaming_action
       end
@@ -355,7 +423,7 @@ class OverworldPokemonEvent < Game_Event
   # Automatically starts a battle if the player is 1 tile away from the Pokemon.
   # If the player is behind or to the side of the pokemon, there is a slight delay
   def should_start_battle?
-    return false unless $PokemonTemp.overworld_wild_battle_participants
+    $PokemonTemp.overworld_wild_battle_participants = [] unless $PokemonTemp.overworld_wild_battle_participants
     should_start = false
     if player_near_event?(1)
       return true if $PokemonTemp.overworld_wild_battle_participants.length >= 1 # Notice immediately if a pokemon is already attacking so that double battles are more likely
@@ -390,6 +458,7 @@ class OverworldPokemonEvent < Game_Event
 
   # called when a pokemon that has noticed the player goes back to roaming
   def back_to_roaming_action
+    @target = nil
     case @behavior_noticed
     when :skittish, :shy
       turn_toward_player
@@ -407,17 +476,17 @@ class OverworldPokemonEvent < Game_Event
     when :ROAMING
       set_roaming_movement
     when :NOTICED_PLAYER
-      set_noticed_movement
+      set_noticed_movement if @behavior_noticed
     end
     set_sprite_to_current_state
   end
 
-  def check_detect_trainer
-    return unless noticed_state_different_from_roaming()
-    return if $game_system.map_interpreter.running? || @starting
-    # return pbEventCanReachPlayer?(self, $game_player, @detection_radius)
-    return pbPlayerInEventCone?(self, $game_player, @detection_radius)
-  end
+  # def check_detect_trainer
+  #   return unless noticed_state_different_from_roaming()
+  #   return if $game_system.map_interpreter.running? || @starting
+  #   # return pbEventCanReachPlayer?(self, $game_player, @detection_radius)
+  #   return pbPlayerInEventCone?(self, $game_player, @detection_radius)
+  # end
 
   def pbCheckEventTriggerAfterTurning
     return if $game_system.map_interpreter.running? || @starting
@@ -498,6 +567,7 @@ class OverworldPokemonEvent < Game_Event
   end
 
   def set_sprite(sprite_path)
+    return if @manual_appearance
     @character_name = sprite_path
     @need_refresh = true
   end
@@ -511,6 +581,10 @@ class OverworldPokemonEvent < Game_Event
     end
 
     effective_behavior = @behavior_noticed || @behavior_roaming # fallback on @behavior_roaming if no @behavior_noticed
+    if @current_state == :NOTICED_PLAYER && @pack_size && @pack_size >= 3
+      pack_behavior = POKEMON_BEHAVIOR_DATA[@behavior_species][:pack_behavior_noticed]
+      effective_behavior = pack_behavior if pack_behavior
+    end
 
     case effective_behavior
     when :random
@@ -521,7 +595,7 @@ class OverworldPokemonEvent < Game_Event
       @move_type = MOVE_TYPE_CURIOUS
     when :semi_aggressive
       @move_type = MOVE_TYPE_TOWARDS_PLAYER
-    when :aggressive
+    when :aggressive, :excited
       @move_type = MOVE_TYPE_TOWARDS_PLAYER
       self.move_frequency = 6
     when :skittish
@@ -545,13 +619,19 @@ class OverworldPokemonEvent < Game_Event
       return
     end
 
-    case @behavior_roaming
+    effective_behavior = @behavior_roaming
+    if @current_state == :ROAMING && @pack_size && @pack_size >= 3
+      pack_behavior = POKEMON_BEHAVIOR_DATA[@behavior_species][:pack_behavior_roaming]
+      effective_behavior = pack_behavior if pack_behavior
+    end
+
+    case effective_behavior
     when :random
       @move_type = MOVE_TYPE_RANDOM
     when :still
       @move_type = MOVE_TYPE_FIXED
     else
-      set_custom_move_route(OW_BEHAVIOR_MOVE_ROUTES[:roaming][@behavior_roaming])
+      set_custom_move_route(OW_BEHAVIOR_MOVE_ROUTES[:roaming][effective_behavior])
     end
     self.move_frequency = 3
     check_weather_roaming_behavior
@@ -561,17 +641,17 @@ class OverworldPokemonEvent < Game_Event
 
   def check_weather_roaming_behavior
     if @weather_type_at_spawn == :Wind || @weather_type_at_spawn == :Storm
-      wind_behavior = POKEMON_BEHAVIOR_DATA[@species][:behavior_wind_roaming]
+      wind_behavior = POKEMON_BEHAVIOR_DATA[@behavior_species][:behavior_wind_roaming]
       if wind_behavior
         set_custom_move_route(OW_BEHAVIOR_MOVE_ROUTES[:roaming][wind_behavior])
       end
     elsif @weather_type_at_spawn == :Rain || @weather_type_at_spawn == :Storm
-      rain_behavior = POKEMON_BEHAVIOR_DATA[@species][:behavior_rain_roaming]
+      rain_behavior = POKEMON_BEHAVIOR_DATA[@behavior_species][:behavior_rain_roaming]
       if rain_behavior
         set_custom_move_route(OW_BEHAVIOR_MOVE_ROUTES[:roaming][rain_behavior])
       end
     elsif @weather_type_at_spawn == :Sunny
-      sun_behavior = POKEMON_BEHAVIOR_DATA[@species][:behavior_sunny_roaming]
+      sun_behavior = POKEMON_BEHAVIOR_DATA[@behavior_species][:behavior_sunny_roaming]
       if sun_behavior
         set_custom_move_route(OW_BEHAVIOR_MOVE_ROUTES[:roaming][sun_behavior])
       end
@@ -587,6 +667,18 @@ class OverworldPokemonEvent < Game_Event
   end
 
   def despawn
+    @light_effect&.dispose
+    dispose_notice_icon
+
+    spriteset = $scene.respond_to?(:spritesets) ? $scene.spritesets[@map_id] : nil
+    if spriteset
+      sprite = spriteset.character_sprites.find { |s| s.character == self }
+      if sprite
+        spriteset.character_sprites.delete(sprite)
+        sprite.dispose
+      end
+    end
+
     erase
     $game_map.events.delete(@id)
     $PokemonTemp.overworld_pokemon_on_map&.delete(@id)
@@ -601,6 +693,13 @@ class OverworldPokemonEvent < Game_Event
     case @move_type
     when MOVE_TYPE_CURIOUS
       move_type_curious(ready_for_next_movement)
+    when MOVE_TYPE_TOWARDS_TARGET
+      move_type_toward_target(@target, ready_for_next_movement) if ready_for_next_movement
+    when MOVE_TYPE_AWAY_FROM_TARGET
+      move_type_away_from_target(@target) if ready_for_next_movement
+    when MOVE_TYPE_SHY_FROM_TARGET
+      move_type_away_from_target(@target) if ready_for_next_movement
+      turnEventTowardsEvent(self, @target)
     end
   end
 
@@ -611,9 +710,13 @@ class OverworldPokemonEvent < Game_Event
 
   def update
     super
+    update_idle_animation
+    update_notice_icon if $PokemonTemp.overworld_safari
     if $game_temp.message_window_showing
       pause_movement unless @current_state == :PAUSED
     else
+      update_attack_target
+      update_retaliation
       @behavior_update_counter = (@behavior_update_counter || 0) + 1
       if @behavior_update_counter >= UPDATE_TIME
         @behavior_update_counter = 0
@@ -621,5 +724,24 @@ class OverworldPokemonEvent < Game_Event
       end
     end
   end
+
+
+
+  #Override marshall dump to exclude stuff that crashes the game (the ref to lignt_effect)
+  def marshal_dump
+    ivars = {}
+    instance_variables.each do |var|
+      next if var == :@light_effect || var == :@notice_icon
+      ivars[var] = instance_variable_get(var)
+    end
+    return ivars
+  end
+
+  def marshal_load(ivars)
+    ivars.each { |var, val| instance_variable_set(var, val) }
+    @light_effect = nil
+    @notice_icon = nil
+  end
+
 end
 

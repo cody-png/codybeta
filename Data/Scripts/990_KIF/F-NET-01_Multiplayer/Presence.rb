@@ -1,7 +1,6 @@
 #===============================================================================
 # F-NET-01 – Multiplayer: seeing each other on the map (presence)
-# (new, 2026-10-24; design: Claude Docs/Base KIF/MULTIPLAYER_PLAN.md, section
-# "Presence (branch kif-mp-presence)")
+# (new, 2026-10-24; branch kif-mp-presence)
 #
 # While connected, the partner is drawn when they are on your map, or on a
 # map joined to yours that is on screen: their skin, outfit, hair and hats as

@@ -1,6 +1,5 @@
 #===============================================================================
-# F-NET-01 – Multiplayer: co-op battles, the shared part (branch kif-mp-coop;
-# design: Claude Docs/Base KIF/MULTIPLAYER_PLAN.md, "Co-op battles")
+# F-NET-01 – Multiplayer: co-op battles, the shared part (branch kif-mp-coop)
 #
 # Two connected players who both picked "Fight together" share battles: a
 # wild or trainer battle either of them starts while the other is on the same

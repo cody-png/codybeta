@@ -1,6 +1,5 @@
 #===============================================================================
-# F-NET-01 – Multiplayer over Steam (2026-10-26; plan: Claude Docs/Base KIF/
-# MULTIPLAYER_PLAN.md "Transport decision", proof: STEAM_PROBE.md)
+# F-NET-01 – Multiplayer over Steam (2026-10-26)
 #
 # Steam's flat C API (steam_api64.dll, Steamworks SDK 1.64) through the
 # engine's Win32API, with Valve's test AppID 480 (steam_appid.txt next to

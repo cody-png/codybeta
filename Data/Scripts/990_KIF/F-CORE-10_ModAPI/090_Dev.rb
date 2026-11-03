@@ -182,7 +182,7 @@ JSON
         return <<-RUBY
 # #{name} - a KIF mod made by Options > Mod tools > Make a new mod.
 # It runs inside the game. Logs/KIF_API_Reference.txt lists every event and call
-# (Options > Mod tools > Write API reference).
+# (Options > Mod tools > Write API reference). The guide is Data/KIF/MODDING.md.
 
 # 1. React to the game with an event: no alias, no copied game code.
 #    ctx[:field] reads a field. ctx[:field] = value writes the fields the

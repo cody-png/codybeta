@@ -1,6 +1,6 @@
 #===============================================================================
 # F-NET-01 – Multiplayer, phase 1: the connection between two games
-# (new in KIF 1.3, 2026-10-23; design: Claude Docs/Base KIF/MULTIPLAYER_PLAN.md)
+# (new in KIF 2.0)
 #
 # Peer to peer, no server: one game hosts (TCP 52411, or the next free of
 # 52412-52415), the other joins with a join code. A host can take two friends

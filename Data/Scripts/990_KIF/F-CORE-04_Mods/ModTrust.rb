@@ -12,7 +12,7 @@
 #                  allows it in Options > Mods
 #
 # Honest limits: this is a consent and audit system. Mods run in the game's
-# own process with the player's rights; see ModGuard.rb and MODDING.md.
+# own process with the player's rights; see ModGuard.rb and Data/KIF/MODDING.md.
 # Plain data only, written with the mod list's own JSON writer, read with
 # MiniJSON (never the game's JSON, which parses by eval).
 #===============================================================================
@@ -29,7 +29,8 @@ module KIF
     ABOUT = "Mods are programs. KIF checks each mod and shows what it says it needs. KIF cannot lock a mod in a box: " \
             "a mod runs with the same rights as the game. The checks catch honest mistakes and common tricks, not a " \
             "determined attacker. Only install mods you trust. Turn a mod Off or delete its folder to remove it. " \
-            "Options > Mods > Mod protection changes how strict KIF is, and you can allow anything for a mod you trust."
+            "Options > System > Mod protection changes how strict KIF is, and you can allow anything for a mod you trust. " \
+            "The guide for mod makers and players is Data/KIF/MODDING.md in the game folder."
 
     @data ||= nil
     @native ||= nil

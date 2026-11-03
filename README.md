@@ -10,8 +10,8 @@ KIF is **standalone**: you do not need Pokémon Infinite Fusion, and you should 
 
 This GitHub lets you see the game (open-source), contribute to its development with pull requests, and download the latest version.
 
-## KIF 1.0 is now officially on 6.8.2 at time of writing!!
-KIF 0.20.7 was built on PIF 6.4.5. **KIF 1.0** brings KIF's features to **PIF 6.8.2**, including its new content and the Hoenn additions (but not Hoenn itself, sorry folks).
+## KIF 2.0 is built on PIF 6.9
+KIF 0.20.7 was built on PIF 6.4.5, and KIF 1.x on PIF 6.8.2. **KIF 2.0** brings KIF's features to **PIF 6.9**, including its new content and the Hoenn additions (but not Hoenn itself, sorry folks). It also adds Multiplayer (experimental, Off by default), a mod safety scan and a mod API. See [CHANGELOG.md](CHANGELOG.md).
 
 - **Old KIF saves** load directly. Your settings, Pokémon and items carry over.
 - **Bug reports:** if the game crashes, send the `Logs` folder from the game folder (`KIF_errorlog.txt` in it has the crash) to the Discord. Please ping Cody (hi I'm Cody please ping me) whenever you open a bug report. Leave PIF folks alone about bug reports, they have no hand in KIF aside from providing a fantastic game (PIF)!
@@ -51,14 +51,14 @@ Highlights:
 - **Kuray QoL:** PC, Heal and the Kuray Shop from the pause menu, plus K-Eggs, Tutor.net and Quicksave.
 - **Fusion:** fusion preview, custom fusion base stats, dominant types, self-fusion boosts, and legendary-head breeding.
 - **Look and feel:** big Pokémon icons, type icons and battle GUIs, fonts, and Dark Mode.
-- **Modding support:** drop a mod's `.rb` file, its folder or its `.zip` into the `Mods` folder; switch mods On/Off, and browse, install, update and uninstall mods in Options > Mods (three catalogs, modpacks and share codes).
+- **Modding support:** drop a mod's `.rb` file, its folder or its `.zip` into the `Mods` folder; switch mods On/Off, and browse, install, update and uninstall mods in Options > Mods (three catalogs, modpacks and share codes). KIF scans every mod and tells you what it can do; the guide for mod makers and players is [Data/KIF/MODDING.md](Data/KIF/MODDING.md).
 - **Infinite save backups,** with named backups.
 
 # Credits
 
 - **Pokémon Infinite Fusion:** Chardub/Frogman and the PIF team.
 - **Kuray Infinite Fusion:** Reïzod, DemICE, Sylvi, HungryPickle, Luminatron, Bluewuppo, JustAnotherU5er, Mirasein, FairyGodmother, Lolpy1, Rekt1029 and the whole KIF community.
-- **KIF 1.0 (PIF 6.8.2):** cody-png, with our testers and modders.
+- **KIF 1.0 and 2.0 (PIF 6.8.2 and 6.9):** cody-png, with our testers and modders.
 - **Elite Battle DX:** Luka S.J. (EBDX), as adapted in KIF Multiplayer by Aleks, included with permission.
 - Made with Pokémon Essentials.
 

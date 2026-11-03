@@ -1,6 +1,5 @@
 #===============================================================================
 # F-NET-01 – Multiplayer: mod state API (KIF::Net.share / KIF::Net.on_share)
-# For modders: Claude Docs/Base KIF/MULTIPLAYER_MOD_API.md
 #
 # A mod shares its own data with the other player:
 #   KIF::Net.on_share(:my_mod) { |from, key, data| ... }   # register (also the whitelist)

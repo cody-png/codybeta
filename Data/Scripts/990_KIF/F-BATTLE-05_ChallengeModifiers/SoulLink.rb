@@ -1,6 +1,5 @@
 #===============================================================================
-# F-BATTLE-05 – Soul Link (Multiplayer plan phase 3; Claude Docs/Base KIF/
-# MULTIPLAYER_PLAN.md section 3 and Cody's answers). Soul Link as a Nuzlocke
+# F-BATTLE-05 – Soul Link (Multiplayer phase 3). Soul Link as a Nuzlocke
 # rule set comes from Aleks (sKarreku) and Pigeon (@anunsocialpigeon).
 #
 # Two players, each with their own save and Nuzlocke On, link their runs:

@@ -1,6 +1,5 @@
 #===============================================================================
 # F-NET-01 – Multiplayer: setting, pause-menu entry and the connection screens
-# (mockups: Claude Docs/Base KIF/mockups/Multiplayer mockups, MP1-MP6)
 #
 # Setting: Options > System > Multiplayer: Off / On (default Off). PC only for
 # now: hidden on phones until someone tests the network there.

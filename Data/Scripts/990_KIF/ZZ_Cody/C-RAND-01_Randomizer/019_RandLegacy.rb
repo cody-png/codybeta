@@ -195,12 +195,12 @@ class Object
 
   def getNewSpecies(*args)
     return KIF::Rand::Legacy.new_species(*args) if KIF::Rand.legacy?
-    return kif_legacy_getNewSpecies(*args)
+    return kif_legacy_getNewSpecies(*KIF::Rand.egg_args(args))
   end
 
   def getNewCustomSpecies(*args)
     return KIF::Rand::Legacy.new_custom_species(*args) if KIF::Rand.legacy?
-    return kif_legacy_getNewCustomSpecies(*args)
+    return kif_legacy_getNewCustomSpecies(*KIF::Rand.egg_args(args))
   end
 
   # Only the randomizer's own picks see the old list; sprite features keep the current one

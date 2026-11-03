@@ -145,6 +145,12 @@ module KIF
           onoff(:trainer_custom, _INTL("Custom sprites only"),
                 _INTL("Trainer teams can use auto-generated sprites."),
                 _INTL("Trainer teams only use Pokémon with a custom sprite.")),
+          onoff(:ref_filter, _INTL("References filter"),
+                _INTL("Trainer teams can use any custom sprite."),
+                _INTL("Trainer teams only use sprites from the reference sets chosen below (needs Custom sprites only). Unfused, Fuse everything, Follow wild and the rival's team ignore it, as they ignore Custom sprites only.")),
+          DynButton.new(proc { KIF::Rand.mark(:__refs, _INTL("Reference sets: {1}", KIF::Rand.ref_label)) },
+                        proc { KIF::Rand.pick_references },
+                        _INTL("Which reference sets the filter uses (all until you choose). The choice stays with this save and is not part of a settings code.")),
           onoff(:class_themes, _INTL("Class themes"),
                 _INTL("Trainer classes can use any type."),
                 _INTL("Every Pokémon of a themed class has its type: Bug Catchers use Bug types, Swimmers Water types, ...")),
@@ -176,6 +182,19 @@ module KIF
           }, _INTL("Which type each trainer class uses. Gym leaders use the Gyms page."))
         ]
       }
+      check_references
+    end
+
+    # The References filter works on the custom sprite list (as in PIF: ask, then turn one off)
+    def self.check_references
+      return unless sw(SWITCH_RANDOM_REFERENCE_SPRITES) && !sw(600)
+      pbMessage(_INTL("The References filter needs Custom sprites only to work."))
+      if pbConfirmMessage(_INTL("Turn on Custom sprites only?"))
+        setsw(600, true)
+      else
+        setsw(SWITCH_RANDOM_REFERENCE_SPRITES, false)
+        pbMessage(_INTL("The References filter was turned off."))
+      end
     end
 
     def self.page_gyms

@@ -141,6 +141,7 @@ module KIF
                               return data[:trainer_follow] ? 2 : 1
       when :trainer_bst  then return $game_variables[VAR_RANDOMIZER_TRAINER_BST].to_i
       when :trainer_custom then return sw(600) ? 1 : 0
+      when :ref_filter   then return sw(SWITCH_RANDOM_REFERENCE_SPRITES) ? 1 : 0   # PIF 6.9 (020_RandReferences.rb)
       when :gyms         then return sw(SWITCH_RANDOMIZE_GYMS_SEPARATELY) ? 1 : 0
       when :gym_custom   then return sw(SWITCH_RANDOM_GYM_CUSTOMS) ? 1 : 0
       when :gym_types    then return sw(SWITCH_RANDOMIZED_GYM_TYPES) ? 1 : 0
@@ -178,6 +179,7 @@ module KIF
         data[:trainer_follow] = (v == 2)
       when :trainer_bst  then $game_variables[VAR_RANDOMIZER_TRAINER_BST] = v.to_i
       when :trainer_custom then setsw(600, v == 1)
+      when :ref_filter     then setsw(SWITCH_RANDOM_REFERENCE_SPRITES, v == 1)   # needs Custom sprites only (checked when the Trainers page closes)
       when :gyms         then setsw(SWITCH_RANDOMIZE_GYMS_SEPARATELY, v == 1)
       when :gym_custom   then setsw(SWITCH_RANDOM_GYM_CUSTOMS, v == 1)
       when :gym_types    then setsw(SWITCH_RANDOMIZED_GYM_TYPES, v == 1)
@@ -396,7 +398,10 @@ module KIF
     end
 
     def self.settings_code
-      flags = code_enums.map { |s| get(s[0]).to_s(36) }.join
+      flags = code_enums.map { |s| get(s[0]).to_s(36) }
+      # the last setting (References filter, PIF 6.9) is left out while Off: codes stay as they were
+      flags.pop if code_enums.last[0] == :ref_filter && flags.last == "0"
+      flags = flags.join
       return [CODE_PREFIX, seed, flags, get(:wild_bst), get(:trainer_bst), bans_code].join("-")
     end
 
@@ -447,6 +452,7 @@ module KIF
       return false unless res
       self.seed = res[0]
       res[1].each { |k, v| set(k, v) }
+      setsw(600, true) if sw(SWITCH_RANDOM_REFERENCE_SPRITES)   # a code with the References filter On means Custom sprites only too
       if res[2]
         res[2].each { |kind, list| data[:"ban_#{kind}"] = (list == :default ? nil : list) }
       end

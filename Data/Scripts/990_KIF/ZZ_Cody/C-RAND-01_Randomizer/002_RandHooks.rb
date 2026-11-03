@@ -36,17 +36,19 @@ class << Kernel
   end
 
   def pbShuffleTrainers(*args)
+    KIF::Rand.reset_pick_caches
     KIF::Rand.progress("Shuffling trainers...", 0.5)
     KIF::Rand.ensure_trainer_dex
     ret = KIF::Rand.with_seed(:trainers) {
       if KIF::Rand.trainer_features?
         KIF::Rand.shuffle_trainers(args[1] ? args[2] : nil)
       else
-        r = kif_rand_pbShuffleTrainers(*args)
+        r = KIF::Rand.in_pif_trainer_shuffle { kif_rand_pbShuffleTrainers(*args) }
         KIF::Rand.shuffle_fallback_trainers(*args)
         r
       end
     }
+    KIF::Rand.reset_pick_caches
     KIF::Rand.progress_done
     KIF::Rand.write_log
     return ret

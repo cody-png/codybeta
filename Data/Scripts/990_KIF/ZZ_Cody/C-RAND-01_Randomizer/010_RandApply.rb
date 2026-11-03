@@ -27,6 +27,7 @@ module KIF
       setting_keys.each { |k| s[k] = get(k) }
       s[:__seed] = seed
       BAN_KINDS.each { |k| s[:"__ban_#{k}"] = ban_list(k) }
+      s[:__refs] = ref_signature   # the reference sets picked (020_RandReferences.rb)
       return s
     end
 
@@ -47,6 +48,7 @@ module KIF
         list = state[:"__ban_#{k}"]
         bans(k).replace(list) if list.is_a?(Array)
       end
+      self.ref_signature = state[:__refs] if state.key?(:__refs)
       sync_masters
     rescue => e
       KIF.log("Randomizer settings couldn't be restored (#{e.class}: #{e.message})")
@@ -66,6 +68,7 @@ module KIF
     def self.capture_one(key)
       return seed if key == :__seed
       return ban_list(key.to_s.sub("__ban_", "").to_sym) if key.to_s.start_with?("__ban_")
+      return ref_signature if key == :__refs
       return get(key)
     end
 

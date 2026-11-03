@@ -25,26 +25,29 @@ module KIF
       return armed
     end
 
-    module FileOpen
-      def open(path, mode = "r", *rest, &blk)
-        if blk && KIF::LanguageSlot.take?(path, mode)
-          tmp = "#{path}.kif_tmp"
-          begin
-            ret = super(tmp, mode, *rest, &blk)
-            File.rename(tmp, path)
-            return ret
-          rescue StandardError
-            File.delete(tmp) if File.exist?(tmp) rescue nil
-            raise
-          end
-        end
-        return super
-      end
-    end
   end
 end
 
-File.singleton_class.prepend(KIF::LanguageSlot::FileOpen) unless File.singleton_class.ancestors.include?(KIF::LanguageSlot::FileOpen)
+# (an alias, not a prepend: code that wraps File.open by aliasing it, as the kit's tests and mods do, would loop through a prepended one)
+class << File
+  alias kif_lang_open open unless method_defined?(:kif_lang_open)
+
+  def open(*args, **kw, &blk)
+    if blk && !args.empty? && KIF::LanguageSlot.take?(args[0], args[1])
+      path = args[0]
+      tmp = "#{path}.kif_tmp"
+      begin
+        ret = kif_lang_open(tmp, *args[1..-1], **kw, &blk)
+        File.rename(tmp, path)
+        return ret
+      rescue StandardError
+        File.delete(tmp) if File.exist?(tmp) rescue nil
+        raise
+      end
+    end
+    return kif_lang_open(*args, **kw, &blk)
+  end
+end
 
 alias kif_lang_pbChooseLanguage pbChooseLanguage unless defined?(kif_lang_pbChooseLanguage)
 

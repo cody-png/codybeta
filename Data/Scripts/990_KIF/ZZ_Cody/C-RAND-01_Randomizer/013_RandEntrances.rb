@@ -1017,6 +1017,16 @@ module KIF
       # Runtime
       #-------------------------------------------------------------------------
       # [map, event] => [map, x, y, dir, door id, :in/:out]
+      # PIF 6.9 moved the Vermillion Gym's exit mat down a row (its exits now lead to 17,27) and put two more exit
+      # events beside it. Data/KIF/entrances.dat keeps its signature (made on the 6.8.2 maps) so layouts saved on
+      # 6.8.2 stay valid; these events act as that door's own exits:
+      # [map, event] => [event whose target it shares, its destination on the 6.9 map]
+      EXIT_VARIANTS = {
+        [24, 3] => [[24, 3], [19, 17, 27]],
+        [24, 34] => [[24, 1], [19, 17, 27]],
+        [24, 36] => [[24, 1], [19, 17, 27]]
+      }
+
       def self.targets
         return @targets if @targets && @targets_sig == state.object_id
         @targets = {}
@@ -1033,6 +1043,7 @@ module KIF
             o[:exit_events].each { |e| @targets[[o[:exit_map], e]] = [back[:exit_to][0], back[:exit_to][1], back[:exit_to][2], back[:exit_dir], o[:id], :out, o[:exit_to]] }
           end
         end
+        EXIT_VARIANTS.each { |ev, (src, _dest)| @targets[ev] = @targets[src] if @targets[src] && !@targets[ev] }
         return @targets
       end
 
@@ -1043,7 +1054,7 @@ module KIF
         return nil unless active?
         t = targets[[map_id, event_id]]
         return nil unless t
-        return nil if params && params[1, 3] != t[6]
+        return nil if params && params[1, 3] != t[6] && params[1, 3] != (EXIT_VARIANTS[[map_id, event_id]] || [])[1]
         return t
       end
 

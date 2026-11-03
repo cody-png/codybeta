@@ -36,7 +36,7 @@ module KIF
     end
 
     def self.use(pkmn, scene, hidden)
-      if pkmn.egg? || pkmn.isSpecies?(:ZYGARDE)
+      if pkmn.egg? || pkmn.species == :ZYGARDE   # not isSpecies?: an unknown species name falls back to Pikachu
         scene.pbDisplay(_INTL("It won't have any effect."))
         return false
       end

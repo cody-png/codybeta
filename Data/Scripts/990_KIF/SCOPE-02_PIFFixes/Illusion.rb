@@ -5,7 +5,7 @@
 # like the Egg at the end of the party ("What will Egg do?").
 # Copy of the base method with that check back. Always on (a bug fix).
 #===============================================================================
-KIF.guard_base("011_Battle/003_Battle/002_PokeBattle_Battle.rb", 2321919076,
+KIF.guard_base("011_Battle/003_Battle/002_PokeBattle_Battle.rb", 2713842088,
                "pbLastInTeam (Illusion copies the last able Pokémon)")
 
 class PokeBattle_Battle
@@ -44,4 +44,18 @@ if defined?(PokeBattle_SceneEBDX)
       pbRefreshOne(idx)
     end
   end
+end
+
+# PIF 6.9's Illusion handler asks the attacker who owns it (to redraw the
+# right type icons). Megas and KIF-ER break Illusion on a Mega Evolution with
+# no attacker, which was a NoMethodError on nil: the Pokémon's own side decides.
+module KIF
+  ILLUSION_HIT_6_9 = BattleHandlers::TargetAbilityOnHit[:ILLUSION] unless const_defined?(:ILLUSION_HIT_6_9)
+end
+if KIF::ILLUSION_HIT_6_9
+  BattleHandlers::TargetAbilityOnHit.add(:ILLUSION,
+    proc { |ability, user, target, move, battle|
+      KIF::ILLUSION_HIT_6_9.call(ability, user || target, target, move, battle)
+    }
+  )
 end

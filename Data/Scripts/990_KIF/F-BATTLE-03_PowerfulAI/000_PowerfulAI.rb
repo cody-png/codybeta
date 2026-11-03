@@ -46,7 +46,7 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Battle AI"), [_INTL("PIF"), _INTL("DemICE")],
                  proc { $PokemonSystem.powerfulai },
                  proc { |value| $PokemonSystem.powerfulai = value },
-                 [_INTL("Opponents use PIF 6.8.2's own AI"),
+                 [_INTL("Opponents use PIF {1}'s own AI", Settings::GAME_VERSION_NUMBER),
                   _INTL("Opponents use DemICE's AI (from the community hard-mode mods)")])
 }
 

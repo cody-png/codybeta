@@ -42,6 +42,9 @@ module KIF
 
     B62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     MAX_CODE = 20_000   # characters; a longer paste isn't a share code
+    MAX_CODE_TEXT = 64 * 1024   # bytes a code may unpack to (a real one is a few hundred)
+    MAX_CODE_MODS = 500
+    CODE_SLICE = 256   # packed bytes unpacked at a time (zlib gives up to about 1000 times that)
 
     module_function
 
@@ -84,6 +87,23 @@ module KIF
       end
     end
 
+    # the text inside a "KIF-" code, nil when it is damaged or unpacks to more than MAX_CODE_TEXT:
+    # a 20,000 character code can hold gigabytes, so it is unpacked a slice at a time
+    def inflate_code(raw)
+      z = Zlib::Inflate.new
+      text = "".b
+      0.step(raw.bytesize - 1, CODE_SLICE) do |pos|
+        text << z.inflate(raw.byteslice(pos, CODE_SLICE))
+        return nil if text.bytesize > MAX_CODE_TEXT
+      end
+      text << z.finish
+      return text.bytesize > MAX_CODE_TEXT ? nil : text
+    rescue StandardError
+      return nil
+    ensure
+      (z.close rescue nil) if z
+    end
+
     # "KIF-..." => [[id, version], ...], or nil when it isn't a code
     def decode(code)
       code = code.to_s.gsub(/\s+/, "")
@@ -91,7 +111,7 @@ module KIF
       if code.start_with?("KIF-")
         bytes = b62_decode(code[4..-1])
         return nil unless bytes
-        text = (Zlib::Inflate.inflate(bytes.pack("C*")) rescue nil)
+        text = inflate_code(bytes.pack("C*"))
       elsif code.start_with?("KIFr-")
         bytes = b62_decode(code[5..-1])
         text = bytes ? bytes.pack("C*") : nil
@@ -99,7 +119,9 @@ module KIF
       return nil unless text
       text = text.force_encoding("UTF-8")
       return nil unless text.valid_encoding?   # a garbled code isn't a code
-      list = text.split(",").map { |p| p.split("@", 2) }.reject { |id, _| id.nil? || id.empty? }
+      parts = text.split(",")
+      return nil if parts.length > MAX_CODE_MODS
+      list = parts.map { |p| p.split("@", 2) }.reject { |id, _| id.nil? || id.empty? }
                  .map { |id, v| [id, v.to_s] }
       return list.empty? ? nil : list
     end

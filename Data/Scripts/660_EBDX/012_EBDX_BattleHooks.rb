@@ -95,12 +95,12 @@ class PokeBattle_Battle
   alias pbReplace_ebdx660 pbReplace unless method_defined?(:pbReplace_ebdx660)
   def pbReplace(index, *args)
     if EBDXToggle.enabled? && @scene.is_a?(PokeBattle_SceneEBDX) && @scene.respond_to?(:pbTrainerBattleSpeech)
-      opt = (respond_to?(:playerBattler?) && playerBattler?(@battlers[index])) ? ["last", "beforeLast"] : ["lastOpp", "beforeLastOpp"]
+      opt = playerBattler?(@battlers[index]) ? ["last", "beforeLast"] : ["lastOpp", "beforeLastOpp"]
       @scene.pbTrainerBattleSpeech(*opt)
     end
     pbReplace_ebdx660(index, *args)
     if EBDXToggle.enabled? && @scene.is_a?(PokeBattle_SceneEBDX) && @scene.respond_to?(:pbTrainerBattleSpeech)
-      opt = (respond_to?(:playerBattler?) && playerBattler?(@battlers[index])) ? "afterLast" : "afterLastOpp"
+      opt = playerBattler?(@battlers[index]) ? "afterLast" : "afterLastOpp"
       @scene.pbTrainerBattleSpeech(opt)
     end
   end
@@ -111,7 +111,7 @@ class PokeBattle_Battle
   alias pbRecallAndReplace_ebdx660 pbRecallAndReplace unless method_defined?(:pbRecallAndReplace_ebdx660)
   def pbRecallAndReplace(*args)
     if EBDXToggle.enabled? && @scene.is_a?(PokeBattle_SceneEBDX) && @scene.respond_to?(:pbTrainerBattleSpeech)
-      @scene.pbTrainerBattleSpeech((respond_to?(:playerBattler?) && playerBattler?(@battlers[args[0]])) ? "recall" : "recallOpp")
+      @scene.pbTrainerBattleSpeech(playerBattler?(@battlers[args[0]]) ? "recall" : "recallOpp")
     end
     if EBDXToggle.enabled? && @scene.is_a?(PokeBattle_SceneEBDX)
       @scene.sendingOut = true if args[0]%2 == 0 && @scene.respond_to?(:sendingOut=)

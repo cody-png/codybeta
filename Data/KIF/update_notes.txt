@@ -1,3 +1,17 @@
+KIF 2.0.0
+- Built on Pokemon Infinite Fusion 6.9: PIF's new content and fixes, and its References filter in the Randomizer (Trainers page, Off by default).
+- New, experimental and Off by default: Multiplayer (Options > System > Multiplayer). Host or join with a code. A lobby holds up to 3 players for co-op wild and trainer battles, PvP (single, double or triple, also between two guests), trading and Soul Link. Everyone needs KIF 2.0.0: this Multiplayer can't join older builds.
+- Co-op: a trainer's team grows with the players, twice the Pokemon for 2 players and three times for 3 (Classic, Remix and Expert).
+- PvP: a player who does not choose for 2 turns in a row forfeits the match.
+- Mod safety: each mod is scanned and shown as OK, CHECK or RISK, and a guard stops what a mod did not ask for (programs, internet, files). Mods still run with the game's rights, so only install mods you trust. Options > System > About mod safety explains it.
+- Mod API: 61 events, hooks, saved data, timers and registries for menus, items, shops and encounters, with a guide (Data/KIF/MODDING.md in the game folder). Mod Dev mode and Mod tools (Options > System) make a new mod, reload one and write an API reference.
+- Nuzlocke and Soul Link: Soul Link keeps working after a run ends, gifts, Safari catches and starters pair like wild catches, and the Nuzlocke rules start with your first Poke Ball.
+- Randomizer: a save started on an earlier version keeps its randomized world. A new world made from the same seed on 2.0.0 can differ from one made on 1.2.x, so don't share seed codes with 1.2.x players. A settings code made with the References filter On doesn't work on older builds.
+- Archipelago: new apworld 0.8.1 (Archipelago/kif.apworld) with Dexsanity fusion milestones and the 19 new checks of PIF 6.9's maps. Make new seeds with it.
+- Faster start-up, less memory and less work each frame.
+- Saves: a save or backup that can't be read is skipped instead of stopping the game (backups are tried newest first), and a failed save changes nothing.
+- Fixed: Map Zoom Far with other camera mods, the shadow under Pokemon and Battle Movement in EBDX battles, the Randomizer's Base stats Total split, and many crashes found by a full code audit.
+
 KIF 1.2.13
 - Fixed: a controller stopped working after F12 or after the game restarted itself for an update.
 - Map Zoom is now Normal or Far: no more thin black lines at map edges, and smoother walking when zoomed out.

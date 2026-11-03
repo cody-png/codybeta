@@ -118,8 +118,17 @@ module KIF
     # Decision (KIF pbGiveFinaleColor :515-588)
     #---------------------------------------------------------------------------
     # Returns [use_pif, use_kif] as booleans for a Pokémon.
+    # a colour setting for this Pokémon: a multiplayer partner's Pokémon keeps
+    # the settings of the game that rolled it (@kif_net_shiny, NetSprite), so
+    # both players see the same colours and star
+    def self.opt(pkmn, name, default)
+      o = pkmn && pkmn.instance_variable_get(:@kif_net_shiny)
+      return o[name] if o.is_a?(Hash) && o[name].is_a?(Integer)
+      return $PokemonSystem ? $PokemonSystem.send(name).to_i : default
+    end
+
     def self.decide(pkmn)
-      mode = $PokemonSystem ? $PokemonSystem.pifimprovedshinies : 0
+      mode = opt(pkmn, :pifimprovedshinies, 0)
       roll = pkmn.shinyimprovpif?
       use_pif = roll >= 1
       force_split = (roll == 1)
@@ -442,8 +451,13 @@ module KIF
       return nil
     end
 
+    # one folder per KIF release: pictures made by older shiny code are never served again
+    def self.cache_folder
+      return KIF::PORT_VERSION.to_s
+    end
+
     def self.disk_path(key)
-      return "#{cache_dir}/#{Settings::GAME_VERSION_NUMBER}/#{key}.png"
+      return "#{cache_dir}/#{cache_folder}/#{key}.png"
     end
 
     def self.cache_get(key)
@@ -475,17 +489,19 @@ module KIF
       @memory[key] = bmp
     end
 
-    def self.cache_put(key, bmp)
+    # disk: false for a multiplayer partner's colours (memory only; the partner picks the colours,
+    # so it would pick how many files this folder gets)
+    def self.cache_put(key, bmp, disk = true)
       return if key.nil? || cache_mode == 2
       cache_put_memory(key, copy_bitmap(bmp))
-      if cache_mode == 0
+      if cache_mode == 0 && disk
         begin
           top = cache_dir
-          dir = "#{top}/#{Settings::GAME_VERSION_NUMBER}"
+          dir = "#{top}/#{cache_folder}"
           KIF.mkdir_p(dir)   # "Cache" itself may not exist on a fresh install
           unless @disk_trimmed   # once a session: older game versions' folders go, this one is capped
             @disk_trimmed = true
-            Dir.children(top).each { |c| KIF.rm_tree(File.join(top, c)) if c != Settings::GAME_VERSION_NUMBER.to_s && File.directory?(File.join(top, c)) }
+            Dir.children(top).each { |c| KIF.rm_tree(File.join(top, c)) if c != cache_folder && File.directory?(File.join(top, c)) }
             KIF.trim_cache_dir(dir, KIF.mobile? ? 2_000 : 20_000)   # phones: less storage
           end
           bmp.save_to_png(disk_path(key)) unless File.exist?(disk_path(key))
@@ -500,7 +516,7 @@ module KIF
     #---------------------------------------------------------------------------
     # Shiny Filter: 0 Off, 1 Filtered, 2 Hybrid (per-Pokémon roll)
     def self.filtered?(pkmn)
-      mode = $PokemonSystem ? $PokemonSystem.shinyfilter.to_i : 2
+      mode = opt(pkmn, :shinyfilter, 2)
       return false if mode == 0
       return true if mode == 1
       return pkmn.respond_to?(:kif_filter_roll?) ? pkmn.kif_filter_roll? == 1 : true
@@ -515,7 +531,7 @@ module KIF
     def self.colorize!(anim, pkmn, kind = :sprite, pif_done = false)
       use_pif, use_kif = decide(pkmn)
       return anim unless use_kif
-      adv = $PokemonSystem ? $PokemonSystem.shinyadvanced : 1
+      adv = opt(pkmn, :shinyadvanced, 1)
       polish = filtered?(pkmn)
       hue = pkmn.shinyValue?
       codes = (adv == 0) ? [0, 1, 2] : [pkmn.shinyR?, pkmn.shinyG?, pkmn.shinyB?]
@@ -539,7 +555,7 @@ module KIF
       end
       anim.bitmap.hue_change(hue) if hue != 0
       channel_shift!(anim.bitmap, codes, krs, adv, polish) if adv != 0
-      cache_put(key, anim.bitmap)
+      cache_put(key, anim.bitmap, !pkmn.instance_variable_get(:@kif_net_kc))
       return anim
     end
 

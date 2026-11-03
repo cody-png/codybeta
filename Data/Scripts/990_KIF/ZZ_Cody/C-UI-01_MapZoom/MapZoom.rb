@@ -169,11 +169,10 @@ module KIF
 end
 
 KIF::Options.add(:graphics, :global) {
-  EnumOption.new(_INTL("Map Zoom"), [_INTL("Normal"), _INTL("Far"), _INTL("Farthest")],
-                 proc { $PokemonSystem.kif_mapzoom },
+  EnumOption.new(_INTL("Map Zoom"), [_INTL("Normal"), _INTL("Far")],
+                 proc { KIF::MapZoom.level },
                  proc { |value| $PokemonSystem.kif_mapzoom = value; KIF::MapZoom.sync },
                  [_INTL("The overworld at its normal size."),
-                  _INTL("Zooms the overworld out: map pixels are drawn at 1.5x, so you see more of the map."),
                   _INTL("Zooms the overworld out to 1x pixels: you see about four times as much of the map.")])
 }
 KIF::Modules.watch(:graphics) { |_on| KIF::MapZoom.sync } if defined?(KIF::Modules)
@@ -390,7 +389,7 @@ class TilemapRenderer
   end
 end
 
-KIF.guard_base("006_Map renderer/001_TilemapRenderer.rb", 1813210744, "TilemapRenderer#update (C-UI-01 MapZoom#mz_zoomed_update)") if KIF.respond_to?(:guard_base)
+KIF.guard_base("006_Map renderer/001_TilemapRenderer.rb", 2052185553, "TilemapRenderer#update (C-UI-01 MapZoom#mz_zoomed_update)") if KIF.respond_to?(:guard_base)
 
 # Frames drawn in between slide the map by the camera's move, which is drawn smaller
 if defined?(KIF::FrameRate) && KIF::FrameRate.respond_to?(:camera_move)
@@ -430,36 +429,44 @@ class Game_Map
   end
 end
 
-class Game_Player
-  alias mz_orig_center center unless method_defined?(:mz_orig_center) || private_method_defined?(:mz_orig_center)
-  alias mz_orig_isCentered isCentered unless method_defined?(:mz_orig_isCentered) || private_method_defined?(:mz_orig_isCentered)
-  alias mz_orig_update_screen_position update_screen_position unless method_defined?(:mz_orig_update_screen_position) || private_method_defined?(:mz_orig_update_screen_position)
+# The camera sits in a module in FRONT of Game_Player, not in aliases: a script
+# that redefines these methods after us (the Overworld Encounters mod's map
+# locking replaces update_screen_position with PIF's normal-view centring)
+# can't take the camera back. That left the player in the top left quarter of
+# the screen from the first step on. Zoomed, this is the whole camera; at
+# Normal it hands over (super) to whatever PIF or a mod has there.
+module KIF
+  module MapZoom
+    module PlayerCamera
+      def mz_camera(rx, ry)
+        return KIF::MapZoom.clamp(self.map, (rx - KIF::MapZoom.center_x).round, (ry - KIF::MapZoom.center_y).round)
+      end
 
-  def mz_camera(rx, ry)
-    return KIF::MapZoom.clamp(self.map, (rx - KIF::MapZoom.center_x).round, (ry - KIF::MapZoom.center_y).round)
-  end
+      def center(x, y)
+        return super unless KIF::MapZoom.zoomed?
+        dx, dy = mz_camera(x * Game_Map::REAL_RES_X, y * Game_Map::REAL_RES_Y)
+        self.map.display_x = dx
+        self.map.display_y = dy
+      end
 
-  def center(x, y)
-    return mz_orig_center(x, y) unless KIF::MapZoom.zoomed?
-    dx, dy = mz_camera(x * Game_Map::REAL_RES_X, y * Game_Map::REAL_RES_Y)
-    self.map.display_x = dx
-    self.map.display_y = dy
-  end
+      def isCentered
+        return super unless KIF::MapZoom.zoomed?
+        dx, dy = mz_camera(x * Game_Map::REAL_RES_X, y * Game_Map::REAL_RES_Y)
+        return self.map.display_x == dx && self.map.display_y == dy
+      end
 
-  def isCentered
-    return mz_orig_isCentered unless KIF::MapZoom.zoomed?
-    dx, dy = mz_camera(x * Game_Map::REAL_RES_X, y * Game_Map::REAL_RES_Y)
-    return self.map.display_x == dx && self.map.display_y == dy
-  end
-
-  def update_screen_position(last_real_x, last_real_y)
-    return mz_orig_update_screen_position(last_real_x, last_real_y) unless KIF::MapZoom.zoomed?
-    return if self.map.scrolling? || !(@moved_last_frame || @moved_this_frame)
-    dx, dy = mz_camera(@real_x, @real_y)
-    self.map.display_x = dx
-    self.map.display_y = dy
+      def update_screen_position(last_real_x, last_real_y)
+        return super unless KIF::MapZoom.zoomed?
+        return if self.map.scrolling? || !(@moved_last_frame || @moved_this_frame)
+        return if $game_temp.respond_to?(:map_locked) && $game_temp.map_locked   # Overworld Encounters' camera lock
+        dx, dy = mz_camera(@real_x, @real_y)
+        self.map.display_x = dx
+        self.map.display_y = dy
+      end
+    end
   end
 end
+Game_Player.prepend(KIF::MapZoom::PlayerCamera) unless Game_Player.ancestors.include?(KIF::MapZoom::PlayerCamera)
 
 # Connected maps further out are loaded for the larger view
 module MapFactoryHelper
@@ -725,3 +732,12 @@ class NightmareSprite
     end
   end
 end
+
+# The busiest hooks above (the tile grid, every character's screen position,
+# every character sprite) look at KIF::MapZoom.scale first, and that is 1.0
+# whenever the module is Off or a mod replaced the feature (MapZoom.wanted),
+# when they hand over to PIF's own method. The module gate in front of them
+# would only repeat that check hundreds of times a frame.
+KIF::Modules.self_gated(TilemapRenderer, :refresh_tile_coordinates, :refresh_tile_z) if defined?(KIF::Modules)
+KIF::Modules.self_gated(Game_Character, :screen_x, :screen_y_ground, :screen_y, :screen_z) if defined?(KIF::Modules)
+KIF::Modules.self_gated(Sprite_Character, :update) if defined?(KIF::Modules)

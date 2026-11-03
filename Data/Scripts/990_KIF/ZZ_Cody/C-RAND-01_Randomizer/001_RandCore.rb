@@ -141,6 +141,7 @@ module KIF
                               return data[:trainer_follow] ? 2 : 1
       when :trainer_bst  then return $game_variables[VAR_RANDOMIZER_TRAINER_BST].to_i
       when :trainer_custom then return sw(600) ? 1 : 0
+      when :ref_filter   then return sw(SWITCH_RANDOM_REFERENCE_SPRITES) ? 1 : 0   # PIF 6.9 (020_RandReferences.rb)
       when :gyms         then return sw(SWITCH_RANDOMIZE_GYMS_SEPARATELY) ? 1 : 0
       when :gym_custom   then return sw(SWITCH_RANDOM_GYM_CUSTOMS) ? 1 : 0
       when :gym_types    then return sw(SWITCH_RANDOMIZED_GYM_TYPES) ? 1 : 0
@@ -178,6 +179,7 @@ module KIF
         data[:trainer_follow] = (v == 2)
       when :trainer_bst  then $game_variables[VAR_RANDOMIZER_TRAINER_BST] = v.to_i
       when :trainer_custom then setsw(600, v == 1)
+      when :ref_filter     then setsw(SWITCH_RANDOM_REFERENCE_SPRITES, v == 1)   # needs Custom sprites only (checked when the Trainers page closes)
       when :gyms         then setsw(SWITCH_RANDOMIZE_GYMS_SEPARATELY, v == 1)
       when :gym_custom   then setsw(SWITCH_RANDOM_GYM_CUSTOMS, v == 1)
       when :gym_types    then setsw(SWITCH_RANDOMIZED_GYM_TYPES, v == 1)
@@ -245,6 +247,8 @@ module KIF
     end
 
     def self.seed=(s)
+      # a new seed makes a new world: the current picking rules (019_RandLegacy.rb)
+      data[:alg] = ALG_NOW if data[:seed] && data[:seed] != s && data[:alg] == ALG_LEGACY
       data[:seed] = s
     end
 
@@ -359,7 +363,7 @@ module KIF
 
     #---------------------------------------------------------------------------
     # Settings code:
-    #   KIFR2-SEED-<one character per setting>-<wild BST>-<trainer BST>-<bans>
+    #   KIFR2-SEED-<one character per setting>-<wild BST>-<trainer BST>-<bans>[-<letters>]
     #   bans = "P" + Pokémon dex numbers, "M" + move numbers, "A" + ability
     #   numbers (base 36, dot-separated), joined by "~"
     #   KIFR1 codes (chunk 1, no data settings or bans) are still read.
@@ -368,6 +372,16 @@ module KIF
 
     def self.code_enums
       return SETTINGS.select { |s| s[1] == :enum } + DATA_SETTINGS
+    end
+
+    # Settings that ride in an optional 7th part of the code (only while On), not in the
+    # one-character-per-setting string: mods append their own enums to that string
+    # (KIF: Elite Redux does), so a flag in it would move with them. Off = no 7th part =
+    # the code is byte for byte what it was before the setting existed.
+    CODE_TAIL = { :ref_filter => "R" }
+
+    def self.code_flag_enums
+      return code_enums.reject { |s| CODE_TAIL.key?(s[0]) }
     end
 
     # GameData::Move.get doesn't take numbers; look them up once
@@ -394,17 +408,21 @@ module KIF
     end
 
     def self.settings_code
-      flags = code_enums.map { |s| get(s[0]).to_s(36) }.join
-      return [CODE_PREFIX, seed, flags, get(:wild_bst), get(:trainer_bst), bans_code].join("-")
+      flags = code_flag_enums.map { |s| get(s[0]).to_s(36) }.join
+      parts = [CODE_PREFIX, seed, flags, get(:wild_bst), get(:trainer_bst), bans_code]
+      tail = CODE_TAIL.select { |key, _c| get(key) != 0 }.values.join
+      parts << tail unless tail.empty?
+      return parts.join("-")
     end
 
     # Returns [seed, {key => value}, bans or nil] or nil
     def self.parse_code(code)
       parts = code.to_s.strip.split("-")
       v1 = parts[0] == CODE_PREFIX_V1
-      return nil unless (v1 && parts.length == 5) || (parts[0] == CODE_PREFIX && parts.length == 6)
+      return nil unless (v1 && parts.length == 5) || (parts[0] == CODE_PREFIX && parts.length.between?(6, 7))
+      return nil if parts[6] && parts[6] !~ /\A[A-Z]+\z/   # unknown letters are ignored, anything else is no code
       s = parse_seed(parts[1])
-      enums = v1 ? SETTINGS.select { |x| x[1] == :enum } : code_enums
+      enums = v1 ? SETTINGS.select { |x| x[1] == :enum } : code_flag_enums
       # Codes from before newer settings existed are shorter; the rest keep
       # their defaults
       return nil unless s && (v1 ? parts[2].length == enums.length : parts[2].length.between?(1, enums.length))
@@ -419,6 +437,7 @@ module KIF
         vals[key] = v
       end
       return nil unless parts[3] =~ /\A\d+\z/ && parts[4] =~ /\A\d+\z/
+      CODE_TAIL.each { |key, c| vals[key] = parts[6].to_s.include?(c) ? 1 : 0 } unless v1   # no 7th part = Off
       vals[:wild_bst] = [parts[3].to_i, 999].min
       vals[:trainer_bst] = [parts[4].to_i, 999].min
       bans = nil
@@ -445,6 +464,7 @@ module KIF
       return false unless res
       self.seed = res[0]
       res[1].each { |k, v| set(k, v) }
+      setsw(600, true) if sw(SWITCH_RANDOM_REFERENCE_SPRITES)   # a code with the References filter On means Custom sprites only too
       if res[2]
         res[2].each { |kind, list| data[:"ban_#{kind}"] = (list == :default ? nil : list) }
       end
@@ -468,9 +488,17 @@ module KIF
       return Dir.glob("#{preset_dir}/*.txt").map { |f| File.basename(f, ".txt") }.sort
     end
 
+    # the file name a preset gets, or nil when there is none that Windows would take as a file
+    # (a name ending in a dot or space, or a device name such as NUL or COM1)
+    def self.preset_clean(name)
+      clean = name.to_s.gsub(/[\\\/:*?"<>|]/, "").strip.sub(/[. ]+\z/, "")
+      return nil if clean.empty? || clean =~ /\A(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|\z)/i
+      return clean
+    end
+
     def self.save_preset(name)
-      clean = name.to_s.gsub(/[\\\/:*?"<>|]/, "").strip
-      return false if clean.empty?
+      clean = preset_clean(name)
+      return false unless clean
       make_dir(preset_dir)
       File.open("#{preset_dir}/#{clean}.txt", "wb") do |f|
         f.write(settings_code + "\r\n")
@@ -570,10 +598,24 @@ module KIF
 
     @custom_list = nil
     def self.custom_list
+      old = legacy? ? legacy_list : nil   # a world made on PIF 6.8.2 keeps its sprite list (019_RandLegacy.rb)
+      return old if old
       path = Settings::CUSTOM_SPRITES_FILE_PATH
       mtime = File.exist?(path) ? File.mtime(path) : nil
       if !@custom_list || @custom_list[0] != mtime
-        list = getCustomSpeciesList rescue []
+        list = begin
+          # getCustomSpeciesList walks every sprite folder (up to 236,000 files) and then returns the list file's
+          # species instead, as the list is never nil; the walk is skipped, the result is the same
+          online = list_online_custom_sprites(true)
+          if online
+            max = (NB_POKEMON * NB_POKEMON) + NB_POKEMON
+            online.map { |f| getDexNumFromFilename(f) }.select { |n| n && n > 0 && n <= max }
+          else
+            getCustomSpeciesList
+          end
+        rescue
+          []
+        end
         @custom_list = [mtime, list || []]
       end
       return @custom_list[1]

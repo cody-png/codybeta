@@ -61,11 +61,11 @@ KIF::Options.define(:showlevel_nolevelmode, 0, :save)
 KIF::Options.add(:graphics, :global) {
   EnumOption.new(_INTL("Type Display"),
                  [_INTL("Off"), _INTL("PIF"), _INTL("Ico"), _INTL("TCG"), _INTL("Sqr"), _INTL("FGM"), _INTL("Txt")],
-                 # choice 1 is PIF's own type_icons; 2.. are typedisplay 1..
-                 proc { t = $PokemonSystem.typedisplay.to_i; t > 0 ? t + 1 : ($PokemonSystem.type_icons ? 1 : 0) },
+                 # choice 1 is PIF's own foe-side type_icons_opponent; 2.. are typedisplay 1..
+                 proc { t = $PokemonSystem.typedisplay.to_i; t > 0 ? t + 1 : ($PokemonSystem.type_icons_opponent ? 1 : 0) },
                  proc { |value|
                    $PokemonSystem.typedisplay = [value - 1, 0].max
-                   $PokemonSystem.type_icons = value == 1 if value < 2
+                   $PokemonSystem.type_icons_opponent = value == 1 if value < 2
                  },
                  [_INTL("Don't draw the type indicator in battle"),
                   _INTL("PIF's type icons in the foe's battle box"),
@@ -113,6 +113,20 @@ module KIF
     def self.type_display
       v = $PokemonSystem ? $PokemonSystem.typedisplay.to_i : 0
       return (0..5).include?(v) ? v : 0
+    end
+
+    # The Type Display sheet that draws the player's own Pokémon's types (6.9's
+    # "Type Icons (Player)" On, style Ico, TCG, Sqr or FGM), or nil: PIF's small
+    # icons draw them then. Txt is too wide for the room left of the box.
+    def self.player_sheet(battler)
+      return nil unless $PokemonSystem && $PokemonSystem.type_icons_player
+      return nil unless battler && !battler.opposes?(0) && battler.pbOwnedByPlayer?
+      mode = type_display
+      return nil unless (1..4).include?(mode)
+      sheet = TYPE_SHEETS[mode]
+      @sheet_found ||= {}
+      @sheet_found[sheet] = !!pbResolveBitmap(sheet) unless @sheet_found.key?(sheet)
+      return @sheet_found[sheet] ? sheet : nil
     end
 
     def self.dark?
@@ -163,6 +177,7 @@ class PokemonDataBox
   alias kif_bui_refresh refresh unless method_defined?(:kif_bui_refresh)
   alias kif_bui_refreshExp refreshExp unless method_defined?(:kif_bui_refreshExp)
   alias kif_bui_drawEnemyTypeIcons drawEnemyTypeIcons unless method_defined?(:kif_bui_drawEnemyTypeIcons)
+  alias kif_bui_drawPlayerTypeIcons drawPlayerTypeIcons unless method_defined?(:kif_bui_drawPlayerTypeIcons)
 
   def initializeDataBoxGraphic(sideSize)
     kif_bui_initializeDataBoxGraphic(sideSize)
@@ -308,11 +323,14 @@ class PokemonDataBox
     @kif_statusIcon.src_rect.set(0, (s - 1) * STATUS_ICON_HEIGHT, @kif_statusBitmap.width, STATUS_ICON_HEIGHT)
   end
 
-  # KIF drawtypeDisplay, drawn into the box (foes only)
+  # KIF drawtypeDisplay, drawn into the box. Foes always; the player's own
+  # Pokémon too when 6.9's "Type Icons (Player)" is On (Ico, TCG, Sqr and FGM:
+  # PIF's own small icons are used for the player with Off, PIF and Txt)
   def kif_draw_type_display
     mode = KIF::BattleUI.type_display
     return if mode == 0
-    return unless @battler.opposes?(0)
+    foe = @battler.opposes?(0)
+    return unless foe || KIF::BattleUI.player_sheet(@battler)
     return if @battler.is_a?(PokeBattle_FakeBattler)
     return if @battler.fainted?
     sheet = KIF::BattleUI::TYPE_SHEETS[mode]
@@ -337,14 +355,23 @@ class PokemonDataBox
     hp_x, hp_y = (@kif_gui == 2) ? kif_gui2_hp_offset : [12, 40]
     x = @spriteBaseX + @spriteBaseX + hp_x + 185
     y = hp_y + @hpBar.src_rect.height - (text ? 40 : 43)
+    # the player's: left of the box, stacked from the top like PIF's own (drawPlayerTypeIcons)
+    x = @spriteBaseX - 1 - dw unless foe
     [type1, type2].uniq.each_with_index do |t, i|
       n = GameData::Type.get(t).id_number
       next if (n + 1) * h > bmp.height
-      dy = (i == 0) ? y : (text ? y + dh : y + 5 + dh)
+      dy = foe ? ((i == 0) ? y : (text ? y + dh : y + 5 + dh)) : 16 + i * (dh + 2)
       self.bitmap.stretch_blt(Rect.new(x, dy, dw, dh), bmp, Rect.new(0, n * h, w, h))
     end
   rescue => e
     KIF.log("Type Display failed: #{e.message}")
+  end
+
+  # PIF's small icons for the player's Pokémon give way to the Type Display
+  # style when it draws them itself (above)
+  def drawPlayerTypeIcons(imagePos)
+    return if KIF::BattleUI.player_sheet(@battler)
+    kif_bui_drawPlayerTypeIcons(imagePos)
   end
 
   # Trapstarr's Exp bar patch: no crash on a NaN/infinite fraction.
@@ -380,10 +407,9 @@ if defined?(::DataBoxEBDX)
       @typeDisplayBitmap.dispose if @typeDisplayBitmap && !@typeDisplayBitmap.disposed?
       @typeDisplayBitmap = nil
       @kif_types_key = nil
-      return if @playerpoke
       s = Sprite.new(@viewport)
       s.z = getMetric("name", :z)
-      s.ex = @sprites["base"].bitmap.width
+      s.ex = @sprites["base"].bitmap.width   # (the player's box: moved to its right end when drawn)
       s.ey = -14
       @sprites["kif_types"] = s
     end
@@ -401,8 +427,11 @@ if defined?(::DataBoxEBDX)
     # [sheet, icon w, icon h, drawn w, drawn h] for the foe's types, or nil
     def kif_types_sheet
       mode = KIF::BattleUI.type_display
+      # 6.9 has one switch for each side; Type Display styles the foe's and, with Type Icons (Player) On, the player's
+      return nil unless $PokemonSystem
+      return nil if @playerpoke && !($PokemonSystem.type_icons_player && @battler.pbOwnedByPlayer?)
       if mode == 0
-        return nil unless $PokemonSystem && $PokemonSystem.type_icons
+        return nil unless @playerpoke || $PokemonSystem.type_icons_opponent
         return [KIF::BattleUI::PIF_TYPES, 19, 19, 19, 19]   # PIF's typesSmall
       end
       sheet = KIF::BattleUI::TYPE_SHEETS[mode]
@@ -445,6 +474,7 @@ if defined?(::DataBoxEBDX)
         sheet.dispose
       end
       base = @sprites["base"]
+      spr.ex = base.bitmap.width - spr.bitmap.width - 4 if @playerpoke
       spr.x = base.x + spr.ex
       spr.y = base.y + spr.ey
     rescue => e

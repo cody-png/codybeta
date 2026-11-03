@@ -200,6 +200,8 @@ module KIF
       bits << _INTL("Failed to load (see Logs/KIF_errorlog.txt).") if e.error
       took = mod_takes(e)
       bits << took if took
+      sec = defined?(KIF::ModSecurityUI) ? KIF::ModSecurityUI.describe(e) : nil
+      bits << sec if sec
       who = []
       who << "v#{e.version}" if e.version && !e.version.empty?
       who << _INTL("by {1}", e.author) if e.author && !e.author.empty? && e.author != "Unknown"
@@ -285,6 +287,8 @@ module KIF
             opt.kif_badge = [_INTL("ERROR"), KIF::PixelUI::DOWN]
           elsif !loaded.nil? && (loaded ? true : false) != e.enabled?
             opt.kif_badge = [e.enabled? ? _INTL("ON NEXT START") : _INTL("OFF NEXT START"), KIF::PixelUI::WARN]
+          elsif defined?(KIF::ModSecurityUI) && (sb = KIF::ModSecurityUI.badge(e))
+            opt.kif_badge = sb
           end
           # USE: description, uninstall (KIF's own Mods folder; Mod Manager removes its own)
           rows << Row.new(:opt, opt, :global, e.name.to_s, :mods, "Installed", 0, nil, [:mod_menu, e])
@@ -309,9 +313,15 @@ module KIF
     # USE on an installed mod; true when it was uninstalled
     def mod_menu(e)
       native = e.source.is_a?(KIF::Mods::NativeSource)
-      cmds = [_INTL("Read description")] + (native ? [_INTL("Uninstall")] : []) + [_INTL("Cancel")]
+      extra = defined?(KIF::ModSecurityUI) ? KIF::ModSecurityUI.menu_items(e) : []
+      lead = native ? 2 : 1   # Read description, Uninstall: the safety items follow them
+      cmds = [_INTL("Read description")] + (native ? [_INTL("Uninstall")] : []) + extra.map { |_k, label| label } + [_INTL("Cancel")]
       cmd = pbMessage(KIF::PixelFont.utf8(e.name.to_s), cmds, cmds.length)
       KIF::ModReadme.show_installed(e) if cmd == 0
+      if cmd >= lead && cmd < lead + extra.length
+        KIF::ModSecurityUI.run_item(extra[cmd - lead][0], e)
+        return false
+      end
       return false unless native && cmd == 1
       return false unless pbConfirmMessage(KIF::PixelFont.utf8(_INTL("Remove {1}? Its settings are kept for if you install it again.", e.name)))
       if KIF::Mods.uninstall(e)
@@ -732,7 +742,14 @@ class KifSettingsScreen
     # the list
     n = opt_rows.length
     if n == 0
-      @focus = :side unless @query
+      if @query && Input.trigger?(Input::BACK)   # a search with no results: Back clears it (the footer says so)
+        pbPlayCancelSE
+        self.query = nil
+        @focus = :side
+        refresh
+      else
+        @focus = :side unless @query
+      end
       return nil
     end
     if Input.repeat?(Input::DOWN) || Input.repeat?(Input::UP)
@@ -943,7 +960,7 @@ class KifSettingsScreen
       q = nil
       hidden { q = pbEnterText(_INTL("Search settings"), 0, 20, @query || "") }
       self.query = q
-      @focus = :list if @query
+      @focus = :list if @query && !opt_rows.empty?
       refresh
     elsif Input.trigger?(Input::BACK) && keys_back.none? { |k| (Input.triggerex?(k) rescue false) }
       stop_search(:keep)
@@ -1076,6 +1093,24 @@ class KifSettingsScreen
     return :arrows
   end
 
+  # The name a row has room for: it stops before the chip drawn in its row (long
+  # mod names ran under the OPEN chip, and under a mod's OK / RISK badge, which
+  # sits left of the Off / On choice and hid the last letters).
+  def row_label(r, x, mode)
+    label = r.label
+    badge = r.opt.respond_to?(:kif_badge) ? r.opt.kif_badge : nil
+    if mode == :button
+      chip = PF.width(PF::TINY, PF.utf8((badge ? badge[0] : _INTL("OPEN")).to_s)) + 12
+      return PF.fit(PF::ROW, label, VAL_X1 - x - chip - 10)
+    end
+    if badge && mode == :beside && KIF::SettingsScreen.choices?(r.opt)
+      seg = r.opt.values.sum { |v| PF.width(PF::TEXT, PF.utf8(v.to_s)) + 12 }
+      chip = PF.width(PF::TINY, PF.utf8(badge[0].to_s)) + 12
+      return PF.fit(PF::ROW, label, VAL_X1 - seg - 8 - chip - 8 - x)
+    end
+    return label
+  end
+
   def row_h(r)
     return HEAD_H if r.kind == :head
     return value_mode(r) == :below ? ROW_H + LINE2_H : ROW_H
@@ -1140,13 +1175,7 @@ class KifSettingsScreen
         b.fill_rect(x - 9, y + 13, 6, 1, LINE)
       end
       rrect(b, x - 9, y + 10, x - 5, y + 14, 1, DOTC) if changed?(r)
-      label = r.label
-      # a button row's name stops before its OPEN chip (long mod names ran under it)
-      if mode == :button
-        badge = r.opt.respond_to?(:kif_badge) ? r.opt.kif_badge : nil
-        chip = PF.width(PF::TINY, PF.utf8((badge ? badge[0] : _INTL("OPEN")).to_s)) + 12
-        label = PF.fit(PF::ROW, label, VAL_X1 - x - chip - 10)
-      end
+      label = row_label(r, x, mode)
       grey = KIF::SettingsScreen.grey_reason(r.opt)
       text(b, x, y - 1, 330, 26, label, grey ? DIM : TXT, PF::ROW)
       if locked_by(r.opt) || grey
@@ -1312,7 +1341,7 @@ end
 # Options (pause menu and load screen) opens this screen instead of PIF's
 # Options. If it fails, PIF's Options open as before and the error is logged.
 #===============================================================================
-KIF.guard_base("052_InfiniteFusion/System/Game Options/GameOptions.rb", 2796826256, "PokemonGameOption_Scene#pbEndScene (KifSettingsScreen#close_effects)")
+KIF.guard_base("052_InfiniteFusion/System/Game Options/GameOptions.rb", 1334977872, "PokemonGameOption_Scene#pbEndScene (KifSettingsScreen#close_effects)")
 
 class PokemonOptionScreen
   alias kif_ss_pbStartScreen pbStartScreen unless method_defined?(:kif_ss_pbStartScreen)

@@ -73,11 +73,18 @@ end
 module KIF
   def self.recalc_all_stats
     return unless $Trainer
+    # calc_stats keeps the missing HP: a fainted Pokémon would come back and a hurt one could faint
+    recalc = proc do |p|
+      next if !p || p.egg?
+      ko = p.hp <= 0
+      p.calc_stats
+      p.instance_variable_set(:@hp, ko ? 0 : 1) if ko ? p.hp != 0 : p.hp <= 0
+    end
     begin
-      $Trainer.party.each { |p| p.calc_stats if p && !p.egg? }
+      $Trainer.party.each(&recalc)
       if $PokemonStorage
         $PokemonStorage.boxes.each do |box|
-          box.pokemon.each { |p| p.calc_stats if p && !p.egg? }
+          box.pokemon.each(&recalc)
         end
       end
     rescue => e
@@ -214,4 +221,4 @@ class PokeBattle_AI
   end
 end
 
-KIF.guard_base("011_Battle/001_Battler/001_PokeBattle_Battler.rb", 486165913, "PokeBattle_Battler#pbDirectOpposing (004_KIF_BattleHelpers.rb)")
+KIF.guard_base("011_Battle/001_Battler/001_PokeBattle_Battler.rb", 2663409976, "PokeBattle_Battler#pbDirectOpposing (004_KIF_BattleHelpers.rb)")

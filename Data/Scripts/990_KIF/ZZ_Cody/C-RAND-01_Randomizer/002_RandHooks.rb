@@ -15,9 +15,10 @@ class << Kernel
 
   # The range is always the Pokémon page's Strength range (Common Event 28
   # passes the default 50 when only the starters are random)
-  def pbShuffleDex(range = 50, type = 0)
+  # (6.9 adds a third argument, force_reshuffle: passed on)
+  def pbShuffleDex(range = 50, type = 0, *rest)
     range = $game_variables[VAR_RANDOMIZER_WILD_POKE_BST] if $game_variables
-    ret = KIF::Rand.with_seed(:dex) { kif_rand_pbShuffleDex(range, type) }
+    ret = KIF::Rand.with_seed(:dex) { kif_rand_pbShuffleDex(range, type, *rest) }
     KIF::Rand.sanitize_tables
     KIF::Rand.progress_done
     KIF::Rand.data[:dex_ok] = true
@@ -35,17 +36,19 @@ class << Kernel
   end
 
   def pbShuffleTrainers(*args)
+    KIF::Rand.reset_pick_caches
     KIF::Rand.progress("Shuffling trainers...", 0.5)
     KIF::Rand.ensure_trainer_dex
     ret = KIF::Rand.with_seed(:trainers) {
       if KIF::Rand.trainer_features?
         KIF::Rand.shuffle_trainers(args[1] ? args[2] : nil)
       else
-        r = kif_rand_pbShuffleTrainers(*args)
+        r = KIF::Rand.in_pif_trainer_shuffle { kif_rand_pbShuffleTrainers(*args) }
         KIF::Rand.shuffle_fallback_trainers(*args)
         r
       end
     }
+    KIF::Rand.reset_pick_caches
     KIF::Rand.progress_done
     KIF::Rand.write_log
     return ret
@@ -75,15 +78,19 @@ class Object
 
   # PIF's progress message updates the map (NPCs roll random steps), which
   # would change a seeded shuffle; the seeded one draws its own bar instead
-  def show_shuffle_progress(i)
-    return kif_rand_show_shuffle_progress(i) if KIF::Rand.seeded == 0
-    KIF::Rand.progress(_INTL("Shuffling Pokémon..."), i.to_f / NB_POKEMON) if i % 25 == 0
+  # (6.9 passes the progress bar, the count so far and the total)
+  def show_shuffle_progress(*args)
+    return kif_rand_show_shuffle_progress(*args) if KIF::Rand.seeded == 0
+    i, total = args.length >= 3 ? [args[1], args[2]] : [args[0], NB_POKEMON]
+    KIF::Rand.progress(_INTL("Shuffling Pokémon..."), i.to_f / total) if i % 25 == 0
   end
 end
 
 # Faster shuffles: while a seeded shuffle runs, the two lookups PIF makes for
 # every candidate (base stat total, legendary check) are remembered per
-# Pokémon (KIF::Rand.memo_*). Outside shuffles nothing changes.
+# Pokémon (KIF::Rand.memo_*). Outside shuffles nothing changes. A plain number
+# is answered by KIF's own decoder (019_RandLegacy.rb): 6.9's table misreads
+# some fusion numbers.
 class Object
   alias kif_rand_calcBaseStatsSum calcBaseStatsSum unless method_defined?(:kif_rand_calcBaseStatsSum) || private_method_defined?(:kif_rand_calcBaseStatsSum)
   alias kif_rand_is_legendary is_legendary unless method_defined?(:kif_rand_is_legendary) || private_method_defined?(:kif_rand_is_legendary)
@@ -96,42 +103,17 @@ class Object
     return KIF::Rand.memo_bst_set(species, kif_rand_calcBaseStatsSum(species))
   end
 
-  def is_legendary(dex_num, printInfo = false)
-    v = KIF::Rand.fast_legendary(dex_num)
+  def is_legendary(dex_num)
+    v = KIF::Rand.fast_legendary(dex_num)   # (019_RandLegacy.rb)
     return v unless v.nil?
     v = KIF::Rand.memo_legend(dex_num)
     return v unless v.nil?
-    return KIF::Rand.memo_legend_set(dex_num, kif_rand_is_legendary(dex_num, printInfo))
+    return KIF::Rand.memo_legend_set(dex_num, kif_rand_is_legendary(dex_num))
   end
 end
 
-# PIF's is_legendary builds the whole fused species (FusedSpecies.new) for
-# every number it is asked about, then compares its head and body with the
-# legendary list; a trainer shuffle asks about thousands of fusions (~20 s).
-# For a plain dex number the answer only needs the head and body numbers.
-# Triple fusions and anything else go the old way.
 module KIF
   module Rand
-    def self.fast_legendary(dex)
-      return nil unless dex.is_a?(Integer) && dex >= 1 && defined?(NB_POKEMON) && defined?(LEGENDARIES_LIST)
-      nb = NB_POKEMON
-      return nil if dex > nb * nb + nb
-      if @fast_legend_token != KIF::Perf.token || @fast_legend_list != LEGENDARIES_LIST.hash
-        @fast_legend_token = KIF::Perf.token
-        @fast_legend_list = LEGENDARIES_LIST.hash
-        @fast_legend = {}
-        LEGENDARIES_LIST.each do |sym|
-          d = (GameData::Species.try_get(sym) rescue nil)
-          @fast_legend[d.id_number] = true if d && d.id_number <= nb
-        end
-      end
-      return @fast_legend[dex] ? true : false if dex <= nb
-      body = (dex % nb == 0) ? dex / nb - 1 : dex / nb
-      head = dex - body * nb
-      head = nb if head == 0
-      return (@fast_legend[body] || @fast_legend[head]) ? true : false
-    end
-
     # A fusion's base stats and types only, worked out by PIF's own
     # FusedSpecies methods (the rest of the species data isn't built).
     # nil for anything that isn't a plain two-part fusion.

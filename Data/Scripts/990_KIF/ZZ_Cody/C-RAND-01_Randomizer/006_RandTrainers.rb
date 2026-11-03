@@ -267,7 +267,7 @@ module KIF
       end
       bst = get(:trainer_bst)
       unless theme
-        return dex_of(customs ? getNewCustomSpecies(old, customs, bst) : getNewSpecies(old, bst))
+        return dex_of(customs ? getNewCustomSpecies(old, customs, bst, false, true, false, *pick_caches) : getNewSpecies(old, bst))
       end
       3000.times do |i|
         bst += 5 if i > 0 && i % 25 == 0
@@ -441,7 +441,7 @@ module KIF
         next if hash[tr.id]
         hash[tr.id] = tr.pokemon.map do |p|
           old = GameData::Species.get(p[:species]).id_number
-          customs_only ? getNewCustomSpecies(old, customs, bst) : getNewSpecies(old, bst)
+          customs_only ? getNewCustomSpecies(old, customs, bst, false, true, false, *pick_caches) : getNewSpecies(old, bst)
         end
       end
     end

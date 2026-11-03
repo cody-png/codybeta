@@ -220,8 +220,10 @@ class PokeBattle_AI
       #       round.
       itemBlacklist = [:EXPERTBELT,:LIFEORB]
       if !itemBlacklist.include?(user.item_id)
+        gem = user.effects[PBEffects::GemConsumed]   # an estimate must not consume the Gem
         BattleHandlers.triggerDamageCalcUserItem(user.item,
            user,target,move,multipliers,baseDmg,type)
+        user.effects[PBEffects::GemConsumed] = gem
       end
     end
     if skill>=PBTrainerAI.bestSkill && target.itemActive?

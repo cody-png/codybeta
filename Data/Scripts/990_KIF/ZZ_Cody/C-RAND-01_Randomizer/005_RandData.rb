@@ -24,8 +24,10 @@
 #     never Truant, Slow Start, Defeatist, Klutz, Stall; never weather that
 #     hurts the Pokémon's own type.
 #   * Base stats: Shuffle (same numbers, new order, same order per family) /
-#     Total (random spread, same total) / Chaos (each 1-255) with Chaos safety
-#     Off / Total (an evolution's total is never lower) / Each stat.
+#     Total (random split of the same total; no stat under ~20-25 or over
+#     ~100-190 depending on the total, see spread_bounds) / Chaos (each
+#     1-255) with Chaos safety Off / Total (an evolution's total is never
+#     lower) / Each stat.
 #   * Evolutions (only Pokémon that already evolve): the new evolution is a
 #     Final (doesn't evolve) or a higher stage; same level/item/method.
 #     Type-themed: it shares a type.
@@ -497,20 +499,42 @@ module KIF
     #---------------------------------------------------------------------------
     STAT_ORDER = [:HP, :ATTACK, :DEFENSE, :SPECIAL_ATTACK, :SPECIAL_DEFENSE, :SPEED]
 
+    # "Total" mode: the Pokémon keeps its base stat total and the six stats are
+    # a random split of it, every stat kept between spread_bounds(total).
+    # Lowest: half the average stat, at most 25. Highest: twice the average,
+    # at most 190, and never under 1.5x the average so a very high total still
+    # fits (255 at most). Examples: total 309 gives 25-103, 540 gives 25-180,
+    # 720 gives 25-190, 236 gives 20-79, 180 gives 15-60.
+    # PIF's Kernel#rand with no argument returns 0 or 1 (not a fraction): the
+    # old weights built from it were only two values, so stats came out
+    # 98/5/5/98/98/5. Only rand(n) is used here.
+    def self.spread_bounds(total)
+      avg = total / 6.0
+      lo = [[(avg * 0.5).round, 25].min, 1].max
+      hi = [[[(avg * 2).round, 190].min, (avg * 1.5).ceil].max, 255].min
+      return [lo, hi]
+    end
+
     def self.spread(total)
       total = [[total, 6].max, 1530].min
-      w = STAT_ORDER.map { rand + 0.05 }
-      sum = w.sum
-      v = w.map { |x| [[(x / sum * total).round, 1].max, 255].min }
-      # fix rounding/caps so the total stays the same
-      guard = 0
-      while v.sum != total && guard < 5000
-        i = rand(6)
-        if v.sum < total && v[i] < 255 then v[i] += 1
-        elsif v.sum > total && v[i] > 1 then v[i] -= 1 end
-        guard += 1
+      lo, hi = spread_bounds(total)
+      room = total - 6 * lo   # what is shared out above the lowest value
+      cap = hi - lo
+      parts = nil
+      200.times do   # a random split of room (5 random cut points), taken when no part is over the cap
+        cuts = Array.new(5) { rand(room + 1) }.sort
+        parts = [0, *cuts, room].each_cons(2).map { |a, b| b - a }
+        return parts.map { |x| x + lo } if parts.max <= cap
       end
-      return v
+      # shortcut: tight bounds (totals over ~700) rarely fit a random split; the last try is cut at
+      # the cap and the excess goes to random stats still under it
+      extra = parts.sum { |x| [x - cap, 0].max }
+      parts = parts.map { |x| [x, cap].min }
+      while extra > 0 && !(open = (0...6).select { |j| parts[j] < cap }).empty?
+        parts[open.sample] += 1
+        extra -= 1
+      end
+      return parts.map { |x| x + lo }
     end
 
     def self.roll_stats(evos)
@@ -586,8 +610,14 @@ module Game
     alias kif_rand_start_new start_new unless method_defined?(:kif_rand_start_new)
 
     def load(*args)
-      ret = kif_rand_load(*args)
+      KIF::Rand.loading += 1   # the picks made while the save is put on need its stamp (019_RandLegacy.rb)
       begin
+        ret = kif_rand_load(*args)
+      ensure
+        KIF::Rand.loading -= 1
+      end
+      begin
+        KIF::Rand.stamp_loaded
         KIF::Rand.sanitize_tables if $PokemonGlobal
         KIF::Rand.apply_data
       rescue => e
@@ -602,7 +632,9 @@ module Game
       rescue => e
         KIF.log("Randomizer data reset failed: #{e.message}")
       end
-      return kif_rand_start_new(*args)
+      ret = kif_rand_start_new(*args)
+      KIF::Rand.stamp_new
+      return ret
     end
   end
 end

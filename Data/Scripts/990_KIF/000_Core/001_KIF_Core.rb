@@ -18,11 +18,21 @@ module KIF
     return false
   end
 
-  # A downloaded relative path that stays inside its folder: no "..", drive,
-  # backslash or leading "/" (update manifests, mod catalogs).
+  # A downloaded relative path that stays inside its folder (update manifests,
+  # mod catalogs, mod .zip files). Refused: a leading "/", "\", ":" (drive
+  # letters, NTFS streams), control characters and NUL, the characters Windows
+  # file names can't hold, an empty, "." or ".." part, a part ending in "." or
+  # a space (Windows drops those, so "..." or "x. " can mean something else),
+  # Windows device names (CON, NUL, COM1...), and anything over 250 bytes.
+  # Spaces inside a name, accents, "%", "&", "#" and "x..mp3" are fine.
+  UNSAFE_PATH_CHARS = /[\x00-\x1f\x7f"*:<>?|\\]/
+  DEVICE_NAME = /\A(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|\z)/i
+  MAX_REL_PATH = 250
   def self.safe_rel_path?(path)
     p = path.to_s
-    return !(p.empty? || p.start_with?("/") || p =~ /\A[A-Za-z]:/ || p.include?("\\") || p.split("/").include?(".."))
+    p = p.dup.force_encoding(Encoding::UTF_8) if p.encoding == Encoding::BINARY
+    return false if p.empty? || p.bytesize > MAX_REL_PATH || !p.valid_encoding? || p.start_with?("/") || p =~ UNSAFE_PATH_CHARS
+    return p.split("/", -1).none? { |part| part.empty? || part =~ /[. ]\z/ || part =~ DEVICE_NAME }
   end
 
   # mkdir -p / rm -r (no FileUtils in the game's Ruby). rm_tree never follows

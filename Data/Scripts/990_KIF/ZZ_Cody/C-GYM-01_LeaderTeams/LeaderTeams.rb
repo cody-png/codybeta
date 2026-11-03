@@ -260,6 +260,7 @@ module KIF
 
     def self.add_extras(trainer, tr_data)
       return unless trainer && leader?(trainer.trainer_type)
+      return if defined?(KIF::Teams) && KIF::Teams.skip_extras?(trainer)   # co-op bigger trainer teams already hold the extras
       party = trainer.party
       return if party.empty? || party.length >= Settings::MAX_PARTY_SIZE
       n = extra_count(party.length, cody_setting)

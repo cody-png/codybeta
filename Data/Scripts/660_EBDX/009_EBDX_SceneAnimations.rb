@@ -122,7 +122,34 @@ module EliteBattle
   #-----------------------------------------------------------------------------
   #  function used to store Move Animations
   #-----------------------------------------------------------------------------
+  #  019_EBDX_MoveAnimations.rb holds the 581 EBDX move animations as text
+  #  (1.4 MB: ~0.35 s to compile on a PC at every start). It is evaluated the
+  #  first time the registry is used (a battle animation, or a mod that
+  #  defines or copies one), under the same file name and line numbers.
+  #-----------------------------------------------------------------------------
+  @@lazyMoveAnimations = nil
+  @@afterMoveAnimations = []
+  def self.lazy_move_animations(source)
+    @@lazyMoveAnimations = source
+  end
+  # runs the block once the game's move animations are in (now, if they are):
+  # for a change to one of them that must come after it
+  def self.after_move_animations(&block)
+    return block.call if @@lazyMoveAnimations.nil?
+    @@afterMoveAnimations.push(block)
+  end
+  def self.load_move_animations
+    source = @@lazyMoveAnimations
+    return if source.nil?
+    @@lazyMoveAnimations = nil
+    eval(source, TOPLEVEL_BINDING, "019_EBDX_MoveAnimations.rb", 1)
+    pending = @@afterMoveAnimations
+    @@afterMoveAnimations = []
+    pending.each { |b| b.call }
+  end
+  #-----------------------------------------------------------------------------
   def self.defineMoveAnimation(id, species = nil, process = nil, &block)
+    load_move_animations
     if species.is_a?(Proc)
       process = species
       species = nil
@@ -141,6 +168,7 @@ module EliteBattle
   #  function bulk copy Move Animations
   #-----------------------------------------------------------------------------
   def self.copyMoveAnimation(key, *args)
+    load_move_animations
     return if !@@moveAnimations.has_key?(key)
     for k in args
       next if key == k
@@ -151,6 +179,7 @@ module EliteBattle
   #  function used to load Move Animations
   #-----------------------------------------------------------------------------
   def self.playMoveAnimation(id, scene, userindex, targetindex, hitnum = 0, multihit = false, species = nil, *args)
+    load_move_animations
     # Normalize string IDs to symbols - animations are always registered with symbol keys
     id = id.to_sym if id.is_a?(String)
     MultiplayerDebug.info("EBDX-ANIM", "playMoveAnimation: id=#{id.inspect}, registered=#{@@moveAnimations.has_key?(id)}, all_keys=#{@@moveAnimations.keys.inspect}") if defined?(MultiplayerDebug)
@@ -175,6 +204,7 @@ module EliteBattle
   #  function used to get all defined animations (for Debug purposes)
   #-----------------------------------------------------------------------------
   def self.getDefinedAnimations
+    load_move_animations
     moves = []; common = []
     for key in @@moveAnimations.keys
       key = getConstantName(PBMoves, key) if key.is_a?(Numeric)

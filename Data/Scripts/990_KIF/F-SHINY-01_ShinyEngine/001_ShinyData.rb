@@ -140,7 +140,7 @@ class Pokemon
   # re-rolled (and saved) when read.
   def kif_channel_code(ivar)
     v = instance_variable_get(ivar)
-    if v.nil? || ($PokemonSystem && $PokemonSystem.shinyadvanced != 2 && v > 11)
+    if v.nil? || (KIF::Shiny.opt(self, :shinyadvanced, 1) != 2 && v > 11)
       v = kurayRNGforChannels
       instance_variable_set(ivar, v)
     end

@@ -46,7 +46,7 @@ module KIF
 
     # nil = plain star
     def self.star_color(pkmn)
-      adv = $PokemonSystem ? $PokemonSystem.shinyadvanced : 1
+      adv = KIF::Shiny.opt(pkmn, :shinyadvanced, 1)
       return nil if adv == 0
       codes = [pkmn.shinyR?, pkmn.shinyG?, pkmn.shinyB?]
       table, default = (adv == 2) ? [ADVANCED_STARS, ADVANCED_DEFAULT] : [NORMAL_STARS, NORMAL_DEFAULT]

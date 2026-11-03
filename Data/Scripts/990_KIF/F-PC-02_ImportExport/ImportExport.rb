@@ -332,6 +332,13 @@ module KIF
       return !($PokemonSystem && $PokemonSystem.debugfeature.to_i == 1)
     end
 
+    # Import is off while a Nuzlocke run is linked (Soul Link): an imported Pokémon would be a free
+    # extra with no place and no pair (NSL-06)
+    def self.import_allowed?
+      return false if defined?(KIF::SoulLink) && KIF::Nuzlocke.on? && KIF::SoulLink.linked? && !$DEBUG
+      return allowed?
+    end
+
     def self.ensure_folder(dir = FOLDER)
       Dir.mkdir(dir) unless File.directory?(dir)
     end
@@ -682,6 +689,7 @@ module KIF
     end
 
     def self.import(screen, randomly)
+      return screen.pbDisplay(_INTL("Soul Link: Pokémon can't be imported while your run is linked.")) unless import_allowed?
       files = choose_files(screen, "Choose Import Sub-Directory.")
       return if files.nil?
       if files.empty?
@@ -726,7 +734,9 @@ module KIF
     end
 
     #--- export commands -------------------------------------------------------
-    def self.delete_on_export?
+    # pkmn: a linked Pokémon is never deleted by an export (NSL-05)
+    def self.delete_on_export?(pkmn = nil)
+      return false if pkmn && defined?(KIF::SoulLink) && KIF::SoulLink.protected?(pkmn)
       return $PokemonSystem.exportdelete.to_i == 1
     end
 
@@ -740,7 +750,7 @@ module KIF
       storage.maxPokemon(box).times do |k|
         pkmn = storage[box, k]
         next unless pkmn
-        storage.pbDelete(box, k) if export(pkmn) && delete_on_export?
+        storage.pbDelete(box, k) if export(pkmn) && delete_on_export?(pkmn)
       end
       screen.pbHardRefresh
       screen.pbDisplay(_INTL("Pokemon(s) Exported!"))
@@ -754,7 +764,7 @@ module KIF
         storage.maxPokemon(j).times do |k|
           pkmn = storage[j, k]
           next unless pkmn
-          storage.pbDelete(j, k) if export(pkmn) && delete_on_export?
+          storage.pbDelete(j, k) if export(pkmn) && delete_on_export?(pkmn)
         end
       end
       $Trainer.party.each { |pkmn| export(pkmn) if pkmn }   # party is never deleted
@@ -778,6 +788,8 @@ end
 #-------------------------------------------------------------------------------
 module KIF::PCActionMethods
   def kif_export_one(pkmn, selected, heldpoke)
+    msg = defined?(KIF::SoulLink) && KIF::PokeIO.delete_on_export? && KIF::SoulLink.leave_refusal(pkmn, :delete)
+    return pbDisplay(msg) if msg   # export and delete in one go would take it from its pair
     unless KIF::PokeIO.export(pkmn)
       pbDisplay(_INTL("The Pokémon couldn't be exported."))
       return
@@ -816,10 +828,16 @@ KIF::BoxCommands.add(:export_box, proc { |_s| KIF::PokeIO.allowed? ? _INTL("Expo
   proc { |s| KIF::PokeIO.export_box(s, s.storage.currentBox) }, order: 70)
 KIF::BoxCommands.add(:export_all, proc { |_s| KIF::PokeIO.allowed? ? _INTL("Export All") : nil },
   proc { |s| KIF::PokeIO.export_all(s, proc { |t| s.pbDisplay(t) }) }, order: 80)
-KIF::BoxCommands.add(:import, proc { |_s| KIF::PokeIO.allowed? ? _INTL("Import") : nil },
+KIF::BoxCommands.add(:import, proc { |_s| KIF::PokeIO.import_allowed? ? _INTL("Import") : nil },
   proc { |s| KIF::PokeIO.import(s, false) }, order: 90)
-KIF::BoxCommands.add(:import_random, proc { |_s| KIF::PokeIO.allowed? ? _INTL("Import Randomly") : nil },
+KIF::BoxCommands.add(:import_random, proc { |_s| KIF::PokeIO.import_allowed? ? _INTL("Import Randomly") : nil },
   proc { |s| KIF::PokeIO.import(s, true) }, order: 100)
 
 KIF::MultiCommands.add(:export, proc { |_s, _b| KIF::PokeIO.allowed? ? _INTL("Export") : nil },
   proc { |s, box| KIF::PokeIO.export_selected(s, box) }, order: 20)
+
+# KIF 0.20.7's Pokemon#imported? (FusionRules and LevelCaps ask for it): a Pokemon this
+# importer brought in counts as the player's own. Saves from before it have no @imported.
+class Pokemon
+  def imported?; return @imported ? true : false; end unless method_defined?(:imported?)
+end

@@ -53,13 +53,40 @@ module KIF
     # registered while loading.
     class Entry
       attr_accessor :id, :name, :version, :author, :description, :kind, :path,
-                    :source, :loaded, :error
+                    :source, :loaded, :error,
+                    :mod_id, :api_version, :permissions
+      attr_writer :network_hosts, :permission_notes
       def initialize(h = {})
         h.each { |k, v| send("#{k}=", v) if respond_to?("#{k}=") }
         @name ||= @id.to_s
       end
 
       def enabled?; return @source ? @source.enabled?(self) : true; end
+
+      # What mod.json says about the API and about safety (all optional): the id, the API level it
+      # was written for, the permissions it asks for (nil = an older mod, held to what its code
+      # does), the hosts it may reach and a sentence for each permission.
+      def apply_json(h)
+        return unless h.is_a?(Hash)
+        @mod_id = h["id"].to_s unless h["id"].to_s.empty?
+        v = h["api_version"]
+        @api_version = v.to_i if (v.is_a?(Integer) && v > 0) || (v.is_a?(String) && v =~ /\A[1-9]\d{0,5}\z/)
+        if h["permissions"].is_a?(Array)
+          @permissions = h["permissions"].select { |x| x.is_a?(String) } & KIF::ModCheck::PERMISSION_NAMES
+        end
+        if h["network_hosts"].is_a?(Array) && KIF::ModCheck.hosts_ok?(h["network_hosts"])
+          @network_hosts = h["network_hosts"].map { |x| x.downcase }
+        end
+        if h["permission_notes"].is_a?(Hash)
+          @permission_notes = {}
+          h["permission_notes"].each { |k, t| @permission_notes[k] = t.to_s[0, 140] if KIF::ModCheck::PERMISSION_NAMES.include?(k) && t.is_a?(String) }
+        end
+      end
+
+      def network_hosts; return @network_hosts || []; end
+      def permission_notes; return @permission_notes || {}; end
+      def scan; return defined?(KIF::ModTrust) ? KIF::ModTrust.report_for(@id) : nil; end
+      def trust; return defined?(KIF::ModTrust) ? KIF::ModTrust.state(@id) : nil; end
       # what happened when it loaded this session (KIF's own mods)
       def error; return @error || (KIF::Mods.status[@id] || {})[:error]; end
       def loaded; return @loaded.nil? ? (KIF::Mods.status[@id] || {})[:loaded] : @loaded; end
@@ -92,6 +119,8 @@ module KIF
       return false unless roots.any? { |root| path.start_with?(root + "/") } && File.exist?(path)
       KIF::ModSettings.stash(e.id) if defined?(KIF::ModSettings) && KIF::ModSettings.active?
       File.directory?(path) ? KIF.rm_tree(path) : File.delete(path)
+      # its pictures and sounds must not stay in the lookup, or the next one that uses them fails to open
+      KIF::ModAssets.build(loaded_dirs.reject { |d| File.expand_path(d.to_s) == path }) if defined?(KIF::ModAssets)
       set_disabled(e.id, false) if disabled.include?(e.id)
       e.source.instance_variable_set(:@entries, nil)
       KIF::ModCatalog.instance_variable_set(:@installed_index, nil) if defined?(KIF::ModCatalog)
@@ -181,18 +210,29 @@ module KIF
     module MiniJSON
       module_function
 
+      MAX_DEPTH = 64   # a mod.json is flat; "[[[[..." could end the game with a stack overflow
+
       def parse(text)
         @s = text.to_s.sub(/\A\xEF\xBB\xBF/, "")
         @i = 0
+        @depth = 0
         v = value
         return v
-      rescue StandardError
+      rescue StandardError, SystemStackError
         return nil
       end
 
       def ws; @i += 1 while @i < @s.length && @s[@i] =~ /\s/; end
 
       def value
+        @depth += 1
+        raise "nested too deep" if @depth > MAX_DEPTH
+        return raw_value
+      ensure
+        @depth -= 1
+      end
+
+      def raw_value
         ws
         c = @s[@i]
         case c
@@ -297,8 +337,10 @@ module KIF
           KIF.log("Mod zip #{c}: Mods/#{name} already exists - the zip is left alone (delete one of them)")
           next
         end
+        made = false
         begin
           n = unzip(zip, into)
+          made = true
           if done_list
             File.open(done_list, "ab") { |f| f.write(key + "\n") }
             KIF.log("Mod zip #{c}: #{n} files unpacked into #{into} (its Mods folder can't be written)")
@@ -315,41 +357,125 @@ module KIF
         rescue StandardError => e
           KIF.log("Mod zip #{c} couldn't be unpacked (#{e.class}: #{e.message})")
           @failed << c
-          (rm_tree(into) rescue nil)
+          (rm_tree(into) rescue nil) if made   # unzip cleans up after itself; this is a failed move to Imported
         end
       end
     end
 
+    # What a mod .zip may hold: scripts and pictures, not a whole game. A
+    # bigger or odder one is refused whole (nothing is left half unpacked).
+    ZIP_MAX_FILES = 10_000
+    ZIP_MAX_FILE  = 64 * 1024 * 1024
+    ZIP_MAX_TOTAL = 512 * 1024 * 1024
+    ZIP_SLICE     = 4096   # compressed bytes inflated at a time: a bomb is stopped after one slice, not after it fills memory
+
+    # The path parts of a zip entry's name ("\" read as "/", "" and "." parts
+    # dropped). A name that is absolute or has a ".." or drive part, control
+    # characters, a device name... is not skipped: the whole zip is refused.
+    def self.zip_parts(name)
+      n = name.to_s.tr("\\", "/")
+      parts = n.split("/").reject { |p| p.empty? || p == "." }
+      ok = !n.start_with?("/") && (parts.empty? || KIF.safe_rel_path?(parts.join("/")))
+      raise "unsafe file name in the zip: #{name.to_s.inspect[0, 80]}" unless ok
+      return parts
+    end
+
+    # the bytes of one entry, never more than ZIP_MAX_FILE and checked against the zip's own CRC
+    def self.zip_data(f, entry)
+      name, method, csize, offset, _usize, crc = entry
+      raise "unsupported packing (method #{method})" unless method == 0 || method == 8
+      raise "#{name.to_s.inspect[0, 80]} is too big (#{csize} bytes packed)" if csize > ZIP_MAX_FILE
+      f.seek(offset)
+      h = f.read(30)
+      raise "damaged entry #{name.to_s.inspect[0, 80]}" unless h && h[0, 4] == "PK\x03\x04".b
+      nlen, xlen = h[26, 4].unpack("vv")
+      f.seek(offset + 30 + nlen + xlen)
+      raw = f.read(csize)
+      raise "damaged entry #{name.to_s.inspect[0, 80]}" unless raw && raw.bytesize == csize
+      if method == 8 && !raw.empty?
+        z = Zlib::Inflate.new(-Zlib::MAX_WBITS)
+        data = "".b
+        begin
+          0.step(raw.bytesize - 1, ZIP_SLICE) do |pos|
+            data << z.inflate(raw.byteslice(pos, ZIP_SLICE))
+            raise "#{name.to_s.inspect[0, 80]} is too big (over #{ZIP_MAX_FILE} bytes unpacked)" if data.bytesize > ZIP_MAX_FILE
+          end
+          data << z.finish
+        ensure
+          z.close
+        end
+      else
+        data = raw
+      end
+      raise "#{name.to_s.inspect[0, 80]} is too big (over #{ZIP_MAX_FILE} bytes unpacked)" if data.bytesize > ZIP_MAX_FILE
+      raise "damaged entry #{name.to_s.inspect[0, 80]}" if crc && Zlib.crc32(data) != crc
+      return data
+    end
+
+    # The names of entries that are links (Unix mode 0120000 in the central directory's
+    # attributes). A link unpacked on a player's PC could point anywhere, so a zip that
+    # holds one is refused whole.
+    def self.zip_links(f)
+      size = f.size
+      tail = size > 70_000 ? 70_000 : size
+      f.seek(size - tail)
+      buf = f.read(tail).to_s.b
+      at = buf.rindex("PK\x05\x06".b)
+      return [] unless at && buf.bytesize >= at + 22
+      count, _cdsize, cdoff = buf[at + 10, 12].unpack("vVV")
+      f.seek(cdoff)
+      out = []
+      count.times do
+        h = f.read(46)
+        break unless h && h.bytesize == 46 && h[0, 4] == "PK\x01\x02".b
+        made = h[4, 2].unpack1("v")
+        attr = h[38, 4].unpack1("V")
+        nlen, xlen, clen = h[28, 6].unpack("vvv")
+        name = f.read(nlen).to_s
+        f.read(xlen + clen)
+        out << name if (made >> 8) == 3 && ((attr >> 16) & 0o170000) == 0o120000
+      end
+      return out
+    end
+
+    # Unpacked beside `into` in a hidden folder, moved to `into` only when
+    # every entry is in: a refused or broken zip leaves nothing behind.
     def self.unzip(zip, into)
       require "zlib"
       raise "no zip reader" unless defined?(KIF::SpriteImport::Zip)
       written = 0
-      File.open(zip, "rb") do |f|
-        list = KIF::SpriteImport::Zip.entries(f)
-        names = list.map { |e| e[0].tr("\\", "/").split("/").reject { |p| p.empty? || p == "." || p == ".." } }
-        files = names.each_with_index.reject { |n, i| n.empty? || list[i][0].end_with?("/") }
-        # one folder around everything: drop it
-        tops = files.map { |n, _| n.length > 1 ? n[0] : nil }.uniq
-        strip = (tops.length == 1 && tops[0]) ? 1 : 0
-        files.each do |parts, i|
-          _name, method, csize, offset = list[i]
-          rel = parts[strip..-1]
-          next if rel.nil? || rel.empty?
-          raise "unsupported packing (method #{method})" unless method == 0 || method == 8
-          f.seek(offset)
-          h = f.read(30)
-          raise "damaged entry #{parts.join('/')}" unless h && h[0, 4] == "PK\x03\x04".b
-          nlen, xlen = h[26, 4].unpack("vv")
-          f.seek(offset + 30 + nlen + xlen)
-          data = f.read(csize)
-          data = Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(data) if method == 8
-          dest = File.join(into, *rel)
-          mkdir_p(File.dirname(dest))
-          File.open(dest, "wb") { |o| o.write(data) }
-          written += 1
+      total = 0
+      tmp = File.join(File.dirname(into), ".#{File.basename(into)}.kif_unpack")
+      rm_tree(tmp)
+      begin
+        File.open(zip, "rb") do |f|
+          list = KIF::SpriteImport::Zip.entries(f)
+          raise "too many files in the zip (#{list.length})" if list.length > ZIP_MAX_FILES
+          links = zip_links(f)
+          raise "the zip holds a link (#{links.first.to_s.inspect[0, 60]}), so it isn't unpacked" unless links.empty?
+          names = list.map { |e| zip_parts(e[0]) }
+          files = names.each_with_index.reject { |n, i| n.empty? || list[i][0].end_with?("/") }
+          files.reject! { |n, _| n[0] == "__MACOSX" || n[-1].start_with?("._") }   # Finder's extras
+          # one folder around everything: drop it (not Graphics / Audio / Fonts: those are the mod's own)
+          tops = files.map { |n, _| n.length > 1 ? n[0] : nil }.uniq
+          strip = (tops.length == 1 && tops[0] && KIF::ModAssets::DIRS.none? { |d| d.casecmp?(tops[0]) }) ? 1 : 0
+          files.each do |parts, i|
+            rel = parts[strip..-1]
+            next if rel.nil? || rel.empty?
+            data = zip_data(f, list[i])
+            total += data.bytesize
+            raise "the zip unpacks to more than #{ZIP_MAX_TOTAL} bytes" if total > ZIP_MAX_TOTAL
+            dest = File.join(tmp, *rel)
+            mkdir_p(File.dirname(dest))
+            File.open(dest, "wb") { |o| o.write(data) }
+            written += 1
+          end
         end
+        mkdir_p(tmp)
+        File.rename(tmp, into)
+      ensure
+        rm_tree(tmp)   # still there only when something above failed
       end
-      mkdir_p(into)
       return written
     end
 
@@ -398,9 +524,11 @@ module KIF
               next if mod_manager_folders?
               h = KIF::Mods.read_json(json) || {}
               desc = h["description"].is_a?(Array) ? h["description"].join(" ") : h["description"].to_s
-              list << Entry.new(:id => c, :name => (h["name"] || c).to_s, :version => h["version"]&.to_s,
-                                :author => h["author"]&.to_s, :description => desc, :kind => :folder,
-                                :path => path, :source => self)
+              ent = Entry.new(:id => c, :name => (h["name"] || c).to_s, :version => h["version"]&.to_s,
+                              :author => h["author"]&.to_s, :description => desc, :kind => :folder,
+                              :path => path, :source => self)
+              ent.apply_json(h)
+              list << ent
             else
               # a folder with only pictures / sounds is a mod too (KIF::ModAssets)
               next if Dir.glob(File.join("**", "*.rb"), base: path).empty? &&   # base: a [ ] { } in the name isn't a pattern
@@ -513,7 +641,9 @@ module KIF
     end
 
     # Everything in one Mods folder (the game's, or a test's)
-    def self.load_dir(dir, extra = [])
+    def self.load_dir(dir, extra = [], secure: nil)
+      # the checks (ModTrust, ModGuard) belong to the real Mods folder; a test folder asks for them with secure: true
+      secure = (dir.to_s == File.join(".", FOLDER) && defined?(KIF::ModGuard) && defined?(KIF::ModTrust)) if secure.nil?
       @loaded_root = []
       @loaded_root_paths = {}
       @loaded_dirs = []   # folder mods that loaded, in order (their pictures / sounds)
@@ -527,13 +657,24 @@ module KIF
       add_source(ModManagerSource.new)
       # a read-only game folder's zips unpack into the save folder's Mods
       native.dirs.each { |d| unpack_zips(d, (d == dir && !extra.empty? && !KIF::Paths.game_writable?) ? extra.first : d) if File.directory?(d) }
+      if secure
+        KIF::ModContract.refresh_roots if defined?(KIF::ModContract)
+        KIF::ModTrust.begin_session(native)
+        KIF::ModGuard.arm!
+      end
       off = []
       on = mods_on(native)
       # loose .rb files first, in name order (as KIF 0.20.7)
       native.entries.select { |e| e.kind == :file }.each do |e|
         (off << e.id; next) unless e.enabled?
+        if secure && (why = KIF::ModTrust.gate(e))
+          status[e.id] = { :loaded => false, :error => nil, :blocked => why }
+          KIF.log("Mod not loaded: #{e.name} - #{why}")
+          next
+        end
         @names[e.id] = e.name.to_s
         r = load_file(e.path, e.id)
+        KIF::ModGuard.after_load(e.id) if secure
         status[e.id] = { :loaded => r == true, :error => (r == true ? nil : r) }
         KIF::ModRules.release(e.id) unless r == true
         next unless r == true
@@ -550,6 +691,7 @@ module KIF
         (off << e.id; next) unless e.enabled?
         json = KIF::ModRules.json_for(e)
         why = KIF::ModRules.blocked_reason(e, json, on, blocked)
+        why ||= KIF::ModTrust.gate(e) if secure
         if why
           status[e.id] = { :loaded => false, :error => nil, :blocked => why }
           blocked[e.id] = e.name.to_s
@@ -563,6 +705,7 @@ module KIF
         # makes its aliases recurse)
         scripts = native.scripts(e).reject { |f| loaded_file?(f) || loose_copy?(f) }
         results = scripts.map { |f| load_file(f, e.id) }
+        KIF::ModGuard.after_load(e.id) if secure
         bad = results.find { |r| r != true }
         status[e.id] = { :loaded => bad.nil?, :error => bad }
         if bad.nil?
@@ -576,6 +719,10 @@ module KIF
         end
       end
       KIF::ModRules.apply_mod_manager
+      if secure
+        KIF::ModTrust.save!
+        KIF::ModSecurityUI.schedule if defined?(KIF::ModSecurityUI) && !KIF::ModTrust.notices.empty?
+      end
       KIF.log("Mods switched Off: #{off.join(', ')}") unless off.empty?
     end
 
@@ -609,7 +756,15 @@ module KIF
       (Dir.mkdir(FOLDER) rescue nil) unless File.directory?(FOLDER)   # a read-only game folder still loads its mods
       KIF::ModSettings.install(FOLDER) if defined?(KIF::ModSettings)
       KIF::ModCatalog.migrate_copied_assets(FOLDER) if defined?(KIF::ModCatalog)   # once: files older KIF copied into the game
-      load_dir(File.join(".", FOLDER), extra_folders)
+      # The collector ran for a quarter of the time the mods' scripts took to
+      # load (garbage nothing needs yet); it waits until they're all in. Not
+      # on a phone, where memory is the tighter one.
+      gc_paused = !KIF.mobile? && GC.disable == false
+      begin
+        load_dir(File.join(".", FOLDER), extra_folders)
+      ensure
+        GC.enable if gc_paused
+      end
       KIF::ModAssets.build(@loaded_dirs || []) if defined?(KIF::ModAssets)
       KIF::ModCompat.after_mods_loaded if defined?(KIF::ModCompat) && KIF::ModCompat.respond_to?(:after_mods_loaded)
       KIF::AbilityText.install if defined?(KIF::AbilityText)   # outside mods' own ability-text aliases

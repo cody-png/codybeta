@@ -32,6 +32,22 @@ module KIF
       return acts.map { |a| [a, (a.label.call(pkmn) rescue nil)] }.select { |_, l| l }
     end
 
+    # Runs a handler of an action, box command, multi command or party row. A
+    # mod's handler that raises is logged once (with its mod) and the menu goes
+    # on (F-CORE-10, 2026-11-01).
+    def self.run_handler(kind, id, handler, *args)
+      return handler.call(*args)
+    rescue StandardError => e
+      @bad ||= {}
+      unless @bad["#{kind}:#{id}"]
+        @bad["#{kind}:#{id}"] = true
+        src = (handler.source_location[0] rescue nil)
+        mod = (defined?(KIF::ModContract) && src) ? KIF::ModContract.owner_of_path(src) : nil
+        KIF.log("#{kind} #{id} (#{mod || 'KIF'}): #{e.class}: #{e.message}")
+      end
+      return nil
+    end
+
     # Money helper used by several actions (KIF "Streamer's Dream" makes
     # everything free; that option comes with the Kuray Shop).
     def self.price(base)
@@ -181,20 +197,21 @@ class PokemonStorageScreen
     ret = kif_pc_pbShowCommands(msg, shown, index)
     return ret if ret < cancel_idx
     k = ret - cancel_idx
-    list[k][0].handler.call(self) if k < list.length
+    KIF::PCActions.run_handler("PC box command", list[k][0].id, list[k][0].handler, self) if k < list.length
     return cancel_idx
   end
 
   def kif_multi_menu(msg, commands, index, box)
     cancel_idx = commands.length - 1
     return kif_pc_pbShowCommands(msg, commands, index) if commands[cancel_idx] != _INTL("Cancel")
-    list = KIF::MultiCommands.available(self, box)
+    # an entry PIF's own menu has is not added again (6.9 shows Release outside Debug too)
+    list = KIF::MultiCommands.available(self, box).reject { |_, l| commands.include?(l) }
     return kif_pc_pbShowCommands(msg, commands, index) if list.empty?
     shown = commands[0...cancel_idx] + list.map { |_, l| l } + [commands[cancel_idx]]
     ret = kif_pc_pbShowCommands(msg, shown, index)
     return ret if ret < cancel_idx
     k = ret - cancel_idx
-    list[k][0].handler.call(self, box) if k < list.length
+    KIF::PCActions.run_handler("PC multi command", list[k][0].id, list[k][0].handler, self, box) if k < list.length
     return cancel_idx
   end
 
@@ -203,7 +220,7 @@ class PokemonStorageScreen
     labels = list.map { |_, l| l } + [_INTL("Cancel")]
     cmd = kif_pc_pbShowCommands(_INTL("{1} is selected.", pkmn.name), labels)
     return if cmd < 0 || cmd >= list.length
-    list[cmd][0].handler.call(self, pkmn, selected, heldpoke)
+    KIF::PCActions.run_handler("PC action", list[cmd][0].id, list[cmd][0].handler, self, pkmn, selected, heldpoke)
   end
 
   # KIF pbKurayRefresh: redraw the selected Pokémon and the whole box.
@@ -250,7 +267,7 @@ module KIF
       labels = list.map { |_, l| l } + [_INTL("Cancel")]
       cmd = pbShowCommands(_INTL("Do what with {1}?", pkmn.name), labels)
       return if cmd < 0 || cmd >= list.length
-      list[cmd][0].handler.call(self, pkmn, [-1, @index], nil)
+      KIF::PCActions.run_handler("Party action", list[cmd][0].id, list[cmd][0].handler, self, pkmn, [-1, @index], nil)
     end
   end
 end
@@ -307,6 +324,31 @@ module KIF
 end
 PokemonPartyScreen.prepend(KIF::PartyMenuCompat::ScreenHook)
 
+# Rows a mod adds to the field party menu ("Do what with X?"), before Cancel,
+# after "Kuray Actions" (F-CORE-10, 2026-11-01). Replaces copying the whole menu.
+#   KIF::PartyMenu.add(:my_row, "My action", condition: ->(pkmn, idx) { true },
+#                      handler: ->(screen, pkmn, idx) { ... }, order: 100)
+module KIF
+  module PartyMenu
+    Row = Struct.new(:id, :label, :condition, :handler, :order, :index)
+    @rows = []
+
+    def self.add(id, label, handler:, condition: nil, order: 100)
+      @rows.reject! { |r| r.id == id }
+      @rows << Row.new(id, label, condition, handler, order, @rows.length)
+    end
+
+    def self.remove(id); @rows.reject! { |r| r.id == id }; end
+
+    # [[row, label]] for this Pokemon; a condition that raises hides the row
+    def self.available(pkmn, idx)
+      list = @rows.select { |r| !defined?(KIF::Modules) || KIF::Modules.proc_active?(r.handler) }
+      list = list.select { |r| r.condition.nil? || (r.condition.call(pkmn, idx) rescue false) }
+      return list.sort_by { |r| [r.order, r.index] }.map { |r| [r, (r.label.is_a?(Proc) ? (r.label.call(pkmn) rescue r.id.to_s) : r.label.to_s)] }
+    end
+  end
+end
+
 class PokemonParty_Scene
   alias kif_party_pbChoosePokemon pbChoosePokemon unless method_defined?(:kif_party_pbChoosePokemon)
 
@@ -329,13 +371,14 @@ class PokemonParty_Scene
     end
     extras = @kif_party_screen ? KIF::PartyMenuCompat.missing(pkmn, commands) : []
     # field party menu only (the battle party list has the same header)
-    kuray = @kif_party_screen && !($game_temp && $game_temp.in_battle) &&
-            !(defined?(KIF::SelfBattle) && KIF::SelfBattle.active) &&
-            !KIF::PCActions.available(pkmn).empty?
-    return kif_party_raw_commands(helptext, commands, index) if extras.empty? && !kuray
+    field = @kif_party_screen && !($game_temp && $game_temp.in_battle) && !(defined?(KIF::SelfBattle) && KIF::SelfBattle.active)
+    kuray = field && !KIF::PCActions.available(pkmn).empty?
+    rows = field ? KIF::PartyMenu.available(pkmn, idx) : []
+    return kif_party_raw_commands(helptext, commands, index) if extras.empty? && !kuray && rows.empty?
     pos = commands.length - 1
     added = extras.map { |_, label| label }
     added << _INTL("Kuray Actions") if kuray
+    added.concat(rows.map { |_, label| label })
     shown = commands[0...pos] + added + [cancel]
     ret = kif_party_raw_commands(helptext, shown, index)
     return ret if ret < pos
@@ -347,6 +390,11 @@ class PokemonParty_Scene
       KIF::PartyActionHost.new(self, idx).run(pkmn)
       pbRefresh rescue nil
       return pos   # "Cancel" in the base list
+    end
+    row = rows[ret - pos - extras.length - (kuray ? 1 : 0)]
+    if row
+      KIF::PCActions.run_handler("Party menu row", row[0].id, row[0].handler, @kif_party_screen, pkmn, idx)
+      pbRefresh rescue nil
     end
     return pos     # "Cancel"
   end

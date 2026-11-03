@@ -16,10 +16,12 @@
 #===============================================================================
 module KIF
   module Perf
-    @token = rand(2**30) + 1
+    # A Random of its own: the game's random stream is not touched by a data reload (the
+    # same seed gives the same battle whether or not mod data was synced during it)
+    @token = Random.new.rand(2**30) + 1
 
     def self.token; @token; end
-    def self.bump_token; @token = rand(2**30) + 1; end
+    def self.bump_token; @token = Random.new.rand(2**30) + 1; end
   end
 end
 
@@ -248,7 +250,9 @@ module KIF
 end
 
 #-------------------------------------------------------------------------------
-# messages.dat read once at start-up, not twice. 6.8.2 loads it into the main
+# messages.dat read once at start-up, not twice. (Written for 6.8.2; 6.9 loads
+# messages.dat straight into the fallback table, 999_Main.rb:171, so there is
+# rarely anything left to hand over.) 6.8.2 loaded it into the main
 # table (999_Main.rb:171), then Game.set_up_system loads the language file
 # over it (001_StartGame.rb:110, "english.dat" - not shipped, so the main
 # table ends up empty), and the first text lookup then loads messages.dat
@@ -283,9 +287,9 @@ module KIF
     end
 
     #---------------------------------------------------------------------------
-    # Text tables kept ready to load. Decoding messages.dat (31 MB: XOR, then
-    # Marshal.load of ~4 million mostly empty entries, then the compacting
-    # above) takes ~2 s on a PC at every start; the same tables saved once
+    # Text tables kept ready to load. Decoding messages.dat (6.8 MB on PIF 6.9,
+    # 31 MB on 6.8.2: XOR, then Marshal.load of the tables, then the compacting
+    # above) took ~2 s on a PC at every start on 6.8.2; the same tables saved once
     # already compacted (zlib, ~1 MB) load in ~0.1 s. Remade when the file's
     # size or time changes; any problem reading it = the normal load.
     #---------------------------------------------------------------------------
@@ -365,38 +369,6 @@ begin
   end
 rescue StandardError
   nil
-end
-
-#===============================================================================
-# Encryption.xor (001_Technical/000_Encryption.rb) decodes messages.dat (31 MB)
-# one byte at a time in Ruby: ~7 s the first time any text is looked up.
-# Same result, four bytes at a time: ~1.2 s. Used for reading and writing.
-#===============================================================================
-module Encryption
-  class << self
-    alias kif_perf_xor xor unless method_defined?(:kif_perf_xor)
-
-    def xor(data)
-      key = ENCRYPTION_KEY
-      return kif_perf_xor(data) unless key.length == 16
-      n = data.bytesize
-      full = n - n % 16
-      k0, k1, k2, k3 = key.pack("C*").unpack("L<4")
-      w = data.byteslice(0, full).unpack("L<*")
-      i = 0
-      len = w.length
-      while i < len
-        w[i] ^= k0
-        w[i + 1] ^= k1
-        w[i + 2] ^= k2
-        w[i + 3] ^= k3
-        i += 4
-      end
-      out = w.pack("L<*")
-      out << data.byteslice(full, n - full).bytes.each_with_index.map { |b, j| b ^ key[j] }.pack("C*") if n > full
-      return out
-    end
-  end
 end
 
 #===============================================================================

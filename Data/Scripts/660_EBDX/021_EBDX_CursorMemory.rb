@@ -16,11 +16,12 @@ if defined?(PokeBattle_SceneEBDX)
 
       # Restore cursor to last used position for this battler slot (after refresh,
       # so refresh can't clobber our index).
+      numCommands = @commandWindow.indexes.length rescue 4
       if @commandWindow.respond_to?(:index=)
-        @commandWindow.index = (@lastCmd && @lastCmd[idxBattler]) || 0
+        pos = ((@lastCmd && @lastCmd[idxBattler]) || 0).to_i
+        @commandWindow.index = pos.between?(0, numCommands - 1) ? pos : 0
       end
 
-      numCommands = @commandWindow.indexes.length rescue 4
       ret = -1
       loop do
         pbUpdate(@commandWindow)
@@ -51,8 +52,9 @@ if defined?(PokeBattle_SceneEBDX)
         end
       end
 
-      # Save cursor position so it's restored next turn
-      @lastCmd[idxBattler] = ret if @lastCmd && ret >= 0
+      # Save the button position (not the command code: INFO is code 50) so it's restored next turn
+      ret = -1 unless ret.is_a?(Integer)
+      @lastCmd[idxBattler] = @commandWindow.index if @lastCmd && ret >= 0
 
       @commandWindow.hidePlay if @commandWindow.respond_to?(:hidePlay)
       return ret

@@ -11,8 +11,13 @@
 class PokeBattle_Battle
   alias kif_ff_pbDisplayPaused pbDisplayPaused unless method_defined?(:kif_ff_pbDisplayPaused)
 
+  # also asked by the Battle Info log (its hook wraps this one), so the line isn't logged either
+  def kif_ff_hidden?(msg)
+    return @decision == 2 && msg == _INTL("You have no more Pokémon that can fight!") && !(pbAllFainted?(0) rescue true)
+  end
+
   def pbDisplayPaused(msg, &block)
-    return if @decision == 2 && msg == _INTL("You have no more Pokémon that can fight!") && !(pbAllFainted?(0) rescue true)
+    return if kif_ff_hidden?(msg)
     return kif_ff_pbDisplayPaused(msg, &block)
   end
 end

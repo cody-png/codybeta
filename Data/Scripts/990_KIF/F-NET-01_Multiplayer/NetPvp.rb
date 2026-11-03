@@ -25,7 +25,8 @@
 # the Archipelago traps. The Bag and balls are off, Auto-Battle and "let the
 # game choose" are off, Level Caps do not apply, and the Multiplayer host's
 # gameplay settings count. Run is a forfeit. A player who does not choose in
-# PvP.pick_wait seconds has that turn picked by the game's AI; one whose line
+# PvP.pick_wait seconds has that turn picked by the game's AI, and forfeits after
+# two such waits in a row (a pick or a replacement; a real pick starts over); one whose line
 # drops, or whose game can't show the battle, loses to the other; so does one
 # the runner hears nothing from for PvP.silence seconds (the other game sends a
 # "still here" every PvP.beat_every seconds from a thread, so a stalled lobby
@@ -57,6 +58,7 @@ module KIF
     @quiet_wait  = 12.0   # the other game waits this long for a quiet moment to join
     @pick_wait   = 60.0   # a player picks a move in this long, else the AI picks that turn
     @sw_wait     = 45.0   # ... a replacement
+    SILENT_FORFEIT = 2    # waits for a pick that end with no pick, in a row: that player forfeits
     @silence     = 30.0   # the runner hears nothing from the other game for this long: that player forfeits
     @beat_every  = 5.0    # the other game says "still here" this often (from a thread, so a menu or a long message doesn't stop it)
     @running = false
@@ -626,8 +628,20 @@ module KIF
         return _INTL("Waiting for {1} to choose... ({2} s)", @name, left)
       end
 
-      # a player who gives no answer has the turn picked by the AI; it never plays on for them
-      def silent(_why); @silent = 0; end
+      # a player who gives no answer has that turn picked by the AI; it never plays on for them
+      # A player whose line is alive but who gives no pick when the wait ends (a move, or a replacement) SILENT_FORFEIT
+      # times in a row forfeits at once: the other side wins. A real pick starts the count again (Coop::Host counts the
+      # same way, but there the AI fights on).
+      def silent(why)
+        return @silent = 0 if why == true
+        return unless why == :time
+        @silent += 1
+        return if @silent < SILENT_FORFEIT || @silent_forfeit || @battle.decision != 0
+        @silent_forfeit = true
+        KIF::Coop.log("#{@name} gave no pick #{SILENT_FORFEIT} times in a row: the match is a forfeit")
+        (quietly { @battle.pbDisplayPaused(_INTL("{1} did not choose for {2} turns. You win.", @name, SILENT_FORFEIT)) } rescue nil)
+        @battle.decision = 1
+      end
 
       # a dropped line is said when the match ends (the AI picks the missing side meanwhile)
       def lose
@@ -704,6 +718,7 @@ module KIF
         (@beat.kill rescue nil) if @beat
         d = { "dc" => decision.to_i }
         d["x"] = why if why
+        d["f"] = 1 if @silent_forfeit   # (the other game says why it lost)
         post("co_end", "d" => d) if connected?
         KIF::Coop.log("match #{@id} over (#{why || decision})")
       end
@@ -857,14 +872,17 @@ module KIF
         dc = int(d["dc"], 0, 5, 0)
         @decision = { 1 => 2, 2 => 1, 5 => 5 }[dc] || 0
         KIF::Coop.log("#{@host_name}'s match #{@id} over (#{d['x'] ? Mon.name(d['x']) : dc})")
+        @forfeit = d["f"] == 1 && @decision == 2
         if d["x"] || !@begun
           @aborted = true
+          @forfeit = false
           @decision = 0
           KIF::Coop.tell(:party, _INTL("{1}'s game didn't take your team: it has a move, ability or item that game doesn't have (a mod's, or another KIF's), or the match didn't fit.", @host_name)) if d["x"] == "party"
         end
       end
 
       def after_battle
+        pbMessage(_INTL("You did not choose for {1} turns. You forfeit the match.", PvP::SILENT_FORFEIT)) if @forfeit
         PvP.result(@decision.to_i, @host_name)
       end
     end

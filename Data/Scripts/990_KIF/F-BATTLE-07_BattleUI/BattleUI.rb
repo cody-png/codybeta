@@ -61,11 +61,11 @@ KIF::Options.define(:showlevel_nolevelmode, 0, :save)
 KIF::Options.add(:graphics, :global) {
   EnumOption.new(_INTL("Type Display"),
                  [_INTL("Off"), _INTL("PIF"), _INTL("Ico"), _INTL("TCG"), _INTL("Sqr"), _INTL("FGM"), _INTL("Txt")],
-                 # choice 1 is PIF's own type_icons; 2.. are typedisplay 1..
-                 proc { t = $PokemonSystem.typedisplay.to_i; t > 0 ? t + 1 : ($PokemonSystem.type_icons ? 1 : 0) },
+                 # choice 1 is PIF's own foe-side type_icons_opponent; 2.. are typedisplay 1..
+                 proc { t = $PokemonSystem.typedisplay.to_i; t > 0 ? t + 1 : ($PokemonSystem.type_icons_opponent ? 1 : 0) },
                  proc { |value|
                    $PokemonSystem.typedisplay = [value - 1, 0].max
-                   $PokemonSystem.type_icons = value == 1 if value < 2
+                   $PokemonSystem.type_icons_opponent = value == 1 if value < 2
                  },
                  [_INTL("Don't draw the type indicator in battle"),
                   _INTL("PIF's type icons in the foe's battle box"),
@@ -402,7 +402,7 @@ if defined?(::DataBoxEBDX)
     def kif_types_sheet
       mode = KIF::BattleUI.type_display
       if mode == 0
-        return nil unless $PokemonSystem && $PokemonSystem.type_icons
+        return nil unless $PokemonSystem && $PokemonSystem.type_icons_opponent
         return [KIF::BattleUI::PIF_TYPES, 19, 19, 19, 19]   # PIF's typesSmall
       end
       sheet = KIF::BattleUI::TYPE_SHEETS[mode]

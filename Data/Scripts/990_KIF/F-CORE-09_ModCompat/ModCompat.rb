@@ -222,7 +222,29 @@ class PokemonSystem
     end
     define_method(:"#{name}=") { |v| instance_variable_set(ivar, v) }
   end
+
+  # 6.9 split PIF's type_icons into type_icons_opponent / type_icons_player;
+  # the old name keeps meaning the foe side
+  def type_icons
+    return type_icons_opponent
+  end unless method_defined?(:type_icons)
+
+  def type_icons=(v)
+    self.type_icons_opponent = v
+  end unless method_defined?(:type_icons=)
 end
+
+# A save from 6.8.2 or KIF 2.0 holds only the old @type_icons: its choice
+# becomes the foe-side one (the player-side icons are new, off for such saves)
+module KIF
+  module TypeIconsCarryOver
+    def type_icons_opponent
+      @type_icons_opponent = @type_icons if @type_icons_opponent.nil? && !@type_icons.nil?
+      return super
+    end
+  end
+end
+PokemonSystem.prepend(KIF::TypeIconsCarryOver)
 
 class PokeBattle_Battle
   alias kif_compat_pbStartBattle pbStartBattle unless method_defined?(:kif_compat_pbStartBattle)

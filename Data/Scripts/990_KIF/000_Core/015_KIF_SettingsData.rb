@@ -38,7 +38,7 @@ module KIF
         ["K-Eggs", ["K-Eggs Usage", "K-Eggs Rarity", "K-Eggs Fusion Odds", "K-Eggs Fusion Pool",
                     "K-Eggs Rewards"]]]],
       [:graphics, "Graphics", [110, 120, 220], [
-        ["Battle", ["Battle Animations", "Battle Movement", "Battle Camera", "Battle Type Icons", "Type Display", "Swap BattleGUI"]],
+        ["Battle", ["Battle Animations", "Battle Movement", "Battle Camera", "Type Icons (Enemy)", "Type Icons (Player)", "Type Display", "Swap BattleGUI"]],
         ["Sprites", ["Random Sprites", "Joke Sprites", "Custom Eggs", "Fusion Icons"]],
         ["Screens", ["Fusion Screen", "Fusion Preview", "Big Pokémon Icons", "Summary IVs/EVs", "Dark Mode"]],
         ["Pokédex", ["Autogen dex entries", "Improved Pokedex", "Dex Evolutions", "Dex Sprite Select"]],
@@ -118,7 +118,7 @@ module KIF
     # A row that is On never hides, so it can always be turned Off.
     HIDE_IF = {
       # Type Display took over PIF's Battle Type Icons (its "PIF" choice)
-      "Battle Type Icons"  => proc { true },
+      "Type Icons (Enemy)" => proc { true },
       "EV Allocation"      => proc { $PokemonSystem.noevsmode.to_i == 1 && $PokemonSystem.ev_alloc.to_i == 0 },
       "EVs Train Mode"     => proc { $PokemonSystem.noevsmode.to_i == 1 && $PokemonSystem.evstrain.to_i == 0 },
       "Legendary Breeding" => proc { $PokemonSystem.legendarybreed.to_i == 0 && $PokemonSystem.cody_legendarybreed.to_i == 0 },

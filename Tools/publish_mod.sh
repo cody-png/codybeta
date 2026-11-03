@@ -6,8 +6,11 @@
 #   bash publish_mod.sh <mod folder> <catalog folder name> <branch> <commit message file> <pull request body file> <mod id>
 #
 # Catalog contributors (write access) publish straight to main: only their
-# own mod's folder, and only a folder they last changed themselves. Everyone
-# else gets a pull request from their fork, reviewed before it goes live.
+# own mod's folder. A folder's owners are the logins on its line in the
+# catalog's owners.txt ("folder: login login", changed only by a reviewed
+# commit); with no line, the account that added the folder or last changed it.
+# Everyone else (and a contributor who isn't the owner) gets a pull request
+# from their fork, reviewed before it goes live.
 # The message file's first line is the commit's and pull request's title.
 # KIF never sees your GitHub sign-in: gh keeps it.
 #   KIF_PUBLISH_DRY=1     stop before anything is pushed (shows what would happen)
@@ -30,6 +33,35 @@ fail() {
   echo "Stopped: $1"
   echo "Nothing was published unless a link was shown above."
   finish 1
+}
+
+lc() { printf '%s' "$1" | tr 'A-Z' 'a-z'; }
+same() { [ -n "$1" ] && [ "$(lc "$1")" = "$(lc "$2")" ]; }
+use_fork() {
+  echo "Making your own copy (fork) of $UPSTREAM, if you don't have one yet..."
+  gh repo fork "$UPSTREAM" --clone=false >/dev/null 2>&1 || fail "couldn't fork $UPSTREAM."
+  # shortcut: assumes the fork kept the name kif-discord-mods; a renamed fork needs KIF_PUBLISH_CACHE pointed at a clone of it
+  TARGET="$LOGIN/kif-discord-mods"
+}
+# the GitHub account behind a commit; else yours, when the commit has your address
+author_of() {
+  [ -n "$1" ] || return 0
+  local a e
+  a="$(gh api "repos/$UPSTREAM/commits/$1" --jq .author.login 2>/dev/null)"
+  [ "$a" = "null" ] && a=""
+  if [ -z "$a" ]; then
+    e="$(lc "$(git log -1 --format=%ae "$1")")"
+    { [ "$e" = "$(lc "$EMAIL")" ] || [ "$e" = "$(lc "$LOGIN")@users.noreply.github.com" ]; } && a="$LOGIN"
+  fi
+  printf '%s' "$a"
+}
+# the folder's line in owners.txt on the catalog's main, as "= login login ": empty when there is none
+owners_entry() {
+  git show upstream/main:owners.txt 2>/dev/null | tr -d '\r' | awk -v f="$(lc "$FOLDER")" '
+    /^[ \t]*#/ { next }
+    { i = index($0, ":"); if (i == 0) next
+      k = substr($0, 1, i - 1); gsub(/^[ \t]+|[ \t]+$/, "", k)
+      if (tolower(k) == f) { v = substr($0, i + 1); gsub(/[, \t]+/, " ", v); print "=" v " "; exit } }'
 }
 
 echo "Publish a KIF mod"
@@ -69,16 +101,13 @@ UID_="$(gh api user --jq .id)" || fail "couldn't read your GitHub user name."
 EMAIL="$UID_+$LOGIN@users.noreply.github.com"
 echo "Signed in as $LOGIN."
 
-# 3. Contributors push to the catalog; everyone else to their fork
+# 3. Contributors push to the catalog (step 5 may still send them to their fork); everyone else to their fork
 if [ "$(gh api "repos/$UPSTREAM" --jq .permissions.push 2>/dev/null)" = "true" ]; then
   DIRECT=1; TARGET="$UPSTREAM"
-  echo "You're a contributor to the catalog: the mod is published straight away."
+  echo "You're a contributor to the catalog: your own mods are published straight away."
 else
   DIRECT=0
-  echo "Making your own copy (fork) of $UPSTREAM, if you don't have one yet..."
-  gh repo fork "$UPSTREAM" --clone=false >/dev/null 2>&1 || fail "couldn't fork $UPSTREAM."
-  # shortcut: assumes the fork kept the name kif-discord-mods; a renamed fork needs KIF_PUBLISH_CACHE pointed at a clone of it
-  TARGET="$LOGIN/kif-discord-mods"
+  use_fork
 fi
 
 # 4. A copy of the catalog on this computer, on a new branch from the catalog's main
@@ -106,19 +135,45 @@ git fetch -q upstream main || fail "couldn't read $UPSTREAM."
 git checkout -q -f -B "$BRANCH" upstream/main || fail "couldn't make the branch $BRANCH."
 git clean -q -fdx
 
-# 5. Contributors change only their own mod: a folder someone else last
-# changed, or an id another folder uses, is for the catalog's owner
+# 5. Contributors change only their own mod. The owners are the logins on the
+# folder's line in owners.txt (the catalog's maintainer sets it, so editing the
+# mod on GitHub never changes it); with no line, the account that added the
+# folder or last changed it. Anyone else goes the pull request way.
+HAS="$(git ls-tree --name-only upstream/main -- "$FOLDER")"
+[ -z "$HAS" ] || [ -n "$(git ls-tree -d --name-only upstream/main -- "$FOLDER")" ] \
+  || fail "\"$FOLDER\" is a file in the catalog, not a mod folder."
 if [ "$DIRECT" = 1 ]; then
-  if [ -n "$(git ls-tree -d --name-only upstream/main -- "$FOLDER")" ]; then
-    OWNER="$(gh api "repos/$UPSTREAM/commits?path=${FOLDER// /%20}&sha=main&per_page=1" --jq '.[0].author.login' 2>/dev/null)"
-    [ "$OWNER" = "null" ] && OWNER=""
-    if [ -z "$OWNER" ]; then
-      # an address GitHub doesn't link to an account: compare the address
-      LAST="$(git log -1 --format=%ae upstream/main -- "$FOLDER")"
-      { [ "$LAST" = "$EMAIL" ] || [ "$LAST" = "$LOGIN@users.noreply.github.com" ]; } && OWNER="$LOGIN"
+  ENTRY="$(owners_entry)"
+  if [ -n "$HAS" ] || [ -n "$ENTRY" ]; then
+    MINE=""
+    LAST_BY="$(author_of "$(git log -1 --format=%H upstream/main -- "$FOLDER")")"
+    if [ -n "$ENTRY" ]; then
+      case "$(lc "$ENTRY")" in *" $(lc "$LOGIN") "*) MINE=1 ;; esac
+      NAMES="${ENTRY#=}"; NAMES="${NAMES# }"; NAMES="${NAMES% }"; NAMES="${NAMES// /, }"
+      WHYNOT="owners.txt in the catalog lists who may publish $FOLDER straight away."
+    else
+      FIRST_BY="$(author_of "$(git log --diff-filter=A --format=%H upstream/main -- "$FOLDER" | tail -n 1)")"
+      { same "$FIRST_BY" "$LOGIN" || same "$LAST_BY" "$LOGIN"; } && MINE=1
+      NAMES="${FIRST_BY:-someone else}"
+      WHYNOT="The catalog's owners.txt has no line for $FOLDER, so the account that added the folder counts as its owner."
     fi
-    [ "$OWNER" = "$LOGIN" ] || fail "the catalog's $FOLDER folder was last changed by ${OWNER:-someone else}, not you. To change another modder's mod, ask Cody on the KIF Discord."
+    if [ -z "$MINE" ]; then
+      echo
+      echo "This mod's owner on the catalog is ${NAMES:-nobody}; you are signed in as $LOGIN."
+      echo "$WHYNOT"
+      echo "To publish updates to it straight away, ask the catalog's maintainer to add you as an owner of $FOLDER in owners.txt."
+      echo "For now it goes as a pull request, which is reviewed before it goes live."
+      DIRECT=0
+      use_fork
+      ORIGIN="$GITHUB/$TARGET.git"
+      git remote set-url origin "$ORIGIN"
+    elif [ -n "$HAS" ] && ! same "$LAST_BY" "$LOGIN"; then
+      echo
+      echo "Note: the catalog's $FOLDER folder was last changed by ${LAST_BY:-someone else}, not you. Publishing replaces it with your files, so a change made on GitHub is lost unless your folder has it too. Check the list below."
+    fi
   fi
+fi
+if [ "$DIRECT" = 1 ]; then
   # shortcut: a text search, so an "id" inside another mod's dependency list also stops it (the safe side); parse the JSON if that gets in the way
   OTHER="$(git grep -l -E "[^a-z0-9_]id.[[:space:]]*:[[:space:]]*.$ID[^a-z0-9_-]" upstream/main -- '*/mod.json' 2>/dev/null \
            | sed 's#^upstream/main:##; s#/mod\.json$##' | grep -vxF -- "$FOLDER" | head -n 1)"
@@ -165,7 +220,11 @@ if git fetch -q origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" 2>/dev/
    && git diff --quiet "origin/$BRANCH" HEAD -- "$FOLDER"; then
   echo; echo "Nothing to upload: your pull request already has exactly these files."; finish 0
 fi
-git push -q -f origin "$BRANCH" || fail "couldn't upload to $TARGET."
+n=0
+until git push -q -f origin "$BRANCH"; do
+  n=$((n + 1)); [ $n -ge 4 ] && fail "couldn't upload to $TARGET."
+  echo "Waiting for GitHub to finish your copy..."; sleep 5
+done
 find_pr() { gh pr list --repo "$UPSTREAM" --head "$BRANCH" --state open --author "$LOGIN" --json url --jq '.[].url' | head -n 1; }
 URL="$(find_pr)"
 if [ -n "$URL" ]; then

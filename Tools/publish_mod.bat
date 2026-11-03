@@ -6,8 +6,11 @@ rem
 rem   publish_mod.bat "<mod folder>" "<catalog folder name>" "<branch>" "<commit message file>" "<pull request body file>" "<mod id>"
 rem
 rem Catalog contributors (write access) publish straight to main: only their
-rem own mod's folder, and only a folder they last changed themselves. Everyone
-rem else gets a pull request from their fork, reviewed before it goes live.
+rem own mod's folder. A folder's owners are the logins on its line in the
+rem catalog's owners.txt ("folder: login login", changed only by a reviewed
+rem commit); with no line, the account that added the folder or last changed it.
+rem Everyone else (and a contributor who isn't the owner) gets a pull request
+rem from their fork, reviewed before it goes live.
 rem The message file's first line is the commit's and pull request's title.
 rem KIF never sees your GitHub sign-in: gh keeps it.
 rem   KIF_PUBLISH_DRY=1     stop before anything is pushed (shows what would happen)
@@ -82,19 +85,16 @@ rem GitHub's private address for the account: commits count as yours, your own e
 set "EMAIL=!UID_!+!LOGIN!@users.noreply.github.com"
 echo Signed in as !LOGIN!.
 
-rem 3. Contributors push to the catalog; everyone else to their fork
+rem 3. Contributors push to the catalog (step 5 may still send them to their fork); everyone else to their fork
 set "PUSH="
 for /f "usebackq delims=" %%a in (`gh api repos/%UPSTREAM% --jq .permissions.push 2^>nul`) do set "PUSH=%%a"
 if /i "!PUSH!"=="true" (
   set "DIRECT=1"
   set "TARGET=%UPSTREAM%"
-  echo You're a contributor to the catalog: the mod is published straight away.
+  echo You're a contributor to the catalog: your own mods are published straight away.
 ) else (
   set "DIRECT=0"
-  echo Making your own copy - a fork - of %UPSTREAM%, if you don't have one yet...
-  gh repo fork %UPSTREAM% --clone=false >nul 2>nul || (set "WHY=couldn't fork %UPSTREAM%." & goto :fail)
-  rem shortcut: assumes the fork kept the name kif-discord-mods; a renamed fork needs KIF_PUBLISH_CACHE pointed at a clone of it
-  set "TARGET=!LOGIN!/kif-discord-mods"
+  call :use_fork || goto :fail
 )
 
 rem 4. A copy of the catalog on this computer, on a new branch from the catalog's main
@@ -128,8 +128,16 @@ git fetch -q upstream main || (set "WHY=couldn't read %UPSTREAM%." & goto :fail)
 git checkout -q -f -B "!BRANCH!" upstream/main || (set "WHY=couldn't make the branch !BRANCH!." & goto :fail)
 git clean -q -fdx
 
-rem 5. Contributors change only their own mod
-if "!DIRECT!"=="1" call :guard || goto :fail
+rem 5. Contributors change only their own mod: the folder's owners (see :owner)
+set "HAS="
+for /f "usebackq delims=" %%a in (`git ls-tree --name-only upstream/main -- "!FOLDER!"`) do set "HAS=1"
+if defined HAS (
+  set "ISDIR="
+  for /f "usebackq delims=" %%a in (`git ls-tree -d --name-only upstream/main -- "!FOLDER!"`) do set "ISDIR=1"
+  if not defined ISDIR (set "WHY=!FOLDER! is a file in the catalog, not a mod folder." & goto :fail)
+)
+if "!DIRECT!"=="1" call :owner || goto :fail
+if "!DIRECT!"=="1" call :guard_id || goto :fail
 
 rem 6. The mod's files (not its .git folder or KIF's install lists)
 if exist "!FOLDER!" rmdir /s /q "!FOLDER!"
@@ -163,7 +171,15 @@ goto :done
 rem 7b. Everyone else: the fork's branch, then the pull request (an open one
 rem for this branch is updated by the push)
 git fetch -q origin "+refs/heads/!BRANCH!:refs/remotes/origin/!BRANCH!" 2>nul && git diff --quiet "origin/!BRANCH!" HEAD -- "!FOLDER!" && (echo. & echo Nothing to upload: your pull request already has exactly these files. & goto :done)
-git push -q -f origin "!BRANCH!" || (set "WHY=couldn't upload to !TARGET!." & goto :fail)
+set /a PTRIES=0
+:push_try
+git push -q -f origin "!BRANCH!" && goto :pushed
+set /a PTRIES+=1
+if !PTRIES! geq 4 (set "WHY=couldn't upload to !TARGET!." & goto :fail)
+echo Waiting for GitHub to finish your copy...
+ping -n 6 127.0.0.1 >nul
+goto :push_try
+:pushed
 call :find_pr
 if defined URL goto :have_pr
 set "TITLE="
@@ -199,27 +215,95 @@ set "URL="
 for /f "usebackq delims=" %%u in (`gh pr list --repo %UPSTREAM% --head "!BRANCH!" --state open --author "!LOGIN!" --json url --jq ".[].url"`) do if not defined URL set "URL=%%u"
 exit /b 0
 
-rem A contributor may change a folder they last changed themselves, with an id
-rem no other folder uses; anything else is for the catalog's owner
-:guard
-set "HAS="
-for /f "usebackq delims=" %%a in (`git ls-tree -d --name-only upstream/main -- "!FOLDER!"`) do set "HAS=1"
-if not defined HAS goto :guard_id
-set "QF=!FOLDER: =%%20!"
-set "OWNER="
-for /f "usebackq delims=" %%a in (`gh api "repos/%UPSTREAM%/commits?path=!QF!&sha=main&per_page=1" --jq ".[0].author.login" 2^>nul`) do set "OWNER=%%a"
-if "!OWNER!"=="null" set "OWNER="
-if defined OWNER goto :guard_owner
-rem an address GitHub doesn't link to an account: compare the address
-set "LAST="
-for /f "usebackq delims=" %%a in (`git log -1 "--format=%%ae" upstream/main -- "!FOLDER!"`) do set "LAST=%%a"
-if /i "!LAST!"=="!EMAIL!" set "OWNER=!LOGIN!"
-if /i "!LAST!"=="!LOGIN!@users.noreply.github.com" set "OWNER=!LOGIN!"
-:guard_owner
-if /i "!OWNER!"=="!LOGIN!" goto :guard_id
-if not defined OWNER set "OWNER=someone else"
-set "WHY=the catalog's !FOLDER! folder was last changed by !OWNER!, not you. To change another modder's mod, ask Cody on the KIF Discord."
-exit /b 1
+rem The owners are the logins on the folder's line in owners.txt (the catalog's
+rem maintainer sets it, so editing the mod on GitHub never changes it); with no
+rem line, the account that added the folder or last changed it. Anyone else goes
+rem the pull request way. owners.txt is read from the catalog's main, not from
+rem the working copy; each line is  folder: login login
+:owner
+set "ENTRY="
+set "OWNERS="
+for /f "usebackq tokens=1* delims=:" %%k in (`git show upstream/main:owners.txt 2^>nul`) do (
+  set "K=%%k"
+  call :trim_key
+  if /i "!K!"=="!FOLDER!" if not defined ENTRY (set "ENTRY=1" & set "OWNERS=%%l")
+)
+if not defined HAS if not defined ENTRY exit /b 0
+set "MINE="
+set "SHA="
+for /f "usebackq delims=" %%a in (`git log -1 "--format=%%H" upstream/main -- "!FOLDER!"`) do set "SHA=%%a"
+call :author_of
+set "LAST_BY=!BY!"
+if defined ENTRY goto :owner_listed
+set "SHA="
+for /f "usebackq delims=" %%a in (`git log --diff-filter=A "--format=%%H" upstream/main -- "!FOLDER!"`) do set "SHA=%%a"
+call :author_of
+set "FIRST_BY=!BY!"
+if /i "!FIRST_BY!"=="!LOGIN!" set "MINE=1"
+if /i "!LAST_BY!"=="!LOGIN!" set "MINE=1"
+set "NAMES=!FIRST_BY!"
+if not defined NAMES set "NAMES=someone else"
+set "WHYNOT=The catalog's owners.txt has no line for !FOLDER!, so the account that added the folder counts as its owner."
+goto :owner_decide
+:owner_listed
+set "NAMES="
+rem (the commas are taken out first: a comma inside the for list would split the variable name)
+set "OWNERS=!OWNERS:,= !"
+for %%o in (!OWNERS!) do (
+  if /i "%%o"=="!LOGIN!" set "MINE=1"
+  if defined NAMES (set "NAMES=!NAMES!, %%o") else set "NAMES=%%o"
+)
+if not defined NAMES set "NAMES=nobody"
+set "WHYNOT=owners.txt in the catalog lists who may publish !FOLDER! straight away."
+:owner_decide
+if defined MINE goto :owner_mine
+echo.
+echo This mod's owner on the catalog is !NAMES!; you are signed in as !LOGIN!.
+echo !WHYNOT!
+echo To publish updates to it straight away, ask the catalog's maintainer to add you as an owner of !FOLDER! in owners.txt.
+echo For now it goes as a pull request, which is reviewed before it goes live.
+set "DIRECT=0"
+call :use_fork || exit /b 1
+set "ORIGIN=!GITHUB!/!TARGET!.git"
+git remote set-url origin "!ORIGIN!"
+exit /b 0
+:owner_mine
+if not defined HAS exit /b 0
+if /i "!LAST_BY!"=="!LOGIN!" exit /b 0
+set "WHO=!LAST_BY!"
+if not defined WHO set "WHO=someone else"
+echo.
+echo Note: the catalog's !FOLDER! folder was last changed by !WHO!, not you. Publishing replaces it with your files, so a change made on GitHub is lost unless your folder has it too. Check the list below.
+exit /b 0
+
+rem a line's folder name without the spaces around it
+:trim_key
+for /f "tokens=* delims= " %%t in ("!K!") do set "K=%%t"
+:trim_key_end
+if "!K:~-1!"==" " (set "K=!K:~0,-1!" & goto :trim_key_end)
+exit /b 0
+
+rem the GitHub account behind commit !SHA! into BY; else yours, when the commit has your address
+:author_of
+set "BY="
+if not defined SHA exit /b 0
+for /f "usebackq delims=" %%a in (`gh api repos/%UPSTREAM%/commits/!SHA! --jq .author.login 2^>nul`) do set "BY=%%a"
+if "!BY!"=="null" set "BY="
+if defined BY exit /b 0
+set "ADDR="
+for /f "usebackq delims=" %%a in (`git log -1 "--format=%%ae" !SHA!`) do set "ADDR=%%a"
+if /i "!ADDR!"=="!EMAIL!" set "BY=!LOGIN!"
+if /i "!ADDR!"=="!LOGIN!@users.noreply.github.com" set "BY=!LOGIN!"
+exit /b 0
+
+:use_fork
+echo Making your own copy - a fork - of %UPSTREAM%, if you don't have one yet...
+gh repo fork %UPSTREAM% --clone=false >nul 2>nul || (set "WHY=couldn't fork %UPSTREAM%." & exit /b 1)
+rem shortcut: assumes the fork kept the name kif-discord-mods; a renamed fork needs KIF_PUBLISH_CACHE pointed at a clone of it
+set "TARGET=!LOGIN!/kif-discord-mods"
+exit /b 0
+
+rem an id no other folder uses; anything else is for the catalog's owner
 :guard_id
 rem shortcut: a text search, so an "id" inside another mod's dependency list also stops it (the safe side)
 set "OTHER="

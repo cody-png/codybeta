@@ -88,16 +88,19 @@ module KIF
       return KIF::Net.pick_peer(_INTL("Challenge who?"))
     end
 
-    # this player's lobby slot (0 the host); a stand-in session has none: the host's role says
-    def self.my_slot
-      s = session
-      return s.my_slot if s && s.respond_to?(:my_slot)
+    # this player's lobby slot (0 the host). The role belongs to the session, so a match passes its own (s): that
+    # session keeps its role after its line dropped, while PvP.session (connected ones only) is nil by then and
+    # the host would read as slot 1. A stand-in session has no slot: its role says.
+    def self.my_slot(s = nil)
+      s ||= KIF::Net.session if KIF::Net.respond_to?(:session)
+      return s.my_slot if s.respond_to?(:my_slot)
+      return s.role == :host ? 0 : 1 if s.respond_to?(:role)
       return KIF::Coop.rules_host? ? 0 : 1
     end
 
     # a match between two guests: the lobby host passes every frame on
-    def self.relayed?(with)
-      return with.is_a?(Integer) && with != 0 && my_slot != 0
+    def self.relayed?(with, s = nil)
+      return with.is_a?(Integer) && with != 0 && my_slot(s) != 0
     end
 
     # the slot the match in this line is with (nil: the one partner)
@@ -669,7 +672,7 @@ module KIF
         # The line to the host gone, or a silent player while the host's game has said nothing for a few roster beats
         # (it is in a menu or stalled; its thread still answers pings), is nobody's: no result. A host from before the roster
         # beat (host_quiet nil) is taken as answering.
-        relay = PvP.relayed?(@slot)
+        relay = PvP.relayed?(@slot, @s)
         q = relay && @s.respond_to?(:host_quiet) ? @s.host_quiet : nil
         down = relay && !@s.connected?
         stale = q && q > 3 * @s.roster_every

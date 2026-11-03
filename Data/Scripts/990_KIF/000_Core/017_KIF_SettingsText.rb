@@ -251,6 +251,9 @@ module KIF
         "Square type icons next to the foe's battle box (triple fusion types by Lolpy1).",
         "Type icons by FairyGodmother next to the foe's battle box.",
         "The foe's types as text next to its battle box."],
+      "Type Icons (Player)" => [
+        "No type icons next to your Pokémon's battle box.",
+        "Your Pokémon's types next to its battle box, in the Type Display style (PIF's small icons for Off, PIF and Text)."],
       "Swap BattleGUI" => [
         "PIF's battle boxes and bars.",
         "Mirasein's battle boxes and bars, version 1. No effect with EBDX Battles.",

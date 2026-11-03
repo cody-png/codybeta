@@ -8,7 +8,7 @@
 #     Kernel.pbShuffleTrainersCustom already turns the file into the list KIF's
 #     shuffle gets, so this adds the setting, the picker button, and makes the
 #     file follow the save's own sets. It needs Custom sprites only (as in PIF).
-#     Off by default; not part of a settings code while Off.
+#     Off by default; a settings code carries it only while On (7th part "R").
 #   * One progress bar: while a seeded shuffle runs, PIF's bar (ShuffleProgressBar)
 #     is the seeded bar of 001_RandCore.rb instead of a second one.
 #   * Trainer egg groups: PIF 6.9's trainer shuffle hands the "trainers are
@@ -18,7 +18,7 @@
 #===============================================================================
 module KIF
   module Rand
-    # Added last, so older settings codes still line up (not in DATA_KEYS: the switch is the value)
+    # In a settings code it is the optional 7th part (CODE_TAIL), not a position (not in DATA_KEYS: the switch is the value)
     REFERENCE_SETTINGS = [[:ref_filter, :enum, 2]]
     REFERENCE_SETTINGS.each { |st| DATA_SETTINGS << st unless DATA_SETTINGS.any? { |s| s[0] == st[0] } }
     LABELS[:ref_filter] = ["References filter", ["Off", "On"]]

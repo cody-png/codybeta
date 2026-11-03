@@ -363,7 +363,7 @@ module KIF
 
     #---------------------------------------------------------------------------
     # Settings code:
-    #   KIFR2-SEED-<one character per setting>-<wild BST>-<trainer BST>-<bans>
+    #   KIFR2-SEED-<one character per setting>-<wild BST>-<trainer BST>-<bans>[-<letters>]
     #   bans = "P" + Pokémon dex numbers, "M" + move numbers, "A" + ability
     #   numbers (base 36, dot-separated), joined by "~"
     #   KIFR1 codes (chunk 1, no data settings or bans) are still read.
@@ -372,6 +372,16 @@ module KIF
 
     def self.code_enums
       return SETTINGS.select { |s| s[1] == :enum } + DATA_SETTINGS
+    end
+
+    # Settings that ride in an optional 7th part of the code (only while On), not in the
+    # one-character-per-setting string: mods append their own enums to that string
+    # (KIF: Elite Redux does), so a flag in it would move with them. Off = no 7th part =
+    # the code is byte for byte what it was before the setting existed.
+    CODE_TAIL = { :ref_filter => "R" }
+
+    def self.code_flag_enums
+      return code_enums.reject { |s| CODE_TAIL.key?(s[0]) }
     end
 
     # GameData::Move.get doesn't take numbers; look them up once
@@ -398,20 +408,21 @@ module KIF
     end
 
     def self.settings_code
-      flags = code_enums.map { |s| get(s[0]).to_s(36) }
-      # the last setting (References filter, PIF 6.9) is left out while Off: codes stay as they were
-      flags.pop if code_enums.last[0] == :ref_filter && flags.last == "0"
-      flags = flags.join
-      return [CODE_PREFIX, seed, flags, get(:wild_bst), get(:trainer_bst), bans_code].join("-")
+      flags = code_flag_enums.map { |s| get(s[0]).to_s(36) }.join
+      parts = [CODE_PREFIX, seed, flags, get(:wild_bst), get(:trainer_bst), bans_code]
+      tail = CODE_TAIL.select { |key, _c| get(key) != 0 }.values.join
+      parts << tail unless tail.empty?
+      return parts.join("-")
     end
 
     # Returns [seed, {key => value}, bans or nil] or nil
     def self.parse_code(code)
       parts = code.to_s.strip.split("-")
       v1 = parts[0] == CODE_PREFIX_V1
-      return nil unless (v1 && parts.length == 5) || (parts[0] == CODE_PREFIX && parts.length == 6)
+      return nil unless (v1 && parts.length == 5) || (parts[0] == CODE_PREFIX && parts.length.between?(6, 7))
+      return nil if parts[6] && parts[6] !~ /\A[A-Z]+\z/   # unknown letters are ignored, anything else is no code
       s = parse_seed(parts[1])
-      enums = v1 ? SETTINGS.select { |x| x[1] == :enum } : code_enums
+      enums = v1 ? SETTINGS.select { |x| x[1] == :enum } : code_flag_enums
       # Codes from before newer settings existed are shorter; the rest keep
       # their defaults
       return nil unless s && (v1 ? parts[2].length == enums.length : parts[2].length.between?(1, enums.length))
@@ -426,6 +437,7 @@ module KIF
         vals[key] = v
       end
       return nil unless parts[3] =~ /\A\d+\z/ && parts[4] =~ /\A\d+\z/
+      CODE_TAIL.each { |key, c| vals[key] = parts[6].to_s.include?(c) ? 1 : 0 } unless v1   # no 7th part = Off
       vals[:wild_bst] = [parts[3].to_i, 999].min
       vals[:trainer_bst] = [parts[4].to_i, 999].min
       bans = nil

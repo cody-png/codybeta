@@ -495,13 +495,17 @@ module KIF
       return nil
     end
 
+    # a friendly match is being set up (challenge out, received, said yes to, or about to run): a battle invite of the lobby host
+    # is busy, else this game leaves for it and the match asked for meanwhile finds it busy
+    def self.pvp_pending?; return defined?(KIF::PvP) && KIF::PvP.pending?; end
+
     def self.guest_ask(msg, from = nil)
       s = session or return
       return KIF::PvP.got_ask(msg, from) if msg["kind"] == "pvp" && defined?(KIF::PvP)   # a friendly match has its own checks
       return say("co_no", { "id" => msg["id"], "why" => "off" }, from) unless on? && (from.nil? || @their_by.empty? || @their_by[from])   # only a player I fight together with
       # busy, or the last invite from this partner never became a battle (5 minutes of "busy")
       return say("co_no", { "id" => msg["id"], "why" => "busy" }, from) if @guest || @ask || @hosting || $game_temp&.in_battle ||
-                                                                       cannot_join? || KIF::Net.now < (@no_asks_until || 0)
+                                                                       cannot_join? || pvp_pending? || KIF::Net.now < (@no_asks_until || 0)
       @ask = msg
       @ask_from = from
       @ask_at = KIF::Net.now
@@ -516,7 +520,7 @@ module KIF
         ask = @ask
         why = if !on? then "off"
               elsif ask["map"] != $game_map.map_id then "map"
-              elsif cannot_join? then "busy"
+              elsif cannot_join? || pvp_pending? then "busy"
               elsif ($Trainer.able_pokemon_count rescue 0) == 0 then "fainted"
               end
         from = @ask_from

@@ -66,6 +66,12 @@ module KIF
     class << self
       attr_accessor :answer_wait, :join_wait, :quiet_wait, :pick_wait, :sw_wait, :silence, :beat_every
       def running?; @running; end
+
+      # a challenge is out, received, said yes to, or about to run on this game
+      def pending?
+        st = line
+        return st ? !!(st[:out] || st[:in] || st[:acc] || st[:go] || st[:ask]) : false
+      end
     end
 
     def self.log(msg); KIF::Net.log("pvp: #{msg}"); end

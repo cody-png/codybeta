@@ -500,6 +500,7 @@ module KIF
       def dispose
         return if @disposed
         [@body, @base, @tag].each(&:dispose)
+        drop_bush
         @tag_bmp.dispose if @tag_bmp
         @disposed = true
       end
@@ -525,6 +526,32 @@ module KIF
 
       def hide
         [@body, @base, @tag].each { |s| s.visible = false; s.bitmap = nil }
+        drop_bush
+      end
+
+      # PIF 6.9 sinks a character standing in tall grass by cutting the bottom of its
+      # picture (BushBitmap, in the picture's own pixels, so the sprite's zoom scales it
+      # with the rest): the partner's sheet is cut the same way
+      def sunk(g, sheet)
+        depth = begin
+                  g.calculate_bush_depth
+                  g.bush_depth.to_i
+                rescue StandardError
+                  0
+                end
+        return sheet if depth <= 0
+        unless @bush && @bush_src.equal?(sheet) && @bush_depth == depth
+          drop_bush
+          @bush = BushBitmap.new(sheet, false, depth)
+          @bush_src = sheet
+          @bush_depth = depth
+        end
+        return @bush.bitmap
+      end
+
+      def drop_bush
+        @bush.dispose if @bush
+        @bush = @bush_src = @bush_depth = nil
       end
 
       # the screen y of the top of the picture
@@ -536,10 +563,12 @@ module KIF
         ch = 64
         @head_top = 22   # no picture: where PIF's player head starts in its 80 px frames
         if sheet
-          unless @body.bitmap.equal?(sheet)
-            @body.bitmap = sheet
+          unless @sheet_shown.equal?(sheet)
+            @sheet_shown = sheet
             @tops = {}
           end
+          shown = sunk(g, sheet)
+          @body.bitmap = shown unless @body.bitmap.equal?(shown)
           cw = sheet.width / 4
           ch = sheet.height / 4
           row = (g.direction - 2) / 2
@@ -549,6 +578,8 @@ module KIF
           @body.oy = (LOW.include?(g.action) ? ch - 16 : ch) - g.bob_height
         else
           @body.bitmap = nil
+          @sheet_shown = nil
+          drop_bush
         end
         @body.visible = !sheet.nil?
         @body.x = g.screen_x

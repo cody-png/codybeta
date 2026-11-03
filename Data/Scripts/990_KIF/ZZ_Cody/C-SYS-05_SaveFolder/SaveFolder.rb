@@ -47,14 +47,18 @@ module KIF
     # Returns [saves copied, saves moved to another slot, saves left behind]
     # (settings and controls files are copied too but not counted: the
     # player was asked about saves)
+    # A file that can't be written (full disk, locked folder) is skipped
+    # and named in KIF::SaveFolder.failed; the others carry on.
     def import_report(new_d = new_dir, old_d = old_dir(new_d), rehome: false)
       n = 0
       moved = []
       left = []
+      @failed = []
       Dir.children(old_d).sort.each do |f|
         src = File.join(old_d, f)
         next unless File.file?(src) && PATTERNS.any? { |p| f =~ p }
         dst = File.join(new_d, f)
+        note = nil
         if File.exist?(dst)
           next unless rehome && f =~ /\.rxdata\z/i
           next if already_here?(src, new_d)
@@ -64,13 +68,24 @@ module KIF
             next
           end
           dst = File.join(new_d, "#{slot}.rxdata")
-          moved << "#{File.basename(f, '.*')} -> #{slot}"
+          note = "#{File.basename(f, '.*')} -> #{slot}"
         end
-        File.binwrite(dst, File.binread(src))
+        begin
+          KIF::SaveBackups.write_file(dst, File.binread(src))   # a copy is whole or not there
+        rescue SystemCallError, IOError => e
+          KIF.log("Save folder: #{f} not copied (#{e.class})")
+          @failed << File.basename(f, ".*") if f =~ /\.rxdata\z/i
+          next
+        end
+        moved << note if note
         n += 1 if f =~ /\.rxdata\z/i
       end
       forget_check(new_d)
       return [n, moved, left]
+    end
+
+    def failed
+      return @failed || []
     end
 
     # Old KIF had 8 File slots too: copying 8 saves leaves none empty, and a
@@ -132,12 +147,16 @@ module KIF
       end.join("\n")
     end
 
+    def count_text(n)
+      return n == 1 ? _INTL("1 save") : _INTL("{1} saves", n)
+    end
+
     def import_hint?(new_d = new_dir, old_d = old_dir(new_d))
       return false unless Dir.exist?(old_d)
       fp = old_fingerprint(old_d)
       return false if fp.empty?
       cache = File.join(new_d, CHECK_FILE)
-      saved = File.exist?(cache) ? File.binread(cache) : ""
+      saved = File.exist?(cache) ? File.binread(cache).force_encoding("UTF-8") : ""   # fp is UTF-8: a save name with accents never compared equal
       return saved.start_with?("1") if saved.sub(/\A[01]\n/, "") == fp
       t = Time.now
       res = !importable(new_d, old_d, deadline: t + 3).empty?
@@ -164,12 +183,14 @@ module KIF
       return if File.exist?(File.join(new_dir, MARKER))
       if offer?
         count = saves_in(old_dir).length
-        q = _INTL("Saves from the old KIF were found ({1} saves). Copy them into KIF's new save folder?", count)
+        q = _INTL("Saves from the old KIF were found ({1}). Copy them into KIF's new save folder?", count_text(count))
         # the new folder is empty here: after the copy it has the old one's slots
         q += " " + _INTL("They fill all {1} save slots, so a new game would have to save over one.", SaveData::MANUAL_SLOTS.length) if full?(old_dir)
         if pbConfirmMessage(q)
           n = import
-          pbMessage(_INTL("Copied {1} saves. Your old KIF keeps its own copies, and the old save backups stay in the old folder.", n) + full_note(new_dir))
+          msg = _INTL("Copied {1}. Your old KIF keeps its own copies, and the old save backups stay in the old folder.", count_text(n))
+          msg += " " + _INTL("These could not be copied: {1}.", failed.join(", ")) unless failed.empty?
+          pbMessage(msg + full_note(new_dir))
           KIF.log("Save folder: copied #{n} saves from #{old_dir}")
           show_copied_saves if n > 0
         else
@@ -245,9 +266,10 @@ module KIF
       KIF.log("Save folder: menu import copied #{n} saves from #{old_dir}" +
               (moved.empty? ? "" : ", moved #{moved.join(', ')}") +
               (left.empty? ? "" : ", no free slot for #{left.join(', ')}"))
-      msg = _INTL("Copied {1} saves. Your old KIF keeps its own copies.", n)
+      msg = _INTL("Copied {1}. Your old KIF keeps its own copies.", count_text(n))
       msg += " " + _INTL("Some saves had a slot that was already taken here, so they went into another slot: {1}.", moved.join(", ")) unless moved.empty?
       msg += " " + _INTL("No free slot was left for: {1}.", left.join(", ")) unless left.empty?
+      msg += " " + _INTL("These could not be copied: {1}.", failed.join(", ")) unless failed.empty?
       msg += full_note(new_dir) if n > 0 && left.empty?
       pbMessage(msg)
       update_menu

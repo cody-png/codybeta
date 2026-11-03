@@ -266,19 +266,44 @@ class PokemonEggHatchSceneEBDX
     pbMEPlay("EBDX/Capture Success")
     pbBGMPlay("EBDX/Victory Against Wild")
     @sprites["msgwindow"].visible = true
-    cmd = [_INTL("Yes"), _INTL("No")]
     pbMessageDisplay(@sprites["msgwindow"],
       _INTL("\\se[]{1} hatched from the Egg!\\wt[80]", @pokemon.name)) { self.update }
+    pbAskNickname
+    pbRegisterHatched
+    @sprites["msgwindow"].text = ""
+    @sprites["msgwindow"].visible = false
+  end
+  #-----------------------------------------------------------------------------
+  # The nickname question, only when Prompt Nicknames is on (as PIF's scene); Back is No
+  #-----------------------------------------------------------------------------
+  def pbAskNickname
+    return if $PokemonSystem && !$PokemonSystem.prompt_nicknames
+    cmd = [_INTL("Yes"), _INTL("No")]
     pbMessageDisplay(@sprites["msgwindow"],
       _INTL("Would you like to nickname the newly hatched {1}?", @pokemon.name)) { self.update }
-    if pbShowCommands(@sprites["msgwindow"], cmd, 1, 0) { self.update } == 0
+    if pbShowCommands(@sprites["msgwindow"], cmd, 2, 0) { self.update } == 0
       nickname = pbEnterPokemonName(_INTL("{1}'s nickname?", @pokemon.name),
         0, Pokemon::MAX_NAME_SIZE, "", @pokemon, true)
       @pokemon.name = nickname if nickname != ""
       @nicknamed = true
     end
-    @sprites["msgwindow"].text = ""
-    @sprites["msgwindow"].visible = false
+  end
+  #-----------------------------------------------------------------------------
+  # Pokedex entry and egg counter: PIF's PokemonEggHatch_Scene#pbMain does this, this scene does not inherit from it
+  #-----------------------------------------------------------------------------
+  def pbRegisterHatched
+    if !$Trainer.pokedex.owned?(@pokemon.species)
+      $Trainer.pokedex.register(@pokemon)
+      $Trainer.pokedex.set_owned(@pokemon.species)
+      pbMessageDisplay(@sprites["msgwindow"], _INTL("{1}'s data was added to the Pokédex", @pokemon.name)) { self.update }
+      pbShowPokedex(@pokemon)
+    end
+    if KIF.respond_to?(:unfused_dex_names)
+      KIF.unfused_dex_names(@pokemon).each do |name|
+        pbMessageDisplay(@sprites["msgwindow"], _INTL("{1}'s data was added to the Pokédex", name)) { self.update }
+      end
+    end
+    pbSet(VAR_NB_EGGS_HATCHED, pbGet(VAR_NB_EGGS_HATCHED) + 1)
   end
   #-----------------------------------------------------------------------------
   # frame wait function

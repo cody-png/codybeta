@@ -121,6 +121,12 @@ class KifLivingTitle
     @stats[:sprites] = sprite_count
     @viewport.color = Color.new(0, 0, 0, 255)
     pbBGMPlay(Settings::KANTO ? "Pokemon Red-Blue Opening" : "title_screen")
+  rescue StandardError
+    # Scene_Intro never receives a half-built scene, so what exists is freed here
+    (pbDisposeSpriteHash(@sprites) if @sprites) rescue nil
+    (@bitmaps.each_value { |b| b.dispose if b && !b.disposed? } if @bitmaps) rescue nil
+    (@viewport.dispose if @viewport && !@viewport.disposed?) rescue nil
+    raise
   end
 
   # Scene_Intro calls this before its loop (PIF's title shows its intro here)
@@ -655,7 +661,8 @@ class KifLivingTitle
       @sprites["bg0"].bitmap = nil if @sprites["bg0"].bitmap.equal?(@bg_loaded[i])
       @sprites["bg1"].bitmap = nil if @sprites["bg1"].bitmap.equal?(@bg_loaded[i])
       @bitmaps.delete(DIR + "pano_#{i}")
-      @bg_loaded.delete(i).dispose
+      b = @bg_loaded.delete(i)
+      b.dispose if b && !b.disposed?   # nil when the strip's file could not be read
     end
     2.times do |n|
       i = want[n]

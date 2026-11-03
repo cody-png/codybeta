@@ -85,7 +85,7 @@ module KIF
         "Evolutions after a battle wait for you, as usual.",
         "Evolutions after a battle play by themselves. B still stops one."],
       "Battle AI" => [
-        "Opponents use PIF 6.8.2's own AI.",
+        "Opponents use PIF #{Settings::GAME_VERSION_NUMBER}'s own AI.",
         "Opponents use DemICE's AI, from the community hard-mode mods. It plays differently, not just harder."],
       "Damage Variance" => [
         "A move always does the same damage (no random roll).",
@@ -251,6 +251,9 @@ module KIF
         "Square type icons next to the foe's battle box (triple fusion types by Lolpy1).",
         "Type icons by FairyGodmother next to the foe's battle box.",
         "The foe's types as text next to its battle box."],
+      "Type Icons (Player)" => [
+        "No type icons next to your Pokémon's battle box.",
+        "Your Pokémon's types next to its battle box, in the Type Display style (PIF's small icons for Off, PIF and Text)."],
       "Swap BattleGUI" => [
         "PIF's battle boxes and bars.",
         "Mirasein's battle boxes and bars, version 1. No effect with EBDX Battles.",

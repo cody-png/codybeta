@@ -82,8 +82,14 @@ class PokemonParty_Scene
     slot = nil
     n.times do |i|
       s = @sprites["pokemon#{i}"]
-      next unless s && KIF::Mouse.over_sprite?(s)
-      next if i < Settings::MAX_PARTY_SIZE && !@party[i]
+      next unless s
+      if i < Settings::MAX_PARTY_SIZE
+        # a filled panel is a SpriteWrapper whose own sprite has no bitmap, so over_sprite? never matches it
+        next unless @party[i] && !s.disposed? && s.visible &&
+                    KIF::Mouse.over_rect?(s.x, s.y, Graphics.width / 2, 98, s.viewport)
+      else
+        next unless KIF::Mouse.over_sprite?(s)
+      end
       slot = i
       break
     end
@@ -357,6 +363,15 @@ end
 # prepended: Nuzlocke and SaveFolder prepend pbChoose too (never alias it)
 module KIF
   module Mouse
+    # the slider value for a click at frac (0..1) of the bar: a step the keys and arrows can reach
+    def self.slider_value(o, frac)
+      span = o.optend.to_i - o.optstart.to_i
+      step = o.instance_variable_get(:@optinterval).to_i
+      step = 1 if step < 1
+      return span if frac >= 1
+      return ((frac * span / step).round * step).clamp(0, span)
+    end
+
     module LoadChoose
       def pbChoose(*args)
         @kif_mouse_continue = args[1]   # MultiSaves: pbChoose(commands, continue_idx)
@@ -542,7 +557,7 @@ class KifSettingsScreen
       return change(1) unless on_value_line && m.x >= x0 - 4 && m.x <= x1 + 4
       span = o.optend.to_i - o.optstart.to_i
       frac = [[(m.x - x0).to_f / (x1 - x0), 0].max, 1].min
-      nv = (frac * span).round
+      nv = KIF::Mouse.slider_value(o, frac)
       return if nv == o.get.to_i
       o.set(nv)
       pbPlayCursorSE

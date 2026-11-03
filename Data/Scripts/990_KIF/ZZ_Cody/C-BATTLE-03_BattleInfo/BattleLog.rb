@@ -33,6 +33,7 @@ module KIF
       text = KIF::PixelFont.utf8(msg).gsub(/\\pn/i) { $Trainer ? $Trainer.name.to_s : "" }
                 .gsub(/\\[a-z]+\[[^\]]*\]|\\(?:pm|cn|pt|wd|wm|wu|op|cl|pog|pg|ft|qp|hs|[gnrb.|!^])|<[^>]*>|[\x00-\x1F]/i, " ").squeeze(" ").strip
       return if text.empty?
+      return if battle.respond_to?(:kif_ff_hidden?) && battle.kif_ff_hidden?(msg)
       battler ||= battle.battlers.map { |b| b && b.pokemon && [b, KIF::PixelFont.utf8(b.pbThis)] }.compact
                         .select { |_b, name| text.start_with?(name) }.max_by { |_b, name| name.length }&.first ||
                   battle.instance_variable_get(:@kif_log_actor)
@@ -63,7 +64,8 @@ class PokeBattle_Battle
   end
 
   def pbDisplayConfirm(msg)
-    KIF::BattleLog.add(self, msg)
+    # the forfeit question: "<player> forfeited the match!" follows when it's a yes
+    KIF::BattleLog.add(self, msg) unless msg == _INTL("Would you like to forfeit the match and quit now?")
     return kif_log_pbDisplayConfirm(msg)
   end
 end

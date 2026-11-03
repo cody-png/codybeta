@@ -73,10 +73,10 @@ module KIF
 end
 
 #-------------------------------------------------------------------------------
-# Catching (copy of 6.8.2 pbRecordAndStoreCaughtPokemon, 001_PokeBattle_
-# BattleCommon.rb:60-85, with the KIF lines marked)
+# Catching (copy of 6.9 pbRecordAndStoreCaughtPokemon, 001_PokeBattle_
+# BattleCommon.rb, with the KIF lines marked)
 #-------------------------------------------------------------------------------
-KIF.guard_base("011_Battle/003_Battle/001_PokeBattle_BattleCommon.rb", 563813507,
+KIF.guard_base("011_Battle/003_Battle/001_PokeBattle_BattleCommon.rb", 177678609,
                "PokeBattle_Battle#pbRecordAndStoreCaughtPokemon")
 
 module PokeBattle_BattleCommon
@@ -102,12 +102,19 @@ module PokeBattle_BattleCommon
       gave_away_pokemon = promptGiveToPartner(pkmn) if isPartneredWithAnyTrainer()
 
       promptCaughtPokemonAction(pkmn) if !gave_away_pokemon
-      if $game_switches[AUTOSAVE_CATCH_SWITCH]
-        Kernel.tryAutosave()
-      end
+      # no autosave on catch: 6.9 removed it (the battle restarts after a reload and the Pokemon would be duplicated)
 
     end
     @caughtPokemon.clear
+  end
+end
+
+# PokeBattle_Battle's own wrappers of this method (Soul Link, co-op) are aliases made at load
+# time, before this redefinition, so they kept running PIF's body. Their alias name now reaches
+# the module's current method (and with it any later change to it).
+class PokeBattle_Battle
+  def kif_sl_pbRecordAndStoreCaughtPokemon(*args)
+    return PokeBattle_BattleCommon.instance_method(:pbRecordAndStoreCaughtPokemon).bind_call(self, *args)
   end
 end
 
@@ -149,7 +156,7 @@ end
 # Dex Sprite Select (copy of 6.8.2 PokemonPokedexInfoScreen#pbDexEntry,
 # 004_UI_Pokedex_Entry.rb:818-832)
 #-------------------------------------------------------------------------------
-KIF.guard_base("016_UI/Pokedex/004_UI_Pokedex_Entry.rb", 3919832689, "PokemonPokedexInfoScreen#pbDexEntry")
+KIF.guard_base("016_UI/Pokedex/004_UI_Pokedex_Entry.rb", 2078630065, "PokemonPokedexInfoScreen#pbDexEntry")
 
 class PokemonPokedexInfoScreen
   def pbDexEntry(pokemon)

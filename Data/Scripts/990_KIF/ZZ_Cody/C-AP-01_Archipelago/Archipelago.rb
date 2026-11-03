@@ -58,7 +58,7 @@
 #   nothing here is Kanto-only (badge_events names every shuffled badge).
 #   Goal all_gym_leaders: every badge location of the slot checked (each
 #   leader of the regions in play beaten). Traps ("TRAP_<kind>"): Traps.rb.
-#   Dexsanity (apworld 0.7.0): Dexsanity.rb (slot "dex_milestones", "game_mode").
+#   Dexsanity (apworld 0.7.0): Dexsanity.rb (slot "dex_milestones", "game_mode"; 0.8.0: "fusion_milestones").
 #===============================================================================
 class PokemonGlobalMetadata
   attr_accessor :kif_ap
@@ -172,11 +172,13 @@ module KIF
         n = int_or_nil(v)
         options[k.to_s] = n if n && OPTION_DEFAULTS.key?(k.to_s)
       end
-      milestones = (slot["dex_milestones"].is_a?(Array) ? slot["dex_milestones"] : []).map { |e|
-        e.is_a?(Array) && e.length == 2 ? e.map { |x| int_or_nil(x) } : nil
-      }.select { |e| e && !e.include?(nil) }
+      milestones = lambda { |key|
+        (slot[key].is_a?(Array) ? slot[key] : []).map { |e|
+          e.is_a?(Array) && e.length == 2 ? e.map { |x| int_or_nil(x) } : nil
+        }.select { |e| e && !e.include?(nil) }
+      }
       return {
-        dex_milestones: milestones, game_mode: %w[classic remix].include?(slot["game_mode"].to_s) ? slot["game_mode"].to_s : nil,
+        dex_milestones: milestones.call("dex_milestones"), fusion_milestones: milestones.call("fusion_milestones"), game_mode: %w[classic remix].include?(slot["game_mode"].to_s) ? slot["game_mode"].to_s : nil,
         seed: slot["seed"].to_s, slot: slot["slot"].to_s, player: int_or_nil(slot["player"]) || 0,
         locations: slot["locations"].map { |x| int_or_nil(x) }.compact, death_link: slot["death_link"] ? true : false,
         aliases: aliases, badge_events: events, league_badges: (int_or_nil(slot["league_badges"]) || 8).clamp(0, 8),
@@ -220,6 +222,7 @@ module KIF
       end
       # assumed decision: start with the DNA Splicers
       $PokemonBag.pbStoreItem(:DNASPLICERS, 1) if $PokemonBag && !$PokemonBag.pbHasItem?(:DNASPLICERS)
+      turned_on << _INTL("Infinite Splicers") if Dex.give_splicers
       money = opt("starting_money")
       $Trainer.money = money if money >= 0
       town = free_fly_town
@@ -549,6 +552,10 @@ module KIF
       end
       if e["item"].to_s =~ /\ABADGE_(\d+)\z/
         n = $1.to_i
+        unless n.between?(0, 31)   # a hand-edited items.json must not make the badge list huge
+          KIF.log("Archipelago: badge #{e['item'].inspect} (index #{e['index']}) skipped")
+          return true
+        end
         $Trainer.badges[n] = true
         name = e["name"].to_s.empty? ? _INTL("a Badge") : e["name"].to_s
         pbMessage(_INTL("\\me[Badge get]{1}\\wtnp[30]", received_text(name, who, d)))
@@ -632,6 +639,7 @@ module KIF
         d = data
         d[:dirty] = true if !d[:checked].empty? || d[:goal]   # send them again (see the header)
         Dex.scan   # Pokemon registered while unlinked or offline
+        Dex.give_splicers   # a save linked before the link gave them, or one that lost them
       end
       @timer += 1
       return if @timer < POLL_FRAMES
@@ -790,7 +798,8 @@ alias pbAddEgg pbGenerateEgg
 alias pbGenEgg pbGenerateEgg
 
 def pbStartOver(*args)
-  KIF::AP.death_out if KIF::AP.on?
+  # only a wiped team is a death: the Debugger item, a Game Over event and the secret base exit call this too
+  KIF::AP.death_out if KIF::AP.on? && $Trainer && $Trainer.able_pokemon_count == 0
   return kif_ap_pbStartOver(*args)
 end
 

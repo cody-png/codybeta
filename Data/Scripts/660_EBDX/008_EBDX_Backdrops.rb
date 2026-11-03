@@ -120,9 +120,11 @@ module EliteBattle
     # applies conditional environment/terrain data
     processes = EliteBattle.get(:procData)
     for key in processes.keys
-      if key.call(terrain, environ)
-        for k in processes[key][:BACKDROP].keys
-          data[k] = processes[key][:BACKDROP][k]
+      bd = processes[key][:BACKDROP]
+      next unless bd.is_a?(Hash)   # an entry registered for something else
+      if (key.call(terrain, environ) rescue false)
+        for k in bd.keys
+          data[k] = bd[k]
         end
       end
     end
@@ -145,6 +147,22 @@ end
 class BattleSceneRoom
   attr_reader :data, :sprites
   attr_accessor :dynamax
+  # Names of the weather particle sprites, made once: the per-frame loops over
+  # them used to build 72 + 72 + ... new strings a frame, clear sky or not
+  KEYS_SNOW  = Array.new(72) { |j| "w_snow#{j}" }.freeze
+  KEYS_RAIN  = Array.new(72) { |j| "w_rain#{j}" }.freeze
+  KEYS_SUNNY = Array.new(3) { |j| "w_sunny#{j}" }.freeze
+  KEYS_SAND  = Array.new(2) { |j| "w_sand#{j}" }.freeze
+  KEYS_FOG   = Array.new(2) { |j| "w_fog#{j}" }.freeze
+  # setWeather: [weather kind, the weathers that show it, how it goes away, how it comes]
+  WEATHER_KINDS = [
+    ["Rain", [:Rain, :HeavyRain], :deleteRain, :drawRain],
+    ["Snow", [:Hail], :deleteSnow, :drawSnow],
+    ["StrongWind", [:StrongWinds], :deleteStrongWind, :drawStrongWind],
+    ["Sunny", [:Sun, :HarshSun], :deleteSunny, :drawSunny],
+    ["Sandstorm", [:Sandstorm], :deleteSandstorm, :drawSandstorm],
+    ["Fog", [:Fog], :deleteFog, :drawFog]
+  ].freeze
   #-----------------------------------------------------------------------------
   # class constructor
   #-----------------------------------------------------------------------------
@@ -432,7 +450,7 @@ class BattleSceneRoom
       # for trainer sprites
       if @battle.opponent
         for t in 0...@battle.opponent.length
-          next if !@scene.sprites["trainer_#{t}"]
+          next if !@scene.sprites["trainer_#{t}"] || !@scene.sprites["trainer_#{t}"].respond_to?(:noshadow=)
           @scene.sprites["trainer_#{t}"].noshadow = true
         end
       end
@@ -474,10 +492,14 @@ class BattleSceneRoom
       @sprites["void"].zoom_y = @sprites["bg"].zoom_y * 1.2
     end
 
+    dayNight = nil   # [night, evening], asked once a call for the trees and grass
     for key in @sprites.keys
-      next if key == "bg" || key == "0" || key == "void" || key.include?("w_sunny") || key.include?("w_sand") || key.include?("w_fog")
+      # what the name says about the sprite: worked out once per name, not on every frame
+      skip, sLight, flatName, img, grass, tree, aLight, bLight = (POSITION_FLAGS[key] ||= position_flags(key))
+      next if skip
+      bg = @sprites["bg"]
       # updates fancy light effects
-      if key.include?("sLight")
+      if sLight
         i = key.gsub("sLight","").to_i
         if @sprites["sLight#{i}"] && @scene.vector
           x, y = self.stageLightPos(i)
@@ -486,40 +508,40 @@ class BattleSceneRoom
           @sprites["sLight#{i}"].update
         end
       end
-      x = @sprites["bg"].x - (@sprites["bg"].ox - @sprites[key].ex)*@sprites["bg"].zoom_x
-      y = @sprites["bg"].y - (@sprites["bg"].oy - @sprites[key].ey)*@sprites["bg"].zoom_y
-      z = @sprites[key].param * @sprites["bg"].zoom_x
+      x = bg.x - (bg.ox - @sprites[key].ex)*bg.zoom_x
+      y = bg.y - (bg.oy - @sprites[key].ey)*bg.zoom_y
+      z = @sprites[key].param * bg.zoom_x
       @sprites[key].x = x
       @sprites[key].y = y
-      if ["sky", "base", "water"].string_include?(key) || (key.include?("img") && @data[key].try_key?(:flat))
-        @sprites[key].zoom_x = @sprites["bg"].zoom_x * (@sprites[key].zx ? @sprites[key].zx : 1)
-        @sprites[key].zoom_y = @sprites["bg"].zoom_y * (@sprites[key].zy ? @sprites[key].zy : 1)
-      elsif key.include?("sLight") && @sprites[key] && @scene.vector
+      if flatName || (img && @data[key].try_key?(:flat))
+        @sprites[key].zoom_x = bg.zoom_x * (@sprites[key].zx ? @sprites[key].zx : 1)
+        @sprites[key].zoom_y = bg.zoom_y * (@sprites[key].zy ? @sprites[key].zy : 1)
+      elsif sLight && @sprites[key] && @scene.vector
         z = ((@scene.vector.zoom1**0.6) * ((i%2 == 0) ? 2 : 1) * 1.25)
-        @sprites[key].zoom_x = z * @sprites["bg"].zoom_x * @sprites[key].zx
-        @sprites[key].zoom_y = z * @sprites["bg"].zoom_y * @sprites[key].zy
+        @sprites[key].zoom_x = z * bg.zoom_x * @sprites[key].zx
+        @sprites[key].zoom_y = z * bg.zoom_y * @sprites[key].zy
       else
         @sprites[key].zoom_x = z
         @sprites[key].zoom_y = z
       end
       # effect for elements blowing side to side with wind
-      if (key.include?("grass") || key.include?("tree") || key.include?("img"))
-        if key.include?("grass") || key.include?("tree") || (@data[key] && @data[key].has_key?(:effect) && @data[key][:effect] == "wind")
-          w = key.include?("tree") ? ((@wind-90)*0.25).to_i + 90 : @wind
+      if (grass || tree || img)
+        if grass || tree || (@data[key] && @data[key].has_key?(:effect) && @data[key][:effect] == "wind")
+          w = tree ? ((@wind-90)*0.25).to_i + 90 : @wind
           @sprites[key].skew(w)
           @sprites[key].ox = @sprites[key].x_mid
         end
       end
       # effect for rotating elements
-      if key.include?("img") && (@data[key].has_key?(:effect) && @data[key][:effect] == "rotate")
+      if img && (@data[key].has_key?(:effect) && @data[key][:effect] == "rotate")
         @sprites[key].angle += @sprites[key].direction * @sprites[key].speed/self.delta
       end
       # effect for lighting updates
-      if key.include?("aLight") || key.include?("cLight")
+      if aLight
         @sprites[key].opacity -= @sprites[key].toggle*@sprites[key].speed/self.delta
         @sprites[key].toggle *= -1 if @sprites[key].opacity <= 95 || @sprites[key].opacity >= @sprites[key].end_x*255
       end
-      if key.include?("bLight")
+      if bLight
         if @wWait*self.delta % @sprites[key].speed == 0
           @sprites[key].bitmap = @sprites[key].storedBitmap.clone
           @sprites[key].bitmap.hue_change((rand(8)*45/self.delta).round)
@@ -530,32 +552,18 @@ class BattleSceneRoom
       # CRITICAL: Reapply daylight tone to trees and grass AFTER update()
       # The update() call may reset the tone, so we ensure it persists
       # This must be done after update() to have the final say on the tone
-      if key.include?("grass") || key.include?("tree")
+      if grass || tree
         # Use stored daylightTone if available, otherwise calculate from time
         tone = @daylightTone
-        # Debug log - more aggressive for first 10 frames, then every 120
-        @tintDebugCounter ||= 0
-        @tintDebugCounter += 1
-        shouldLog = (@tintDebugCounter <= 20) || (@tintDebugCounter % 120 == 1)
-
-        # Check tone BEFORE we do anything
-        toneBefore = @sprites[key].tone.inspect rescue "nil"
-
-        if shouldLog && defined?(MultiplayerDebug)
-          #MultiplayerDebug.info("EBDX-TINT", "position() #{key}: BEFORE tone=#{toneBefore}, @daylightTone=#{@daylightTone.inspect}")
-        end
 
         if tone.nil? || (tone.red == 0 && tone.green == 0 && tone.blue == 0)
           # Recalculate based on current time if stored tone is empty/nil
           if defined?(PBDayNight) && (@data["outdoor"] || @data["sky"])
-            isNight = PBDayNight.isNight? rescue false
-            isEvening = (PBDayNight.isEvening? || PBDayNight.isMorning?) rescue false
-            if shouldLog && defined?(MultiplayerDebug)
-              #MultiplayerDebug.info("EBDX-TINT", "position() recalculating: isNight=#{isNight}, isEvening=#{isEvening}")
-            end
-            if isNight && !@sunny
+            dayNight ||= [(PBDayNight.isNight? rescue false),
+                          ((PBDayNight.isEvening? || PBDayNight.isMorning?) rescue false)]
+            if dayNight[0] && !@sunny
               tone = Tone.new(-120, -100, -60)
-            elsif isEvening && !@sunny
+            elsif dayNight[1] && !@sunny
               tone = Tone.new(-16, -52, -56)
             end
           end
@@ -563,12 +571,18 @@ class BattleSceneRoom
 
         if tone
           @sprites[key].tone = tone
-          if shouldLog && defined?(MultiplayerDebug)
-            #MultiplayerDebug.info("EBDX-TINT", "position() #{key}: AFTER tone=#{@sprites[key].tone.inspect}")
-          end
         end
       end
     end
+  end
+  # [skip, sLight, flatName, img, grass, tree, aLight or cLight, bLight] for a sprite name (see position)
+  POSITION_FLAGS = {}
+  def position_flags(key)
+    return [key == "bg" || key == "0" || key == "void" || key.include?("w_sunny") || key.include?("w_sand") || key.include?("w_fog"),
+            key.include?("sLight"),
+            ["sky", "base", "water"].string_include?(key),
+            key.include?("img"), key.include?("grass"), key.include?("tree"),
+            key.include?("aLight") || key.include?("cLight"), key.include?("bLight")].freeze
   end
   #-----------------------------------------------------------------------------
   # loads all the necessary elements for the outdoor skybox
@@ -717,7 +731,8 @@ class BattleSceneRoom
   #-----------------------------------------------------------------------------
   def updateSky
     return if !@data.try_key?("sky", "outdoor")
-    minutes = Time.now.hour*60 + Time.now.min
+    now = pbGetTimeNow   # the game's clock (UnrealTime), the one PBDayNight reads for the branch below
+    minutes = now.hour*60 + now.min
     # animates twinkling stars
     for i in 0...24
       break if !(PBDayNight.isNight? && @data.try_key?("outdoor"))
@@ -742,18 +757,18 @@ class BattleSceneRoom
   # set weather data
   #-----------------------------------------------------------------------------
   def setWeather
-    # loop once
-    for wth in [["Rain", [:Rain, :HeavyRain]], ["Snow", :Hail], ["StrongWind", :StrongWinds], ["Sunny", [:Sun, :HarshSun]], ["Sandstorm", :Sandstorm], ["Fog", :Fog]]
+    # loop once (no eval: it parsed a new piece of code five times a frame)
+    for kind, conds, del, drw in WEATHER_KINDS
       proceed = false
-      for cond in (wth[1].is_a?(Array) ? wth[1] : [wth[1]])
+      for cond in conds
         proceed = true if @battle.pbWeather == cond
       end
       unless proceed
         # don't delete snow particles that were spawned by the environment data itself
-        next if wth[0] == "Snow" && @data.is_a?(Hash) && @data["snowParticles"]
-        eval("delete" + wth[0])
+        next if kind == "Snow" && @data.is_a?(Hash) && @data["snowParticles"]
+        __send__(del)
       end
-      eval("draw"  + wth[0]) if proceed
+      __send__(drw) if proceed
     end
   end
   #-----------------------------------------------------------------------------
@@ -764,63 +779,63 @@ class BattleSceneRoom
     harsh = [:HEAVYRAIN, :HARSHSUN].include?(@battle.pbWeather)
     # snow particles
     for j in 0...72
-      next if !@sprites["w_snow#{j}"]
-      if @sprites["w_snow#{j}"].opacity <= 0
+      next if !@sprites[KEYS_SNOW[j]]
+      if @sprites[KEYS_SNOW[j]].opacity <= 0
         z = rand(32)
-        @sprites["w_snow#{j}"].param = 0.24 + 0.01*rand(z/2)
-        @sprites["w_snow#{j}"].ey = -rand(64)
-        @sprites["w_snow#{j}"].ex = 32 + rand(@sprites["bg"].bitmap.width - 64)
-        @sprites["w_snow#{j}"].end_x = @sprites["w_snow#{j}"].ex
-        @sprites["w_snow#{j}"].toggle = rand(2) == 0 ? 1 : -1
-        @sprites["w_snow#{j}"].speed = 1 + 2/((rand(5) + 1)*0.4)
-        @sprites["w_snow#{j}"].z = z - (@focused ? 0 : 100)
-        @sprites["w_snow#{j}"].opacity = 255
+        @sprites[KEYS_SNOW[j]].param = 0.24 + 0.01*rand(z/2)
+        @sprites[KEYS_SNOW[j]].ey = -rand(64)
+        @sprites[KEYS_SNOW[j]].ex = 32 + rand(@sprites["bg"].bitmap.width - 64)
+        @sprites[KEYS_SNOW[j]].end_x = @sprites[KEYS_SNOW[j]].ex
+        @sprites[KEYS_SNOW[j]].toggle = rand(2) == 0 ? 1 : -1
+        @sprites[KEYS_SNOW[j]].speed = 1 + 2/((rand(5) + 1)*0.4)
+        @sprites[KEYS_SNOW[j]].z = z - (@focused ? 0 : 100)
+        @sprites[KEYS_SNOW[j]].opacity = 255
       end
       min = @sprites["bg"].bitmap.height/4
       max = @sprites["bg"].bitmap.height/2
-      scale = (2*Math::PI)/((@sprites["w_snow#{j}"].bitmap.width/64.0)*(max - min) + min)
-      @sprites["w_snow#{j}"].opacity -= @sprites["w_snow#{j}"].speed/self.delta
-      @sprites["w_snow#{j}"].ey += [1, @sprites["w_snow#{j}"].speed/self.delta].max
-      @sprites["w_snow#{j}"].ex = @sprites["w_snow#{j}"].end_x + @sprites["w_snow#{j}"].bitmap.width*0.25*Math.sin(@sprites["w_snow#{j}"].ey*scale)*@sprites["w_snow#{j}"].toggle
+      scale = (2*Math::PI)/((@sprites[KEYS_SNOW[j]].bitmap.width/64.0)*(max - min) + min)
+      @sprites[KEYS_SNOW[j]].opacity -= @sprites[KEYS_SNOW[j]].speed/self.delta
+      @sprites[KEYS_SNOW[j]].ey += [1, @sprites[KEYS_SNOW[j]].speed/self.delta].max
+      @sprites[KEYS_SNOW[j]].ex = @sprites[KEYS_SNOW[j]].end_x + @sprites[KEYS_SNOW[j]].bitmap.width*0.25*Math.sin(@sprites[KEYS_SNOW[j]].ey*scale)*@sprites[KEYS_SNOW[j]].toggle
     end
     # rain particles
     for j in 0...72
-      next if !@sprites["w_rain#{j}"]
-      if @sprites["w_rain#{j}"].opacity <= 0
+      next if !@sprites[KEYS_RAIN[j]]
+      if @sprites[KEYS_RAIN[j]].opacity <= 0
         z = rand(32)
-        @sprites["w_rain#{j}"].param = 0.24 + 0.01*rand(z/2)
-        @sprites["w_rain#{j}"].ox = 0
-        @sprites["w_rain#{j}"].ey = -rand(64)
-        @sprites["w_rain#{j}"].ex = 32 + rand(@sprites["bg"].bitmap.width - 64)
-        @sprites["w_rain#{j}"].speed = 3 + 2/((rand(5) + 1)*0.4)
-        @sprites["w_rain#{j}"].z = z - (@focused ? 0 : 100)
-        @sprites["w_rain#{j}"].opacity = 255
+        @sprites[KEYS_RAIN[j]].param = 0.24 + 0.01*rand(z/2)
+        @sprites[KEYS_RAIN[j]].ox = 0
+        @sprites[KEYS_RAIN[j]].ey = -rand(64)
+        @sprites[KEYS_RAIN[j]].ex = 32 + rand(@sprites["bg"].bitmap.width - 64)
+        @sprites[KEYS_RAIN[j]].speed = 3 + 2/((rand(5) + 1)*0.4)
+        @sprites[KEYS_RAIN[j]].z = z - (@focused ? 0 : 100)
+        @sprites[KEYS_RAIN[j]].opacity = 255
       end
-      @sprites["w_rain#{j}"].opacity -= @sprites["w_rain#{j}"].speed*(harsh ? 3 : 2)/self.delta
-      @sprites["w_rain#{j}"].ox += [1, @sprites["w_rain#{j}"].speed*(harsh ? 8 : 6)/self.delta].max
+      @sprites[KEYS_RAIN[j]].opacity -= @sprites[KEYS_RAIN[j]].speed*(harsh ? 3 : 2)/self.delta
+      @sprites[KEYS_RAIN[j]].ox += [1, @sprites[KEYS_RAIN[j]].speed*(harsh ? 8 : 6)/self.delta].max
     end
     # sun particles
     for j in 0...3
-      next if !@sprites["w_sunny#{j}"]
+      next if !@sprites[KEYS_SUNNY[j]]
       #next if j > @shine["count"]/6
-      @sprites["w_sunny#{j}"].zoom_x += 0.04*[0.5, 0.8, 0.7][j]/self.delta
-      @sprites["w_sunny#{j}"].zoom_y += 0.03*[0.5, 0.8, 0.7][j]/self.delta
-      @sprites["w_sunny#{j}"].opacity += (@sprites["w_sunny#{j}"].zoom_x < 1 ? 8 : -12)/self.delta
-      if @sprites["w_sunny#{j}"].opacity <= 0
-        @sprites["w_sunny#{j}"].zoom_x = 0
-        @sprites["w_sunny#{j}"].zoom_y = 0
-        @sprites["w_sunny#{j}"].opacity = 0
+      @sprites[KEYS_SUNNY[j]].zoom_x += 0.04*[0.5, 0.8, 0.7][j]/self.delta
+      @sprites[KEYS_SUNNY[j]].zoom_y += 0.03*[0.5, 0.8, 0.7][j]/self.delta
+      @sprites[KEYS_SUNNY[j]].opacity += (@sprites[KEYS_SUNNY[j]].zoom_x < 1 ? 8 : -12)/self.delta
+      if @sprites[KEYS_SUNNY[j]].opacity <= 0
+        @sprites[KEYS_SUNNY[j]].zoom_x = 0
+        @sprites[KEYS_SUNNY[j]].zoom_y = 0
+        @sprites[KEYS_SUNNY[j]].opacity = 0
       end
     end
     # sandstorm particles
     for j in 0...2
-      next if !@sprites["w_sand#{j}"]
-      @sprites["w_sand#{j}"].update
+      next if !@sprites[KEYS_SAND[j]]
+      @sprites[KEYS_SAND[j]].update
     end
     # fog particles
     for j in 0...2
-      next if !@sprites["w_fog#{j}"]
-      @sprites["w_fog#{j}"].update
+      next if !@sprites[KEYS_FOG[j]]
+      @sprites[KEYS_FOG[j]].update
     end
   end
   #-----------------------------------------------------------------------------
@@ -1101,21 +1116,21 @@ class BattleSceneRoom
     end
     # draw particles
     for i in 0...3
-      next if @sprites["w_sunny#{i}"]
-      @sprites["w_sunny#{i}"] = Sprite.new(@viewport)
-      @sprites["w_sunny#{i}"].z = 100
+      next if @sprites[KEYS_SUNNY[i]]
+      @sprites[KEYS_SUNNY[i]] = Sprite.new(@viewport)
+      @sprites[KEYS_SUNNY[i]].z = 100
       begin
-        @sprites["w_sunny#{i}"].bitmap = pbBitmap("Graphics/EBDX/Animations/Weather/ray001")
+        @sprites[KEYS_SUNNY[i]].bitmap = pbBitmap("Graphics/EBDX/Animations/Weather/ray001")
       rescue
-        @sprites["w_sunny#{i}"].bitmap = Bitmap.new(64, 64)
+        @sprites[KEYS_SUNNY[i]].bitmap = Bitmap.new(64, 64)
       end
-      @sprites["w_sunny#{i}"].oy = @sprites["w_sunny#{i}"].bitmap.height/2
-      @sprites["w_sunny#{i}"].angle = 290 + [-10, 32, 10][i]
-      @sprites["w_sunny#{i}"].zoom_x = 0
-      @sprites["w_sunny#{i}"].zoom_y = 0
-      @sprites["w_sunny#{i}"].opacity = 0
-      @sprites["w_sunny#{i}"].x = [-2, 20, 10][i]
-      @sprites["w_sunny#{i}"].y = [-4, -24, -2][i]
+      @sprites[KEYS_SUNNY[i]].oy = @sprites[KEYS_SUNNY[i]].bitmap.height/2
+      @sprites[KEYS_SUNNY[i]].angle = 290 + [-10, 32, 10][i]
+      @sprites[KEYS_SUNNY[i]].zoom_x = 0
+      @sprites[KEYS_SUNNY[i]].zoom_y = 0
+      @sprites[KEYS_SUNNY[i]].opacity = 0
+      @sprites[KEYS_SUNNY[i]].x = [-2, 20, 10][i]
+      @sprites[KEYS_SUNNY[i]].y = [-4, -24, -2][i]
     end
   end
   def deleteSunny
@@ -1133,9 +1148,9 @@ class BattleSceneRoom
       end
     end
     for j in 0...3
-      next if !@sprites["w_sunny#{j}"]
-      @sprites["w_sunny#{j}"].dispose
-      @sprites.delete("w_sunny#{j}")
+      next if !@sprites[KEYS_SUNNY[j]]
+      @sprites[KEYS_SUNNY[j]].dispose
+      @sprites.delete(KEYS_SUNNY[j])
     end
   end
   #-----------------------------------------------------------------------------
@@ -1143,24 +1158,24 @@ class BattleSceneRoom
   #-----------------------------------------------------------------------------
   def drawSandstorm
     for j in 0...2
-      next if @sprites["w_sand#{j}"]
-      @sprites["w_sand#{j}"] = ScrollingSprite.new(@viewport)
-      @sprites["w_sand#{j}"].default!
-      @sprites["w_sand#{j}"].z = 100
+      next if @sprites[KEYS_SAND[j]]
+      @sprites[KEYS_SAND[j]] = ScrollingSprite.new(@viewport)
+      @sprites[KEYS_SAND[j]].default!
+      @sprites[KEYS_SAND[j]].z = 100
       begin
-        @sprites["w_sand#{j}"].setBitmap("Graphics/EBDX/Animations/Weather/sandstorm#{j}")
+        @sprites[KEYS_SAND[j]].setBitmap("Graphics/EBDX/Animations/Weather/sandstorm#{j}")
       rescue
         # skip if sandstorm bitmap not found
       end
-      @sprites["w_sand#{j}"].speed = 32
-      @sprites["w_sand#{j}"].direction = j == 0 ? 1 : -1
+      @sprites[KEYS_SAND[j]].speed = 32
+      @sprites[KEYS_SAND[j]].direction = j == 0 ? 1 : -1
     end
   end
   def deleteSandstorm
     for j in 0...2
-      next if !@sprites["w_sand#{j}"]
-      @sprites["w_sand#{j}"].dispose
-      @sprites.delete("w_sand#{j}")
+      next if !@sprites[KEYS_SAND[j]]
+      @sprites[KEYS_SAND[j]].dispose
+      @sprites.delete(KEYS_SAND[j])
     end
   end
   #-----------------------------------------------------------------------------
@@ -1168,27 +1183,27 @@ class BattleSceneRoom
   #-----------------------------------------------------------------------------
   def drawFog
     for j in 0...2
-      next if @sprites["w_fog#{j}"]
-      @sprites["w_fog#{j}"] = ScrollingSprite.new(@viewport)
-      @sprites["w_fog#{j}"].default!
-      @sprites["w_fog#{j}"].z = 100
+      next if @sprites[KEYS_FOG[j]]
+      @sprites[KEYS_FOG[j]] = ScrollingSprite.new(@viewport)
+      @sprites[KEYS_FOG[j]].default!
+      @sprites[KEYS_FOG[j]].z = 100
       begin
-        @sprites["w_fog#{j}"].setBitmap("Graphics/EBDX/Animations/Weather/fog#{j}", false, true)
+        @sprites[KEYS_FOG[j]].setBitmap("Graphics/EBDX/Animations/Weather/fog#{j}", false, true)
       rescue
         # skip if fog bitmap not found
       end
-      @sprites["w_fog#{j}"].speed = 2 - j
-      @sprites["w_fog#{j}"].min_o = 105
-      @sprites["w_fog#{j}"].max_o = 205
-      @sprites["w_fog#{j}"].opacity = 205
-      @sprites["w_fog#{j}"].direction = j == 0 ? 1 : -1
+      @sprites[KEYS_FOG[j]].speed = 2 - j
+      @sprites[KEYS_FOG[j]].min_o = 105
+      @sprites[KEYS_FOG[j]].max_o = 205
+      @sprites[KEYS_FOG[j]].opacity = 205
+      @sprites[KEYS_FOG[j]].direction = j == 0 ? 1 : -1
     end
   end
   def deleteFog
     for j in 0...2
-      next if !@sprites["w_fog#{j}"]
-      @sprites["w_fog#{j}"].dispose
-      @sprites.delete("w_fog#{j}")
+      next if !@sprites[KEYS_FOG[j]]
+      @sprites[KEYS_FOG[j]].dispose
+      @sprites.delete(KEYS_FOG[j])
     end
   end
   #-----------------------------------------------------------------------------
@@ -1196,23 +1211,23 @@ class BattleSceneRoom
   #-----------------------------------------------------------------------------
   def drawSnow
     for j in 0...72
-      next if @sprites["w_snow#{j}"]
-      @sprites["w_snow#{j}"] = Sprite.new(@viewport)
+      next if @sprites[KEYS_SNOW[j]]
+      @sprites[KEYS_SNOW[j]] = Sprite.new(@viewport)
       begin
-        @sprites["w_snow#{j}"].bitmap = pbBitmap("Graphics/EBDX/Battlebacks/elements/snow")
+        @sprites[KEYS_SNOW[j]].bitmap = pbBitmap("Graphics/EBDX/Battlebacks/elements/snow")
       rescue
-        @sprites["w_snow#{j}"].bitmap = Bitmap.new(8, 8)
+        @sprites[KEYS_SNOW[j]].bitmap = Bitmap.new(8, 8)
       end
-      @sprites["w_snow#{j}"].center!
-      @sprites["w_snow#{j}"].default!
-      @sprites["w_snow#{j}"].opacity = 0
+      @sprites[KEYS_SNOW[j]].center!
+      @sprites[KEYS_SNOW[j]].default!
+      @sprites[KEYS_SNOW[j]].opacity = 0
     end
   end
   def deleteSnow
     for j in 0...72
-      next if !@sprites["w_snow#{j}"]
-      @sprites["w_snow#{j}"].dispose
-      @sprites.delete("w_snow#{j}")
+      next if !@sprites[KEYS_SNOW[j]]
+      @sprites[KEYS_SNOW[j]].dispose
+      @sprites.delete(KEYS_SNOW[j])
     end
   end
   #-----------------------------------------------------------------------------
@@ -1230,13 +1245,13 @@ class BattleSceneRoom
       end
     end
     for j in 0...72
-      next if @sprites["w_rain#{j}"]
-      @sprites["w_rain#{j}"] = Sprite.new(@viewport)
-      @sprites["w_rain#{j}"].create_rect(harsh ? 28 : 24, 3, Color.white)
-      @sprites["w_rain#{j}"].default!
-      @sprites["w_rain#{j}"].angle = 80
-      @sprites["w_rain#{j}"].oy = 2
-      @sprites["w_rain#{j}"].opacity = 0
+      next if @sprites[KEYS_RAIN[j]]
+      @sprites[KEYS_RAIN[j]] = Sprite.new(@viewport)
+      @sprites[KEYS_RAIN[j]].create_rect(harsh ? 28 : 24, 3, Color.white)
+      @sprites[KEYS_RAIN[j]].default!
+      @sprites[KEYS_RAIN[j]].angle = 80
+      @sprites[KEYS_RAIN[j]].oy = 2
+      @sprites[KEYS_RAIN[j]].opacity = 0
     end
   end
   def deleteRain
@@ -1250,9 +1265,9 @@ class BattleSceneRoom
       end
     end
     for j in 0...72
-      next if !@sprites["w_rain#{j}"]
-      @sprites["w_rain#{j}"].dispose
-      @sprites.delete("w_rain#{j}")
+      next if !@sprites[KEYS_RAIN[j]]
+      @sprites[KEYS_RAIN[j]].dispose
+      @sprites.delete(KEYS_RAIN[j])
     end
   end
   #-----------------------------------------------------------------------------

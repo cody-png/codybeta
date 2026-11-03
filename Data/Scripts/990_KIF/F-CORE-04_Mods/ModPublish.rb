@@ -14,7 +14,9 @@
 #      the GitHub part with the GitHub CLI under the player's own account:
 #      sign in (browser), then either straight to main (catalog contributors,
 #      their own mod's folder only; Cody, 2026-10-22) or fork, branch, push
-#      and a pull request that is reviewed.
+#      and a pull request that is reviewed. A folder's owners are listed in
+#      the catalog's owners.txt (fx-publish, 2026-11-02): the script, not the
+#      game, reads it, and says why when it doesn't treat a mod as yours.
 # KIF never sees or stores a GitHub sign-in: gh keeps it.
 #===============================================================================
 module KIF
@@ -146,6 +148,16 @@ module KIF
       others = {}
       items.each { |it| others[it.folder] = it.id }
       errs, warns = KIF::ModCheck.check(path, folder, others)
+      # the catalog's folder of this name is another mod (or this one under its old id): it would be overwritten, and players' settings are kept under the id
+      if !old && others[folder] && others[folder] != json["id"].to_s
+        errs << "the catalog's \"#{folder}\" folder is the mod \"#{others[folder]}\", but this mod.json says \"#{json['id']}\". An id never changes once published: set it back to \"#{others[folder]}\", or give the folder another name"
+      end
+      # what players will be told about the mod: the scan's colour and lines, and a nudge to list what it needs
+      if KIF::ModCheck.respond_to?(:scan)
+        rep = KIF::ModCheck.scan(path, json)
+        rep.lines(5).each { |l| warns << "scan is #{rep.color}: #{l}" }
+        warns << "list what the mod needs in mod.json \"permissions\" (now: #{rep.inferred.join(', ')}) so players see it before they install" if rep.declared.nil? && !(rep.inferred - %w[eval objectspace]).empty?
+      end
       if old && KIF::ModRules.compare(json["version"], old.version) <= 0
         errs << "\"version\" must be higher than the catalog's #{old.version} for players to get the update"
       end
@@ -192,9 +204,14 @@ module KIF
       return [title, lines.join("\n") + "\n"]
     end
 
+    # only letters, digits, "." "_" "-" (a mod.json can hold anything, and this goes onto a command line)
+    def slug(s)
+      return s.to_s.gsub(/[^A-Za-z0-9._\-]/, "-")
+    end
+
     def branch_for(json)
-      v = json["version"].to_s.gsub(/\.{2,}/, ".").sub(/[.\-]+\z/, "")
-      return "mod/#{json['id']}-#{v}"
+      v = slug(json["version"]).gsub(/\.{2,}/, ".").sub(/[.\-]+\z/, "")
+      return "mod/#{slug(json['id'])}-#{v}"
     end
 
     def request_dir
@@ -227,6 +244,11 @@ module KIF
     # player runs it: the command is in Cache/Publish/command.txt) or false.
     def launch(args)
       return false if KIF.mobile?
+      # a quote or a line break would end the quoted argument and add commands (cmd.exe), so none is passed on
+      if args.any? { |a| a.to_s =~ /["\x00-\x1f]/ }
+        log("not started: an argument holds a quote or a control character")
+        return false
+      end
       if windows?
         bat = script("bat")
         return false unless File.file?(bat)
@@ -391,11 +413,11 @@ module KIF
       return unless ask(_INTL("Publish {1} {2}? A window opens that signs you in to GitHub in your browser (the first time) and uploads the mod. The game stays open.",
                               json["name"], json["version"]), [_INTL("Publish"), _INTL("Cancel")]) == 0
       msg, bod = write_request(title, body)
-      res = launch([path, folder, branch_for(json), msg, bod, json["id"].to_s])
+      res = launch([path, folder, branch_for(json), msg, bod, slug(json["id"])])
       case res
       when :started
         pbMessage(t(_INTL("The publish window is open. Follow its steps; it may ask to install Git or the GitHub CLI first.")))
-        pbMessage(t(_INTL("Catalog contributors publish straight away: players get the mod at their next catalog check. Everyone else gets a pull request, which opens in the browser; it is checked and reviewed before the mod goes live.")))
+        pbMessage(t(_INTL("The mod's owners (catalog contributors) publish straight away: players get the mod at their next catalog check. Everyone else gets a pull request, which opens in the browser; it is checked and reviewed before the mod goes live. The window says which one applies and why.")))
       when :manual
         pbMessage(t(_INTL("Open a terminal and run the command saved in Cache/Publish/command.txt (in the game folder).")))
       else

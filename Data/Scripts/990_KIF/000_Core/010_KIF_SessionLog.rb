@@ -121,6 +121,7 @@ module KIF
 
       def write(msg)
         start
+        return if @full   # nothing more is written, so nothing more is counted (a partner can send endless different lines)
         msg = msg.to_s
         key = repeat_key(msg)
         @counts[key] += 1

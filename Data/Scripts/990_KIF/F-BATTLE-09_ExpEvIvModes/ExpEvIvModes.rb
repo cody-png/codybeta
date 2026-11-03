@@ -212,6 +212,7 @@ class PokeBattle_Battle
     # KIF: Trainer Exp. Boost (PIF fixed this at +50%)
     exp = (exp * kif_trainer_exp_multiplier).floor if trainerBattle?
     exp = KIF::AP.exp_scaled(exp) if defined?(KIF::AP)   # KIF: Archipelago exp_modifier
+    exp = KIF::Teams.exp_share(exp, self, defeatedBattler) if defined?(KIF::Teams)   # KIF: co-op bigger trainer teams split the Exp
     # Scale the gained Exp based on the gainer's level (or not)
     if Settings::SCALED_EXP_FORMULA
       exp /= 5

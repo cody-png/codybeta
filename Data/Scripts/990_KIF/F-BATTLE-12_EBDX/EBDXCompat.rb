@@ -347,15 +347,36 @@ if KIF::EBDX.installed?
   # or three Pokémon on a side the boxes are stacked 50 px apart, and there
   # the pills covered the start of the next box's name ("Charmander", 26 Oct
   # test). A box with another one under it shows them above its own name.
+  # In triples the middle box has a box right above and below it (no room),
+  # so its pills sit beside its HP bar, on the battlefield side.
   if defined?(::DataBoxEBDX) && ::DataBoxEBDX.method_defined?(:drawStatStages)
     class ::DataBoxEBDX
       alias kif_pills_setUp setUp unless method_defined?(:kif_pills_setUp) || private_method_defined?(:kif_pills_setUp)
       def setUp
         kif_pills_setUp
+        @kif_pills_left = false
         pills = @sprites && @sprites["statStages"]
         return unless pills && @battler && @battle
-        return unless @battler.index / 2 < @battle.pbSideSize(@battler.index) - 1
+        size = @battle.pbSideSize(@battler.index)
+        return unless @battler.index / 2 < size - 1
+        if size >= 3 && @battler.index / 2 > 0
+          pills.ey = getMetric("container", :y)
+          @kif_pills_left = @playerpoke   # player boxes are on the right: the pills end at the box's left edge
+          pills.ex = @playerpoke ? -2 : @sprites["base"].bitmap.width + 2
+          return
+        end
         pills.ey = getMetric("name", :y) + 3 - EBDX_SS_PILL_H - 1   # the name is drawn 3 px down
+      end
+
+      alias kif_pills_drawStatStages drawStatStages unless method_defined?(:kif_pills_drawStatStages) || private_method_defined?(:kif_pills_drawStatStages)
+      def drawStatStages(force = false)
+        before = @cached_stages
+        kif_pills_drawStatStages(force)
+        return if !@kif_pills_left || @cached_stages.equal?(before)
+        bmp = @sprites["statStages"].bitmap
+        w = bmp.width
+        w -= 1 while w > 0 && bmp.get_pixel(w - 1, 0).alpha == 0
+        @sprites["statStages"].ox = w   # right-align: the row ends at ex
       end
     end
   end

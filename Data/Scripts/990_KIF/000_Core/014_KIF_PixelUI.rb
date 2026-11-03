@@ -32,8 +32,23 @@ module KIF
       return s.valid_encoding? ? s : s.scrub("?")
     end
 
+    # Chinese, Japanese and Korean text (PIF 6.9's Chinese texts, names from its
+    # data) has no pixel glyphs: it is drawn with the game's Chinese font, one
+    # square character per glyph, instead of "?"
+    def cjk?(ch)
+      return ch.ord >= 0x2E80
+    end
+
+    def engine_glyph(f)
+      s = [f[:ascent].to_i, 14].max
+      return [s, 0, 0, s, s + 2, :engine]
+    end
+
     def glyph(f, ch)
-      return f[:glyphs][ch.ord] || f[:glyphs][63]   # unknown: "?"
+      g = f[:glyphs][ch.ord]
+      return g if g
+      return engine_glyph(f) if cjk?(ch)
+      return f[:glyphs][63]   # unknown: "?"
     end
 
     def width(font, str)
@@ -51,6 +66,15 @@ module KIF
       return bmp if bmp && !bmp.disposed?
       w = g[3]
       h = g[4]
+      if g[5] == :engine
+        bmp = Bitmap.new(w, h)
+        bmp.font.name = MessageConfig::FONT_NAME_CHINESE
+        bmp.font.size = w
+        bmp.font.color = color
+        bmp.draw_text(0, 0, w, h, [code].pack("U"))
+        @cache[key] = bmp
+        return bmp
+      end
       bytes = g[5].unpack1("m").bytes
       bmp = Bitmap.new(w, h)
       h.times do |yy|

@@ -28,7 +28,8 @@
 # another tile or the walk ended. The
 # walk drives Input.dir4, so the player's own movement code does each step.
 # A click past the edge onto a connected map (route <-> town) walks to the
-# edge and steps over. Clicks follow the Journey Camera mod's zoom and tilt.
+# edge and steps over. Clicks follow KIF's Map Zoom and the Journey Camera
+# mod's zoom and tilt.
 #
 # Engine: mkxp-z's Input.mouse_x/mouse_y/mouse_in_window?, MOUSELEFT/RIGHT,
 # scroll_v and Graphics.show_cursor; every call checks the engine has it.
@@ -150,7 +151,7 @@ module KIF
     # JoiPlay reports taps in the window the engine started with (640x480),
     # not in the game's own size after PIF resizes it (512x384): a tap there
     # landed 25% too far right and down. The PC engine already converts.
-    START_SIZE = [(Graphics.width rescue 0), (Graphics.height rescue 0)]
+    START_SIZE = [(Graphics.width rescue 0), (Graphics.height rescue 0)] unless const_defined?(:START_SIZE)   # a soft reset re-runs this file after PIF resized the screen
 
     # the engine is a phone's: KIF.mobile? without PIF's Device: Mobile
     # option, which a save brought over from a phone keeps on a PC (there the
@@ -489,6 +490,13 @@ module KIF
       return OverworldZoom.current_scale
     end
 
+    # KIF's own Map Zoom (Far): the map is drawn at this fraction of its size
+    # from the screen's top left corner, nil at Normal
+    def self.far
+      return nil unless defined?(KIF::MapZoom) && KIF::MapZoom.zoomed?
+      return KIF::MapZoom.scale
+    end
+
     # the map tile under the pointer; past the map's edge the nearest tile of
     # the map (small maps, the black border), or the tile just past it when a
     # connected map is drawn there that the player can step onto from it
@@ -499,6 +507,10 @@ module KIF
       # pixel's middle: the mod rounds where each tile starts)
       s = zoom
       py = OverworldZoom.inverse_transform_ground_y(py + 0.5, s) if s
+      if (f = far)   # Map Zoom Far: the pixel's middle, back to the map's own pixels
+        px = (px + 0.5) / f
+        py = (py + 0.5) / f
+      end
       ry = (($game_map.display_y + py * Game_Map::Y_SUBPIXELS) / Game_Map::REAL_RES_Y.to_f).floor
       if s   # x with the factor the mod draws that tile row with: at its bottom plus one tile
         st = OverworldZoom.projection_state(s)
@@ -692,6 +704,10 @@ module KIF
         y = OverworldZoom.transform_ground_y(y, s)
         zx = OverworldZoom.ground_x_factor(b, s) * s
         zy = OverworldZoom.ground_row_scale(b, s)
+      elsif (f = far)   # Map Zoom Far: placed and sized like a map tile
+        x = (x * f).floor
+        y = (y * f).floor
+        zx = zy = f
       end
       @marker.x = x
       @marker.y = y

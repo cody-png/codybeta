@@ -94,7 +94,7 @@ module KIF
   end
 end
 
-KIF.guard_base("014_Pokemon/001_Pokemon.rb", 212896005, "Pokemon#shiny?")
+KIF.guard_base("014_Pokemon/001_Pokemon.rb", 4112433899, "Pokemon#shiny?")
 
 class Pokemon
   # Each Pokémon remembers the odds set when it was generated. A non-shiny

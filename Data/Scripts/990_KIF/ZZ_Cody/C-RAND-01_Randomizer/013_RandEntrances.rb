@@ -142,9 +142,9 @@ module KIF
         a << :rocksmash if have.include?(:item_TM94) || have.include?(:item_PICKAXE)
         a << :strength if (have.include?(:item_HM04) && badges >= 5) || have.include?(:item_LEVER)
         a << :surf if (have.include?(:item_HM03) && badges >= 6) || have.include?(:item_SURFBOARD)
-        a << :waterfall if (have.include?(:item_HM05) && badges >= 9) || have.include?(:item_JETPACK)
+        a << :waterfall if (have.include?(:item_HM05) && badges >= Settings::BADGE_FOR_WATERFALL) || have.include?(:item_JETPACK)
         a << :rockclimb if have.include?(:item_CLIMBINGGEAR)
-        a << :dive if (have.include?(:item_HM06) && badges >= 9) || have.include?(:item_SCUBAGEAR)   # HM06 is Dive (HM08 is Flash)
+        a << :dive if (have.include?(:item_HM06) && badges >= Settings::BADGE_FOR_DIVE) || have.include?(:item_SCUBAGEAR)   # HM06 is Dive (HM08 is Flash)
         a << :pokeflute if have.include?(:item_POKEFLUTE)
         a << :bike if have.include?(:item_BICYCLE)
         return a
@@ -763,7 +763,7 @@ module KIF
       # behind a ledge, an NPC's spot - aren't where a player stands). Worked
       # out once per Randomize now.
       def self.here_strict(d)
-        key = [$game_map.map_id, state.object_id]
+        key = [$game_map.map_id, state.object_id, current_flags(d)]   # the flags too: with no layout the state is nil for every save
         return @here_strict[1] if @here_strict && @here_strict[0] == key
         s = state
         edges = (s.is_a?(Hash) && layout_current?(s)) ? edges_for(d, s[:in], s[:out]) : edges_for(d, {}, {})
@@ -1009,6 +1009,7 @@ module KIF
         Rand.data[:ent_done] = true
         randomize
       rescue => e
+        Rand.progress_done if Rand.respond_to?(:progress_done)   # the progress screen must not stay up
         KIF.log("Entrance layout at intro end failed (#{e.class}: #{e.message})")
       end
 
@@ -1016,6 +1017,16 @@ module KIF
       # Runtime
       #-------------------------------------------------------------------------
       # [map, event] => [map, x, y, dir, door id, :in/:out]
+      # PIF 6.9 moved the Vermillion Gym's exit mat down a row (its exits now lead to 17,27) and put two more exit
+      # events beside it. Data/KIF/entrances.dat keeps its signature (made on the 6.8.2 maps) so layouts saved on
+      # 6.8.2 stay valid; these events act as that door's own exits:
+      # [map, event] => [event whose target it shares, its destination on the 6.9 map]
+      EXIT_VARIANTS = {
+        [24, 3] => [[24, 3], [19, 17, 27]],
+        [24, 34] => [[24, 1], [19, 17, 27]],
+        [24, 36] => [[24, 1], [19, 17, 27]]
+      }
+
       def self.targets
         return @targets if @targets && @targets_sig == state.object_id
         @targets = {}
@@ -1032,6 +1043,7 @@ module KIF
             o[:exit_events].each { |e| @targets[[o[:exit_map], e]] = [back[:exit_to][0], back[:exit_to][1], back[:exit_to][2], back[:exit_dir], o[:id], :out, o[:exit_to]] }
           end
         end
+        EXIT_VARIANTS.each { |ev, (src, _dest)| @targets[ev] = @targets[src] if @targets[src] && !@targets[ev] }
         return @targets
       end
 
@@ -1042,7 +1054,7 @@ module KIF
         return nil unless active?
         t = targets[[map_id, event_id]]
         return nil unless t
-        return nil if params && params[1, 3] != t[6]
+        return nil if params && params[1, 3] != t[6] && params[1, 3] != (EXIT_VARIANTS[[map_id, event_id]] || [])[1]
         return t
       end
 
@@ -1102,6 +1114,7 @@ module KIF
         @handover_msg = [:start, dat[:names][o[:map]]]
         return [o[:to][0], o[:to][1], o[:to][2], o[:to_dir], nil, :start]
       rescue => e
+        Rand.progress_done if Rand.respond_to?(:progress_done)
         KIF.log("Random start hand-over failed (#{e.class}: #{e.message})")
         # doors get shuffled the usual way at this warp instead
         Rand.data[:ent_done] = nil

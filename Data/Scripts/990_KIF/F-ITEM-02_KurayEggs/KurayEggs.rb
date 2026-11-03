@@ -103,8 +103,8 @@ module KIF
                  "Egg with a Pokémon who's BST is between #{MINBSTSHOW[t]} and #{MAXBSTSHOW[t]}. 10x shiny odds.")
       end
       add.call("Legendary", BASE_PRICE * 5, "Egg with a LEGENDARY Pokémon. 10x shiny odds.")
-      # Port addition: 6.8.2's new species only
-      add.call("Hoenn", BASE_PRICE * 4, "Egg with a Pokémon new to PIF 6.8.2 (Dex 502-576). 10x shiny odds.")
+      # Port addition: the Hoenn species only (Dex 502-576)
+      add.call("Hoenn", BASE_PRICE * 4, "Egg with a Hoenn Pokémon (Dex 502-576). 10x shiny odds.")
       @defs = defs
       return defs
     end
@@ -144,6 +144,8 @@ module KIF
           next KIF::KurayEggs.use(effect, it)
         })
       end
+      # bought, not found: the item randomizers must neither hide them in the world nor hand them out
+      INVALID_ITEMS.concat(definitions.map { |d| d[0] } - INVALID_ITEMS) if defined?(INVALID_ITEMS)
       @pools = {}
     end
 
@@ -394,6 +396,7 @@ module KIF
 
       def prepare
         stock = kif_eggs_prepare
+        return stock if defined?(KIF::Modules) && !KIF::Modules.active?("F-ITEM-02_KurayEggs")   # K-Eggs Off: nothing of them is sold
         KIF::KurayEggs.shop_stock.each do |sym|
           next unless GameData::Item.exists?(sym)
           stock << sym unless stock.include?(sym)

@@ -145,6 +145,12 @@ module KIF
           onoff(:trainer_custom, _INTL("Custom sprites only"),
                 _INTL("Trainer teams can use auto-generated sprites."),
                 _INTL("Trainer teams only use Pokémon with a custom sprite.")),
+          onoff(:ref_filter, _INTL("References filter"),
+                _INTL("Trainer teams can use any custom sprite."),
+                _INTL("Trainer teams only use sprites from the reference sets chosen below (needs Custom sprites only). Unfused, Fuse everything, Follow wild and the rival's team ignore it, as they ignore Custom sprites only.")),
+          DynButton.new(proc { KIF::Rand.mark(:__refs, _INTL("Reference sets: {1}", KIF::Rand.ref_label)) },
+                        proc { KIF::Rand.pick_references },
+                        _INTL("Which reference sets the filter uses (all until you choose). The choice stays with this save and is not part of a settings code.")),
           onoff(:class_themes, _INTL("Class themes"),
                 _INTL("Trainer classes can use any type."),
                 _INTL("Every Pokémon of a themed class has its type: Bug Catchers use Bug types, Swimmers Water types, ...")),
@@ -176,6 +182,19 @@ module KIF
           }, _INTL("Which type each trainer class uses. Gym leaders use the Gyms page."))
         ]
       }
+      check_references
+    end
+
+    # The References filter works on the custom sprite list (as in PIF: ask, then turn one off)
+    def self.check_references
+      return unless sw(SWITCH_RANDOM_REFERENCE_SPRITES) && !sw(600)
+      pbMessage(_INTL("The References filter needs Custom sprites only to work."))
+      if pbConfirmMessage(_INTL("Turn on Custom sprites only?"))
+        setsw(600, true)
+      else
+        setsw(SWITCH_RANDOM_REFERENCE_SPRITES, false)
+        pbMessage(_INTL("The References filter was turned off."))
+      end
     end
 
     def self.page_gyms
@@ -257,7 +276,7 @@ module KIF
           enum(:stats, _INTL("Base stats"), [_INTL("Same"), _INTL("Shuffle"), _INTL("Total"), _INTL("Chaos")],
                [_INTL("Base stats stay the same."),
                 _INTL("Same numbers in a new order (the same order for the whole family)."),
-                _INTL("Random spread with the same total."),
+                _INTL("Random spread with the same total (no stat very low or very high)."),
                 _INTL("Every stat rolled from 1 to 255.")]),
           enum(:chaos_safety, _INTL("Chaos safety"), [_INTL("Off"), _INTL("Total"), _INTL("Each stat")],
                [_INTL("Chaos: an evolution can be weaker."),
@@ -369,6 +388,18 @@ module KIF
       end
     end
 
+    def self.ask_save_preset
+      name = pbMessageFreeText(_INTL("Preset name:"), "", false, 30)
+      return unless name && !name.strip.empty?
+      clean = preset_clean(name)
+      if clean && preset_names.any? { |n| n.casecmp(clean) == 0 } &&   # Windows file names ignore case
+         !pbConfirmMessage(_INTL("A preset called {1} already exists. Replace it?", clean))
+        return
+      end
+      ok = save_preset(name)
+      pbMessage(ok ? _INTL("Saved to the {1} folder.", preset_dir) : _INTL("Couldn't save that preset."))
+    end
+
     def self.page_presets
       open_page(_INTL("Presets & sharing"), _INTL("Share or keep your randomizer settings."), nil) {
         [
@@ -390,18 +421,8 @@ module KIF
               pbMessage(_INTL("Loaded. Use Randomize now for them to take effect."))
             end
           }, _INTL("Loads a settings code copied from someone else.")),
-          ButtonOption.new(_INTL("Save as preset"), proc {
-            name = pbMessageFreeText(_INTL("Preset name:"), "", false, 30)
-            if name && !name.strip.empty?
-              clean = name.gsub(/[\\\/:*?"<>|]/, "").strip
-              if KIF::Rand.preset_names.include?(clean) &&
-                 !pbConfirmMessage(_INTL("A preset called {1} already exists. Replace it?", clean))
-                next
-              end
-              ok = KIF::Rand.save_preset(name)
-              pbMessage(ok ? _INTL("Saved to the {1} folder.", KIF::Rand.preset_dir) : _INTL("Couldn't save that preset."))
-            end
-          }, _INTL("Saves these settings as a file you can share.")),
+          ButtonOption.new(_INTL("Save as preset"), proc { KIF::Rand.ask_save_preset },
+                           _INTL("Saves these settings as a file you can share.")),
           ButtonOption.new(_INTL("Built-in presets"), proc {
             list = KIF::Rand::BUILTIN_PRESETS
             i = pbMessage(_INTL("Which preset?"), list.map { |n, _d, _v| _INTL(n) } + [_INTL("Cancel")], list.length + 1)

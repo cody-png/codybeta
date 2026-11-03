@@ -11,7 +11,9 @@
 #   - @targetSprite.tone may be left non-zero
 # Solution: redefine the animation with fp initialized outside begin so
 # ensure can always call pbDisposeSpriteHash(fp) regardless of crash point.
-EliteBattle.defineMoveAnimation(:CONFUSERAY) do
+# (Defined once EBDX's own move animations are compiled, which happens when the
+# first one is played; defining it now would compile them all at start-up.)
+EliteBattle.after_move_animations { EliteBattle.defineMoveAnimation(:CONFUSERAY) do
   vector = @scene.getRealVector(@targetIndex, @targetIsPlayer)
   fp = {}; rndx = []; rndy = []
   begin
@@ -97,7 +99,7 @@ EliteBattle.defineMoveAnimation(:CONFUSERAY) do
     @targetSprite.tone = Tone.new(0,0,0,0) rescue nil if @targetSprite && !pbDisposed?(@targetSprite)
     @vector.inc = 0.2 rescue nil
   end
-end
+end }
 
 # Fix: player-side databox overlaps the YES/NO command window that appears
 # when the rival is about to send in a new Pokémon ("Will you switch?").

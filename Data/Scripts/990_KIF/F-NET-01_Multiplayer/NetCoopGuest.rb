@@ -1,0 +1,1311 @@
+#===============================================================================
+# F-NET-01 – Multiplayer: co-op battles, the partner's game (see NetCoop.rb)
+#
+# The battle runs in the other game. This game builds a copy of it for the
+# battle screen only (never run): its own party as it is, the host's party and
+# the foes from what the host sent, this player as the player (front left),
+# the host as the partner. The host's log is played on this game's own battle
+# scene (PIF's or EBDX's); its menus pick this player's moves, targets,
+# switches, items and balls, checked against this game's own rules, and the
+# host checks them again. HP and status come from the host, onto this
+# player's own Pokémon, as they change, so a lost connection keeps what was
+# seen. At the end: the final state, Exp with this game's own options (moves
+# to learn are asked here), prize money, a Pokémon this player caught, items
+# used, then the usual after-battle steps (Nuzlocke, Soul Link, evolutions,
+# whiting out).
+#===============================================================================
+module KIF
+  module Coop
+    class Guest
+      attr_reader :id, :mirror, :decision, :host_name, :party, :caught, :done
+      attr_accessor :view
+
+      IDLE        = 90.0   # seconds the host may say nothing (while this player isn't choosing) before this game leaves
+      NO_NEWS     = 600.0  # ... and the most it may go on with only "still here" (co_int): no log entry, no request
+      STALL       = 30.0   # after that long without news the player is told B leaves the battle
+      PROGRESS    = %w[co_begin co_cmd co_sw co_end]   # (and a co_ev with an entry): what moves the battle on
+      MAX_EVENTS  = 40     # log entries run from one co_ev (a real one holds 25 at most)
+      MAX_TOTAL   = 6000   # log entries in one battle
+      MAX_PAUSED  = 1500   # messages that wait for a key press in one battle
+      MAX_BOX     = 300    # frames waiting for this game's thread
+
+      attr_accessor :runner   # the lobby slot of the player whose battle this is (nil: the one partner of a game for two)
+
+      def initialize(session, id, trainer, view = nil, bag: nil, max: 0, runner: nil)
+        @s = session
+        @runner = runner
+        @id = id
+        @trainer = trainer
+        @party = KIF::Coop.join_party(trainer, max)   # the Pokémon sent with co_join, in that order
+        @max = max.to_i > 0 && @party.length < trainer.party.length ? max.to_i : nil   # told at the start
+        @bag = bag || (trainer.equal?($Trainer) ? $PokemonBag : nil)
+        @view = view
+        @host_name = ((runner && session.respond_to?(:name_of) && session.name_of(runner)) || session.partner).to_s
+        @box = []
+        @done = @begun = @started = @lost = false
+        @caught = []
+        # what this player picked: the end takes only these off its Bag and only
+        # this many catches; Exp only for foes of this battle (finish)
+        @picked = Hash.new(0)
+        @balls = 0
+        @foes = []
+        @ft_names = nil
+        @fought = []    # slots of @party that took part in the battle on this screen
+        @down = {}      # slots whose Pokémon the log showed at 0 HP
+        @able = @party.each_index.select { |j| @party[j] && !@party[j].egg? && @party[j].hp > 0 }   # slots that could fight when this game joined
+        @picked_slots = []   # slots this player sent in itself (a switch, a replacement)
+        @free = 2       # Pokémon the host's AI may send in that this player did not pick: a forced switch (Roar...), one left to it
+        @rx_at = @news_at = KIF::Net.now
+      end
+
+      def feed(type, msg)
+        return unless msg.is_a?(Hash) && msg["id"] == @id
+        @rx_at = KIF::Net.now
+        (@news_at = @rx_at; @stall_shown = nil) if news?(type, msg)
+        return abort_battle("too many frames waiting") if @box.to_a.length >= MAX_BOX
+        @box << [type, msg]
+      end
+
+      # a frame that moves the battle on (not "still here", not a note about a pick)
+      def news?(type, msg)
+        return PROGRESS.include?(type) || (type == "co_ev" && msg["e"].is_a?(Array) && !msg["e"].empty?)
+      end
+      def begun?; @begun; end
+      def stopped?; @stopped ? true : false; end   # this game left (the host stopped, flooded, or the player left)
+      def lost; @lost = true; end
+      def lost?; @lost || !@s.connected? || !runner_in?; end
+
+      # false when the runner left the lobby while this game's own line (to the lobby host) is fine
+      def runner_in?; @runner.nil? || !@s.respond_to?(:peers) || @s.peers.any? { |sl, _, _| sl == @runner }; end
+
+      def gpost(type, fields); KIF::Net.post_to(@s, type, fields, @runner); end
+      def session; @s; end
+
+      # the host stopped waiting for this request (co_cmd or co_sw): its AI chose
+      def skipped?(req); !skip_at(req).nil?; end
+
+      # the host's battle ended meanwhile (its player ran away)
+      def ended?; @box.any? { |t, _m| t == "co_end" }; end
+
+      def skip_at(req)
+        @box.index { |t, m| t == "co_skip" && m["d"].is_a?(Hash) && %w[b t n].all? { |k| m["d"][k] == req[k] } }
+      end
+
+      # true (and the note taken) when the host chose for this request
+      def take_skip(req)
+        KIF::Net.update if KIF::Net.session.equal?(@s)   # a Bag or party screen doesn't read the line
+        i = skip_at(req) or return false
+        @box.delete_at(i)
+        @view.message(_INTL("{1}'s game chose for you this turn.", @host_name))
+        return true
+      end
+
+      # the host already used this player's pick for that turn (co_lock)
+      def lock_at(req)
+        @box.index { |t, m| t == "co_lock" && m["d"].is_a?(Hash) && %w[b t].all? { |k| m["d"][k] == req[k] } }
+      end
+      def locked?(req); !lock_at(req).nil?; end
+
+      # choosing again came too late: the first pick stands
+      def take_lock(req)
+        i = lock_at(req) or return false
+        @box.delete_at(i)
+        @view.message(_INTL("Too late to change: {1}'s game already used your first choice.", @host_name))
+        return true
+      end
+
+      # the host player's pick this turn (co_int)
+      def intent_from(msg)
+        d = msg["d"]
+        return unless msg["id"] == @id && d.is_a?(Hash) && d["t"].is_a?(Integer) && d["it"].is_a?(String)
+        @intent = [d["t"], d["it"]]
+        @rx_at = KIF::Net.now   # (the host also sends this while its own player chooses)
+      end
+
+      # this game leaves the battle: nothing more is applied, the host's game fights for this player
+      def abort_battle(why, quiet = false)
+        return if @done
+        KIF::Coop.log("#{@host_name}'s battle left here (#{why})")
+        @aborted = @stopped = true
+        @decision = 0
+        @done = true
+        (gpost("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" }) rescue nil)
+        (@view.message(_INTL("{1}'s game stopped working with this one. You left the battle.", @host_name)) rescue nil) if @view && @begun && !quiet
+      end
+
+      # a fight on this screen: this slot of the party (-1: not one of this player's)
+      def slot_of(pk); @party.index { |x| x.equal?(pk) } || -1; end
+
+      def took_part(pk)
+        j = slot_of(pk)
+        (@fought ||= []) << j if j >= 0 && !@fought.to_a.include?(j)
+      end
+
+      # The host decides what happens on its screen, so it must not be able to make the whole team "fight" (and faint)
+      # here: a Pokémon of this player is sent in if it fought already, this player picked it, or the host's AI may
+      # (a forced switch, a pick this player left to it, a request that came too late: a few per battle)
+      def may_fight?(j)
+        return true if @fought.to_a.include?(j) || @picked_slots.to_a.include?(j)
+        return false if @free.to_i <= 0
+        @free -= 1
+        return true
+      end
+
+      # one more Pokémon the host's AI may send in (at most 3 waiting: a host can't save them up). skip: its request
+      # came too late for this player; that earns two a battle, however many requests and skips the host sends
+      def credit(skip = false)
+        return if skip && (@skips = @skips.to_i + 1) > 2
+        @free = [@free.to_i + 1, 3].min
+      end
+
+      def went_down(pk)
+        j = slot_of(pk)
+        (@down ||= {})[j] = true if j >= 0
+      end
+
+      # the host's word on one of this player's Pokémon (HP, status): one that took no part only
+      # gets better (an item); one that did follows the host, but a faint has to be on the screen first
+      def take_state(j, pk, hp, st)
+        fought = @fought.to_a.include?(j)
+        if fought
+          hp = pk.hp if hp == 0 && pk.hp > 0 && !@down.to_h[j]
+        else
+          hp = pk.hp if hp < pk.hp
+        end
+        pk.hp = hp if pk.hp != hp
+        st = pk.status if st && st != :NONE && !fought
+        pk.instance_variable_set(:@status, st) if st && pk.hp > 0
+        return fought
+      end
+
+      def load_mon(h); Mon.load(h, false, @view.respond_to?(:spr_ok?) ? @view.spr_ok? : true); end
+
+      # "Monto: Water Gun -> Pidgey" for this player's menus this turn, or nil
+      def intent
+        return nil unless @turn_req && !@done
+        it = @intent && @intent[0] == @turn_req["t"] ? @intent[1] : ""
+        return KIF::Coop.intent_line(@host_name, it)
+      end
+
+      # B while waiting for the host: take the pick back and choose again
+      def rechoose
+        req = @awaiting
+        @awaiting = nil
+        return unless req && !@done && !lost?
+        KIF::Net.update if KIF::Net.session.equal?(@s)
+        return if lock_at(req) || skipped?(req) || ended?   # already used (or chosen for): nothing to change
+        gpost("co_undo", "id" => @id, "d" => { "b" => req["b"], "t" => req["t"] })
+        answer_command(req, true)
+      end
+
+      # every frame while this player waits on the host's turn
+      def wait_frame
+        now = KIF::Net.now
+        if now - @news_at > STALL && !@stall_shown && !@done   # the host's side is slow or stuck: the player can leave
+          @stall_shown = now
+          @view.stalled(_INTL("{1}'s game has not answered for a while.\n{2}: leave the battle", @host_name, KIF::Coop.back_name))
+        end
+        return unless Input.trigger?(Input::BACK)
+        if @stall_shown && now - @stall_shown >= 1.0
+          return abort_battle("left by the player", true) unless @view.confirm(_INTL("Leave this battle?")) == false
+          return @stall_shown = nil   # (the hint comes again)
+        end
+        rechoose if @awaiting && now - @awaited_at >= 0.5
+      end
+      # the battle screen is up
+      def started!
+        @started = true
+        @view.message(_INTL("{1}'s battle allows {2} Pokémon each: your first {2} that can fight came.", @host_name, @max)) if @max && @mirror
+      end
+
+      def int(v, lo, hi, d = nil); Mon.int(v, lo, hi, d); end
+
+      #-------------------------------------------------------------------------
+      # Places: the two player-side slots swap (this player is the player here)
+      #-------------------------------------------------------------------------
+      # The battle's players in this copy's order, as the host numbers them (0 the runner, 1 and 2 the guests): this
+      # player first, then the runner, then the other guest. A game for two: [1, 0], the two places swap. For three
+      # it is a cycle for the second guest ([2, 0, 1]), so going to this copy's places and back differ.
+      def ord; @ord || [1, 0]; end
+
+      # the lobby slot of the player that is place `idx` in this copy (1: the runner), for that player's look
+      def owner_slot(idx)
+        return @runner unless @ord
+        o = @ord[idx] or return nil
+        sl = @owner_slots && @owner_slots[o]
+        return sl.is_a?(Integer) ? sl : nil
+      end
+
+      # a host battler index -> this copy's (a PvP match overrides this: the two sides swap)
+      def bat(i)
+        return i unless i.is_a?(Integer) && i >= 0 && i.even? && i / 2 < ord.length
+        return 2 * ord.index(i / 2)
+      end
+
+      def to_mirror(i); bat(i); end
+
+      # this copy's battler index -> the host's (what is sent back: a target, a ball's target). In a game for two
+      # (and a match) going there and back is the same swap.
+      def to_host(i)
+        return bat(i) unless @ord
+        return i unless i.is_a?(Integer) && i >= 0 && i.even? && i / 2 < ord.length
+        return 2 * ord[i / 2]
+      end
+
+      # a host battler index -> this copy's, or nil
+      def bat_checked(i)
+        return nil unless @mirror && i.is_a?(Integer) && i >= 0 && i <= @mirror.maxBattlerIndex
+        return bat(i)
+      end
+
+      def battler(i); (mi = bat_checked(i)) ? @mirror.battlers[mi] : nil; end
+
+      # a host party index -> this copy's (side 0: this player's team first, then the runner's, then the other guest's)
+      def party_index(pi, side)
+        return nil unless pi.is_a?(Integer) && pi >= 0
+        return (pi < @mirror.pbParty(1).length ? pi : nil) if side == 1
+        return nil if pi >= @hn + @gn
+        return (pi < @hn ? @gn + pi : pi - @hn) unless @hstart   # a game for two
+        o = @hstart.rindex { |s| s <= pi }
+        return @mstart[o] + pi - @hstart[o]
+      end
+
+      def own?(mp); mp.is_a?(Integer) && mp >= 0 && mp < @gn; end
+      def own_pk?(pk); @party.any? { |x| x.equal?(pk) }; end
+
+      #-------------------------------------------------------------------------
+      # The host's messages, in order
+      #-------------------------------------------------------------------------
+      def step
+        until @box.empty? || @done
+          type = @box[0][0]
+          break if !@started && type != "co_begin" && type != "co_end"
+          type, msg = @box.shift
+          begin
+            handle(type, msg)
+          rescue StandardError, SystemStackError => e
+            KIF::Coop.log("partner step failed on #{type} (#{e.class}: #{e.message})")
+            reply_auto(type, msg)   # the host never waits on a failure here
+          end
+        end
+      end
+
+      def handle(type, msg)
+        case type
+        when "co_begin" then begin_battle(msg["d"]) unless @begun
+        when "co_ev"    then run_events(msg["e"])
+        when "co_cmd"   then answer_command(msg["d"])
+        when "co_sw"    then answer_switch(msg["d"])
+        when "co_skip"  then @view.message(_INTL("{1}'s game chose for you this turn.", @host_name))   # this player's pick came too late
+        when "co_lock"  then @awaiting = nil if @awaiting && msg["d"].is_a?(Hash) && %w[b t].all? { |k| msg["d"][k] == @awaiting[k] }
+        when "co_end"   then finish(msg["d"])
+        end
+      end
+
+      def reply_auto(type, msg)
+        d = msg["d"].is_a?(Hash) ? msg["d"] : {}
+        if type == "co_cmd"
+          gpost("co_act", "id" => @id, "d" => { "b" => d["b"], "t" => d["t"], "a" => "auto" })
+        elsif type == "co_sw"
+          gpost("co_swr", "id" => @id, "d" => { "n" => d["n"], "p" => -2 })
+        end
+      end
+
+      # the host's log entries (a real co_ev holds 25 at most; the rest are dropped, a flood ends the battle here)
+      def run_events(list)
+        list = list.is_a?(Array) ? list.first(MAX_EVENTS) : []
+        @events_seen = @events_seen.to_i + list.length
+        @paused_seen = @paused_seen.to_i + list.count { |ev| ev.is_a?(Array) && ev[0] == "mp" }
+        return abort_battle("too many log entries") if @events_seen > MAX_TOTAL || @paused_seen > MAX_PAUSED
+        list.each { |ev| @view.show(ev) if ev.is_a?(Array) && !@done }
+      end
+
+      def begin_battle(d)
+        @begun = true
+        return if build(d)
+        KIF::Coop.log("couldn't build #{@host_name}'s battle here; the game fights for this player")
+        @mirror = nil
+        @view = AutoView.new(self)
+        gpost("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" })
+      end
+
+      # the host's battle music (gym leader, rival, legendary...) when this game has the file
+      def battle_bgm(v)
+        return nil unless v.is_a?(Array) && v.length == 3 && v[0].is_a?(String)
+        n = v[0]
+        # a plain music name (letters, digits, a few marks; no Windows device name: NUL, CON, COM1...) that is an audio file, not a folder
+        return nil unless n =~ /\A[\p{L}\p{N}_ !'(),\-]{1,60}\z/ && n !~ /\A\s|\s\z/ && n !~ /\A(?:CON|PRN|AUX|NUL|COM\d|LPT\d)\z/i
+        return nil unless (FileTest.audio_exist?("Audio/BGM/" + n) rescue false) && !File.directory?("Audio/BGM/" + n)
+        return RPG::AudioFile.new(n, int(v[1], 0, 100, 100), int(v[2], 50, 150, 100))
+      end
+
+      def trainer_from(t)
+        return nil unless t.is_a?(Hash)
+        ty = Mon.sym(t["ty"], GameData::TrainerType) || ($Trainer.trainer_type rescue nil) || GameData::TrainerType.keys.first
+        return NPCTrainer.new(Mon.name(t["n"]), ty)
+      end
+
+      # the battle as the host has it; false if what came doesn't fit
+      def build(d)
+        return false unless d.is_a?(Hash)
+        sz = d["sz"]
+        three = d["pp"].is_a?(Array)   # a game for three
+        return false unless sz.is_a?(Array) && sz.length == 2 && sz[0] == (three ? 3 : 2) && sz[1].is_a?(Integer) && sz[1].between?(1, 3)
+        @top_level = @party.map { |p| p.level.to_i }.max   # (Exp and prizes are held to this team as it is now)
+        @gn = int(d["gn"], 1, 6) or return false
+        return false unless @gn == @party.length
+        if three
+          me = d["me"]
+          return false unless me.is_a?(Integer) && [1, 2].include?(me) && d["pp"].length == 3 && d["tn"].is_a?(Array) && d["tn"].length == 3
+          return false unless d["pp"].all? { |l| l.is_a?(Array) && l.length.between?(1, 6) } && d["pp"][me].length == @gn
+          parties = d["pp"].each_with_index.map { |l, o| o == me ? @party : l.map { |h| load_mon(h) } }
+          return false if parties.flatten.include?(nil)
+          @ord = [me, 0, 3 - me]
+          sizes = parties.map(&:length)
+          @hstart = [0, sizes[0], sizes[0] + sizes[1]]
+          @mstart = []
+          run = 0
+          @ord.each { |o| @mstart[o] = run; run += sizes[o] }
+          @hn = run - @gn
+          trainers = @ord.map do |o|
+            next @trainer if o == me
+            t = trainer_from(d["tn"][o]) or return false
+            t.trainer_type = Mon.partner_type(d["tn"][o]["ty"])
+            t.party = parties[o]
+            t.define_singleton_method(:full_name) { name }   # "Monto sent out ...", not with a trainer class
+            t
+          end
+          @names = d["tn"].map { |t| Mon.name(t["n"]) }
+          @owner_slots = d["os"] if d["os"].is_a?(Array) && d["os"].length == 3 && d["os"].all? { |x| x.is_a?(Integer) && x.between?(0, 2) }
+          @me_name = KIF::Net.shown_name(@trainer.name.to_s[0, 24])
+          host_party = @ord[1..-1].flat_map { |o| parties[o] }
+        else
+          @ord = nil
+          @hstart = @mstart = nil
+          @hn = int(d["gs"], 1, 6) or return false
+          return false unless d["hp"].is_a?(Array) && d["hp"].length == @hn
+          host_party = d["hp"].map { |h| load_mon(h) }
+        end
+        # a wild battle has as many foes as its side has places; a trainer team has six at most
+        # (24 foes with two tag trainers doubled, 36 at x3: more is refused)
+        fp = d["fp"].is_a?(Array) && d["fp"].length.between?(1, 36) ? d["fp"] : []
+        fp = fp.first(sz[1]) if d["w"] == 1
+        foes = fp.empty? ? [] : fp.map { |h| load_mon(h) }
+        return false if foes.empty? || host_party.include?(nil) || foes.include?(nil)
+        @foes = foes.map { |f| [f.species, f.level] }
+        if d["lo"] == 1
+          KIF::Coop.tell(:lost, _INTL("{1}'s game doesn't have some of your Pokémon's moves, Abilities or items (a mod's, or another KIF's), so there they fight without them.", @host_name))
+        end
+        wild = d["w"] == 1
+        host = trainer_from(d["ht"]) or return false
+        host.trainer_type = Mon.partner_type(d["ht"]["ty"])
+        host.party = host_party
+        host.define_singleton_method(:full_name) { name }   # "Monto sent out ...", not with a trainer class
+        trainers ||= [@trainer, host]
+        t = d["tev"]
+        @tev = t if t.is_a?(Array) && t.length == 2 && t.all? { |x| x.is_a?(Integer) && x.between?(1, 99_999) }
+        opp = nil
+        unless wild
+          return false unless d["ft"].is_a?(Array) && d["ft"].length.between?(1, 3)
+          opp = d["ft"].map { |t| trainer_from(t) }
+          return false if opp.include?(nil)
+          @ft_names = d["ft"].map { |t| [Mon.sym(t["ty"], GameData::TrainerType), Mon.name(t["n"])] }
+        end
+        fs = d["fs"]
+        ok = fs.is_a?(Array) && fs.length == (opp ? opp.length : 1) && fs.all? { |x| x.is_a?(Integer) } &&
+             fs[0] == 0 && fs.each_cons(2).all? { |a, b| a <= b } && fs.last < foes.length
+        fs = [0] unless ok
+        return false if opp && fs.each_with_index.any? { |a, i| (fs[i + 1] || foes.length) - a > 18 }   # a team has six at most, 18 with the co-op trainer teams at x3 (KIF::Teams)
+        opp&.each_with_index { |t, i| t.party = foes[(fs[i] || 0)...(fs[i + 1] || foes.length)] }
+        @view.make_scene if @view.respond_to?(:make_scene)
+        m = PokeBattle_Battle.new(@view.scene, @party + host_party, foes, trainers, opp)
+        m.party1starts = three ? @ord.map { |o| @mstart[o] } : [0, @gn]
+        m.party2starts = fs
+        m.instance_variable_set(:@sideSizes, [three ? 3 : 2, sz[1]])
+        m.backdrop = d["bd"] if d["bd"].is_a?(String) && d["bd"] =~ /\A[A-Za-z0-9_ ]{1,40}\z/
+        m.backdrop = "Field" if m.backdrop.to_s.empty?
+        m.backdropBase = d["bb"] if d["bb"].is_a?(String) && d["bb"] =~ /\A[A-Za-z0-9_ ]{1,40}\z/
+        env = Mon.sym(d["env"], GameData::Environment)
+        m.environment = env if env
+        m.time = int(d["tm"], 0, 2, 0)
+        m.internalBattle = true
+        m.canLose = d["cl"] == 1
+        m.canRun = d["cr"] == 1
+        m.moneyGain = d["mg"] == 1
+        m.expGain = d["eg"] == 1
+        @bgm = battle_bgm(d["bgm"])
+        @mirror = m
+        return false unless d["bt"].is_a?(Array)
+        d["bt"].each do |e|
+          next unless e.is_a?(Array) && e.length == 2
+          mi = bat_checked(e[0]) or next
+          mp = party_index(e[1], mi % 2) or next
+          pk = m.pbParty(mi)[mp]
+          next unless pk && !pk.egg? && m.battlers[mi].nil?
+          m.pbCreateBattler(mi, pk, mp)
+          took_part(pk)
+        end
+        return false unless m.battlers[0] && own?(m.battlers[0].pokemonIndex)
+        m.battlers.each { |b| m.pbSetSeen(b) if b && b.opposes? }
+        nuzlocke_check(foes) if wild
+        return true
+      rescue StandardError => e
+        KIF::Coop.log("battle setup failed (#{e.class}: #{e.message})")
+        return false
+      end
+
+      # this player's own Nuzlocke judges its ball (the place may be used up here)
+      def nuzlocke_check(foes)
+        return unless defined?(KIF::Nuzlocke) && KIF::Nuzlocke.on? && @trainer.equal?($Trainer)
+        place, verdict = KIF::Nuzlocke.judge(foes)
+        @mirror.instance_variable_set(:@kif_nz, verdict)
+        @mirror.instance_variable_set(:@kif_nz_place, place)
+        @nz = [place, verdict]
+      rescue StandardError => e
+        KIF::Coop.log("Nuzlocke check failed (#{e.class}: #{e.message})")
+      end
+
+      # [index, hp, total, status, level] from the host, before each log entry
+      def apply_snap(snap)
+        return unless snap.is_a?(Array) && @mirror
+        snap.each do |e|
+          next unless e.is_a?(Array) && e.length >= 5
+          b = battler(e[0]) or next
+          pk = b.pokemon or next
+          hp = int(e[1], 0, 99_999) or next
+          if own_pk?(pk)
+            took_part(pk)
+            went_down(pk) if hp == 0
+            pk.hp = hp if pk.hp != hp   # this game's own rules apply (No reviving)
+          else
+            th = int(e[2], 1, 99_999, b.totalhp)
+            [b, pk].each { |o| o.instance_variable_set(:@totalhp, th) }
+            pk.instance_variable_set(:@hp, [hp, th].min)
+            lv = int(e[4], 1, GameData::GrowthRate.max_level)
+            b.instance_variable_set(:@level, lv) if lv
+          end
+          b.instance_variable_set(:@hp, pk.hp)
+          st = pk.hp > 0 ? (Mon.sym(e[3], GameData::Status) || :NONE) : :NONE
+          [b, pk].each { |o| o.instance_variable_set(:@status, st) }
+        end
+      end
+
+      # a sendout entry [host index, host party index, shown Pokémon] -> [index, Pokémon]
+      def send_in(e)
+        return nil unless e.is_a?(Array) && e.length >= 3
+        mi = bat_checked(e[0]) or return nil
+        mp = party_index(e[1], mi % 2) or return nil
+        arr = @mirror.pbParty(mi)
+        if mi.even? && own?(mp)
+          real = @party[mp]
+          return nil unless real && !real.egg?
+          if may_fight?(mp)
+            arr[mp] = pk = real
+            took_part(pk)
+          else
+            arr[mp] = pk = load_mon(e[2]) || real.clone   # shown as a copy: nothing of this player's own is touched
+          end
+        else
+          pk = load_mon(e[2]) or return nil
+          arr[mp] = pk
+        end
+        if @mirror.battlers[mi]
+          @mirror.battlers[mi].pbInitialize(pk, mp)
+        else
+          @mirror.pbCreateBattler(mi, pk, mp)
+        end
+        return [mi, pk]
+      end
+
+      # HP, status and display order of this player's team (host's view)
+      def sync_party(d)
+        (d["pt"].is_a?(Array) ? d["pt"] : []).first(@gn).each_with_index do |x, j|
+          pk = @party[j]
+          next unless pk && x.is_a?(Array) && !@mirror.battlers.any? { |b| b && b.pokemon.equal?(pk) }
+          hp = int(x[0], 0, pk.totalhp) or next
+          take_state(j, pk, hp, Mon.sym(x[1], GameData::Status))
+        end
+        o = d["ord"]
+        if o.is_a?(Array) && o.length == @gn && o.sort == (0...@gn).to_a
+          o.each_with_index { |v, j| @mirror.pbPartyOrder(0)[j] = v }
+        end
+      end
+
+      # PP from the host (Transform and Mimic change the moves themselves)
+      def sync_moves(b, mv)
+        return unless mv.is_a?(Array) && mv.all? { |x| x.is_a?(Array) && x.length == 4 }
+        ids = mv.map { |x| Mon.sym(x[0], GameData::Move) }
+        return if ids.include?(nil) || ids.length > 4
+        if ids != b.moves.map(&:id)
+          b.moves = ids.map { |id| PokeBattle_Move.from_pokemon_move(@mirror, Pokemon::Move.new(id)) }
+        end
+        b.moves.each_with_index do |m, k|
+          pp = int(mv[k][1], 0, 999, m.pp)
+          m.pp = pp
+          m.realMove.pp = pp if m.realMove && own_pk?(b.pokemon) && b.pokemon.moves.include?(m.realMove)
+        end
+      end
+
+      def answer_command(d, again = false)
+        return unless d.is_a?(Hash)
+        mi = bat_checked(d["b"])
+        b = mi && @mirror ? @mirror.battlers[mi] : nil
+        @mirror.instance_variable_set(:@kif_log_turn, int(d["t"], 0, 9999, 0)) if @mirror   # Battle Log: lines from here on are this turn's
+        @turn_req = d
+        a = nil
+        own = b && mi.even? && own_pk?(b.pokemon)
+        if own
+          unless again
+            sync_party(d)
+            sync_moves(b, d["mv"])
+          end
+          @retracted = (again && @last_pick && @last_pick["a"] == "item") ? @last_pick["i"] : nil   # a pick being changed is free again in the Bag
+          a = @view.command(mi, d) unless KIF::Coop.auto_battle?
+          @retracted = nil
+        end
+        if take_skip(d)   # the host's AI chose for this request
+          credit(true) if own
+          return
+        end
+        return if ended? || take_lock(d)   # nothing to send: the host went on
+        if again && (old = @last_pick) && old["a"] == "item"   # the pick taken back
+          @picked[old["i"]] -= 1
+          @balls -= 1 if (GameData::Item.get(old["i"].to_sym).is_poke_ball? rescue false)
+        end
+        if a && a["a"] == "item"
+          @picked[a["i"]] += 1
+          @balls += 1 if (GameData::Item.get(a["i"].to_sym).is_poke_ball? rescue false)
+        end
+        @last_pick = a
+        credit if own && !a && KIF::Coop.auto_battle?   # this player left the picks to the host's AI
+        a ||= { "a" => "auto" }
+        @picked_slots << a["p"] if a["a"] == "switch" && a["p"].is_a?(Integer)
+        it = b && a["a"] != "auto" ? pick_text(b, a) : nil
+        a = a.merge("it" => it) if it
+        gpost("co_act", "id" => @id, "d" => a.merge("b" => d["b"], "t" => d["t"]))
+        if a["a"] == "auto" || a["a"] == "run"
+          @view.waiting(false)
+        else
+          @awaiting = d   # B: choose again until the host has used it (co_lock)
+          @awaited_at = KIF::Net.now
+          @view.waiting(true)
+        end
+      end
+
+      # this player's pick for the host's menus: "Water Gun -> Pidgey" (the host
+      # sees the same words for the same picks as this player's game sees its own)
+      def pick_text(b, a)
+        case a["a"]
+        when "move"
+          mv = a["m"].is_a?(Integer) && a["m"] >= 0 ? b.moves[a["m"]] : nil
+          return nil unless mv
+          tb = a["tg"].is_a?(Integer) && a["tg"] >= 0 ? battler(a["tg"]) : nil
+          return tb && !tb.equal?(b) ? _INTL("{1} -> {2}", mv.name, tb.name) : mv.name
+        when "item"
+          it = GameData::Item.try_get(a["i"].to_s.to_sym) or return nil
+          return it.is_poke_ball? ? _INTL("throwing a {1}", it.name) : _INTL("using a {1}", it.name)
+        when "switch" then return _INTL("switching")
+        when "run" then return _INTL("running")
+        end
+        return nil
+      rescue StandardError
+        return nil
+      end
+
+      def answer_switch(d)
+        return unless d.is_a?(Hash)
+        mi = bat_checked(d["b"])
+        p = -2
+        own = mi && mi.even? && @mirror
+        if own && !KIF::Coop.auto_battle?
+          sync_party(d)
+          p = @view.replacement(mi, d) || -2
+        end
+        if take_skip(d)
+          credit(true) if own
+          return
+        end
+        return if ended?
+        p >= 0 ? @picked_slots << p : (credit if own && p == -2 && KIF::Coop.auto_battle?)
+        gpost("co_swr", "id" => @id, "d" => { "n" => d["n"], "p" => p })
+        @view.waiting
+      end
+
+      #-------------------------------------------------------------------------
+      # The end
+      #-------------------------------------------------------------------------
+      def finish(d)
+        @done = true
+        d = {} unless d.is_a?(Hash)
+        @decision = int(d["dc"], 0, 5, 0)
+        KIF::Coop.log("#{@host_name}'s battle #{@id} over (#{d['x'] ? Mon.name(d['x']) : @decision})")   # the host logs its own end
+        @can_lose = d["cl"] == 1
+        if d["x"] || !@begun
+          @aborted = true
+          @decision = 0
+          if d["x"] == "party"
+            KIF::Coop.tell(:party, _INTL("{1}'s game doesn't have one of your Pokémon (a mod's, or another KIF's), so you didn't join the battle.", @host_name))
+          end
+          return
+        end
+        # a loss or a draw counts when this screen showed every Pokémon of this player that fought go down
+        if (@decision == 2 || @decision == 5) && !loss_seen?
+          KIF::Coop.log("#{@host_name} says the battle was lost; this screen never showed it, so it counts as stopped")
+          @decision = 0
+          @aborted = true
+        end
+        apply_final(d["pt"])
+        return unless @mirror
+        award_exp(d["k"]) if @mirror.expGain
+        money
+        store_catches(d["c"])
+        use_items(d["it"])
+        trainer_beaten if @decision == 1 && @tev
+      end
+
+      # won together: the trainer is beaten on this save too, when this game has
+      # that trainer (the same map and event, a trainer battle whose page turns
+      # on self switch A, as PIF's trainers do)
+      TRAINER_CALL = /TrainerBattle\w*\(\s*(?::|PBTrainers::)(\w+)\s*,\s*"([^"]*)"/   # (:YOUNGSTER, or PBTrainers::YOUNGSTER,)
+      # the scripts of a trainer's page: its intro and end, the notice, speech bubbles, the battle's backdrop and music
+      EVENT_SCRIPT_OK = /\A\s*(?:pbTrainerBattle\w*|pbTrainerIntro|pbTrainerEnd|(?:Kernel\.)?pbNoticePlayer|pbTrainerCheck|pbCallBub|\$PokemonGlobal\.nextBattle(?:Back|BGM|ME)\s*=)/
+      EVENT_CODES_NO  = [121, 122, 125, 126, 127, 128, 129, 134, 135, 136, 137, 138, 201, 202, 203, 339]   # switches, variables, money, items, party, warps, battle calls
+
+      # An event the host points at is marked beaten only when its page (the one that starts the fight) is a plain
+      # fight against a trainer of this battle: the page holds nothing that changes the game (a badge, a switch,
+      # a variable, money, a warp), and sets only self switch A. Other pages (a rematch's) are not what runs now.
+      def plain_trainer_event?(page)
+        cmds = page.list.to_a
+        return false if cmds.any? { |c| EVENT_CODES_NO.include?(c.code) }
+        return false if cmds.any? { |c| (c.code == 123 && c.parameters != ["A", 0]) || (c.code == 111 && c.parameters[0] != 12) }
+        scripts = []   # a script is its 355 line and the 655 lines after it
+        cmds.each { |c| c.code == 355 ? scripts << c.parameters[0].to_s : (scripts[-1] += "\n" + c.parameters[0].to_s if c.code == 655 && !scripts.empty?) }
+        scripts += cmds.select { |c| c.code == 111 }.map { |c| c.parameters[1].to_s }   # the battle is a script condition
+        return false unless scripts.all? { |t| t =~ EVENT_SCRIPT_OK }
+        return true if @ft_names.nil?   # (no battle set up here: only a game that was never told one gets here)
+        calls = scripts.map { |t| t.match(TRAINER_CALL) }.compact.map { |m| [m[1].to_sym, Mon.name(m[2])] }
+        return calls.any? { |c| @ft_names.include?(c) }
+      end
+
+      def trainer_beaten
+        map, ev = @tev
+        return unless $game_map && $game_map.map_id == map && $game_self_switches
+        e = $game_map.events[ev] or return
+        pages = e.instance_variable_get(:@event).pages rescue []
+        page = e.instance_variable_get(:@page) || pages.first   # the page the event runs now
+        trainer = page && page.list.any? { |c| c.parameters.any? { |x| x.is_a?(String) && x.include?("TrainerBattle") } }
+        after = pages.any? { |pg| pg.condition.self_switch_valid && pg.condition.self_switch_ch == "A" }
+        return unless trainer && after && plain_trainer_event?(page)
+        $game_self_switches[[map, ev, "A"]] = true
+        $game_map.need_refresh = true
+        KIF::Coop.log("#{@host_name}'s trainer (event #{ev}) beaten here too")
+      rescue StandardError => e
+        KIF::Coop.log("trainer not marked beaten (#{e.class}: #{e.message})")
+      end
+
+      def apply_final(pt)
+        (pt.is_a?(Array) ? pt : []).first(@gn || @party.length).each_with_index do |x, j|
+          pk = @party[j]
+          next unless pk && x.is_a?(Array) && x.length == 4 && !pk.egg?
+          hp = int(x[0], 0, pk.totalhp) or next
+          next unless take_state(j, pk, hp, Mon.sym(x[1], GameData::Status) || :NONE)   # (one that took no part only gets better)
+          pk.statusCount = int(x[2], 0, 255, 0)
+          (x[3].is_a?(Array) ? x[3] : []).each_with_index { |pp, k| pk.moves[k].pp = int(pp, 0, pk.moves[k].total_pp, pk.moves[k].pp) if pk.moves[k] }
+        end
+      end
+
+      # this screen showed every Pokémon of this player that was able at the start fight and go down
+      # (healthy ones that never came out mean the battle was not lost)
+      def loss_seen?
+        f = @fought.to_a
+        return !f.empty? && @able.to_a.all? { |j| f.include?(j) && @down.to_h[j] }
+      end
+
+      # each foe the host noted: this game's own pbGainExp, one foe at a time
+      def award_exp(kills)
+        return unless kills.is_a?(Array)
+        keep = @mirror.battlers
+        left = @foes.dup   # each foe of this battle once
+        kills.first(left.length).each do |k|
+          next unless k.is_a?(Hash)
+          sp = Mon.sym(k["s"], GameData::Species) or next
+          lv = int(k["l"], 1, GameData::GrowthRate.max_level) or next
+          i = left.index([sp, lv]) or next
+          left.delete_at(i)
+          lv = [lv, level_cap].min   # the host names the foes: they pay as if no more than 10 levels over this team
+          parts = (k["p"].is_a?(Array) ? k["p"] : []).map { |pi| party_index(pi, 0) }.compact.uniq
+          next if parts.empty?
+          foe = Pokemon.new(sp, lv, nil, false, false)
+          foe.instance_variable_set(:@hp, 0)
+          fake = PokeBattle_Battler.new(@mirror, 1)
+          fake.pbInitialize(foe, 0)
+          fake.instance_variable_set(:@kif_team_mult, int(k["m"], 1, 3, 1))   # bigger trainer teams: the Exp is split
+          fake.participants = parts
+          list = Array.new(keep.length)
+          keep.each_with_index { |b, i| list[i] = b if b && i.even? }
+          list[1] = fake
+          @mirror.instance_variable_set(:@battlers, list)
+          # a Pokémon that fainted later in the battle still earns its kill: it is counted as able while the Exp is paid
+          down = parts.map { |pi| @party[pi] }.select { |pk| pk && !pk.egg? && pk.hp == 0 }
+          down.each { |pk| pk.instance_variable_set(:@hp, 1) }
+          begin
+            @mirror.pbGainExp
+          rescue StandardError => e
+            KIF::Coop.log("Exp not given (#{e.class}: #{e.message})")
+          ensure
+            down.each { |pk| pk.instance_variable_set(:@hp, 0) }
+            @mirror.instance_variable_set(:@battlers, keep)
+          end
+        end
+      end
+
+      # the highest level this team's foes count at for Exp and prize money (the host names the foes)
+      def level_cap
+        [(@top_level || @party.map { |p| p.level.to_i }.max || 1) + 10, GameData::GrowthRate.max_level].min
+      end
+
+      def money
+        if @decision == 1 && @mirror.trainerBattle?
+          cap = level_cap * 100
+          calc = @mirror.method(:calculateMoneyGain)
+          @mirror.define_singleton_method(:calculateMoneyGain) { |*a| [calc.call(*a).to_i, cap].min }
+          @mirror.pbGainMoney
+        elsif @decision == 2 || @decision == 5
+          @mirror.pbLoseMoney
+        end
+      rescue StandardError => e
+        KIF::Coop.log("money step failed (#{e.class}: #{e.message})")
+      end
+
+      def store_catches(list)
+        return unless list.is_a?(Array) && !list.empty?
+        # no more than this player's balls, and only foes of this battle
+        pks = list.first([@balls, 6].min).map { |h| Mon.load(h, true) }.compact.select { |pk| @foes.any? { |s, _| s == pk.species } }
+        pks.each do |pk|
+          pk.reset_moves if pk.instance_variable_defined?(:@kif_coop_slots)   # a move this game lacks: its own level-up moves, not Struggle
+          [:@kif_coop_slots, :@kif_coop_lost].each { |v| pk.remove_instance_variable(v) if pk.instance_variable_defined?(v) }
+          pk.owner = Pokemon::Owner.new_from_trainer(@trainer)
+          pk.obtain_map = $game_map.map_id if $game_map
+          KIF::NetSprite.forget(pk) if defined?(KIF::NetSprite)
+        end
+        @caught = pks
+        @mirror.instance_variable_get(:@caughtPokemon).concat(pks)
+        @mirror.pbRecordAndStoreCaughtPokemon
+      rescue StandardError => e
+        KIF::Coop.log("catch not stored (#{e.class}: #{e.message})")
+      end
+
+      # How many of this item the Bag can still give in this battle. The Bag is debited when the battle ends, so
+      # what was already picked counts here (a pick being changed does not).
+      def item_left(item)
+        id = GameData::Item.get(item).id
+        return (@bag || $PokemonBag).pbQuantity(id) - @picked[id.to_s] + (@retracted == id.to_s ? 1 : 0)
+      end
+
+      def use_items(list)
+        return unless @bag && list.is_a?(Array)
+        list.first(20).each do |x|
+          next unless x.is_a?(Array) && x.length == 2
+          it = Mon.sym(x[0], GameData::Item) or next
+          n = [int(x[1], 1, 99) || 0, @picked[it.to_s]].min   # never more than this player picked
+          @bag.pbDeleteItem(it, n) if n > 0
+        end
+      end
+
+      #-------------------------------------------------------------------------
+      # The whole battle, from this game's map
+      #-------------------------------------------------------------------------
+      def run
+        @view ||= SceneView.new(self)
+        t0 = KIF::Net.now
+        until @begun || @done
+          if lost? || KIF::Net.now - t0 > KIF::Coop.begin_wait
+            KIF::Coop.log("#{@host_name}'s battle didn't start here")
+            return
+          end
+          Graphics.update
+          Input.update
+          KIF::Net.update
+          step
+        end
+        return if @done && !@mirror
+        start_event
+        if @mirror
+          wild = @mirror.wildBattle?
+          bgm = @bgm || (wild ? pbGetWildBattleBGM(@mirror.pbParty(1)) : pbGetTrainerBattleBGM(@mirror.opponent))
+          type = wild ? (@mirror.pbParty(1).length == 1 ? 0 : 2) : 3
+          pbBattleAnimation(bgm, type, wild ? @mirror.pbParty(1) : @mirror.opponent) {
+            pbSceneStandby { play }
+            after_battle
+          }
+        else
+          play
+          after_battle
+        end
+        Input.update
+      end
+
+      def start_event
+        Events.onStartBattle.trigger(nil)   # levels before, for the evolution check after
+      end
+
+      def play
+        begin
+          @view.start
+        rescue StandardError => e
+          KIF::Coop.log("battle screen failed (#{e.class}: #{e.message})")
+          (@view.finish(0) rescue nil)
+          if !@plain && defined?(PokeBattle_SceneEBDX) && @view.scene.is_a?(PokeBattle_SceneEBDX)
+            @plain = true   # EBDX's screen failed: PIF's own
+            @view = SceneView.new(self, PokeBattle_Scene.new)
+            @mirror.instance_variable_set(:@scene, @view.scene)
+            retry
+          end
+          @view = AutoView.new(self)
+          @mirror&.instance_variable_set(:@scene, @view.scene)
+          gpost("co_act", "id" => @id, "d" => { "b" => -1, "a" => "auto" })
+          @view.start
+        end
+        started!
+        @rx_at = KIF::Net.now
+        t_start = @rx_at
+        until @done
+          if lost?
+            @view.message(_INTL("Lost the connection to {1}. Your Pokémon keep the HP they had.", @host_name))
+            break
+          end
+          @view.frame
+          KIF::Net.update
+          busy = @box.any? { |t, m| news?(t, m) }
+          step
+          @rx_at = @news_at = KIF::Net.now if busy   # (a menu or message of this player may have taken a while)
+          wait_frame
+          # the line stays up on pings alone: a host that says nothing for 90 s, only says "still here" for 10 minutes,
+          # or a battle that goes on for over an hour, is left (the host's game fights for this player)
+          abort_battle("the host said nothing for #{IDLE.to_i} s") if KIF::Net.now - @rx_at > IDLE
+          abort_battle("the host sent no news for #{NO_NEWS.to_i} s") if KIF::Net.now - @news_at > NO_NEWS
+          abort_battle("the battle ran over an hour") if KIF::Net.now - t_start > 3600
+        end
+        @view.finish(@decision || 0)
+      end
+
+      def after_battle
+        # this player's catch uses up the place, and so does a miss both share when the host is the Soul Link partner
+        if @nz && @nz[1] == :first && KIF::Nuzlocke.on? &&
+           (!@caught.empty? || (defined?(KIF::SoulLink) && KIF::SoulLink.shared_miss?(@nz[0], @decision)))
+          KIF::Nuzlocke.pending = [@nz[0], @mirror.pbParty(1).compact]
+        end
+        d = @decision || 0
+        safe = @can_lose || d == 0 || @aborted ? true : false
+        pbAfterBattle(d, safe)
+        KIF::Coop.black_out_check(d, safe)   # this player's Pokémon all fainted though the host won
+      end
+    end
+
+    #---------------------------------------------------------------------------
+    # The battle on this game's own battle scene
+    #---------------------------------------------------------------------------
+    class SceneView
+      attr_reader :scene
+
+      def initialize(guest, scene = nil)
+        @g = guest
+        @scene = scene
+        @warned = {}
+      end
+
+      def make_scene; @scene ||= pbNewBattleScene; end
+
+      # a sprite lookup (a disk read and a request) for a Pokémon the host shows: 30 at once, then 6 a second
+      def spr_ok?
+        now = KIF::Net.now
+        @spr_n = [(@spr_n || 30.0) + (now - (@spr_at || now)) * 6.0, 30.0].min
+        @spr_at = now
+        return false if @spr_n < 1
+        @spr_n -= 1
+        return true
+      end
+
+      def start
+        @scene.extend(MenuWatch) unless @scene.is_a?(MenuWatch)
+        @scene.extend(IntentShow) unless @scene.is_a?(IntentShow)
+        @scene.instance_variable_set(:@kif_coop_view, self)
+        @scene.pbStartBattle(@g.mirror)
+      end
+      def finish(decision); call(:pbEndBattle, decision); end
+
+      def waiting(change = false)
+        t = change ? _INTL("Waiting for {1}...\n{2}: change your choice", @g.host_name, KIF::Coop.back_name) : _INTL("Waiting for {1}...", @g.host_name)
+        call(:pbDisplayMessage, t, true)
+      end
+      def message(t); call(:pbDisplayPausedMessage, t); end
+      def stalled(t); call(:pbDisplayMessage, t, true); end
+      def confirm(t); call(:pbDisplayConfirmMessage, t); end   # true, false, or nil when this scene has no question
+      def int(v, lo, hi, d = nil); Mon.int(v, lo, hi, d); end
+
+      def frame
+        if @scene.class.method_defined?(:pbUpdate)
+          @scene.pbUpdate
+        else
+          Graphics.update
+          Input.update
+        end
+      end
+
+      # a scene method from this file's own list, with as many arguments as it takes
+      def call(m, *args, &blk)
+        return nil unless @scene.respond_to?(m)
+        prm = @scene.method(m).parameters
+        args = args.first(prm.count { |t, _| t == :req || t == :opt }) unless prm.any? { |t, _| t == :rest }
+        return @scene.send(m, *args, &blk)
+      rescue StandardError, SystemStackError => e
+        KIF::Coop.log("couldn't show #{m} (#{e.class}: #{e.message})") unless @warned[m]
+        @warned[m] = true
+        return nil
+      end
+
+      # PIF: (battler, secondAbility, abilityName); EBDX: (battler, delay, logTrigger, abilityName)
+      def ability(b, second, name)
+        prm = (@scene.method(:pbShowAbilitySplash).parameters.map(&:last) rescue [])
+        at = prm.index(:abilityName)
+        return call(:pbShowAbilitySplash, b, second, name) unless at
+        args = Array.new(at + 1) { |k| k == 0 ? b : k == at ? name : (k == 1 && prm[1] == :secondAbility ? second : k == 1 ? false : true) }
+        call(:pbShowAbilitySplash, *args)
+      end
+
+      # The host's text, worded for this player: the host calls this player's
+      # Pokémon "the ally ..." and its own by name; here it's the other way
+      # round, and the send-out line names the host as the trainer.
+      def mine(t)
+        t = Mon.text(t)
+        m = @g.mirror or return t
+        own, host = m.battlers.select { |b| b && b.index.even? }.partition { |b| @g.own_pk?(b.pokemon) }.map { |l| l.map(&:name) }
+        return three_text(t, m, own) if @g.ord.length == 3
+        return sent_out(t, own, host) || t.split("\n", -1).map { |line| ally_line(line, own, host) }.join("\n")
+      end
+
+      # A game for three. The runner's text calls this player's Pokémon "<this player>'s X" and its own by name; here
+      # this player's are plain and the runner's are "<runner>'s X". The other guest's are "<name>'s X" on both.
+      # Send-out lines: "<this player> sent out A!" -> "Go! A!"; the runner's "Go! B!" -> "<runner> sent out B!".
+      def three_text(t, m, own)
+        me = @g.instance_variable_get(:@me_name).to_s
+        names = @g.instance_variable_get(:@names) || []
+        run = names[0].to_s
+        mine_pk = m.battlers.select { |b| b && b.index.even? && !@g.own_pk?(b.pokemon) && m.pbGetOwnerIndexFromBattlerIndex(b.index) == 1 }.map(&:name)   # (the runner's: the next place)
+        t.split("\n", -1).map do |line|
+          if line =~ /\A#{Regexp.escape(_INTL("{1} sent out {2}!", me, "KIFXXX")).sub("KIFXXX", "(.+)")}\z/
+            _INTL("Go! {1}!", $1)
+          elsif (mm = line.match(/\A#{Regexp.escape(_INTL("Go! {1}!", "KIFXXX")).sub("KIFXXX", "(.+)")}\z/))
+            _INTL("{1} sent out {2}!", run, mm[1])
+          else
+            own.each { |x| line = line.gsub(_INTL("{1}'s {2}", me, x), x) }
+            n = mine_pk.find { |x| line =~ /\A#{Regexp.escape(x)}[ ']/ }
+            n ? _INTL("{1}'s {2}", run, n) + line[n.length..-1] : line
+          end
+        end.join("\n")
+      end
+
+      # "<this player> sent out A!\nGo! B!" -> "<host> sent out B!\nGo! A!", or nil
+      def sent_out(t, own, host)
+        a, b = t.split("\n")
+        return nil unless own.length == 1 && host.length == 1 && t.count("\n") == 1 && b == _INTL("Go! {1}!", host[0])
+        pat = Regexp.escape(_INTL("{1} sent out {2}!", "KIFAAA", "KIFBBB")).sub("KIFAAA", ".+").sub("KIFBBB") { Regexp.escape(own[0]) }
+        return nil unless a =~ /\A#{pat}\z/
+        who = (@g.mirror.player[1].full_name rescue @g.host_name)
+        return _INTL("{1} sent out {2}!", who, host[0]) + "\n" + _INTL("Go! {1}!", own[0])
+      end
+
+      # (one pass at the start, so a host's and this player's Pokémon with the same name stay apart)
+      def ally_line(line, own, host)
+        own.each { |x| line = line.gsub(_INTL("the ally {1}", x), x) }
+        n = own.find { |x| line.start_with?(_INTL("The ally {1}", x)) }
+        return n + line[_INTL("The ally {1}", n).length..-1] if n
+        n = host.find { |x| line =~ /\A#{Regexp.escape(x)}[ ']/ }   # "Squirtle used", "Squirtle's" (not "Squirtle, come back!")
+        return n ? _INTL("The ally {1}", n) + line[n.length..-1] : line
+      end
+
+      def show(ev)
+        type, args, snap = ev
+        return unless type.is_a?(String) && args.is_a?(Array)
+        g = @g
+        g.apply_snap(snap) unless type == "so"   # the host's numbers are the incoming Pokémon's: they go on after the send-in below
+        case type
+        when "m", "mp"
+          t = mine(args[0])
+          KIF::BattleLog.add(g.mirror, t) if defined?(KIF::BattleLog) && g.mirror   # this player's Battle Info Log page
+          type == "m" ? call(:pbDisplayMessage, t, args[1] == 1) : call(:pbDisplayPausedMessage, t)
+        when "so"
+          list = (args[0].is_a?(Array) ? args[0] : []).map { |e| g.send_in(e) }.compact
+          g.apply_snap(snap)
+          call(:pbSendOutBattlers, list, args[1] == 1) unless list.empty?
+        when "rc" then (b = g.battler(args[0])) && call(:pbRecall, b.index)
+        when "hp" then (b = g.battler(args[0])) && call(:pbHPChanged, b, int(args[1], 0, 99_999, b.hp), args[2] == 1)
+        when "da" then (b = g.battler(args[0])) && call(:pbDamageAnimation, b, int(args[1], 0, 16, 0))
+        when "hl"
+          t = (args[0].is_a?(Array) ? args[0] : []).map do |x|
+            b = x.is_a?(Array) ? g.battler(x[0]) : nil
+            b ? [b, int(x[1], 0, 99_999, b.hp), int(x[2], 0, 16, 0)] : nil
+          end.compact
+          call(:pbHitAndHPLossAnimation, t) unless t.empty?
+        when "fa"
+          if (b = g.battler(args[0]))
+            g.went_down(b.pokemon) if g.own_pk?(b.pokemon)
+            call(:pbFaintBattler, b)
+          end
+        when "an"
+          mv = Mon.sym(args[0], GameData::Move)
+          u = g.battler(args[1])
+          ts = (args[2].is_a?(Array) ? args[2] : []).map { |x| g.battler(x) }.compact
+          call(:pbAnimation, mv, u, ts, int(args[3], 0, 20, 0)) if mv && u
+        when "ca"
+          name = args[0].is_a?(String) && args[0] =~ /\A[A-Za-z0-9]{1,32}\z/ ? args[0] : nil
+          call(:pbCommonAnimation, name, g.battler(args[1]), g.battler(args[2])) if name
+        when "ab"
+          if (b = g.battler(args[0]))
+            KIF::BattleLog.popup(g.mirror, b, Mon.name(args[2])) if defined?(KIF::BattleLog)
+            ability(b, args[1] == 1, Mon.name(args[2]))
+          end
+        when "abh" then (b = g.battler(args[0])) && call(:pbHideAbilitySplash, b)
+        when "ch"  then (b = g.battler(args[0])) && (pk = Mon.load(args[1], false, spr_ok?)) && call(:pbChangePokemon, b.index, pk)
+        when "rf"  then call(:pbRefresh)
+        when "r1"  then (b = g.battler(args[0])) && call(:pbRefreshOne, b.index)
+        when "op"  then call(:pbShowOpponent, int(args[0], 0, 2, 0))
+        when "pl"  then call(:pbShowPartyLineup, int(args[0], 0, 1, 0), args[1] == 1)
+        when "th"
+          b = g.battler(args[3])
+          ball = Mon.sym(args[0], GameData::Item)
+          call(:pbThrow, ball, int(args[1], 0, 4, 0), args[2] == 1, b.index, args[4] == 1) if b && ball
+        when "ts"  then call(:pbThrowSuccess)
+        when "hc"  then (b = g.battler(args[0])) && call(:pbHideCaptureBall, b.index)
+        when "td"
+          b = g.battler(args[1])
+          ball = Mon.sym(args[0], GameData::Item)
+          call(:pbThrowAndDeflect, ball, b.index) if b && ball
+        when "ws"  then call(:pbWildBattleSuccess)
+        when "tw"  then call(:pbTrainerBattleSuccess)
+        end
+      end
+
+      #-------------------------------------------------------------------------
+      # This player's choices, on this game's menus. nil: the host's AI picks.
+      # While a menu is up the line is read each frame (MenuWatch): an invite
+      # is answered "busy", and when the host chose for this request the
+      # command menu closes.
+      #-------------------------------------------------------------------------
+      def menu(req)
+        @asking = req
+        cw = catch(:kif_coop_skip) { return yield }
+        @asking = nil   # before the hide animation's own frames
+        cw.hidePlay if cw.respond_to?(:hidePlay)   # EBDX's command window slides out
+        call(:pbSelectBattler, -1)
+        return nil
+      ensure
+        @asking = nil
+      end
+
+      # each frame of this game's battle scene (MenuWatch)
+      def menu_frame(cw)
+        req = @asking
+        return unless req && !@polling
+        begin
+          @polling = true
+          KIF::Net.update if KIF::Net.session.equal?(@g.session)
+        ensure
+          @polling = false
+        end
+        throw :kif_coop_skip, cw if command_window?(cw) && (@g.skipped?(req) || @g.ended? || @g.lost? || @g.locked?(req))
+      end
+
+      # only the command menu closes early: a fight, Bag or party screen ends as usual (then the note shows)
+      def command_window?(cw)
+        return false unless cw
+        sp = @scene.instance_variable_get(:@sprites)
+        return cw.equal?(@scene.instance_variable_get(:@commandWindow)) || (sp.respond_to?(:[]) && cw.equal?(sp["commandWindow"]))
+      end
+
+      def command(mi, req); menu(req) { pick_command(mi, req) }; end
+
+      def pick_command(mi, req)
+        m = @g.mirror
+        b = m.battlers[mi]
+        200.times do
+          cmd = call(:pbCommandMenu, mi, true)
+          return nil unless cmd.is_a?(Integer)
+          case cmd
+          when 0
+            return { "a" => "move", "m" => -1 } if req["fa"] == 1   # Encore, or no PP left: the battle picks
+            a = fight(mi, b, req)
+            return a if a
+          when 1
+            a = bag(mi, b)
+            return a if a
+          when 2
+            if req["sw"] != 1
+              call(:pbDisplayPausedMessage, _INTL("{1} can't be switched out!", b.name))
+              next
+            end
+            p = party(mi, true)
+            return { "a" => "switch", "p" => p } if p
+          when 3
+            a = run_choice(m, req)
+            return a if a
+          end
+        end
+        return nil
+      end
+
+      def run_choice(m, req)
+        if m.trainerBattle?
+          call(:pbDisplayPausedMessage, _INTL("No! There's no running from a Trainer battle!"))
+        elsif req["rn"] != 1
+          call(:pbDisplayPausedMessage, _INTL("You can't escape!"))
+        else
+          return { "a" => "run" }
+        end
+        return nil
+      end
+
+      def fight(mi, b, req)
+        usable = req["mv"].is_a?(Array) ? req["mv"].map { |x| x.is_a?(Array) && x[3] == 1 } : []
+        ret = nil
+        call(:pbFightMenu, mi, false) do |k|
+          next true if k == -1
+          next false unless k.is_a?(Integer) && k >= 0 && b.moves[k] && b.moves[k].id
+          unless usable[k]
+            call(:pbDisplayPausedMessage, _INTL("{1} can't use that move right now.", b.name))
+            next false
+          end
+          tg = -1
+          unless @g.mirror.singleBattle?
+            t = call(:pbChooseTarget, mi, b.moves[k].pbTarget(b))
+            next false unless t.is_a?(Integer) && t >= 0
+            tg = @g.to_host(t)
+          end
+          ret = { "a" => "move", "m" => k, "tg" => tg }
+          next true
+        end
+        return ret
+      end
+
+      def bag(mi, b)
+        m = @g.mirror
+        ret = nil
+        call(:pbItemMenu, mi, true) do |item, use, ip, im, isc|
+          next false unless item
+          if (1..5).include?(use) && @g.item_left(item) <= 0   # used up in this battle (the flutes, 6-10, are never used up)
+            (isc.pbDisplay(_INTL("You have none of those left for this battle.")) rescue nil)
+            next false
+          end
+          pk = bt = nil
+          case use
+          when 1, 2, 6, 7
+            next false unless ItemHandlers.hasBattleUseOnPokemon(item) && @g.own?(ip)
+            pk = m.pbParty(mi)[ip]
+            bt = m.pbFindBattler(ip, mi)
+          when 3, 8
+            next false unless ItemHandlers.hasBattleUseOnBattler(item) && @g.own?(ip)
+            bt = m.pbFindBattler(ip, mi)
+            pk = bt.pokemon if bt
+          when 4, 9
+            next false unless ip.is_a?(Integer) && ip >= 0
+            bt = m.battlers[ip]
+            pk = bt.pokemon if bt
+          when 5, 10
+            bt = b
+            pk = b.pokemon
+          else
+            next false
+          end
+          next false unless pk
+          next false if [1, 2, 3, 6, 7, 8].include?(use) && !m.pbCanUseItemOnPokemon?(item, pk, bt, isc)
+          next false unless ItemHandlers.triggerCanUseInBattle(item, pk, bt, im, true, m, isc)
+          ret = { "a" => "item", "i" => item.to_s, "p" => ip, "mv" => im }
+          ret["tb"] = @g.to_host(ip) if [4, 9].include?(use)
+          next true
+        end
+        return ret
+      end
+
+      # a party slot of this player's team, or nil
+      def party(mi, cancel)
+        m = @g.mirror
+        ret = nil
+        call(:pbPartyScreen, mi, cancel) do |ip, psc|
+          pk = ip.is_a?(Integer) && @g.own?(ip) ? m.pbParty(mi)[ip] : nil
+          next false unless pk
+          if !pk.able?
+            (psc.pbDisplay(_INTL("{1} has no energy left to battle!", pk.name)) rescue nil)
+            next false
+          end
+          if m.pbFindBattler(ip, mi)
+            (psc.pbDisplay(_INTL("{1} is already in battle!", pk.name)) rescue nil)
+            next false
+          end
+          ret = ip
+          next true
+        end
+        return ret
+      end
+
+      def replacement(mi, req)
+        p = menu(req) { party(mi, req["c"] == 1) }
+        return p if p
+        return req["c"] == 1 ? -1 : -2
+      end
+    end
+
+    # on the partner's battle scene object only (SceneView#start)
+    module MenuWatch
+      def pbUpdate(*args)
+        super
+        v = @kif_coop_view
+        v.menu_frame(args[0]) if v
+      end
+    end
+
+    #---------------------------------------------------------------------------
+    # When this game can't show the battle: the host's AI fights for this
+    # player; what happens at the end shows as messages on the map
+    #---------------------------------------------------------------------------
+    class AutoScene < PokeBattle_DebugSceneNoLogging
+      def pbDisplayMessage(msg, brief = false); pbMessage(msg) unless brief; end
+      def pbDisplayPausedMessage(msg); pbMessage(msg); end
+      def pbDisplayConfirmMessage(msg); return pbConfirmMessage(msg); end
+      def pbShowCommands(msg, commands, defaultValue); return pbMessage(msg, commands, defaultValue); end
+
+      def pbForgetMove(pkmn, moveToLearn)
+        ret = -1
+        pbFadeOutIn {
+          scene = PokemonSummary_Scene.new
+          screen = PokemonSummaryScreen.new(scene)
+          ret = screen.pbStartForgetScreen([pkmn], 0, moveToLearn)
+        }
+        return ret
+      end
+
+      def pbNameEntry(helpText, pkmn); return pbEnterPokemonName(helpText, 0, Pokemon::MAX_NAME_SIZE, "", pkmn); end
+      def pbShowPokedex(_pkmn); end
+    end
+
+    class AutoView
+      attr_reader :scene
+
+      def initialize(guest)
+        @g = guest
+        @scene = AutoScene.new
+      end
+
+      def make_scene; @scene; end
+      def start; pbMessage(_INTL("This game couldn't show {1}'s battle. The game fights for your Pokémon there.", @g.host_name)); end
+      def finish(_d); end
+      def frame; Graphics.update; Input.update; end
+      def waiting(_change = false); end
+      def stalled(t); pbMessage(t); end
+      def confirm(t); pbConfirmMessage(t); end
+      def message(t); pbMessage(t); end
+      def show(_ev); end
+      def command(_mi, _req); nil; end
+      def replacement(_mi, _req); -2; end
+    end
+  end
+end

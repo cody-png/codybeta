@@ -29,7 +29,7 @@
 #   shown in battle while Auto-Battle and Battle Loop are on; folder battles
 #   also append "player folder,enemy folder,result" to
 #   ExportedPokemons/Data.csv.
-# Multi-select "Release" is available outside Debug mode, like KIF
+# Multi-select "Release" is available outside Debug mode, like KIF (6.9 does this itself; KIF adds it only when PIF's menu lacks it)
 #   (6.8.2 limits it to Debug).
 #
 # 6.8.2 adaptations (see PORT_LOG):

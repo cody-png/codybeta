@@ -38,7 +38,7 @@ module KIF
         ["K-Eggs", ["K-Eggs Usage", "K-Eggs Rarity", "K-Eggs Fusion Odds", "K-Eggs Fusion Pool",
                     "K-Eggs Rewards"]]]],
       [:graphics, "Graphics", [110, 120, 220], [
-        ["Battle", ["Battle Animations", "Battle Movement", "Battle Camera", "Battle Type Icons", "Type Display", "Swap BattleGUI"]],
+        ["Battle", ["Battle Animations", "Battle Movement", "Battle Camera", "Type Icons (Enemy)", "Type Icons (Player)", "Type Display", "Swap BattleGUI"]],
         ["Sprites", ["Random Sprites", "Joke Sprites", "Custom Eggs", "Fusion Icons"]],
         ["Screens", ["Fusion Screen", "Fusion Preview", "Big Pokémon Icons", "Summary IVs/EVs", "Dark Mode"]],
         ["Pokédex", ["Autogen dex entries", "Improved Pokedex", "Dex Evolutions", "Dex Sprite Select"]],
@@ -53,7 +53,8 @@ module KIF
       [:challenges, "Challenges", [160, 80, 180], [
         ["Rules", ["Level caps", "No reviving", "No heals (battles)", "No heals (overworld)"]],
         ["KIF challenges", ["Metronome Madness", "Letdown", "Letdown Player Only", "Berserker"]],
-        ["Nuzlocke", ["Nuzlocke", "Fainted Pokémon", "Nuzlocke whiteout", "Dupes clause", "Shiny clause", "Gift Pokémon", "Kuray Shop", "Safari Zone", "Nuzlocke Graveyard"]]]],
+        ["Nuzlocke", ["Nuzlocke", "Fainted Pokémon", "Nuzlocke whiteout", "Dupes clause", "Shiny clause", "Gift Pokémon", "Kuray Shop", "Safari Zone", "Nuzlocke Graveyard"]],
+        ["Soul Link", ["Soul Link", "Link mode", "Soul Link type rule", "Soul Link party rule"]]]],
       [:game, "Game", [70, 160, 170], [
         ["Difficulty", ["Difficulty"]],
         ["Movement", ["Default Movement", "Quick HMs"]],
@@ -68,11 +69,13 @@ module KIF
         ["Screen", ["Screen Size", "Device"]],
         ["Text", ["Text Speed", "Text Entry"]],
         ["Controls", ["Mouse", "Click to move", "Touch controls", "Tap to move"]],
+        ["Multiplayer", ["Multiplayer", "Players", "Use partners' sprites", "Co-op: hold attacks for a ball", "Co-op: second ball", "Co-op: bigger trainer teams"]],
         ["Updates and downloads", ["Updates", "Check for Updates", "Update history", "Download data"]],
         ["Test builds", ["Test Code"]],
         ["Speed", ["Frame rate", "Sprite File Cache"]],
         ["Start-up", ["Skip intro", "Title screen"]],
         ["Files", ["Imported Archives"]],
+        ["Mod safety", ["Mod protection", "About mod safety", "Mod Dev mode", "Mod tools"]],
         ["Advanced", ["Increment Slider by", "Debug Exclusive", "DEBUG"]]]],
       [:modules, "Modules", [180, 120, 90], []],
       [:mods, "Mods", [90, 140, 210], []],
@@ -115,7 +118,7 @@ module KIF
     # A row that is On never hides, so it can always be turned Off.
     HIDE_IF = {
       # Type Display took over PIF's Battle Type Icons (its "PIF" choice)
-      "Battle Type Icons"  => proc { true },
+      "Type Icons (Enemy)" => proc { true },
       "EV Allocation"      => proc { $PokemonSystem.noevsmode.to_i == 1 && $PokemonSystem.ev_alloc.to_i == 0 },
       "EVs Train Mode"     => proc { $PokemonSystem.noevsmode.to_i == 1 && $PokemonSystem.evstrain.to_i == 0 },
       "Legendary Breeding" => proc { $PokemonSystem.legendarybreed.to_i == 0 && $PokemonSystem.cody_legendarybreed.to_i == 0 },

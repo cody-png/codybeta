@@ -19,6 +19,8 @@ module KIF
   module Modules
     ALIAS_RE = /^\s*alias(?:_method)?\s+:?([A-Za-z_][\w]*[?!=]?|\[\]=?|[+\-*\/<>=!~%&|^]+)\s*,?\s*:?([A-Za-z_][\w]*[?!=]?|\[\]=?|[+\-*\/<>=!~%&|^]+)/
     @alias_cache = {}
+    @alias_seen = {}   # path => [size and time, alias lines] of the files read, or found in the cache, this start
+    @alias_dirty = false
     @gated = Hash.new(0)
     class << self
       attr_reader :gated
@@ -31,13 +33,53 @@ module KIF
       path = file
       path = basename_map[file] || file unless file.include?("/") || file.include?("\\")
       begin
-        # one read and one scan per file; spaces never cross a line, as when read line by line
-        @alias_scan_re ||= Regexp.new(ALIAS_RE.source.gsub("\\s", "[^\\S\\n]"))
-        File.read(path).scan(@alias_scan_re) { |new_name, orig| h[orig.to_sym] << new_name.to_sym }
+        st = alias_stamp(path)
+        saved = st && alias_store[path]
+        if saved && saved[0] == st
+          # unchanged since an earlier start: its alias lines come from the cache, the file isn't opened
+          saved[1].each { |orig, news| h[orig] = news.dup }
+          @alias_seen[path] = saved
+        else
+          # one read and one scan per file; spaces never cross a line, as when read line by line
+          @alias_scan_re ||= Regexp.new(ALIAS_RE.source.gsub("\\s", "[^\\S\\n]"))
+          File.read(path).scan(@alias_scan_re) { |new_name, orig| h[orig.to_sym] << new_name.to_sym }
+          if st
+            @alias_seen[path] = [st, h.map { |orig, news| [orig, news.dup] }]
+            @alias_dirty = true
+          end
+        end
       rescue
       end
       @alias_cache[file] = h
       return h
+    end
+
+    # The alias lines of each KIF script are kept between starts
+    # (Cache/KIFBoot/module_gate_aliases.kbc): opening and scanning ~200
+    # source files was most of the gate's time (more on a phone's storage). A
+    # file is read again when its size or time changes, all of them when
+    # KIF's version does.
+    ALIAS_STORE = "module_gate_aliases"
+
+    def self.alias_stamp(path)
+      return defined?(KIF::Perf::BootCache) ? KIF::Perf::BootCache.stamp(path) : nil
+    end
+
+    def self.alias_store_key
+      return [defined?(KIF::PORT_VERSION) ? KIF::PORT_VERSION.to_s : "", ALIAS_RE.source]
+    end
+
+    def self.alias_store
+      return @alias_store ||= begin
+        got = defined?(KIF::Perf::BootCache) ? KIF::Perf::BootCache.read(ALIAS_STORE, alias_store_key) : nil
+        got.is_a?(Hash) ? got : {}
+      end
+    end
+
+    def self.save_alias_store
+      return unless @alias_dirty && defined?(KIF::Perf::BootCache)
+      @alias_dirty = false
+      KIF::Perf::BootCache.write(ALIAS_STORE, alias_store_key, @alias_seen)
     end
 
     def self.has_method?(mod, name)
@@ -161,6 +203,7 @@ module KIF
           next unless id
           snap = @snapshot[[m, name]]
           next if snap && snap == um
+          next if self_gated?(m, name)
           next if old_code[loc]
           # An alias another layer made of this module's version (e.g.
           # kif_big_pbStartScene -> Gender's pbStartScene) is switched too,
@@ -199,6 +242,7 @@ module KIF
     def self.install_gate
       t = Time.now
       gate_methods
+      save_alias_store
       handlers = gate_handler_hashes
       ms = ((Time.now - t) * 1000).round
       parts = MODULES.keys.map { |id| "#{id} #{@gated[id]}" }.join(", ")

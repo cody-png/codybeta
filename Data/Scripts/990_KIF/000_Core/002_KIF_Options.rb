@@ -73,6 +73,7 @@ module KIF
       @defaults[key] = default
       @scopes[key] = scope
       ivar = :"@#{key}"
+      klass = default.class
       if PokemonSystem.method_defined?(key) && !PokemonSystem.method_defined?(:"kif_defined_#{key}")
         # the getter below replaces it, so KIF's default does apply when unset
         KIF.verbose("PokemonSystem##{key} is also defined outside KIF; KIF's default (#{default.inspect}) applies when it's unset")
@@ -85,14 +86,42 @@ module KIF
           lock = KIF::Locks.table[key]
           return lock[0] if lock
           val = instance_variable_get(ivar)
-          if val.nil?
-            val = KIF::Options.copy_default(key)
-            instance_variable_set(ivar, val)
-          end
-          val
+          return val if val.class == klass
+          KIF::Options.settle(self, ivar, key, val)
         end
         define_method(:"#{key}=") { |v| instance_variable_set(ivar, v) }
       end
+    end
+
+    # Whether a stored value is the kind of thing the setting holds. An older
+    # build, a mod or a damaged or hand-edited save can hold a String where a
+    # number is read, and the first read of it fails (comparison of String
+    # with 0, to_i of true). A number setting holds a whole number or a finite
+    # decimal; an On/Off setting also takes a number.
+    def self.sound?(key, v)
+      d = @defaults[key]
+      case d
+      when Integer, Float      then return v.is_a?(Integer) || (v.is_a?(Float) && v.finite?)
+      when true, false         then return v.is_a?(Numeric) || v == true || v == false
+      when Hash, Array, String then return v.is_a?(d.class)
+      end
+      return true
+    end
+
+    # What a value that is not sound becomes: true/false in a whole-number
+    # setting is 1/0 (an On/Off written as a boolean), anything else the default
+    def self.mend(key, v)
+      return (v ? 1 : 0) if @defaults[key].is_a?(Integer) && (v == true || v == false)
+      return copy_default(key)
+    end
+
+    # What the getter makes of a value that is nil or not the default's class
+    def self.settle(sys, ivar, key, val)
+      return val if !val.nil? && sound?(key, val)
+      KIF.log("Setting #{key} held #{val.class}: back to its default") unless val.nil?
+      val = mend(key, val)
+      sys.instance_variable_set(ivar, val)
+      return val
     end
 
     # The player's own value (a mod's lock doesn't count): what saves keep
@@ -100,7 +129,9 @@ module KIF
       return nil unless sys
       key = key.to_sym
       ivar = :"@#{key}"
-      return sys.instance_variable_get(ivar) if sys.instance_variable_defined?(ivar) && !sys.instance_variable_get(ivar).nil?
+      if sys.instance_variable_defined?(ivar) && !(v = sys.instance_variable_get(ivar)).nil?
+        return (@defaults.has_key?(key) && !sound?(key, v)) ? mend(key, v) : v
+      end
       return copy_default(key) if @defaults.has_key?(key)
       plain = :"kif_unlocked_#{key}"
       return sys.respond_to?(plain) ? sys.send(plain) : sys.send(key)
@@ -270,6 +301,7 @@ module KIF
         return false
       end
       @modules[id] = [st, by, owner]
+      KIF::Modules.gate_changed! if defined?(KIF::Modules) && KIF::Modules.respond_to?(:gate_changed!)
       KIF::Modules.poll if KIF::Modules.respond_to?(:poll) && $PokemonSystem
       return true
     end
@@ -287,11 +319,13 @@ module KIF
     def self.release(owner)
       @table.delete_if { |_k, v| v[2] == owner }
       @modules.delete_if { |_k, v| v[2] == owner }
+      KIF::Modules.gate_changed! if defined?(KIF::Modules) && KIF::Modules.respond_to?(:gate_changed!)
     end
 
     def self.reset!
       @table = {}
       @modules = {}
+      KIF::Modules.gate_changed! if defined?(KIF::Modules) && KIF::Modules.respond_to?(:gate_changed!)
     end
 
     # PIF's own settings (plain attributes): the getter learns about locks

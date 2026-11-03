@@ -99,6 +99,11 @@ module KIF
     # are On; blocked: ids / folders of mods that won't load
     def blocked_reason(e, json, on, blocked = {})
       return nil unless json
+      # the API level it was written for (mod.json "api_version"); works when the API files are absent
+      av = json["api_version"]
+      av = av.to_i if av.is_a?(String) && av =~ /\A[1-9]\d{0,5}\z/
+      level = defined?(KIF::API_LEVEL) ? KIF::API_LEVEL : 1
+      return _INTL("Needs a newer KIF (API level {1}).", av) if av.is_a?(Integer) && av > level
       spec = json["requires_kif"]
       unless version_ok?(spec)
         return _INTL("Needs {1} (this is KIF {2}).", version_text(spec), kif_version)
@@ -118,7 +123,21 @@ module KIF
       unless gone.empty?
         return _INTL("Needs {1}. Install it or switch it On.", gone.join(", "))
       end
+      # a dependency with a version ({ "id": "kif_er", "version": ">=0.6" }) must have it
+      Array(json["dependencies"]).each do |d|
+        next unless d.is_a?(Hash) && !d["version"].to_s.strip.empty?
+        have = dependency_version(d["id"].to_s)
+        next if have.nil? || version_ok?(d["version"], have)
+        return _INTL("Needs {1} {2} (you have {3}).", d["id"], d["version"].to_s.strip, have)
+      end
       return nil
+    end
+
+    # the version of an installed mod by its folder name or mod.json id, or nil
+    def dependency_version(id)
+      list = (KIF::Mods.entries rescue [])
+      e = list.find { |x| x.id == id || (x.respond_to?(:mod_id) && x.mod_id == id) }
+      return e && !e.version.to_s.empty? ? e.version.to_s : nil
     end
 
     # replaces / locks / modules of one mod
@@ -133,8 +152,9 @@ module KIF
       end
       # the mod's own catalog: Browse lists it, its updates come from there
       if json["catalog"].is_a?(String) && defined?(KIF::ModCatalog)
+        # only a GitHub repository: a folder named by a downloaded mod.json would be walked and read
         c = KIF::ModCatalog.parse_catalog(json["catalog"])
-        KIF::ModCatalog.add_catalog(c.local? ? c.path : c.repo, :branch => c.branch, :name => name) if c
+        KIF::ModCatalog.add_catalog(c.repo, :branch => c.branch, :name => name) if c && !c.local?
       end
     end
 

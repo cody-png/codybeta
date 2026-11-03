@@ -562,8 +562,10 @@ class PokeBattle_AI
 			#       round.     #DemICE:  WHAT THE FUCK DO YOU MEAN THEY AREN'T SUITABLE FFS
 			itemBlacklist = [:EXPERTBELT]#,:LIFEORB]
 			 if !itemBlacklist.include?(user.item_id)
+			gem = user.effects[PBEffects::GemConsumed]   # an estimate must not consume the Gem
 			BattleHandlers.triggerDamageCalcUserItem(user.item,
 				user,target,move,multipliers,baseDmg,type)
+			user.effects[PBEffects::GemConsumed] = gem
 			 end
 		end
 		if skill>=PBTrainerAI.bestSkill && target.itemActive?
@@ -902,6 +904,10 @@ class PokeBattle_AI
 		return true if move.function == "125" && KIF.last_resort_fails?(user, move)
 		# DemICE same as last resort above, but for Burn Up
 		return true if move.function == "162" && !user.pbHasType?(:FIRE)
+		# damaging moves that fail outright: their function-code penalty is not added to a damaging move's score
+		return true if move.function == "0DE" && !target.asleep?   # Dream Eater
+		return true if move.function == "158" && !user.belched?   # Belch
+		return true if move.function == "123" && !target.pbHasType?(user.type1) && !target.pbHasType?(user.type2)   # Synchronoise
 		# OHKO Moves
 		if move.function == "070"
 			return true if move.name=="Sheer Cold" && target.pbHasType?(:ICE)

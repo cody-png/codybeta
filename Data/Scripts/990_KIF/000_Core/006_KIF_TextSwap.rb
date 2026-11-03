@@ -25,7 +25,12 @@ module KIF
       return nil unless list
       list.each do |block|
         next if defined?(KIF::Modules) && !KIF::Modules.proc_active?(block)
-        ret = (block.call rescue nil)
+        ret = begin
+          block.call
+        rescue StandardError => e
+          (@bad ||= {})[block] ||= KIF.log("Text swap for #{text.inspect} raised #{e.class}: #{e.message}") || true   # once per block
+          nil
+        end
         return ret if ret
       end
       return nil

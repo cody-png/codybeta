@@ -481,6 +481,7 @@ module KIF
       return true if $PokemonGlobal.nil? || $PokemonGlobal.partner
       return true if (pbInSafari? rescue false) || (pbInBugContest? rescue false)
       return true if defined?(KIF::SelfBattle) && KIF::SelfBattle.instance_variable_get(:@active)
+      return true if defined?(KIF::PvP) && KIF::PvP.running?   # the runner of a friendly match is in no $game_temp battle: an invite is busy, not kept for later
       return true if ($game_switches[SWITCH_TRIPLE_BOSS_BATTLE] rescue false)
       return false
     end

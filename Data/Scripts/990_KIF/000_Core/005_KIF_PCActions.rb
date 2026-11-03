@@ -204,7 +204,8 @@ class PokemonStorageScreen
   def kif_multi_menu(msg, commands, index, box)
     cancel_idx = commands.length - 1
     return kif_pc_pbShowCommands(msg, commands, index) if commands[cancel_idx] != _INTL("Cancel")
-    list = KIF::MultiCommands.available(self, box)
+    # an entry PIF's own menu has is not added again (6.9 shows Release outside Debug too)
+    list = KIF::MultiCommands.available(self, box).reject { |_, l| commands.include?(l) }
     return kif_pc_pbShowCommands(msg, commands, index) if list.empty?
     shown = commands[0...cancel_idx] + list.map { |_, l| l } + [commands[cancel_idx]]
     ret = kif_pc_pbShowCommands(msg, shown, index)

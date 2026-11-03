@@ -85,7 +85,7 @@ All options in this menu are per-save.
 - **Auto-Battle New Moves** - Ask / AI picks / Skip *(AI picks)*. When a Pokémon with four moves wants a new one: the battle AI keeps the four it rates best against the opposing team (the new move may not make the cut), or new moves are skipped. Picks are noted in KIF_log.txt with verbose logging.
 - **Auto-Battle Evolutions** - Watch / Automatic *(Automatic)*. Evolutions right after a battle play by themselves (B still stops one); a move the new form wants follows Auto-Battle New Moves.
 - **Damage Variance** - Off / On *(On)*. Off removes the random damage roll, so a move always does the same damage.
-- **Battle AI** - PIF / DemICE *(DemICE)*. Which brain opponents use. DemICE's AI (from the community hard-mode mods) plays smarter and focuses on its best move. PIF is PIF 6.8.2's own AI.
+- **Battle AI** - PIF / DemICE *(DemICE)*. Which brain opponents use. DemICE's AI (from the community hard-mode mods) plays smarter and focuses on its best move. PIF is PIF's own AI.
   Both AIs know the Frostbite and Drowsy options (a frostbitten or drowsy Pokémon is not treated as frozen or asleep), and use Mean Look, Block or Spider Web when trapping pays off: with Perish Song, on a foe that loses HP every turn (Toxic, Leech Seed, Curse, Nightmare), or on a foe that can barely hurt them.
 
 ### Battle mechanics (by Bluewuppo)
@@ -153,7 +153,8 @@ K-Eggs are sold in the Kuray Shop (see "Others > Kuray QoL").
 
 ### Global
 
-- **Type Icons** (Type Display) - Off / PIF / Ico / TCG / Sqr / FGM / Txt *(PIF)*. Shows each Pokémon's in-battle types on its HP box. PIF = PIF's own icons; this replaces PIF's Battle Type Icons setting.
+- **Type Icons** (Type Display) - Off / PIF / Ico / TCG / Sqr / FGM / Txt *(PIF)*. Shows each foe's in-battle types on its HP box. PIF = PIF's own icons; this takes the place of PIF's Type Icons (Enemy) setting.
+- **Type Icons (Player)** - Off / On *(On in a new game; Off on saves from before 6.9)*. PIF 6.9's setting for your own Pokémon: the same icons next to your Pokémon's HP box, in the Type Display style (PIF's small icons with Off, PIF and Txt). Global.
   - Ico: icons by Lolpy1.
   - TCG: trading-card style.
   - Sqr: square icons (Triple Fusion by Lolpy1).
@@ -321,6 +322,7 @@ Only on saves started as randomized saves: **Options > Game > Randomizer** (Rand
 - **Trainers**
   - **Trainers** - Off / Random / Follow wild. Follow wild gives trainers the wild swap table (a trainer's Pidgey becomes whatever wild Pidgey became).
   - **Strength range**, **Custom sprites only** - as in PIF.
+  - **References filter** and **Reference sets** - Off / On *(Off)*, and a list. PIF 6.9's filter: trainer teams only use sprites from the reference sets you pick (Reference sets opens PIF's picker; all sets until you choose). It needs Custom sprites only, which closing the page offers to turn on. It is part of a settings code while On; the picked sets stay with the save. Like Custom sprites only, it is ignored by Follow wild, Rival keeps his team, Fuse everything and Unfused Pokémon.
   - **Class themes** - Off / On *(On)*. Every Pokémon of a themed class has its type: Bug Catchers use Bug types, Swimmers Water types, Hikers Rock/Ground, and so on; *Class theme list* shows every class. Follows randomized types. Gym leaders use the Gyms page.
   - **Shuffle themes** - Off / On. Each class gets a random type instead (the same for the same seed); Type Experts keep theirs.
   - **Extra class themes** - Off / On *(On)*. Also themes the less obvious classes: Scientists, Bikers, Burglars, Jugglers, Robots, Roughnecks, Cue Balls, Aroma Ladies, Painters and Tubers.

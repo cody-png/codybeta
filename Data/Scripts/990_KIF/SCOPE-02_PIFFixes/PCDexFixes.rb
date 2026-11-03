@@ -14,7 +14,7 @@
 #===============================================================================
 KIF.guard_base("052_InfiniteFusion/Menus/PC/Multiselect/MultiSelect_Helpers.rb", 2562488303,
                "SelectionHelper.compute_rect")
-KIF.guard_base("052_InfiniteFusion/Gameplay/Pokedex/UI_Pokedex_SpritesPage.rb", 108322298,
+KIF.guard_base("052_InfiniteFusion/Gameplay/Pokedex/UI_Pokedex_SpritesPage.rb", 1463859335,
                "PokemonPokedexInfo_Scene#init_selected_bg, #showSpriteCredits")
 
 module SelectionHelper

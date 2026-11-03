@@ -148,7 +148,7 @@ KIF::Options.add(:battles, :save) {
 #-------------------------------------------------------------------------------
 # Custom fusion base stats and dominant types on the fused species
 #-------------------------------------------------------------------------------
-KIF.guard_base("052_InfiniteFusion/Fusion/Data/FusedSpecies.rb", 1199575393, "FusedSpecies type/base stat calculation")
+KIF.guard_base("052_InfiniteFusion/Fusion/Data/FusedSpecies.rb", 1441344542, "FusedSpecies type/base stat calculation")
 
 module GameData
   class FusedSpecies

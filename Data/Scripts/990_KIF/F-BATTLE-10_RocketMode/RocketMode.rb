@@ -28,7 +28,7 @@ KIF::Options.add(:battles, :save) {
                   _INTL("Every Balls can steal Pokemons.")])
 }
 
-KIF.guard_base("011_Battle/003_Battle/001_PokeBattle_BattleCommon.rb", 563813507,
+KIF.guard_base("011_Battle/003_Battle/001_PokeBattle_BattleCommon.rb", 177678609,
                "PokeBattle_BattleCommon#pbThrowPokeBall")
 
 module PokeBattle_BattleCommon

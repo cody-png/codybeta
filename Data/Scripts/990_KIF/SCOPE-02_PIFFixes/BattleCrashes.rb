@@ -63,7 +63,7 @@ end
 #    than the other (a 3v3 where one side has only 2 Pokemon) leaves nil
 #    slots, so using Quash ended the battle in the crash handler. Copy of
 #    6.8.2's two methods with `next if !b`. Date: 2026-11-01.
-KIF.guard_base("011_Battle/002_Move/007_Move_Effects_100-17F.rb", 3403102880,
+KIF.guard_base("011_Battle/002_Move/007_Move_Effects_100-17F.rb", 914265366,
                "PokeBattle_Move_11E (Quash)")
 
 class PokeBattle_Move_11E < PokeBattle_Move

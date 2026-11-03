@@ -8,7 +8,7 @@
 # switched the check to pbOwnedByPlayerSerious? (000_Core/004_KIF_BattleHelpers).
 # Copy of 6.8.2's PokeBattle_Move_109#pbEffectGeneral with that one change.
 #===============================================================================
-KIF.guard_base("011_Battle/002_Move/007_Move_Effects_100-17F.rb", 3403102880,
+KIF.guard_base("011_Battle/002_Move/007_Move_Effects_100-17F.rb", 914265366,
                "PokeBattle_Move_109#pbEffectGeneral (Pay Day)")
 
 class PokeBattle_Move_109 < PokeBattle_Move

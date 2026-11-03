@@ -389,7 +389,7 @@ class TilemapRenderer
   end
 end
 
-KIF.guard_base("006_Map renderer/001_TilemapRenderer.rb", 1813210744, "TilemapRenderer#update (C-UI-01 MapZoom#mz_zoomed_update)") if KIF.respond_to?(:guard_base)
+KIF.guard_base("006_Map renderer/001_TilemapRenderer.rb", 2052185553, "TilemapRenderer#update (C-UI-01 MapZoom#mz_zoomed_update)") if KIF.respond_to?(:guard_base)
 
 # Frames drawn in between slide the map by the camera's move, which is drawn smaller
 if defined?(KIF::FrameRate) && KIF::FrameRate.respond_to?(:camera_move)

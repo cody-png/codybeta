@@ -121,7 +121,7 @@ end
 # with the KIF block inserted before the "Labels the move" step and PP use
 # skipped for the forced move.
 #-------------------------------------------------------------------------------
-KIF.guard_base("011_Battle/001_Battler/007_Battler_UseMove.rb", 3893353249,
+KIF.guard_base("011_Battle/001_Battler/007_Battler_UseMove.rb", 1686294228,
                "PokeBattle_Battler#pbUseMove")
 
 class PokeBattle_Battler

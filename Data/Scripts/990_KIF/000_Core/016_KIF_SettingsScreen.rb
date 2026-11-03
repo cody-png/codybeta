@@ -1341,7 +1341,7 @@ end
 # Options (pause menu and load screen) opens this screen instead of PIF's
 # Options. If it fails, PIF's Options open as before and the error is logged.
 #===============================================================================
-KIF.guard_base("052_InfiniteFusion/System/Game Options/GameOptions.rb", 2796826256, "PokemonGameOption_Scene#pbEndScene (KifSettingsScreen#close_effects)")
+KIF.guard_base("052_InfiniteFusion/System/Game Options/GameOptions.rb", 1334977872, "PokemonGameOption_Scene#pbEndScene (KifSettingsScreen#close_effects)")
 
 class PokemonOptionScreen
   alias kif_ss_pbStartScreen pbStartScreen unless method_defined?(:kif_ss_pbStartScreen)

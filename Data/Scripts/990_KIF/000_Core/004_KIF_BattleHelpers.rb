@@ -221,4 +221,4 @@ class PokeBattle_AI
   end
 end
 
-KIF.guard_base("011_Battle/001_Battler/001_PokeBattle_Battler.rb", 486165913, "PokeBattle_Battler#pbDirectOpposing (004_KIF_BattleHelpers.rb)")
+KIF.guard_base("011_Battle/001_Battler/001_PokeBattle_Battler.rb", 2663409976, "PokeBattle_Battler#pbDirectOpposing (004_KIF_BattleHelpers.rb)")

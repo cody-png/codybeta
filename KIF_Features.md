@@ -303,7 +303,7 @@ New features made for KIF 1.0 that were never part of the original KIF. They sit
 
 ### Breeding & Fusion
 
-- **Always Fusion Eggs** - Off / On *(Off, per save)*. An Egg is always a fusion when the parents have two different species. A fusion and a Ditto give that fusion at its earliest stage. With it Off, PIF's chances apply.
+- **Fusion Egg Odds** - PIF / Custom *(PIF, per save)*. Custom lets you set **Fusion Egg Chance** (0-100%, default 50): the chance that an Egg is a fusion when the parents have two different species. A fusion and a Ditto give that fusion at its earliest stage; otherwise the Egg is one part of the fusion.
 - **Legendary Breeding** - Off / On *(Off, per save; shown under Head Legendary Breeding while that is On)*. Legendary Pokémon (and fusions with a legendary head or body) can breed with any Pokémon that can breed - no egg group or gender needed. The Egg is one of four results, 25% each: either parent, or either fusion of the two (Mewtwo + Vulpix > Mewtwo, Vulpix, Mewpix or Vultwo). With Ditto, the Egg is the other parent. Baby Pokémon still can't breed.
 
 ### Randomizer

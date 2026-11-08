@@ -214,9 +214,11 @@ module KIF
       "Legendary Breeding" => [
         "Legendary Pokémon can't breed.",
         "Legendary Pokémon (and fusions with one) can breed with any Pokémon."],
-      "Always Fusion Eggs" => [
-        "Eggs are fusions only some of the time.",
-        "Eggs are always fusions when the parents have two different species."],
+      "Fusion Egg Odds" => [
+        "Eggs use PIF's own chance of being a fusion.",
+        "You choose the chance that an Egg is a fusion."],
+      "Fusion Egg Chance" =>
+        "Chance, in %, that an Egg is a fusion when the parents have two different species. A fusion and a Ditto give that fusion.",
       "Head Legendary Breeding" => [
         "A fusion with a legendary head can't breed (PIF 6).",
         "A fusion with a legendary head breeds through its body (older PIF)."],

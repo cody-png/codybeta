@@ -33,7 +33,7 @@ module KIF
                       "Recover Consumables", "Items to Bag"]],
         ["Fusion", ["Fusion BaseStats", "NPC Fusion BaseStats", "Self-Fusion Stat Boost",
                     "Dominant Fusion Types", "Unfuse Traded"]],
-        ["Breeding and moves", ["Head Legendary Breeding", "Legendary Breeding", "Event Moves",
+        ["Breeding and moves", ["Head Legendary Breeding", "Legendary Breeding", "Always Fusion Eggs", "Event Moves",
                                 "Egg Moves", "Enable EvoLock"]],
         ["K-Eggs", ["K-Eggs Usage", "K-Eggs Rarity", "K-Eggs Fusion Odds", "K-Eggs Fusion Pool",
                     "K-Eggs Rewards"]]]],

@@ -12,6 +12,10 @@
 # parent B, A-head/B-body fusion, B-head/A-body fusion – e.g. Mewtwo + Vulpix
 # → Mewtwo, Vulpix, Mewpix or Vultwo. With Ditto, the Egg is the other
 # parent's. The rest of the Egg (moves, forms, IVs) is 6.8.2's.
+#
+# Always Fusion Eggs (per save, default Off): whenever the parents hold two
+# different species between them, the Egg is a fusion of two of them. A
+# fusion and a Ditto give a fusion of the fusion's two parts.
 #===============================================================================
 KIF::Options.define(:cody_legendarybreed, 0, :save)
 
@@ -21,6 +25,16 @@ KIF::Options.add(:cody_breeding, :save) {
                  proc { |value| $PokemonSystem.cody_legendarybreed = value },
                  [_INTL("Legendary Pokémon can't breed."),
                   _INTL("Legendary Pokémon can breed with any Pokémon.")])
+}
+
+KIF::Options.define(:cody_fusioneggs, 0, :save)
+
+KIF::Options.add(:cody_breeding, :save) {
+  EnumOption.new(_INTL("Always Fusion Eggs"), [_INTL("Off"), _INTL("On")],
+                 proc { $PokemonSystem.cody_fusioneggs },
+                 proc { |value| $PokemonSystem.cody_fusioneggs = value },
+                 [_INTL("Eggs are fusions only some of the time."),
+                  _INTL("Eggs are always fusions when the parents have two different species.")])
 }
 
 module KIF
@@ -54,6 +68,26 @@ module KIF
       return !groups.include?(:Undiscovered)
     end
 
+    def self.always_fusion?
+      return $PokemonSystem && $PokemonSystem.cody_fusioneggs.to_i == 1
+    end
+
+    def self.parts(pkmn)
+      sp = pkmn.species_data
+      return [sp.head_pokemon.species, sp.body_pokemon.species] if sp.is_a?(GameData::FusedSpecies) && sp.head_pokemon && sp.body_pokemon
+      return [pkmn.species]
+    end
+
+    # nil when the parents have only one species between them
+    def self.fusion_egg(father, mother)
+      a = father.species == :DITTO ? parts(mother) : parts(father)
+      b = mother.species == :DITTO ? parts(father) : parts(mother)
+      pairs = a.product(b).reject { |x, y| x == y }
+      return nil if pairs.empty?
+      x, y = pairs.sample
+      return rand(2) == 0 ? fusionOf(x, y) : fusionOf(y, x)
+    end
+
     # One species from a parent: a fusion gives its head or body
     def self.parent_species(pkmn)
       sp = pkmn.species_data
@@ -84,6 +118,10 @@ alias cody_legend_determineDayCareEggSpecies determineDayCareEggSpecies unless d
 
 def determineDayCareEggSpecies(maleParent, femaleParent)
   lb = KIF::LegendaryBreeding
+  if lb.always_fusion?
+    egg = lb.fusion_egg(maleParent, femaleParent)
+    return egg if egg
+  end
   unless lb.on? && (lb.legendary?(maleParent) || lb.legendary?(femaleParent))
     return cody_legend_determineDayCareEggSpecies(maleParent, femaleParent)
   end

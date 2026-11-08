@@ -121,8 +121,15 @@ module KIF
       if d["scans"].length > MAX_SCANS
         d["scans"] = d["scans"].to_a.last(MAX_SCANS / 2).to_h
       end
-      File.write(p + ".tmp", KIF::ModPublish.to_json(d), mode: "wb")
-      File.rename(p + ".tmp", p)
+      json = KIF::ModPublish.to_json(d)
+      File.write(p + ".tmp", json, mode: "wb")
+      begin
+        File.rename(p + ".tmp", p)
+      rescue SystemCallError => e   # not every phone storage renames over a file that exists
+        KIF.log("Mod trust: rename failed (#{e.class}), writing #{FILE} in place")
+        File.write(p, json, mode: "wb")
+        File.delete(p + ".tmp") rescue nil
+      end
       @dirty = false
     rescue StandardError => e
       raise if defined?(KIF::ModGuard::Denied) && e.is_a?(KIF::ModGuard::Denied)   # a mod that calls this is stopped, not forgiven

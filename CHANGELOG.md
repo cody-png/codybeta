@@ -3,7 +3,26 @@
 Every KIF version, newest first: a short overview, then the full notes (click Full notes to open them).
 The game shows the same notes in Options > System > Update history.
 
-[2.0.0](#kif-200) | [1.2.13](#kif-1213) | [1.2.11](#kif-1211) | [1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+[2.0.1](#kif-201) | [2.0.0](#kif-200) | [1.2.13](#kif-1213) | [1.2.11](#kif-1211) | [1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+
+## KIF 2.0.1
+
+- New, Off by default: Always Fusion Eggs (Options > Pokemon > Breeding and moves). An Egg is always a fusion when the parents have two different species. A fusion and a Ditto give that fusion at its earliest stage.
+- Fixed: swapping two Pokemon in the PC crashed the game.
+- Fixed: in EBDX battles, the last-used item button crashed the game when none were left.
+- Fixed: downloading a mod that needs your OK looked frozen, because its question was hidden behind the download box.
+- Phones: mod reviews and Mod protection are kept on storage that can't replace a file.
+
+<details><summary>Full notes</summary>
+
+- New, Off by default: Always Fusion Eggs (Options > Pokemon > Breeding and moves). An Egg is always a fusion when the parents have two different species. A fusion and a Ditto give that fusion at its earliest stage.
+- Fixed: swapping two Pokemon in the PC crashed the game.
+- Fixed: in EBDX battles, the last-used item button crashed the game when none were left.
+- Fixed: downloading a mod that needs your OK looked frozen, because its question was hidden behind the download box.
+- Phones: mod reviews and Mod protection are kept on storage that can't replace a file.
+- Updates: the update window finds Windows' own tools even when other tools come first on the PC's PATH.
+
+</details>
 
 ## KIF 2.0.0
 

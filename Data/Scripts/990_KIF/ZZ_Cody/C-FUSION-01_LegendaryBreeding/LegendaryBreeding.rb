@@ -15,7 +15,7 @@
 #
 # Always Fusion Eggs (per save, default Off): whenever the parents hold two
 # different species between them, the Egg is a fusion of two of them. A
-# fusion and a Ditto give a fusion of the fusion's two parts.
+# fusion and a Ditto give that fusion (at its earliest stage).
 #===============================================================================
 KIF::Options.define(:cody_legendarybreed, 0, :save)
 
@@ -80,9 +80,9 @@ module KIF
 
     # nil when the parents have only one species between them
     def self.fusion_egg(father, mother)
-      a = father.species == :DITTO ? parts(mother) : parts(father)
-      b = mother.species == :DITTO ? parts(father) : parts(mother)
-      pairs = a.product(b).reject { |x, y| x == y }
+      other = father.species == :DITTO ? mother : (mother.species == :DITTO ? father : nil)
+      return other.isFusion? ? other.species : nil if other   # the fusion as it is, as older versions gave
+      pairs = parts(father).product(parts(mother)).reject { |x, y| x == y }
       return nil if pairs.empty?
       x, y = pairs.sample
       return rand(2) == 0 ? fusionOf(x, y) : fusionOf(y, x)

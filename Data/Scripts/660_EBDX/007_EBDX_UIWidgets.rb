@@ -1161,6 +1161,12 @@ class BagWindowEBDX
       cmd = [2, 1, 4, 5] if Settings.bag_pocket_names.length == 6
       self.drawPocket(cmd[@index], @index)
       @sprites["sel"].target(@back ? @sprites["pocket5"] : @items["#{@item}"])
+    elsif @lastUsed == 0 || $PokemonBag.pbQuantity(@lastUsed) <= 0
+      # the last one is gone and the cursor is still on its button
+      @lastUsed = 0
+      $lastUsed = 0
+      @index = 0
+      self.refresh
     else
       @selPocket = 0
       @page = -1

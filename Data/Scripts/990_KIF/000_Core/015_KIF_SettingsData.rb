@@ -41,7 +41,7 @@ module KIF
         ["Battle", ["Battle Animations", "Battle Movement", "Battle Camera", "Type Icons (Enemy)", "Type Icons (Player)", "Type Display", "Swap BattleGUI"]],
         ["Sprites", ["Random Sprites", "Joke Sprites", "Custom Eggs", "Fusion Icons"]],
         ["Screens", ["Fusion Screen", "Fusion Preview", "Big Pokémon Icons", "Summary IVs/EVs", "Dark Mode"]],
-        ["Pokédex", ["Autogen dex entries", "Improved Pokedex", "Dex Evolutions", "Dex Sprite Select"]],
+        ["Pokédex", ["Autogen dex entries", "Improved Pokedex", "Dex Evolutions", "Dex Sprite Select", "Evolution Sprites"]],
         ["Text", ["Game's Font", "Speech Frame"]],
         ["Overworld", ["Map Zoom"]]]],
       [:selfbattle, "Self-Battle", [200, 120, 60], [

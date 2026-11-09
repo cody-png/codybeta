@@ -21,7 +21,19 @@
 # A label over the sprites names the group (This fusion, Swapped, Evolution
 # line). Only the look changes. When the species changes (unfuse, reverse,
 # fuse) a pick that isn't one of the new species' is dropped.
+# Evolution Sprites (default Hidden, they spoil what a fusion becomes): Hidden
+# lists this fusion and Swapped only. A pick already made stays.
 #===============================================================================
+KIF::Options.define(:kif_line_sprites, 0, :global)
+
+KIF::Options.add(:others, :global) {
+  EnumOption.new(_INTL("Evolution Sprites"), [_INTL("Hidden"), _INTL("Shown")],
+                 proc { $PokemonSystem.kif_line_sprites },
+                 proc { |value| $PokemonSystem.kif_line_sprites = value },
+                 [_INTL("A fusion's sprite list has only its own and swapped sprites."),
+                  _INTL("A fusion's sprite list also has its evolution lines' sprites.")])
+}
+
 module KIF
   module LineSprites
     # ancestors, the species, then what it evolves into (its own branch only)
@@ -44,13 +56,13 @@ module KIF
 
     # the other species whose sprites this Pokémon (or species) may use, in
     # list order: swapped, then the lines' fusions (both orders); none unfused
-    def self.others(pkmn)
+    def self.others(pkmn, line = true)
       sp = pkmn.is_a?(Pokemon) ? pkmn.species : GameData::Species.get(pkmn).species
       dex = GameData::Species.get(sp).id_number
       return [] unless isFusion(dex)   # an unfused or triple Pokémon: its own sprites only
       body = getBodyID(sp)
       head = getHeadID(sp, body)
-      pairs = nums(body).product(nums(head))
+      pairs = line ? nums(body).product(nums(head)) : []
       ret = ([[head, body]] + pairs + pairs.map(&:reverse)).map { |b, h| getFusedPokemonIdFromDexNum(b, h) }
       return ret.uniq - [sp]
     end
@@ -120,7 +132,7 @@ class PokemonPokedexInfo_Scene
     ret = kif_ls_pbGetAvailableForms(species)
     return ret unless species.nil? && @pokemon && !@pokemon.egg?
     begin
-      KIF::LineSprites.others(@pokemon).each { |sp| ret += kif_ls_pbGetAvailableForms(sp) }
+      KIF::LineSprites.others(@pokemon, $PokemonSystem.kif_line_sprites.to_i == 1).each { |sp| ret += kif_ls_pbGetAvailableForms(sp) }
       ret = ret.uniq { |s| [s.species, s.alt_letter] }
     rescue StandardError => e
       KIF.log("Line sprites: #{e.class}: #{e.message}")

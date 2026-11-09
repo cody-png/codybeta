@@ -288,6 +288,9 @@ module KIF
       "Dex Evolutions" => [
         "Run on the Pokédex info page swaps the credits for the evolution lines.",
         "Run on the Pokédex info page shows an evolution chart in the entry box."],
+      "Evolution Sprites" => [
+        "A fusion's sprite list has only its own and swapped sprites.",
+        "A fusion's sprite list also has its evolution lines' sprites."],
       "Dex Sprite Select" => [
         "New species don't ask you to pick a sprite.",
         "Each new Pokémon or fusion asks you to pick its sprite."],

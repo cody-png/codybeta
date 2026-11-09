@@ -1,3 +1,6 @@
+KIF 2.0.3
+- New: Evolution Sprites (Options > Graphics > Pokedex). A fusion's sprite list now leaves out its evolution lines, so it doesn't spoil what it becomes. Set it to Shown to list them again.
+
 KIF 2.0.2
 - Updates: a folder left empty by an update is removed.
 

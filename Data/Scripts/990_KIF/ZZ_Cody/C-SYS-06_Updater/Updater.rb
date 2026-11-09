@@ -756,15 +756,16 @@ module KIF
       # look again at once, then once a second; one still open after ~20 s more is closed here
       lines << "set /a waited=0"
       lines << ":wait"
-      lines << "tasklist /FI \"PID eq #{pid}\" 2>nul | find \"#{pid}\" >nul"
+      win = "%SystemRoot%\\System32\\"   # full paths: Git's find.exe can come first on PATH and never match
+      lines << "#{win}tasklist.exe /FI \"PID eq #{pid}\" 2>nul | #{win}find.exe \"#{pid}\" >nul"
       lines << "if errorlevel 1 goto go"
       lines << "set /a waited+=1"
-      lines << "if %waited% GEQ 30 taskkill /PID #{pid} /F >nul 2>&1"
-      lines << "if %waited% GEQ 10 timeout /t 1 /nobreak >nul"
+      lines << "if %waited% GEQ 30 #{win}taskkill.exe /PID #{pid} /F >nul 2>&1"
+      lines << "if %waited% GEQ 10 #{win}timeout.exe /t 1 /nobreak >nul"
       lines << "goto wait"
       lines << ":go"
       dest = r.end_with?("\\") ? r + "." : r   # a drive root ends in a backslash, which would escape the closing quote
-      lines << "robocopy \"#{s}\\files\" \"#{dest}\" /E /MOVE /R:10 /W:1 /NFL /NDL /NJH /NJS /NP >nul"
+      lines << "#{win}robocopy.exe \"#{s}\\files\" \"#{dest}\" /E /MOVE /R:10 /W:1 /NFL /NDL /NJH /NJS /NP >nul"
       lines << "if errorlevel 8 goto fail"
       lines << "if exist \"#{s}\\#{STAGED_MANIFEST}\" copy /y \"#{s}\\#{STAGED_MANIFEST}\" \"#{r}\\#{m}\" >nul"
       lines << "if exist \"#{s}\\remove.txt\" for /f \"usebackq delims=\" %%f in (\"#{s}\\remove.txt\") do if exist \"#{r}\\%%f\" del /f /q \"#{r}\\%%f\""

@@ -24,7 +24,8 @@ module KIF
 
     def self.drop(list, index, incoming)
       old = list[index]
-      old.dispose if old && !old.equal?(incoming) && !old.disposed?
+      # only an empty icon: in a swap the Pokemon's icon goes on to the arrow
+      old.dispose if old && !old.equal?(incoming) && !old.disposed? && old.pokemon.nil?
     end
   end
 end

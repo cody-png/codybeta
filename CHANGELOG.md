@@ -23,6 +23,7 @@ The game shows the same notes in Options > System > Update history.
 <details><summary>Full notes</summary>
 
 - Updates: a folder left empty by an update is removed.
+- This covers Windows, phones and Steam Deck alike, and only a folder with nothing left in it is removed.
 
 </details>
 

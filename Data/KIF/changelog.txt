@@ -10,6 +10,7 @@ OVERVIEW
 - Updates: a folder left empty by an update is removed.
 FULL NOTES
 - Updates: a folder left empty by an update is removed.
+- This covers Windows, phones and Steam Deck alike, and only a folder with nothing left in it is removed.
 
 KIF 2.0.1
 OVERVIEW

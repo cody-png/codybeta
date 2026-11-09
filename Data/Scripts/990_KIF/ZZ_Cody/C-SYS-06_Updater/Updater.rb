@@ -768,7 +768,7 @@ module KIF
       lines << "#{win}robocopy.exe \"#{s}\\files\" \"#{dest}\" /E /MOVE /R:10 /W:1 /NFL /NDL /NJH /NJS /NP >nul"
       lines << "if errorlevel 8 goto fail"
       lines << "if exist \"#{s}\\#{STAGED_MANIFEST}\" copy /y \"#{s}\\#{STAGED_MANIFEST}\" \"#{r}\\#{m}\" >nul"
-      lines << "if exist \"#{s}\\remove.txt\" for /f \"usebackq delims=\" %%f in (\"#{s}\\remove.txt\") do if exist \"#{r}\\%%f\" del /f /q \"#{r}\\%%f\""
+      lines << "if exist \"#{s}\\remove.txt\" for /f \"usebackq delims=\" %%f in (\"#{s}\\remove.txt\") do if exist \"#{r}\\%%f\" (del /f /q \"#{r}\\%%f\" & rd \"#{r}\\%%f\\..\" 2>nul)"   # rd only takes an empty folder
       lines << "echo ok> \"#{s}\\done.txt\""
       lines << "start \"\" \"#{win_path(exe).gsub('%', '%%')}\"" if exe
       lines << "exit /b 0"
@@ -819,7 +819,9 @@ module KIF
           rel = rel.tr("\\", "/")
           next if rel.empty? || !KIF.safe_rel_path?(rel) || !removable?(rel)
           p = File.join(root, rel)
-          KIF::UpdateFinish.discard(p) if File.file?(p)
+          next unless File.file?(p)
+          KIF::UpdateFinish.discard(p)
+          Dir.rmdir(File.dirname(p)) rescue nil   # only an empty folder goes
         end
       end
       # the version last: an update cut off before here is still the old one's

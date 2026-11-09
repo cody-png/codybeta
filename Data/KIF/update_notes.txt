@@ -1,3 +1,6 @@
+KIF 2.0.2
+- Updates: a folder left empty by an update is removed.
+
 KIF 2.0.1
 - New: Fusion Egg Odds (Options > Pokemon > Breeding and moves). Set it to Custom to choose the chance, 0 to 100%, that an Egg is a fusion. A fusion and a Ditto give that fusion at its earliest stage. The default, PIF, changes nothing.
 - Fixed: swapping two Pokemon in the PC crashed the game.

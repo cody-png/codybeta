@@ -1,3 +1,10 @@
+KIF 2.0.1
+- New: Fusion Egg Odds (Options > Pokemon > Breeding and moves). Set it to Custom to choose the chance, 0 to 100%, that an Egg is a fusion. A fusion and a Ditto give that fusion at its earliest stage. The default, PIF, changes nothing.
+- Fixed: swapping two Pokemon in the PC crashed the game.
+- Fixed: in EBDX battles, the last-used item button crashed the game when none were left.
+- Fixed: downloading a mod that needs your OK looked frozen, because its question was hidden behind the download box.
+- Phones: mod reviews and Mod protection are kept on storage that can't replace a file.
+
 KIF 2.0.0
 - Built on Pokemon Infinite Fusion 6.9: PIF's new content and fixes, and its References filter in the Randomizer (Trainers page, Off by default).
 - New, experimental and Off by default: Multiplayer (Options > System > Multiplayer). Host or join with a code. A lobby holds up to 3 players for co-op wild and trainer battles, PvP (single, double or triple, also between two guests), trading and Soul Link. Everyone needs KIF 2.0.0: this Multiplayer can't join older builds.

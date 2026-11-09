@@ -800,6 +800,7 @@ module KIF
           consent = nil
           if ask && !todo.empty? && defined?(KIF::ModCheck) && File.directory?(File.join(dir, "files"))
             rep = KIF::ModCheck.scan(File.join(dir, "files"), item.json)
+            updater.hide_status   # the download's box would sit over the question
             consent = ask.call(item, rep)
             unless consent
               log("#{item.folder}: not installed, the player said no after the check (#{rep.color})")

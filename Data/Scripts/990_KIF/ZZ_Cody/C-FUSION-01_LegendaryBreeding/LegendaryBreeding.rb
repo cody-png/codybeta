@@ -12,6 +12,12 @@
 # parent B, A-head/B-body fusion, B-head/A-body fusion – e.g. Mewtwo + Vulpix
 # → Mewtwo, Vulpix, Mewpix or Vultwo. With Ditto, the Egg is the other
 # parent's. The rest of the Egg (moves, forms, IVs) is 6.8.2's.
+#
+# Fusion Egg Odds (per save, default PIF): with Custom, Fusion Egg Chance
+# (0-100) is the chance that an Egg is a fusion, whatever the parents. Two
+# different species are needed; a fusion and a Ditto give that fusion (at
+# its earliest stage). Otherwise the Egg is one part of the mother (of the
+# non-Ditto parent).
 #===============================================================================
 KIF::Options.define(:cody_legendarybreed, 0, :save)
 
@@ -21,6 +27,24 @@ KIF::Options.add(:cody_breeding, :save) {
                  proc { |value| $PokemonSystem.cody_legendarybreed = value },
                  [_INTL("Legendary Pokémon can't breed."),
                   _INTL("Legendary Pokémon can breed with any Pokémon.")])
+}
+
+KIF::Options.define(:cody_fusioneggs, 0, :save)
+KIF::Options.define(:cody_fusionegg_chance, 50, :save)
+
+KIF::Options.add(:cody_breeding, :save) {
+  EnumOption.new(_INTL("Fusion Egg Odds"), [_INTL("PIF"), _INTL("Custom")],
+                 proc { $PokemonSystem.cody_fusioneggs },
+                 proc { |value| $PokemonSystem.cody_fusioneggs = value },
+                 [_INTL("Eggs use PIF's own chance of being a fusion."),
+                  _INTL("You choose the chance that an Egg is a fusion.")])
+}
+
+KIF::Options.add(:cody_breeding, :save) {
+  SliderOption.new(_INTL("Fusion Egg Chance"), 0, 100, 1,
+                   proc { $PokemonSystem.cody_fusionegg_chance },
+                   proc { |value| $PokemonSystem.cody_fusionegg_chance = value },
+                   _INTL("x% | Chance that an Egg is a fusion, when the parents have two different species"))
 }
 
 module KIF
@@ -54,6 +78,31 @@ module KIF
       return !groups.include?(:Undiscovered)
     end
 
+    def self.custom_odds?
+      return $PokemonSystem && $PokemonSystem.cody_fusioneggs.to_i == 1
+    end
+
+    def self.parts(pkmn)
+      sp = pkmn.species_data
+      return [sp.head_pokemon.species, sp.body_pokemon.species] if sp.is_a?(GameData::FusedSpecies) && sp.head_pokemon && sp.body_pokemon
+      return [pkmn.species]
+    end
+
+    def self.custom_egg(father, mother)
+      egg = rand(100) < $PokemonSystem.cody_fusionegg_chance.to_i ? fusion_egg(father, mother) : nil
+      return egg || parts(mother.species == :DITTO ? father : mother).sample
+    end
+
+    # nil when the parents have only one species between them
+    def self.fusion_egg(father, mother)
+      other = father.species == :DITTO ? mother : (mother.species == :DITTO ? father : nil)
+      return other.isFusion? ? other.species : nil if other   # the fusion as it is, as older versions gave
+      pairs = parts(father).product(parts(mother)).reject { |x, y| x == y }
+      return nil if pairs.empty?
+      x, y = pairs.sample
+      return rand(2) == 0 ? fusionOf(x, y) : fusionOf(y, x)
+    end
+
     # One species from a parent: a fusion gives its head or body
     def self.parent_species(pkmn)
       sp = pkmn.species_data
@@ -84,6 +133,7 @@ alias cody_legend_determineDayCareEggSpecies determineDayCareEggSpecies unless d
 
 def determineDayCareEggSpecies(maleParent, femaleParent)
   lb = KIF::LegendaryBreeding
+  return lb.custom_egg(maleParent, femaleParent) if lb.custom_odds?
   unless lb.on? && (lb.legendary?(maleParent) || lb.legendary?(femaleParent))
     return cody_legend_determineDayCareEggSpecies(maleParent, femaleParent)
   end

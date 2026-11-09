@@ -33,7 +33,7 @@ module KIF
                       "Recover Consumables", "Items to Bag"]],
         ["Fusion", ["Fusion BaseStats", "NPC Fusion BaseStats", "Self-Fusion Stat Boost",
                     "Dominant Fusion Types", "Unfuse Traded"]],
-        ["Breeding and moves", ["Head Legendary Breeding", "Legendary Breeding", "Event Moves",
+        ["Breeding and moves", ["Head Legendary Breeding", "Legendary Breeding", "Fusion Egg Odds", "Fusion Egg Chance", "Event Moves",
                                 "Egg Moves", "Enable EvoLock"]],
         ["K-Eggs", ["K-Eggs Usage", "K-Eggs Rarity", "K-Eggs Fusion Odds", "K-Eggs Fusion Pool",
                     "K-Eggs Rewards"]]]],
@@ -122,6 +122,7 @@ module KIF
       "EV Allocation"      => proc { $PokemonSystem.noevsmode.to_i == 1 && $PokemonSystem.ev_alloc.to_i == 0 },
       "EVs Train Mode"     => proc { $PokemonSystem.noevsmode.to_i == 1 && $PokemonSystem.evstrain.to_i == 0 },
       "Legendary Breeding" => proc { $PokemonSystem.legendarybreed.to_i == 0 && $PokemonSystem.cody_legendarybreed.to_i == 0 },
+      "Fusion Egg Chance"  => proc { $PokemonSystem.cody_fusioneggs.to_i == 0 },
       # KIF's Level Cap and Nuzlocke replace PIF's two rules
       "Level caps"         => proc { $PokemonSystem.level_caps.to_i == 0 },
       "No reviving"        => proc { !$PokemonSystem.no_reviving },

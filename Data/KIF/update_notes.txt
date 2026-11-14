@@ -1,3 +1,6 @@
+KIF 2.0.4
+- Fixed: five trainers fought someone else in a rematch (Engineer Bernie on Route 11, Bird Keeper Marlon on Route 18, Fisherman Ned on the S.S. Anne, Camper Elliot on Route 35, Pokemon Ranger Selena on Bond Bridge). Their rematch is now against them.
+
 KIF 2.0.3
 - New: Evolution Sprites (Options > Graphics > Pokedex). A fusion's sprite list now leaves out its evolution lines, so it doesn't spoil what it becomes. Set it to Shown to list them again.
 

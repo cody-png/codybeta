@@ -3,7 +3,18 @@
 Every KIF version, newest first: a short overview, then the full notes (click Full notes to open them).
 The game shows the same notes in Options > System > Update history.
 
-[2.0.3](#kif-203) | [2.0.2](#kif-202) | [2.0.1](#kif-201) | [2.0.0](#kif-200) | [1.2.13](#kif-1213) | [1.2.11](#kif-1211) | [1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+[2.0.4](#kif-204) | [2.0.3](#kif-203) | [2.0.2](#kif-202) | [2.0.1](#kif-201) | [2.0.0](#kif-200) | [1.2.13](#kif-1213) | [1.2.11](#kif-1211) | [1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+
+## KIF 2.0.4
+
+- Fixed: five trainers fought someone else in a rematch (Engineer Bernie on Route 11, Bird Keeper Marlon on Route 18, Fisherman Ned on the S.S. Anne, Camper Elliot on Route 35, Pokemon Ranger Selena on Bond Bridge). Their rematch is now against them.
+
+<details><summary>Full notes</summary>
+
+- Fixed: five trainers fought someone else in a rematch (Engineer Bernie on Route 11, Bird Keeper Marlon on Route 18, Fisherman Ned on the S.S. Anne, Camper Elliot on Route 35, Pokemon Ranger Selena on Bond Bridge). Their rematch is now against them.
+- This was in PIF's own maps: each rematch was copied from the trainer next to them and kept that trainer's name.
+
+</details>
 
 ## KIF 2.0.3
 

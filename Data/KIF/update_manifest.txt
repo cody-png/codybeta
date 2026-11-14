@@ -1,4 +1,4 @@
-KIF-MANIFEST 1 version=2.0.3 channel=beta files=30467
+KIF-MANIFEST 1 version=2.0.4 channel=beta files=30467
 c65b0fb10ff84054f38fbc53d9f6ed79eac2c1aa 23305 Archipelago/KIF.yaml
 5ec9399a060ad7f71049adcf49b722c9aaa999bb 560815 Archipelago/kif.apworld
 9535e6ead24be7e2c9c1c4e7d9e62b77c0da28df 1973679 Audio/BGM/Azalea Town.ogg
@@ -3393,7 +3393,7 @@ cc9ae33b53b8440a7ab35c0938c49f44ee37dce3 8583 Audio/SE/steps/water.ogg
 0fcdfa35350ee75066a25ba7163cc0301ee19dd8 16136 Audio/SE/superdamage.ogg
 307ee775d5ee6b3d0cb4ae49c4eda53e1d9c3acc 8080 Audio/SE/throw.ogg
 92e5337776335e4c00586e64a627788e66fb307b 13493 Audio/SE/whistle.ogg
-62a3aade6eb6b6d33bd4c306099c57f26f8a61f5 76959 CHANGELOG.md
+278b452471061d67b64db835305107da0d11c9f6 77663 CHANGELOG.md
 673f7dfb1e6a65983a4aefd6672f1ecf2399e220 10352 Credits.txt
 7967a5432e745ce89c252788128efc799d8cd787 1574 Data/Actors.rxdata
 0f021a510dd577e0a88c1c82556e4ad9feab047e 32276 Data/Animations.rxdata
@@ -3406,14 +3406,14 @@ dee6de55a269bc79900f41c5c7c5de66081cf7a3 240857 Data/EditorScripts.rxdata
 3e62ba6d258bc19fc16370f283c930709a15ef2b 428 Data/Items.rxdata
 8c551f6f472c4bc5cf41203389a6fb0b795c73d4 43037 Data/KIF/MODDING.md
 ef274be56fa0a395d41f9d20c4627b84d49f9e46 4878 Data/KIF/MysteryGift_KIF.txt
-a0b04592acc61670a30f31f06478cf31516da859 75505 Data/KIF/changelog.txt
+c97d22903bb4094b47ad70ca27ca5a862aa16661 76159 Data/KIF/changelog.txt
 413b744ee0239402b70786e0cf48cf902aa2fcaa 613525 Data/KIF/entrances.dat
 783e450ff7a98e577f3199267c443b992124b7cf 455844 Data/KIF/legacy_custom_sprites.dat
 ccdde561e5fc62b0b3ebd760916e6e29eb9c07f9 21721 Data/KIF/trainers_challenge.dat
 51ae8dc079aba6cb133e937aa8f37d8e131ec3b0 89121 Data/KIF/trainers_ext_classic.dat
 3a34ecaa72fdc1ac0a01632fd37e1e90137c8fa4 208629 Data/KIF/trainers_ext_expert.dat
 db4fedf795b60a9496c76d17deba35acaa8f6f17 124215 Data/KIF/trainers_ext_remix.dat
-4f1cd4dc9b53262178cf2aa6b41ad288f47bca63 12959 Data/KIF/update_notes.txt
+143b3f939dff6ef5aa5735278ae2bdd0d43da2f0 13224 Data/KIF/update_notes.txt
 9a527fb1c545d642d4a709d95452fbabcc853867 78297 Data/Map001.rxdata
 775d19da5c3949f878e650e7bbd242a6a300dfe4 5213 Data/Map002.rxdata
 c3b515ce84529786f64ff576c20ffc7be05d739d 17634 Data/Map003.rxdata
@@ -4870,7 +4870,7 @@ fd06f6f6d5ec44ac1aebd8b429f3fa620e7bc74c 5740 Data/Scripts/990_KIF/000_Core/018_
 b39d0a496ed3588fde4bc6f1a2512945696215ea 4673 Data/Scripts/990_KIF/000_Core/019_KIF_AbilityText.rb
 83c853f83f6306023c70c992cbfbd18cbbd8869e 4503 Data/Scripts/990_KIF/000_CrashLog.rb
 08d1a85457b2de28c02225d981e68d513e339585 5883 Data/Scripts/990_KIF/000_Paths.rb
-16535e02ce5e9a12459f254a70bcd812cf0fdf39 1657 Data/Scripts/990_KIF/000_README.rb
+9d48393ee3ad4075dcaeb82692016bf49d9e8b5c 1657 Data/Scripts/990_KIF/000_README.rb
 c71dc6639c04aa6eafd1faf81e55486063e7db0e 5270 Data/Scripts/990_KIF/F-BATTLE-01_BattleFormat/BattleFormat.rb
 0ded5723b23a37ce0182eaa944a2b6fad1181194 5334 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattle.rb
 20746c28ac5125f920561939f885d1f5e10b23ee 13689 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattleChoices.rb
@@ -5012,7 +5012,7 @@ d3d3cfdc915087bb5ab02696afbcd675b8ad71fa 2787 Data/Scripts/990_KIF/SCOPE-02_PIFF
 57408fa9577afafca5a82cfccdbe80b99910996a 2527 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/LanguageSlot.rb
 e457cb47be3ed39b6c03fcdd4c2ef7622532dfec 2225 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/LoadChosenSave.rb
 379dae90fa81c7bfe213eeb690920b1ccf677b84 1000 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/LuvdiscGift.rb
-16482dd7246cfafad4cdc5c07e9713a32723ae06 9384 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/MapEventFixes.rb
+211c93966cb7fe2710b4c1430674e219eb14eafa 10354 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/MapEventFixes.rb
 395ab9ba25073420e7c22af34e0d06a1f011b765 980 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/MenuArrows.rb
 5800943180a476d5f779071d16a3ac237fa7f87f 1243 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/NonIgnorableAbilities.rb
 6072554b88d375a8ac0a7ec894868129f7e0f724 1901 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/OptionScreens.rb
@@ -5107,7 +5107,7 @@ a1332c3e81c3c74904d3a46e5a794aad61394a0b 1788 Data/Scripts/998_Experimental/Remo
 1a704d48e51353a1b4b763c2b4e6b3a850e8c174 32162 Data/System.rxdata
 57538e4e549df4eb8e9369a6883fece2ecff805c 410124 Data/Tilesets.rxdata
 94c39352b0edb225fa90de0ca64fe19c8a5fdae3 345 Data/Troops.rxdata
-6acdb442890d24a5a111bf264099eec7962295c2 5 Data/VERSION
+26e33797acfef38247345f073d168de0208f4e5e 5 Data/VERSION
 d9bd3526099d335d192e97c503f107f02c8aa2ea 245 Data/Weapons.rxdata
 88cb261de46afa991fb60f0251319dcc0a4b73f5 21823 Data/abilities.dat
 6db551d2203ffcddbf4b6d82646a77b13e790887 11962 Data/berry_data.dat

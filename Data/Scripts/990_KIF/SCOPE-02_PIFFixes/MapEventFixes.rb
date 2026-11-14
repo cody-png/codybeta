@@ -222,3 +222,26 @@ def pbMessageDisplay(msgwindow, message, *args, &block)
   message = KIF::EventPrices.variable_prices(message) if message.is_a?(String) && message.include?("$")
   return kif_mef_pbMessageDisplay(msgwindow, message, *args, &block)
 end
+
+# 9. Five rematch pages were copied from a neighbour's event and kept the
+#    neighbour's trainer, so the rematch fought someone else (Route 11's
+#    Bernie became Braxton). Only changed while the page still names the
+#    wrong trainer.
+{
+  [36, 8]   => ['FISHERMAN,"Dale"',      'FISHERMAN,"Ned"'],
+  [155, 12] => ['ENGINEER,"Braxton"',    'ENGINEER,"Bernie"'],
+  [254, 16] => ['PICNICKER,"Kim"',       'CAMPER,"Elliot"'],
+  [517, 25] => ['BIRDKEEPER,"Carter"',   'BIRDKEEPER,"Marlon"'],
+  [600, 23] => ['POKEMONRANGER_F,"Jane"', 'POKEMONRANGER_F,"Selena"'],
+}.each do |(map_id, ev_id), (wrong, right)|
+  KIF::MapPatches.add(map_id, "PIF fix: rematch trainer") do |map|
+    ev = map.events[ev_id]
+    next unless ev
+    ev.pages.drop(1).each do |pg|
+      pg.list.each do |c|
+        next unless c.code == 111 && c.parameters[1].is_a?(String)
+        c.parameters[1] = c.parameters[1].sub("PBTrainers::#{wrong}", "PBTrainers::#{right}")
+      end
+    end
+  end
+end

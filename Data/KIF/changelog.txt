@@ -1,3 +1,10 @@
+KIF 2.0.5
+OVERVIEW
+- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out ("undefined method tone for nil").
+FULL NOTES
+- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out ("undefined method tone for nil").
+- Turning a module Off made EBDX battles use the classic battle scene's send-out, which doesn't work on EBDX's data boxes.
+
 KIF 2.0.4
 OVERVIEW
 - Fixed: five trainers fought someone else in a rematch (Engineer Bernie on Route 11, Bird Keeper Marlon on Route 18, Fisherman Ned on the S.S. Anne, Camper Elliot on Route 35, Pokemon Ranger Selena on Bond Bridge). Their rematch is now against them.

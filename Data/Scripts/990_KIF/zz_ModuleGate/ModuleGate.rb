@@ -100,7 +100,10 @@ module KIF
         file_aliases(cur_file)[orig].each do |nm|
           next if nm == name
           next unless has_method?(mod, nm)
-          other = own_method(mod, nm) || (mod.instance_method(nm) rescue nil)
+          # only an alias on this class: one the same file took on a parent
+          # (Shinies on PokeBattle_Scene and PokeBattle_SceneEBDX) is the
+          # parent's method, and EBDX's scene ran the classic send-out
+          other = own_method(mod, nm)
           next if other.nil? || other == cur_um
           found = [nm, other]
           break

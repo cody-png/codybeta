@@ -3,7 +3,18 @@
 Every KIF version, newest first: a short overview, then the full notes (click Full notes to open them).
 The game shows the same notes in Options > System > Update history.
 
-[2.0.5](#kif-205) | [2.0.4](#kif-204) | [2.0.3](#kif-203) | [2.0.2](#kif-202) | [2.0.1](#kif-201) | [2.0.0](#kif-200) | [1.2.13](#kif-1213) | [1.2.11](#kif-1211) | [1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+[2.0.6](#kif-206) | [2.0.5](#kif-205) | [2.0.4](#kif-204) | [2.0.3](#kif-203) | [2.0.2](#kif-202) | [2.0.1](#kif-201) | [2.0.0](#kif-200) | [1.2.13](#kif-1213) | [1.2.11](#kif-1211) | [1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+
+## KIF 2.0.6
+
+- Fixed: on some saves, choosing a starter in Oak's Lab crashed ("undefined method [] for nil").
+
+<details><summary>Full notes</summary>
+
+- Fixed: on some saves, choosing a starter in Oak's Lab crashed ("undefined method [] for nil").
+- The game's list of chosen alternate sprites was missing from those saves. The game now starts an empty list when it is missing.
+
+</details>
 
 ## KIF 2.0.5
 

@@ -1,3 +1,10 @@
+KIF 2.0.6
+OVERVIEW
+- Fixed: on some saves, choosing a starter in Oak's Lab crashed ("undefined method [] for nil").
+FULL NOTES
+- Fixed: on some saves, choosing a starter in Oak's Lab crashed ("undefined method [] for nil").
+- The game's list of chosen alternate sprites was missing from those saves. The game now starts an empty list when it is missing.
+
 KIF 2.0.5
 OVERVIEW
 - Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out ("undefined method tone for nil").

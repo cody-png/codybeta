@@ -1,5 +1,6 @@
 KIF 2.0.9
 OVERVIEW
+- Fixed: the Pokedex could still crash on saves carried over from other builds or very old versions.
 - Fixed: every trainer rematch crashed; rematch gifts, trades and partner Pokemon also misbehaved.
 - Fixed: three-player co-op could crash when a battle ended.
 - Fixed: Archipelago items could stall or arrive twice.
@@ -7,6 +8,7 @@ OVERVIEW
 - Fixed: files written by the game (Transfer Box, updater, downloads) can no longer be left half-written.
 - Changed: clearer settings and messages, "Pokemon" spelled the game's way, and the Extras menus renamed.
 FULL NOTES
+- Fixed: the Pokedex could still crash on saves carried over from other builds or very old versions.
 - Fixed: every trainer rematch crashed; rematch gifts, trades and partner Pokemon also misbehaved.
 - Fixed: three-player co-op could crash when a battle ended.
 - Fixed: Archipelago items could stall or arrive twice.

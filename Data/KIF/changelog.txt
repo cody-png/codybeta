@@ -1,3 +1,10 @@
+KIF 2.0.7
+OVERVIEW
+- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City ("no implicit conversion of nil into String").
+FULL NOTES
+- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City ("no implicit conversion of nil into String").
+- The rival's starter is kept in the save as a number, and that build numbers Pokemon differently. When the number is no Pokemon, the game now rebuilds the rival from the starters chosen in that save. This also covers the rival battles and the Elite Four rematch.
+
 KIF 2.0.6
 OVERVIEW
 - Fixed: on some saves, choosing a starter in Oak's Lab crashed ("undefined method [] for nil").

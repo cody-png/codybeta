@@ -44,8 +44,8 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Skip Caught Prompt"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.skipcaughtprompt },
                  proc { |value| $PokemonSystem.skipcaughtprompt = value },
-                 [_INTL("If your party is full, allows you to put the caught pokemon on your party."),
-                  _INTL("If your party is full, always send the caught pokemon to the PC.")])
+                 [_INTL("If your party is full, allows you to put the caught Pokémon on your party."),
+                  _INTL("If your party is full, always send the caught Pokémon to the PC.")])
 }
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Items to Bag"), [_INTL("Off"), _INTL("On")],

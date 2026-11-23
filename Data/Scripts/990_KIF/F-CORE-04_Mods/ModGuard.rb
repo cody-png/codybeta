@@ -42,7 +42,7 @@ module KIF
     ABOUT_UNGUARDED = "KIF does not see: text eval (eval, class_eval and instance_eval with a string); Ruby reflection " \
                       "(send, public_send, method().call, instance_variable_set, const_get, define_method) used to reach " \
                       "a door or a helper that is not listed; patching KIF or the game, which is what modding is; changing " \
-                      "game state in memory (money, Pokemon, flags), which the game then saves; threads and endless loops; " \
+                      "game state in memory (money, Pokémon, flags), which the game then saves; threads and endless loops; " \
                       "memory use; require_relative; code run with a file name of its own (eval with a file argument is nobody's); mods that " \
                       "other loaders start before KIF; anything a started program does; mods drawing fake messages. A mod " \
                       "with Ruby skill can get around the guard. Do not install mods you do not trust.".freeze unless const_defined?(:ABOUT_UNGUARDED)

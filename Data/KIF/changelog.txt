@@ -1,29 +1,29 @@
 KIF 2.0.8
 OVERVIEW
-- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon ("undefined method [] for nil").
+- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon.
 FULL NOTES
-- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon ("undefined method [] for nil").
+- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon.
 - That build sizes the Pokedex for its own number of Pokemon. The game now resizes such a Pokedex to its own 576 Pokemon and keeps what was seen and caught. A missing entry now counts as not seen instead of crashing.
 
 KIF 2.0.7
 OVERVIEW
-- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City ("no implicit conversion of nil into String").
+- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City.
 FULL NOTES
-- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City ("no implicit conversion of nil into String").
+- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City.
 - The rival's starter is kept in the save as a number, and that build numbers Pokemon differently. When the number is no Pokemon, the game now rebuilds the rival from the starters chosen in that save. This also covers the rival battles and the Elite Four rematch.
 
 KIF 2.0.6
 OVERVIEW
-- Fixed: on some saves, choosing a starter in Oak's Lab crashed ("undefined method [] for nil").
+- Fixed: on some saves, choosing a starter in Oak's Lab crashed.
 FULL NOTES
-- Fixed: on some saves, choosing a starter in Oak's Lab crashed ("undefined method [] for nil").
+- Fixed: on some saves, choosing a starter in Oak's Lab crashed.
 - The game's list of chosen alternate sprites was missing from those saves. The game now starts an empty list when it is missing.
 
 KIF 2.0.5
 OVERVIEW
-- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out ("undefined method tone for nil").
+- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out.
 FULL NOTES
-- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out ("undefined method tone for nil").
+- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out.
 - Turning a module Off made EBDX battles use the classic battle scene's send-out, which doesn't work on EBDX's data boxes.
 
 KIF 2.0.4
@@ -370,7 +370,7 @@ OVERVIEW
 - A much smaller game: about 920 MB instead of 1.68 GB (this update is about 680 MB). Pictures look the same; music and sounds are now Ogg.
 - Faster start-up, and menus check the disk far less.
 - New: Mouse and touch controls (Options > System > Controls, Off by default). Click or tap to choose, click or tap the map to walk there.
-- New: EV Allocation (Options > Pokémon, Off by default). EVs from battles become points you spend on the Summary's Skills page.
+- New: EV Allocation (Options > Pokemon, Off by default). EVs from battles become points you spend on the Summary's Skills page.
 - New: Living title screen (Options > System > Title screen).
 - New: Archipelago (beta). Play KIF in a multiworld: Kanto, Sevii and Johto, Trainersanity, Giftsanity and 10 kinds of traps. Use apworld 0.6.2.
 - Nuzlocke: options for gift Pokemon and the Safari Zone. Pinkan Island now plays as in PIF with the Randomizer, Nuzlocke and Archipelago.
@@ -390,7 +390,7 @@ Mouse and touch controls
 - Click to move (On while Mouse is On): click a tile and you walk there, around walls, people and water, down ledges and over stairs and bridges. Click a person or object to walk up to it and talk. Hold the button to keep walking toward the pointer. Any key or a new click stops the walk.
 - Touch controls (phones, Off by default): taps work like clicks, quick taps too. Tap to move works like Click to move. JoiPlay's and Kirin's on-screen buttons keep working.
 EV Allocation
-- Options > Pokémon > EV Allocation (Off by default): EVs won in battle wait on the Pokemon as points, and you spend them on the Summary's Skills page (keys, mouse or touch).
+- Options > Pokemon > EV Allocation (Off by default): EVs won in battle wait on the Pokemon as points, and you spend them on the Summary's Skills page (keys, mouse or touch).
 - The end of a battle says how many points each Pokemon got. The usual limits stay: 252 in one stat, 510 in all. You can put every point back and spend them again for free.
 Living title screen
 - Options > System > Title screen: Living, Simple or Classic (Living by default; Simple on phones).
@@ -571,7 +571,7 @@ Getting started
 Modules and Options
 - Every feature belongs to one of 13 modules: Auto Battle, Shinies, Graphical Changes, Information, Battles & Challenges, Randomizer, Pokemon & Fusion, Kuray Shop, K-Eggs, PC & Saves, Import & Export, Quality of Life and Mod Settings. Each is On, Hidden (works, settings tucked away) or Off (plays like PIF).
 - Items and menus PIF has its own version of (Ability Capsule, Mist Stone, Perfect Ball, the randomizer menu, breeding, naming screens) go back to PIF's when their module is Off.
-- One Options screen replaces the separate settings pages and holds PIF's own options too. Sections on the left (Shinies, Battles, Pokémon, Graphics, Self-Battle, Challenges, Game, System, Modules, Mods, Presets), settings on the right under headings, each with a bar of choices and a description at the bottom.
+- One Options screen replaces the separate settings pages and holds PIF's own options too. Sections on the left (Shinies, Battles, Pokemon, Graphics, Self-Battle, Challenges, Game, System, Modules, Mods, Presets), settings on the right under headings, each with a bar of choices and a description at the bottom.
 - An orange dot marks a setting you changed, and it can be set back to its default. The bottom bar shows the default and whether the setting is for this save or all saves. A search bar lists every matching setting from every section.
 - Settings Presets (Options > Presets): 12 named slots that hold every per-save KIF setting.
 - Every screen names the keys you actually bound. DEBUG turns on PIF's real debug mode. The window title shows the KIF and PIF versions, the speed and the Auto-Battler or Battle Loop state.

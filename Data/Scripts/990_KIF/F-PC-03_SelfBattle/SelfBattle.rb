@@ -60,20 +60,20 @@ KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Battle Size"), (1..6).map { |i| i.to_s },
                  proc { $PokemonSystem.sb_battlesize },
                  proc { |value| $PokemonSystem.sb_battlesize = value },
-                 [_INTL("1 enemy Pokemon")] + (2..6).map { |i| _INTL("{1} enemy Pokemons", i) })
+                 [_INTL("1 enemy Pokémon")] + (2..6).map { |i| _INTL("{1} enemy Pokémon", i) })
 }
 KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Player Size"), (1..6).map { |i| i.to_s },
                  proc { $PokemonSystem.sb_randomizesize },
                  proc { |value| $PokemonSystem.sb_randomizesize = value },
-                 [_INTL("1 player Pokemon")] + (2..6).map { |i| _INTL("{1} player Pokemons", i) })
+                 [_INTL("1 player Pokémon")] + (2..6).map { |i| _INTL("{1} player Pokémon", i) })
 }
 KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Level"), [_INTL("Default"), "1", "5", "10", "50", "70", "100"],
                  proc { $PokemonSystem.sb_level },
                  proc { |value| $PokemonSystem.sb_level = value },
-                 [_INTL("Pokemons keep their original level")] +
-                 [1, 5, 10, 50, 70, 100].map { |l| _INTL("Pokemons are level {1}", l) })
+                 [_INTL("Pokémon keep their original level")] +
+                 [1, 5, 10, 50, 70, 100].map { |l| _INTL("Pokémon are level {1}", l) })
 }
 KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Randomize Team"), [_INTL("Off"), _INTL("On")],
@@ -86,8 +86,8 @@ KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Randomize Share"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.sb_randomizeshare },
                  proc { |value| $PokemonSystem.sb_randomizeshare = value },
-                 [_INTL("Doesn't allow randomize to make you share the same Pokemons"),
-                  _INTL("Randomize might give you and the enemy the same Pokemons")])
+                 [_INTL("Doesn't allow randomize to make you share the same Pokémon"),
+                  _INTL("Randomize might give you and the enemy the same Pokémon")])
 }
 KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Players Folder"), [_INTL("Off"), _INTL("On")],
@@ -257,7 +257,7 @@ module KIF
         n = opt(:sb_randomizesize) + 1
         if pool.length < n
           n = pool.length
-          screen.pbDisplay(_INTL("Battling with only {1} Pokemon(s) (Player)", n))
+          screen.pbDisplay(_INTL("Battling with only {1} Pokémon(s) (Player)", n))
         end
         players = load_pool(pool.sample(n))
       end
@@ -361,11 +361,11 @@ module KIF
         end
         if pool.length < needing
           e_n = p_n = pool_share(pool.length, both)
-          screen.pbDisplay(_INTL("Battling with only {1} Pokemon(s)", e_n))
+          screen.pbDisplay(_INTL("Battling with only {1} Pokémon(s)", e_n))
         end
         if randteam && player_pool.length < p_n
           p_n = player_pool.length
-          screen.pbDisplay(_INTL("Battling with only {1} Pokemon(s) (Player)", p_n))
+          screen.pbDisplay(_INTL("Battling with only {1} Pokémon(s) (Player)", p_n))
         end
         picked = pool.sample(e_n)
         player_pool -= picked unless share || playerfolder

@@ -1,14 +1,14 @@
 KIF 2.0.8
-- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon ("undefined method [] for nil").
+- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon.
 
 KIF 2.0.7
-- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City ("no implicit conversion of nil into String").
+- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City.
 
 KIF 2.0.6
-- Fixed: on some saves, choosing a starter in Oak's Lab crashed ("undefined method [] for nil").
+- Fixed: on some saves, choosing a starter in Oak's Lab crashed.
 
 KIF 2.0.5
-- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out ("undefined method tone for nil").
+- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out.
 
 KIF 2.0.4
 - Fixed: five trainers fought someone else in a rematch (Engineer Bernie on Route 11, Bird Keeper Marlon on Route 18, Fisherman Ned on the S.S. Anne, Camper Elliot on Route 35, Pokemon Ranger Selena on Bond Bridge). Their rematch is now against them.
@@ -131,7 +131,7 @@ KIF 1.2.0
 - A much smaller game: about 920 MB instead of 1.68 GB (this update is about 680 MB). Pictures look the same; music and sounds are now Ogg.
 - Faster start-up, and menus check the disk far less.
 - New: Mouse and touch controls (Options > System > Controls, Off by default). Click or tap to choose, click or tap the map to walk there.
-- New: EV Allocation (Options > Pokémon, Off by default). EVs from battles become points you spend on the Summary's Skills page.
+- New: EV Allocation (Options > Pokemon, Off by default). EVs from battles become points you spend on the Summary's Skills page.
 - New: Living title screen (Options > System > Title screen).
 - New: Archipelago (beta). Play KIF in a multiworld: Kanto, Sevii and Johto, Trainersanity, Giftsanity and 10 kinds of traps. Use apworld 0.6.2.
 - Nuzlocke: options for gift Pokemon and the Safari Zone. Pinkan Island now plays as in PIF with the Randomizer, Nuzlocke and Archipelago.

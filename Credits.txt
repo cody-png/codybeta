@@ -1,9 +1,19 @@
 ##########		CREDITS	         ###############
-Pok?mon Infinite Fusion & Pok?mon Infinite Fusion: Hoenn
+Pokémon Infinite Fusion & Pokémon Infinite Fusion: Hoenn
 Game made by Chardub
 
-*This is NOT an official Pokemon game. The author of this game is not 
-affiliated with Nintendo in any way 
+This is not an official Pokémon game. The author of this game is not
+affiliated with Nintendo in any way.
+
+#################################
+##	Kuray Infinite Fusion	#
+#################################
+Reïzod, DemICE, Sylvi, HungryPickle, Luminatron, Bluewuppo, JustAnotherU5er, Mirasein,
+FairyGodmother, Lolpy1, Rekt1029 and the whole KIF community
+KIF 1.0 and 2.0 (PIF 6.8.2 and 6.9): the KIF team, with our testers and modders
+Elite Battle DX: Luka S.J. (EBDX), as adapted in KIF Multiplayer by Aleks, included with permission
+Soul Link rules: Aleks (sKarreku) and Pigeon (@anunsocialpigeon)
+KIF is a fan project and is not affiliated with or endorsed by the PIF team.
 
 ##################################
 ##	Programming  / Events  ##
@@ -20,7 +30,7 @@ Chardub, Kiwikelly, Payapon
 #################################
 Chardub
 Kiwikelly
-The story and dialogues were based off Pok?mon Ruby, Sapphire and Emerald, as well as Pok?mon
+The story and dialogues were based off Pokémon Ruby, Sapphire and Emerald, as well as Pokémon
 Omega Ruby and Alpha Sapphire, which are all made by Game Freak.
 
 ##############################
@@ -107,18 +117,18 @@ casinoluck<s>ymirbot
 
 
 ###################################
-###	Custom Pok?dex entries					###
+###	Custom Pokédex entries					###
 ###################################
-### Pok?dex entries quality control (Unown)
+### Pokédex entries quality control (Unown)
 luvischlo<s>char_latte3412<s>strawbearycandy
 bobosmith01<s>griddle<s>.izik
 knilk<s>lordjoostmeister<s>.realthree
 wigglypon<s>wildheartrazorfangs<s>ziggaway
 
-### Individual Pok?dex entries credits can be found in Data/pokedex/dex.json 
+### Individual Pokédex entries credits can be found in Data/pokedex/dex.json 
 
 ###########################################################
-####		Pokemon Essentials			 ###
+####		Pokémon Essentials			 ###
 ###########################################################
 Maruno (http://pokemonessentials.wikia.com/wiki/Pok%C3%A9mon_Essentials_Wiki)
 
@@ -126,7 +136,7 @@ Maruno (http://pokemonessentials.wikia.com/wiki/Pok%C3%A9mon_Essentials_Wiki)
 ###			Playtesting			###
 ###########################################################
 Playtesting was done by various members of the Discord channel. 
-Special thanks to all of you!
+Special thanks to all of you.
 ###########################################################
 ###			Graphics			  #
 ###########################################################
@@ -148,7 +158,7 @@ blood.wolf58 (Willi)
 ragzzh
 
 #######################################################################
-The following ressources were also used 
+The following resources were also used
 with their respective authors' consent
 #######################################################################
 ### Sprites ###
@@ -162,7 +172,7 @@ with their respective authors' consent
 		SailorVicious (Prof. Elm OW sprite) 	https://www.deviantart.com/sailorvicious
 		OceansLugiaSpirit (Koga OW sprite)  	http://oceanslugiaspirit.deviantart.com/
 		Wolfang62: https://www.deviantart.com/wolfang62/art/Wimpod-Sprite-Overworld-836704744
-		zender1752 (Sabrina OW sprite)	https://www.deviantart.com/zender1752/art/Pokemon-Anime-Delia-Ketchum-Overworld-sprite-840038766
+		zender1752 (Sabrina and Mom OW sprites)	https://www.deviantart.com/zender1752/art/Pokemon-Anime-Delia-Ketchum-Overworld-sprite-840038766
 		wesleyfg (Hoenn overworld NPCs) https://www.deviantart.com/wesleyfg/art/Hoenn-People-OW-in-BW-style-274475232
 		Wergan https://www.deviantart.com/wergan/art/Pokemon-Random-characters-002-959395621
 		TooManyLuigis, Mortedes, Billla,WolfPP: Golurk overworld sprite https://www.deviantart.com/wolfang62/art/Golurk-Sprite-Overworld-834611476
@@ -174,9 +184,6 @@ with their respective authors' consent
 		luckygirl88  (Misty VS sprite) 		http://luckygirl88.deviantart.com/art/Pokemon-BW-Misty-Sprite-Sheet-268364830
 		Lorelei VS sprite by Nalty 		http://nalty.deviantart.com/art/Lorelei-VS-Sprite-177184960
 		x-5-4-5-2 (Sabrina sprite) 		https://www.deviantart.com/x-5-4-5-2/art/Game-Sabrina-204548703
-		
-		Zender1752 	(overworld mom sprite) 	https://www.deviantart.com/zender1752/art/Pokemon-Anime-Delia-Ketchum-Overworld-sprite-840038766
-		
 ### Custom tileset graphics ###
 Kiwikelly
 
@@ -189,7 +196,7 @@ audreyeyeyeye https://www.deviantart.com/audreyeyeyeye/art/Pokemon-Type-Icons-FR
 
 ### Public tileset graphics ### 
 	Jorginho (OutsideEmerald)
-	ThatsSoWitty (Cave) http://thatssowitty.deviantart.com/art/The-Public-Pokemon-Tileset-281342410
+	ThatsSoWitty (Cave)
 	DirtyWiggles (Gen 5 tileset) http://dirtywiggles.deviantart.com/art/RPG-Maker-Friendly-Tileset-5-0-generation-5-tiles-683576419
 	aveontrainer
 	princess-phoenix	https://www.deviantart.com/princess-phoenix/art/Fossil-Museum-Tileset-780178878
@@ -214,13 +221,13 @@ audreyeyeyeye https://www.deviantart.com/audreyeyeyeye/art/Pokemon-Type-Icons-FR
 	TailDoll666100 (Lavender Tower) 	https://www.youtube.com/watch?v=9cijOh7i7KI
 	Team Rocket hideout: Kazune Sawatari 	http://kazune8390.g.ribbon.to/
 						https://www.youtube.com/watch?v=frcGm7DRWX8
-	Silph Co. : sentsinkant�un	https://soundcloud.com/sentsinkanteun/silph-co-remix
+	Silph Co. : sentsinkantéun	https://soundcloud.com/sentsinkanteun/silph-co-remix
 	S.S. Anne			https://soundcloud.com/sentsinkanteun
 
-	Pok�mon Infernal Red Natural Green OST - Vermilion City  : Nanashima 	https://www.youtube.com/user/nanashimagalaxy
+	Pokémon Infernal Red Natural Green OST - Vermilion City  : Nanashima 	https://www.youtube.com/user/nanashimagalaxy
 										https://www.youtube.com/watch?v=m9XKnGRmB18
 
-	Pokemon Powerplant & Pokemon mansion remix: CharizardTheMaster		https://www.youtube.com/watch?v=K3G73gGCabs
+	Pokémon Powerplant & Pokémon Mansion remix: CharizardTheMaster		https://www.youtube.com/watch?v=K3G73gGCabs
 
 	Surfing theme: The Zame Jack 	https://soundcloud.com/user-272720300/surfing-kanto-remastered
 
@@ -232,8 +239,8 @@ Move animations:
 	Augmented Reborn Animations Project
 	Project lead by StCooler.
 	Contributors: StCooler, DarryBD99, WolfPP, ardicoozer, riddlemeree.
-	Thanks to the Reborn team for letting people use their resources. You are awesome.
-	Thanks to BellBlitzKing for his Pokemon Sound Effects Pack: Gen 1 to Gen 7 - All Attacks SFX.
+	Thanks to the Reborn team for letting people use their resources.
+	Thanks to BellBlitzKing for his Pokémon Sound Effects Pack: Gen 1 to Gen 7 - All Attacks SFX.
 
 	Dig:  WolfPP (Pokecommunity)
 	Bone Club, Bonemerang, Bone Rush: rekman (Pokecommunity)
@@ -241,13 +248,13 @@ Move animations:
 ###			RPG Maker Scripts		###
 ###########################################################
 
-andracass (Pok�mon Reborn)	Compiler optimization
+andracass (Pokémon Reborn)	Compiler optimization
 Luka S.J.			Elite Battle System
 				Animated Title Screen (modified):
 shiney570 			BW2 Summary script (+ graphics)	http://reliccastle.com/forums/showthread.php?tid=1090
 mej71 				Randomizer mode (adapted from)	(https://www.pokecommunity.com/showthread.php?t=360904)
 Erasus 				BW Bag (Pokecommunity)
-Umbreon 			Randomized Pokemon Script
+Umbreon 			Randomized Pokémon Script
 FL				Set controls screen
 				Unreal time system
 KleinStudio 			Water bubble script 	http://kleinstudio.deviantart.com/art/SCRIPT-Water-Bubbles-add-on-for-Essentials-535907963)
@@ -264,7 +271,7 @@ Vizualise			In-battle type icons (adapted from) https://github.com/Vizualyse/Pok
 
 #### Data sources ###			  
 Bulbapedia (Movesets)
-Project: Generation 6 for Pok�mon Essentials (PBS files)
+Project: Generation 6 for Pokémon Essentials (PBS files)
 	Project Organization:WorldSlayer
 	PBS file editing:
 	mej71,karstictrainer, WorldSlayer, TheDeKay, viperk1, SunakazeKun,Radical Raptr, RPD490, Takyon!, Pokegod7020

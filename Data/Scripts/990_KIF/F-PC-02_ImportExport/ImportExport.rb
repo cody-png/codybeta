@@ -57,55 +57,55 @@ KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Import Level"), [_INTL("Default"), _INTL("1"), _INTL("5"), _INTL("50"), _INTL("100")],
                  proc { $PokemonSystem.importlvl },
                  proc { |value| $PokemonSystem.importlvl = value },
-                 [_INTL("Imported Pokemons keep their original level."),
-                  _INTL("Imported Pokemons are set to level 1."),
-                  _INTL("Imported Pokemons are set to level 5."),
-                  _INTL("Imported Pokemons are set to level 50."),
-                  _INTL("Imported Pokemons are set to level 100.")])
+                 [_INTL("Imported Pokémon keep their original level."),
+                  _INTL("Imported Pokémon are set to level 1."),
+                  _INTL("Imported Pokémon are set to level 5."),
+                  _INTL("Imported Pokémon are set to level 50."),
+                  _INTL("Imported Pokémon are set to level 100.")])
 }
 KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Import De-Evolve"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.importdevolve },
                  proc { |value| $PokemonSystem.importdevolve = value },
-                 [_INTL("Imported Pokemons remain intact."),
-                  _INTL("Imported Pokemons are de-evolved into babies.")])
+                 [_INTL("Imported Pokémon remain intact."),
+                  _INTL("Imported Pokémon are de-evolved into babies.")])
 }
 KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Import as Egg"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.importegg },
                  proc { |value| $PokemonSystem.importegg = value },
-                 [_INTL("Imported Pokemons remain intact."),
-                  _INTL("Imported Pokemons are turned into eggs.")])
+                 [_INTL("Imported Pokémon remain intact."),
+                  _INTL("Imported Pokémon are turned into eggs.")])
 }
 KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Import Without Deletion"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.importnodelete },
                  proc { |value| $PokemonSystem.importnodelete = value },
-                 [_INTL("Imported Pokemons' .json files are renamed to .json.imported."),
-                  _INTL("Imported Pokemons will remain as .json in Import folder.")])
+                 [_INTL("The .json files of imported Pokémon are renamed to .json.imported."),
+                  _INTL("Imported Pokémon will remain as .json in Import folder.")])
 }
 KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Delete on Export"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.exportdelete },
                  proc { |value| $PokemonSystem.exportdelete = value },
-                 [_INTL("Exported Pokemons will not be deleted."),
-                  _INTL("Exported Pokemons will be deleted.")])
+                 [_INTL("Exported Pokémon will not be deleted."),
+                  _INTL("Exported Pokémon will be deleted.")])
 }
 KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Export Sprite on Export"), [_INTL("On"), _INTL("Off"), _INTL("Shiny")],
                  proc { $PokemonSystem.nopngexport },
                  proc { |value| $PokemonSystem.nopngexport = value },
-                 [_INTL("The .png of the Pokemon will also be exported."),
-                  _INTL("The .png (appearence) of the Pokemon will not be exported."),
-                  _INTL(".png exported as shiny, shiny appearence but pokemon un-shinified.")])
+                 [_INTL("The .png of the Pokémon will also be exported."),
+                  _INTL("The .png (appearance) of the Pokémon will not be exported."),
+                  _INTL(".png exported as shiny, shiny appearance but the Pokémon is not shiny.")])
 }
 KIF::Options.add(:selfbattle, :save) {
   EnumOption.new(_INTL("Import Sprite on Import"), [_INTL("On"), _INTL("Read-Only"), _INTL("Off")],
                  proc { $PokemonSystem.nopngimport },
                  proc { |value| $PokemonSystem.nopngimport = value },
-                 [_INTL("The .png of the Pokemon will also be imported."),
-                  _INTL("The .png of the Pokemon will be read from the folder but not imported."),
-                  _INTL("The .png (appearence) of the Pokemon will not be imported.")])
+                 [_INTL("The .png of the Pokémon will also be imported."),
+                  _INTL("The .png of the Pokémon will be read from the folder but not imported."),
+                  _INTL("The .png (appearance) of the Pokémon will not be imported.")])
 }
 KIF::Options.add(:others, :global) {
   EnumOption.new(_INTL("Debug Exclusive"), [_INTL("Off"), _INTL("On")],
@@ -694,7 +694,7 @@ module KIF
       return if files.nil?
       if files.empty?
         pbPlayBuzzerSE
-        screen.pbDisplay(_INTL("No Pokemon to Import!"))
+        screen.pbDisplay(_INTL("No Pokémon to Import!"))
         return
       end
       files = [files.sample] if randomly
@@ -728,7 +728,7 @@ module KIF
         pbPlayBuzzerSE
         screen.pbDisplay(_INTL("Out of place!"))
       else
-        screen.pbDisplay(_INTL("Pokemon(s) Imported!"))
+        screen.pbDisplay(_INTL("Pokémon(s) Imported!"))
       end
       screen.pbDisplay(_INTL("{1} file(s) could not be read.", failed)) if failed > 0
     end
@@ -753,7 +753,7 @@ module KIF
         storage.pbDelete(box, k) if export(pkmn) && delete_on_export?(pkmn)
       end
       screen.pbHardRefresh
-      screen.pbDisplay(_INTL("Pokemon(s) Exported!"))
+      screen.pbDisplay(_INTL("Pokémon(s) Exported!"))
     end
 
     def self.export_all(screen_or_nil, display)
@@ -769,7 +769,7 @@ module KIF
       end
       $Trainer.party.each { |pkmn| export(pkmn) if pkmn }   # party is never deleted
       screen_or_nil.pbHardRefresh if screen_or_nil && screen_or_nil.respond_to?(:pbHardRefresh)
-      display.call(_INTL("All Pokemons Exported!"))
+      display.call(_INTL("All Pokémon Exported!"))
     end
 
     def self.export_selected(screen, box)
@@ -778,7 +778,7 @@ module KIF
         pkmn = storage[box, index]
         export(pkmn) if pkmn
       end
-      screen.pbDisplay(_INTL("Pokemon(s) Exported!"))
+      screen.pbDisplay(_INTL("Pokémon(s) Exported!"))
     end
   end
 end
@@ -808,7 +808,7 @@ module KIF::PCActionMethods
         @scene.pbRefresh
       end
     end
-    pbDisplay(_INTL("Pokemon Exported!"))
+    pbDisplay(_INTL("Pokémon Exported!"))
   end
 end
 
@@ -816,7 +816,7 @@ KIF::PCActions.add(:export,
   proc { |pkmn| KIF::PokeIO.allowed? ? _INTL("Export") : nil },
   proc { |host, pkmn, selected, heldpoke| host.kif_export_one(pkmn, selected, heldpoke) })
 KIF::PCActions.add(:export_all,
-  proc { |pkmn| KIF::PokeIO.allowed? ? _INTL("Export All Pokemons") : nil },
+  proc { |pkmn| KIF::PokeIO.allowed? ? _INTL("Export All Pokémon") : nil },
   proc { |host, pkmn, selected, heldpoke|
     KIF::PokeIO.export_all(host.is_a?(PokemonStorageScreen) ? host : nil, proc { |t| host.pbDisplay(t) })
   })

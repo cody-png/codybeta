@@ -26,19 +26,19 @@ KIF::Options.add(:battles, :save) {
   SliderOption.new(_INTL("ExpAll Redistribution"), 0, 10, 1,
                    proc { $PokemonSystem.expall_redist },
                    proc { |value| $PokemonSystem.expall_redist = value },
-                   _INTL("0 = Off, 10 = Max | Redistributes total exp from expAll to lower level pokemon"))
+                   _INTL("0 = Off, 10 = Max | Redistributes total exp from expAll to lower level Pokémon"))
 }
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("No-EVs Mode"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.noevsmode },
                  proc { |value| $PokemonSystem.noevsmode = value; KIF.recalc_all_stats },
-                 [_INTL("Pokemon EVs exist."), _INTL("Pokemon EVs are disabled.")])
+                 [_INTL("Pokémon EVs exist."), _INTL("Pokémon EVs are disabled.")])
 }
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Max IVs Mode"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.maxivsmode },
                  proc { |value| $PokemonSystem.maxivsmode = value; KIF.recalc_all_stats },
-                 [_INTL("Disabled."), _INTL("Pokemon IVs are always at max.")])
+                 [_INTL("Disabled."), _INTL("Pokémon IVs are always at max.")])
 }
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("EVs Train Mode"), [_INTL("Off"), _INTL("On")],

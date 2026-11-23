@@ -113,7 +113,7 @@ module KIF
 
     # said before the player agrees: the partner's game runs the battle and tells this one what happened
     def self.trust_line
-      _INTL("Their game decides what happens to your Pokemon in these battles. Only agree with a friend you trust.")
+      _INTL("Their game decides what happens to your Pokémon in these battles. Only agree with a friend you trust.")
     end
 
     class << self

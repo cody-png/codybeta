@@ -32,7 +32,7 @@ module KIF
 
     def ask
       return false unless needed?
-      pbMessage(_INTL("Welcome to KIF! KIF's features come in modules you can turn on or off at any time in Options > Modules."))
+      pbMessage(_INTL("Welcome to KIF. Its features come in modules. You can turn them on or off at any time in Options > Modules."))
       cmd = pbMessage(_INTL("How do you want to play?"),
                       [_INTL("Classic KIF"), _INTL("PIF only"), _INTL("Let me choose")], 0)
       case cmd

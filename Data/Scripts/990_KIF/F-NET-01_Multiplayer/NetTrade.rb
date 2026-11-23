@@ -397,7 +397,7 @@ module KIF
         $PokemonStorage[*own[0][1]] = gave
       else   # changed, fused or copied since: the player keeps what came
         book[id] = :done
-        KIF::Net.notes << _INTL("The trade with {1} didn't finish on their side. You keep the Pokemon you got.", who_now)
+        KIF::Net.notes << _INTL("The trade with {1} didn't finish on their side. You keep the Pokémon you got.", who_now)
         return log("#{id}: not undone (the received one was changed)")
       end
       book.delete(id)
@@ -646,7 +646,7 @@ module KIF
       end
     rescue StandardError => e   # a screen that can't draw what the partner sent ends the trade screen, not the game
       log("the trade screen stopped (#{e.class}: #{e.message})")
-      (pbMessage(_INTL("The trade stopped. Check your Pokemon.")) rescue nil)
+      (pbMessage(_INTL("The trade stopped. Check your Pokémon.")) rescue nil)
     ensure
       cancel
       @st = nil

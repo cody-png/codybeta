@@ -12,7 +12,7 @@ module KIF
     # [id, label, colour, [[heading, [setting names as registered]], ...]]
     SECTIONS = [
       [:shinies, "Shinies", [220, 180, 60], [
-        ["Odds", ["Wild Shiny Odds", "Shiny Gamble Odds", "Shiny Trainer Pokemon"]],
+        ["Odds", ["Wild Shiny Odds", "Shiny Gamble Odds", "Shiny Trainer Pokémon"]],
         ["Look", ["Shiny Colors", "PIF's Improved Shinies", "Shiny Fuse Dye", "Shiny Filter",
                   "Shiny Icons", "Shiny Animation"]],
         ["Poké Radar", ["PokeRadar+", "Radar Chain Count", "Multi-Battle Radar"]],
@@ -41,7 +41,7 @@ module KIF
         ["Battle", ["Battle Animations", "Battle Movement", "Battle Camera", "Type Icons (Enemy)", "Type Icons (Player)", "Type Display", "Swap BattleGUI"]],
         ["Sprites", ["Random Sprites", "Joke Sprites", "Custom Eggs", "Fusion Icons"]],
         ["Screens", ["Fusion Screen", "Fusion Preview", "Big Pokémon Icons", "Summary IVs/EVs", "Dark Mode"]],
-        ["Pokédex", ["Autogen dex entries", "Improved Pokedex", "Dex Evolutions", "Dex Sprite Select", "Evolution Sprites"]],
+        ["Pokédex", ["Autogen dex entries", "Improved Pokédex", "Dex Evolutions", "Dex Sprite Select", "Evolution Sprites"]],
         ["Text", ["Game's Font", "Speech Frame"]],
         ["Overworld", ["Map Zoom"]]]],
       [:selfbattle, "Self-Battle", [200, 120, 60], [
@@ -85,7 +85,7 @@ module KIF
     # Shorter names under their heading (only where the heading says it)
     RENAMES = {
       "Wild Shiny Odds" => "Wild Odds", "Shiny Gamble Odds" => "Gamble Odds",
-      "Shiny Trainer Pokemon" => "Trainer Pokémon", "Shiny Colors" => "Colours",
+      "Shiny Trainer Pokémon" => "Trainer Pokémon", "Shiny Colors" => "Colours",
       "PIF's Improved Shinies" => "PIF's Shinies", "Shiny Fuse Dye" => "Fuse Dye",
       "Shiny Filter" => "Filter", "Shiny Icons" => "Icons", "Shiny Animation" => "Animation",
       "PokeRadar+" => "Radar+", "Radar Chain Count" => "Chain Count",
@@ -102,7 +102,7 @@ module KIF
       "Self-Fusion Stat Boost" => "Self-Fusion Boost", "Dominant Fusion Types" => "Dominant Types",
       "K-Eggs Usage" => "Usage", "K-Eggs Rarity" => "Rarity", "K-Eggs Fusion Odds" => "Fusion Odds",
       "K-Eggs Fusion Pool" => "Fusion Pool", "K-Eggs Rewards" => "Rewards",
-      "Improved Pokedex" => "Improved Pokédex", "Dex Evolutions" => "Evolutions",
+      "Improved Pokédex" => "Improved Pokédex", "Dex Evolutions" => "Evolutions",
       "Dex Sprite Select" => "Sprite Select",
       "Import Level" => "Level", "Import De-Evolve" => "De-Evolve", "Import as Egg" => "As Egg",
       "Import Without Deletion" => "Keep the File", "Import Sprite on Import" => "Sprite",

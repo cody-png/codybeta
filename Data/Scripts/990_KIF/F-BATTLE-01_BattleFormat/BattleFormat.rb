@@ -24,17 +24,17 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Battle Format"), [_INTL("1v1"), _INTL("2v2"), _INTL("3v3")],
                  proc { $PokemonSystem.force_double_wild },
                  proc { |value| $PokemonSystem.force_double_wild = value },
-                 [_INTL("Battles are 1v1 (unless the game says otherwise)"),
-                  _INTL("Battles in 2v2 when possible"),
-                  _INTL("Battles in 3v3 'cause it's cool")])
+                 [_INTL("Battles are 1v1, unless the game makes it a double battle."),
+                  _INTL("Battles are 2v2 when both sides have enough Pokémon."),
+                  _INTL("Battles are 3v3 when both sides have enough Pokémon.")])
 }
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Format Applies To"), [_INTL("Wild"), _INTL("Trainers"), _INTL("Both")],
                  proc { $PokemonSystem.battle_format_scope },
                  proc { |value| $PokemonSystem.battle_format_scope = value },
-                 [_INTL("Battle Format applies to wild encounters"),
-                  _INTL("Battle Format applies to trainer battles"),
-                  _INTL("Battle Format applies to wild and trainer battles")])
+                 [_INTL("Battle Format changes wild battles only."),
+                  _INTL("Battle Format changes trainer battles only."),
+                  _INTL("Battle Format changes wild and trainer battles.")])
 }
 
 module KIF

@@ -43,15 +43,15 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("K-Eggs Fusion Pool"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.kurayeggs_fusionpool },
                  proc { |value| $PokemonSystem.kurayeggs_fusionpool = value },
-                 [_INTL("In case of fusion, the other Pokemon is random."),
-                  _INTL("In case of fusion, the other Pokemon must be from k-egg's pool as well.")])
+                 [_INTL("In case of fusion, the other Pokémon is random."),
+                  _INTL("In case of fusion, the other Pokémon must be from k-egg's pool as well.")])
 }
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("K-Eggs Rarity"), [_INTL("On"), _INTL("Off")],
                  proc { $PokemonSystem.kurayeggs_rarity },
                  proc { |value| $PokemonSystem.kurayeggs_rarity = value },
-                 [_INTL("Pokemons' rarity in k-eggs depend of their catch rate."),
-                  _INTL("All Pokemons have the same odds to come from the k-eggs.")])
+                 [_INTL("A Pokémon's rarity in k-eggs depends on its catch rate."),
+                  _INTL("All Pokémon have the same odds to come from the k-eggs.")])
 }
 KIF::Options.add(:battles, :save) {
   SliderOption.new(_INTL("K-Eggs Fusion Odds"), 0, 100, 1,
@@ -60,11 +60,11 @@ KIF::Options.add(:battles, :save) {
                    _INTL("x% | Probability that a fusion hatches from Kuray Eggs (Default: 20%)"))
 }
 KIF::Options.add(:battles, :save) {
-  EnumOption.new(_INTL("K-Eggs Usage"), [_INTL("Pokemon"), _INTL("Egg")],
+  EnumOption.new(_INTL("K-Eggs Usage"), [_INTL("Pokémon"), _INTL("Egg")],
                  proc { $PokemonSystem.kurayeggs_instanthatch },
                  proc { |value| $PokemonSystem.kurayeggs_instanthatch = value },
-                 [_INTL("When Kuray Egg item used, spawns a Pokemon."),
-                  _INTL("When Kuray Egg item used, spawns an Egg that contains a Pokemon.")])
+                 [_INTL("When Kuray Egg item used, spawns a Pokémon."),
+                  _INTL("When Kuray Egg item used, spawns an Egg that contains a Pokémon.")])
 }
 KIF::Options.add(:battles, :save) {
   SliderOption.new(_INTL("K-Eggs Rewards"), 0, 10, 1,
@@ -100,7 +100,7 @@ module KIF
       10.times do |t|
         name = (t == 9) ? "Elite 4" : (t == 1) ? "1 Badge" : (t == 0) ? "Starter" : "#{t} Badges"
         add.call(name, TIER_PRICES[t],
-                 "Egg with a Pokémon who's BST is between #{MINBSTSHOW[t]} and #{MAXBSTSHOW[t]}. 10x shiny odds.")
+                 "Egg with a Pokémon whose BST is between #{MINBSTSHOW[t]} and #{MAXBSTSHOW[t]}. 10x shiny odds.")
       end
       add.call("Legendary", BASE_PRICE * 5, "Egg with a LEGENDARY Pokémon. 10x shiny odds.")
       # Port addition: the Hoenn species only (Dex 502-576)

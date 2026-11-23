@@ -1,22 +1,22 @@
 # Kuray Infinite Fusion (KIF)
 
-Kuray Infinite Fusion (KIF) is a fork of Pokémon Infinite Fusion (PIF). It adds countless new features, including infinite colours for shinies, mod support (load your own mods from a "Mods" folder), a powerful AI (thanks to DemICE), and much more. Almost every feature can be turned on or off.
+Kuray Infinite Fusion (KIF) is a fork of Pokémon Infinite Fusion (PIF). It adds many new features, including infinite colours for shinies, mod support (load your own mods from a "Mods" folder), a stronger battle AI (thanks to DemICE), and more. Almost every feature can be turned on or off.
 
 KIF is community-based and community-focused: made by the community, for the community, so that anyone can easily create new features for Infinite Fusion and have a better experience overall.
 
 The original Pokémon Infinite Fusion was created by Chardub/Frogman using Pokémon Essentials. Please remember that the backbone of KIF (which is PIF) is still developed and maintained by Chardub/Frogman and the PIF team. If PIF dies, KIF is very likely to die as well.
 
-KIF is **standalone**: you do not need Pokémon Infinite Fusion, and you should **NOT** install KIF on top of a PIF game.
+KIF is **standalone**: you do not need Pokémon Infinite Fusion, and you should not install KIF on top of a PIF game.
 
 This GitHub lets you see the game (open-source), contribute to its development with pull requests, and download the latest version.
 
 ## KIF 2.0 is built on PIF 6.9
-KIF 0.20.7 was built on PIF 6.4.5, and KIF 1.x on PIF 6.8.2. **KIF 2.0** brings KIF's features to **PIF 6.9**, including its new content and the Hoenn additions (but not Hoenn itself, sorry folks). It also adds Multiplayer (experimental, Off by default), a mod safety scan and a mod API. See [CHANGELOG.md](CHANGELOG.md).
+KIF 0.20.7 was built on PIF 6.4.5, and KIF 1.x on PIF 6.8.2. **KIF 2.0** brings KIF's features to **PIF 6.9**, including its new content and the Hoenn additions (but not Hoenn itself). It also adds Multiplayer (experimental, Off by default), a mod safety scan and a mod API. See [CHANGELOG.md](CHANGELOG.md).
 
 - **Old KIF saves** load directly. Your settings, Pokémon and items carry over.
-- **Bug reports:** if the game crashes, send the `Logs` folder from the game folder (`KIF_errorlog.txt` in it has the crash) to the Discord. Please ping a developer whenever you open a bug report. Leave PIF folks alone about bug reports, they have no hand in KIF aside from providing a fantastic game (PIF)!
+- **Bug reports:** if the game crashes, send the `Logs` folder from the game folder (`KIF_errorlog.txt` in it has the crash) to the Discord, and ping a developer when you open a bug report. Do not report KIF bugs to the PIF team: they have no hand in KIF.
 - **New in KIF 1.0:** an updater that downloads only what changed, sprite pack import, Modules (turn any part of KIF off), Settings Presets, Battle Info, the Fusion Screen and more (see [KIF_Features.md](KIF_Features.md)).
-- **Not carried over from 0.20.7**, because PIF 6.8.2 now does these itself or they no longer work or I just couldn't figure them out:
+- **Not carried over from 0.20.7**, because PIF 6.8.2 now does these itself or they no longer work:
   - Shiny Finder.exe;
   - Individual Custom Sprites (PIF now has per-Pokémon sprites);
   - option preset files from 0.20.7 (Settings Presets use a new format).
@@ -58,7 +58,7 @@ Highlights:
 
 - **Pokémon Infinite Fusion:** Chardub/Frogman and the PIF team.
 - **Kuray Infinite Fusion:** Reïzod, DemICE, Sylvi, HungryPickle, Luminatron, Bluewuppo, JustAnotherU5er, Mirasein, FairyGodmother, Lolpy1, Rekt1029 and the whole KIF community.
-- **KIF 1.0 and 2.0 (PIF 6.8.2 and 6.9):** cody-png, with our testers and modders.
+- **KIF 1.0 and 2.0 (PIF 6.8.2 and 6.9):** the KIF team, with our testers and modders.
 - **Elite Battle DX:** Luka S.J. (EBDX), as adapted in KIF Multiplayer by Aleks, included with permission.
 - Made with Pokémon Essentials.
 

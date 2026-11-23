@@ -228,8 +228,8 @@ module KIF
       town = free_fly_town
       turned_on << _INTL("Fly to {1}", pbGetMapNameFromId(town)) if town
       n = Dex.scan
-      turned_on << (n == 1 ? _INTL("1 Pokedex check for a Pokemon the save already has") :
-                             _INTL("{1} Pokedex checks for Pokemon the save already has", n)) if n > 0
+      turned_on << (n == 1 ? _INTL("1 Pokédex check for a Pokémon the save already has") :
+                             _INTL("{1} Pokédex checks for Pokémon the save already has", n)) if n > 0
       KIF.log("Archipelago: save linked to #{slot['slot']} (seed #{slot['seed']}, #{slot['locations'].length} locations, the save plays #{Dex.save_mode})")
       return turned_off
     end
@@ -696,7 +696,7 @@ module KIF
         return
       end
       pbMessage(_INTL("Linked. Keep the KIF Client running to send checks and get items."))
-      pbMessage(_INTL("This save plays {1}; the Pokedex checks follow its wild Pokemon.", Dex.mode_name(Dex.save_mode))) if Dex.slot?
+      pbMessage(_INTL("This save plays {1}; the Pokédex checks follow its wild Pokémon.", Dex.mode_name(Dex.save_mode))) if Dex.slot?
       pbMessage(_INTL("Archipelago needs the normal doors and places the items itself, so these are off for this save: {1}.", off.join(", "))) unless off.empty?
       pbMessage(_INTL("This Archipelago game also gives you: {1}.", on.join(", "))) unless on.empty?
     end

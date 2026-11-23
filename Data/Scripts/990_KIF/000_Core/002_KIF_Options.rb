@@ -31,14 +31,14 @@ module KIF
     # Order and colours follow KIF's KurayOptionsScene / KurayOptSc_1..6.
     MENUS = {
       :shinies    => ["Shiny settings",                "Customize shinies features",       [200, 200, 35], [115, 115, 20]],
-      :battles    => ["Battles & Pokemons settings",   "Customize battles & pokemons features", [200, 35, 35], [115, 20, 20]],
+      :battles    => ["Battles & Pokémon settings",   "Customize battles & Pokémon features", [200, 35, 35], [115, 20, 20]],
       :graphics   => ["Graphics settings",             "Customize graphics features",      [35, 200, 35], [20, 115, 20]],
       :selfbattle => ["Self-Battle & Import settings", "Self-battling & import features",  [200, 35, 200], [115, 20, 115]],
       :challenges => ["Challenges settings",           "Challenges",                       [35, 35, 200], [20, 20, 115]],
       :others     => ["Others settings",               "Customize others features",        [35, 200, 200], [20, 115, 115]]
     }
     MENU_BUTTON_LABELS = {
-      :shinies => "Shinies", :battles => "Battles & Pokemons", :graphics => "Graphics",
+      :shinies => "Shinies", :battles => "Battles & Pokémon", :graphics => "Graphics",
       :selfbattle => "Self-Battle & Import", :challenges => "Challenges", :others => "Others"
     }
     # Values for "Increment Slider by" (KIF: raiserb index -> raiser step)

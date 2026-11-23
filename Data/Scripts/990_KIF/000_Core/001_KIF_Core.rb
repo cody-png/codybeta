@@ -171,7 +171,7 @@ module KIF
     lf = data.gsub("\r\n", "\n")
     return if Zlib.crc32(lf) == crc || Zlib.crc32(lf.gsub("\n", "\r\n")) == crc
     @drift << "#{path} (#{what}): expected CRC #{crc}, found #{actual}"
-    log("BASE FILE CHANGED since port – re-check override of #{what} in #{path}")
+    log("BASE FILE CHANGED since port - re-check override of #{what} in #{path}")
   rescue
     nil
   end

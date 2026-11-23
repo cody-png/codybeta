@@ -66,11 +66,11 @@ module KIF
       def refuse_reason(d, settings = nil)
         return nil unless slot?(d)
         if wild_randomized?(settings)
-          return _INTL("This Archipelago game has Pokedex checks, which need the normal wild Pokemon, but this save randomizes them. Turn off random wild Pokemon and Fuse everything in the randomizer, then link again.")
+          return _INTL("This Archipelago game has Pokédex checks, which need the normal wild Pokémon, but this save randomizes them. Turn off random wild Pokémon and Fuse everything in the randomizer, then link again.")
         end
         mode = d[:game_mode]
         if mode && mode != save_mode
-          return _INTL("This Archipelago game's Pokedex checks were made for {1}, but this save plays {2}. Make the game again with game_mode: {3}, or link a {1} save.",
+          return _INTL("This Archipelago game's Pokedex checks were made for {1}, but this save plays {2}. Generate the game again with its game mode set to {3}, or link a {1} save.",
                        mode_name(mode), mode_name(save_mode), save_mode)
         end
         return nil
@@ -185,15 +185,15 @@ module KIF
       def warnings
         out = []
         if wild_randomized?
-          out << [:wild, _INTL("Wild Pokemon are randomized in this save, so some Pokedex checks of this Archipelago game may be impossible. Turn off random wild Pokemon and Fuse everything in the randomizer.")]
+          out << [:wild, _INTL("Wild Pokémon are randomized in this save, so some Pokédex checks of this Archipelago game may be impossible. Turn off random wild Pokémon and Fuse everything in the randomizer.")]
         end
         mode = KIF::AP.data[:game_mode]
         if mode && mode != save_mode
-          out << [:mode, _INTL("This save now plays {2}, but this Archipelago game's Pokedex checks were made for {1}, so some may be impossible. Set Options > Trainers back to {1}.",
+          out << [:mode, _INTL("This save now plays {2}, but this Archipelago game's Pokédex checks were made for {1}, so some may be impossible. Set Options > Trainers back to {1}.",
                                mode_name(mode), mode_name(save_mode))]
         end
         if defined?(KIF::Nuzlocke) && KIF::Nuzlocke.on?
-          out << [:nuzlocke, _INTL("Nuzlocke is on, so only the first wild Pokemon of each place can be caught and many Pokedex checks of this Archipelago game can't be done. Turn Nuzlocke off in Options > Challenges if you get stuck.")]
+          out << [:nuzlocke, _INTL("Nuzlocke is on, so only the first wild Pokémon of each place can be caught and many Pokédex checks of this Archipelago game can't be done. Turn Nuzlocke off in Options > Challenges if you get stuck.")]
         end
         return out
       end
@@ -211,10 +211,10 @@ module KIF
         end
         until @queue.empty?
           id, n, kind = @queue.shift
-          what = if n > 0 then _INTL("{1} was registered in the Pokedex.", GameData::Species.get(n).name)
-                 elsif kind == :fusion && n == -1 then _INTL("1 fusion registered in the Pokedex.")
-                 elsif kind == :fusion then _INTL("{1} different fusions registered in the Pokedex.", -n)
-                 else _INTL("{1} Pokemon registered in the Pokedex.", -n)
+          what = if n > 0 then _INTL("{1} was registered in the Pokédex.", GameData::Species.get(n).name)
+                 elsif kind == :fusion && n == -1 then _INTL("1 fusion registered in the Pokédex.")
+                 elsif kind == :fusion then _INTL("{1} different fusions registered in the Pokédex.", -n)
+                 else _INTL("{1} Pokémon registered in the Pokédex.", -n)
                  end
           pbMessage(_INTL("\\me[Item get]{1} {2}\\wtnp[30]", what, KIF::AP.found_text(id, :given)))
         end

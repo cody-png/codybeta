@@ -531,7 +531,7 @@ module KIF
         return if @silent < 2 || @auto
         @auto = true
         KIF::Coop.log("#{@name} gave no answer twice in a row: the game fights for them now")
-        (quietly { @battle.pbDisplayPaused(_INTL("{1} is not answering. The game fights for {1}'s Pokemon now.", @name)) } rescue nil)
+        (quietly { @battle.pbDisplayPaused(_INTL("{1} is not answering. The game fights for {1}'s Pokémon now.", @name)) } rescue nil)
       end
 
       #-------------------------------------------------------------------------

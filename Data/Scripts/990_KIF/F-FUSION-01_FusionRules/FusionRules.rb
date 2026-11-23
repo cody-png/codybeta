@@ -119,8 +119,8 @@ KIF::Options.add(:battles, :save) {
                    proc { $PokemonSystem.send(key) },
                    proc { |value| $PokemonSystem.send("#{key}=", value); KIF.recalc_all_stats },
                    [_INTL(offtext),
-                    _INTL("Sliders determine what % of each stat comes from the head pokemon."),
-                    _INTL("Sliders determine what % of each stat comes from the better base stat.")])
+                    _INTL("The sliders below set how much of each base stat comes from the head."),
+                    _INTL("The sliders below set how much of each base stat comes from the higher of the two.")])
   }
   KIF::FusionRules::STATS.each do |stat, name|
     KIF::Options.add(:battles, :save) {
@@ -141,8 +141,8 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Dominant Fusion Types"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.dominant_fusion_types },
                  proc { |value| $PokemonSystem.dominant_fusion_types = value },
-                 [_INTL("Brings back the dominant/inverse fusion types from pre-v6."),
-                  _INTL("Brings back the dominant/inverse fusion types from pre-v6.")])
+                 [_INTL("Fusion types as in PIF 6."),
+                  _INTL("Fusion types as before PIF 6 (dominant types).")])
 }
 
 #-------------------------------------------------------------------------------

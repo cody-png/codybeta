@@ -1,3 +1,10 @@
+KIF 2.0.8
+OVERVIEW
+- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon ("undefined method [] for nil").
+FULL NOTES
+- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon ("undefined method [] for nil").
+- That build sizes the Pokedex for its own number of Pokemon. The game now resizes such a Pokedex to its own 576 Pokemon and keeps what was seen and caught. A missing entry now counts as not seen instead of crashing.
+
 KIF 2.0.7
 OVERVIEW
 - Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City ("no implicit conversion of nil into String").

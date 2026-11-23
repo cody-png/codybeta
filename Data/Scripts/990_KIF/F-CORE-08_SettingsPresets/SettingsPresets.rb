@@ -38,6 +38,7 @@ module KIF
       rescue StandardError => e
         KIF.set_aside(path, "Presets file", e)   # the next save must not overwrite the player's presets
       end
+      KIF.set_aside(path, "Presets file") unless d.nil? || d.is_a?(Hash)   # readable but not presets: kept, not written over
       d = {} unless d.is_a?(Hash)
       d[:names] = Array.new(SLOTS) { |i| "Preset #{i + 1}" } unless d[:names].is_a?(Array)
       d[:names].fill { |i| d[:names][i] || "Preset #{i + 1}" }

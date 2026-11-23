@@ -96,7 +96,7 @@ module KIF
 
     def self.line
       s = session
-      @line = { s: s, declines: 0, mute: nil, later: [] } unless @line && s && @line[:s].equal?(s)
+      @line = { s: s, declines: 0, mute: nil, later: [] } unless @line && (s.nil? || @line[:s].equal?(s))   # a dropped link keeps the held messages and the mute
       return @line
     end
 

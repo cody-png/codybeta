@@ -317,7 +317,7 @@ class PokemonDataBox
       return
     end
     s = GameData::Status.get(@battler.status).id_number
-    if s == :POISON && @battler.statusCount > 0 # Badly poisoned (as the base code)
+    if @battler.status == :POISON && @battler.statusCount > 0 # Badly poisoned (s is the id number, not a symbol)
       s = GameData::Status::DATA.keys.length / 2
     end
     @kif_statusIcon.src_rect.set(0, (s - 1) * STATUS_ICON_HEIGHT, @kif_statusBitmap.width, STATUS_ICON_HEIGHT)

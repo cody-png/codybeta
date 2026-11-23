@@ -4,9 +4,9 @@
 # cut file:
 #  1. The Transfer Box file (053_PIF_Hoenn/TransferBox.rb) is shared by every
 #     save. It is now written through KIF.atomic_write. A file that can't be
-#     read is copied to <file>.bak and the box is not written again (an empty
-#     box would have replaced the player's Pokémon the next time it saved), and
-#     a box change saves the game once, not twice.
+#     read is first copied to <file>.<time>.bak (PIF's empty box then replaces
+#     it, as before, so Pokémon put in the box stay saved), and a box change
+#     saves the game once, not twice.
 #  2. Files from the web (HttpCalls.rb download_file: the settings, credits and
 #     custom Pokédex files) are written through KIF.atomic_write too, and a
 #     disk error (SystemCallError) is a failed download, not a crash.
@@ -16,11 +16,9 @@ KIF.guard_base("053_PIF_Hoenn/TransferBox.rb", 2931014826,
 KIF.guard_base("052_InfiniteFusion/System/HttpCalls.rb", 3232045372, "download_file")
 
 class StorageTransferBox
-  # Copy of 053_PIF_Hoenn/TransferBox.rb:43-54 that remembers a failed read
+  # Copy of 053_PIF_Hoenn/TransferBox.rb:43-54 that keeps a copy of a file it can't read
   def loadTransferBoxPokemon
     echoln "Loading transfer box"
-    # (not assigned when all is well: the box is saved inside the player's save)
-    remove_instance_variable(:@load_failed) if instance_variable_defined?(:@load_failed)
     path = transferBoxSavePath
     if File.exist?(path)
       File.open(path, "rb") do |f|
@@ -30,14 +28,12 @@ class StorageTransferBox
   rescue => e
     echoln "Failed to load transfer box: #{e}"
     @pokemon = Array.new(PokemonBox::BOX_SIZE, nil)
-    @load_failed = true
-    (File.binwrite(path + ".bak", File.binread(path)) if path && File.file?(path)) rescue nil
+    (File.binwrite("#{path}.#{Time.now.strftime('%Y%m%d%H%M%S')}.bak", File.binread(path)) if path && File.file?(path)) rescue nil
   end
 
   # Copy of 053_PIF_Hoenn/TransferBox.rb:93-105
   def saveTransferBox
     return unless can_use_transfer_box?
-    return if @load_failed   # the file couldn't be read: it is left as it is
     path = transferBoxSavePath
     dir = File.dirname(path)
     Dir.mkdir(dir) unless Dir.exist?(dir)

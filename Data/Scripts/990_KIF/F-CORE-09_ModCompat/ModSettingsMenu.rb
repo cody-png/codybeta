@@ -215,6 +215,11 @@ module KIF
 
     def self.set(k, v)
       kk = key(k)
+      # the file is read back with KIF.safe_marshal_load: a value it can't take would set every mod's settings aside
+      unless (begin; KIF::SafeMarshal.load(Marshal.dump(v)); true; rescue StandardError, TypeError; false; end)
+        KIF.log("Mod setting #{kk} not saved: #{v.class} is not plain data") rescue nil
+        return get(kk)
+      end
       stored = values.has_key?(kk)
       old = stored ? values[kk] : get(kk)   # what the mod saw before (its default when unsaved)
       return v if stored && old == v

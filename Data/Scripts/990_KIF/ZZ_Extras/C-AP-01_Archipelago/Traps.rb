@@ -62,7 +62,10 @@ module KIF
         i = list.index { |kind, _w| ready?(kind) }
         return false unless i
         entry = list.delete_at(i)
-        send("run_#{entry[0].downcase}", source(entry[1], d))
+        if send("run_#{entry[0].downcase}", source(entry[1], d)) == :wait
+          list << entry   # nothing to run here after all (no wild Pokemon picked): it waits, quietly
+          return false
+        end
         return true
       rescue StandardError => e
         list << entry if entry   # a trap that raised waits, behind the others, and runs again
@@ -132,6 +135,7 @@ module KIF
           return
         end
         species = wild_species
+        return :wait unless species   # ready? only checks for a table; a pick can still come back empty
         level = party_level
         pbMessage(_INTL("A Battle Trap from {1}! A wild Pokémon attacks!", who))
         # a wild encounter, as pbEncounter's: "Static encounters" would swap it again

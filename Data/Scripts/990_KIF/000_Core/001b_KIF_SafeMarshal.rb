@@ -1,6 +1,7 @@
 #===============================================================================
 # KIF.safe_marshal_load: reads a Marshal file that holds only plain data (nil,
-# true, false, numbers, strings, symbols, arrays, hashes) and refuses anything
+# true, false, numbers, strings, symbols, arrays, hashes, also with a default
+# value) and refuses anything
 # else. Marshal.load itself builds whatever class a file names, so a file a mod
 # can write must not go through it. Files written by Marshal.dump read the same.
 #===============================================================================
@@ -93,14 +94,22 @@ module KIF
         a = keep([])
         n.times { a << value(depth + 1) }
         return a
-      when 123
-        n = long
-        raise Bad, "bad length" if n < 0 || 2 * n > @s.bytesize - @i
-        h = keep({})
-        n.times { k = value(depth + 1); h[k] = value(depth + 1) }
+      when 123 then return value_hash(depth)
+      when 125   # a hash with a default value (Hash.new(0))
+        h = value_hash(depth)
+        h.default = value(depth + 1)
         return h
-      when 73   # a string with its encoding
-        raise Bad, "only strings carry that" unless @s.getbyte(@i) == 34
+      when 73   # a string or symbol with its encoding
+        if @s.getbyte(@i) == 58   # a non-ASCII symbol: its slot in the symbol table comes first
+          @i += 1
+          raw = bytes
+          slot = @syms.length
+          @syms << nil
+          utf8 = false
+          long.times { k = symbol; v = value(depth + 1); utf8 = true if k == :E && v == true }
+          return @syms[slot] = (utf8 ? raw.force_encoding(Encoding::UTF_8) : raw).to_sym
+        end
+        raise Bad, "only strings and symbols carry that" unless @s.getbyte(@i) == 34
         @i += 1
         str = keep(bytes)
         long.times do
@@ -111,6 +120,14 @@ module KIF
         return str
       end
       raise Bad, "type #{t.chr.inspect} is not plain data"
+    end
+
+    def value_hash(depth)
+      n = long
+      raise Bad, "bad length" if n < 0 || 2 * n > @s.bytesize - @i
+      h = keep({})
+      n.times { k = value(depth + 1); h[k] = value(depth + 1) }
+      return h
     end
 
     # every object but nil, true, false, integers and symbols can be named again by a link

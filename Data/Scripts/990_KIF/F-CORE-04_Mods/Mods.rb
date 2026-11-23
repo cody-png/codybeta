@@ -591,6 +591,7 @@ module KIF
 
     # dir + rel, or nil when rel is not a plain relative path or leaves dir (mod.json names files)
     def self.file_in(dir, rel)
+      rel = rel.to_s.tr("\\", "/").sub(%r{\A(\./)+}, "")   # "scripts\main.rb" and "./main.rb" worked before
       unless KIF.safe_rel_path?(rel)
         KIF.log("Mods: #{rel.to_s[0, 80].inspect} in #{File.basename(dir.to_s)} is not a path inside the mod folder; refused")
         return nil

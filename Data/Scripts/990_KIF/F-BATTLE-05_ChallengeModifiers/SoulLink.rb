@@ -778,11 +778,12 @@ module KIF
       return false unless p && body && !p.kif_nz_dead && p.species_data.id_number <= NB_POKEMON &&
                           body.id_number <= NB_POKEMON && !p.egg?
       a["was"] = p.name
+      fused = getFusionSpecies(body.id, p.species).id   # before anything changes: a fusion that cannot be made leaves the Pokemon whole
       head = p.clone
       half = Pokemon.new(body.id, p.level)
       p.original_head = head
       p.original_body = half
-      p.species = getFusionSpecies(body.id, p.species).id
+      p.species = fused
       p.pif_sprite = nil   # the old species' cached sprite (PIF clears it the same way when a Pokemon evolves or unfuses)
       p.preEvolved_pif_sprite = nil
       p.kif_sl_fused = true

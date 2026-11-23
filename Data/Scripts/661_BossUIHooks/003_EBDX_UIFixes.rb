@@ -120,15 +120,15 @@ class PokeBattle_SceneEBDX
       hidden << i
     end
 
-    result = _uifix_pbDisplayConfirmMessage(msg)
-
-    # Restore only the ones we hid
-    hidden.each do |i|
-      spr = @sprites["dataBox_#{i}"]
-      spr.visible = true if spr && !pbDisposed?(spr)
+    begin
+      return _uifix_pbDisplayConfirmMessage(msg)
+    ensure
+      # Restore only the ones we hid, even if the message raised
+      hidden.each do |i|
+        spr = @sprites["dataBox_#{i}"]
+        spr.visible = true if spr && !pbDisposed?(spr)
+      end
     end
-
-    result
   end
 end
 
@@ -150,10 +150,7 @@ if defined?(DataBoxEBDX)
     alias _td_setUp setUp
     def setUp
       # Dispose any existing type display resources before setUp clears @sprites
-      @typeDisplayBitmap&.dispose
-      @typeDisplayBitmap = nil
-      @typeDisplaySprite&.dispose rescue nil
-      @typeDisplaySprite = nil
+      ebdx_freeTypeDisplay
       _td_setUp
       return if @playerpoke || $PokemonSystem.typedisplay.to_i == 0
       path = EBDX_TYPE_DISPLAY_BITMAPS[$PokemonSystem.typedisplay]
@@ -161,17 +158,23 @@ if defined?(DataBoxEBDX)
       @typeDisplayBitmap = AnimatedBitmap.new(path)
       # Keep this sprite OUTSIDE @sprites so EBDX's x=/y= setters (which call .ex/.ey)
       # never iterate over it — plain Sprite doesn't have those EBDX extension attributes.
-      @typeDisplaySprite = Sprite.new(@viewport)
-      @typeDisplaySprite.bitmap = Bitmap.new(Graphics.width, Graphics.height)
+      @typeDisplaySprite = Sprite.new(@viewport)   # its small bitmap is made when the types are known
       @typeDisplaySprite.z = 10000
+    end
+
+    def ebdx_freeTypeDisplay
+      @typeDisplayBitmap&.dispose
+      @typeDisplayBitmap = nil
+      # a Sprite does not dispose its own bitmap
+      (@typeDisplaySprite.bitmap&.dispose rescue nil) if @typeDisplaySprite
+      @typeDisplaySprite&.dispose rescue nil
+      @typeDisplaySprite = nil
+      @typeDisplayKey = nil
     end
 
     alias _td_dispose dispose
     def dispose
-      @typeDisplayBitmap&.dispose
-      @typeDisplayBitmap = nil
-      @typeDisplaySprite&.dispose rescue nil
-      @typeDisplaySprite = nil
+      ebdx_freeTypeDisplay
       _td_dispose
     end
 
@@ -192,41 +195,37 @@ if defined?(DataBoxEBDX)
     def ebdx_refreshTypeDisplay
       spr = @typeDisplaySprite
       return unless spr && !spr.disposed? && @typeDisplayBitmap
-      spr.bitmap.clear
-      return unless @battler&.pokemon && !@battler.fainted?
+      base = @sprites["base"]
+      if !@battler&.pokemon || @battler.fainted? || !base || base.disposed?
+        spr.visible = false
+        return
+      end
 
       type1 = @battler.pokemon.type1
       type2 = @battler.pokemon.type2
-      t1n = GameData::Type.get(type1).id_number
-      t2n = GameData::Type.get(type2).id_number
+      mode = $PokemonSystem.typedisplay
+      scale = (mode == 5) ? 0.65 : 1.0
+      icon_gap = (mode == 5) ? 0 : 3
+      iw, ih = (mode == 5) ? [64, 28] : [24, 20]
+      sw = (iw * scale).to_i
+      sh = (mode == 5 ? ih * scale * 1.2 : ih * scale).to_i
 
-      case $PokemonSystem.typedisplay
-      when 1, 2, 3, 4
-        t1rect = Rect.new(0, t1n * 20, 24, 20)
-        t2rect = Rect.new(0, t2n * 20, 24, 20)
-        scale = 1.0
-        icon_gap = 3
-      when 5
-        t1rect = Rect.new(0, t1n * 28, 64, 28)
-        t2rect = Rect.new(0, t2n * 28, 64, 28)
-        scale = 0.65
-        icon_gap = 0
+      key = [mode, type1, type2]
+      if key != @typeDisplayKey
+        @typeDisplayKey = key
+        spr.bitmap&.dispose
+        spr.bitmap = Bitmap.new(sw, type1 == type2 ? sh : sh * 2 + icon_gap)
+        [type1, type2].uniq.each_with_index do |t, n|
+          t_n = GameData::Type.get(t).id_number
+          spr.bitmap.stretch_blt(Rect.new(0, n * (sh + icon_gap), sw, sh), @typeDisplayBitmap.bitmap, Rect.new(0, t_n * ih, iw, ih))
+        end
       end
-
-      sw  = (t1rect.width  * scale).to_i
-      sh  = ($PokemonSystem.typedisplay == 5 ? t1rect.height * scale * 1.2 : t1rect.height * scale).to_i
-      base = @sprites["base"]
-      return unless base && !base.disposed?
 
       # Position inside the right edge of the enemy EBDX databox.
       # We use base.x (absolute screen position) so the icons follow the slide-in.
-      type_x = base.x + base.bitmap.width - sw + 24
-      type_y = base.y - 14
-
-      spr.bitmap.stretch_blt(Rect.new(type_x, type_y, sw, sh), @typeDisplayBitmap.bitmap, t1rect)
-      unless type1 == type2
-        spr.bitmap.stretch_blt(Rect.new(type_x, type_y + sh + icon_gap, sw, sh), @typeDisplayBitmap.bitmap, t2rect)
-      end
+      spr.x = base.x + base.bitmap.width - sw + 24
+      spr.y = base.y - 14
+      spr.visible = true
     end
   end
 end

@@ -1,6 +1,6 @@
 #===============================================================================
 # C-GYM-01 – Gym Leader teams
-# Cody Settings → Battles (per save file):
+# Extras settings → Battles (per save file):
 #   * Gym Leader teams: Normal / +1 / +2 / Full – Gym Leaders bring extra
 #     Pokémon to every battle (gym, rematch or story battle).
 #   * Your Pokémon in gyms: Normal / +1 / +2 / Full – raises how many Pokémon

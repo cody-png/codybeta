@@ -222,7 +222,7 @@ end
 
 # TrainerRolls keeps each trainer's rolls per party slot under type|name|version; an
 # extended team has another slot order, so it gets its own record (|x2, |x3). Runs
-# before TrainerRolls' own handler (loaded later, in ZZ_Cody).
+# before TrainerRolls' own handler (loaded later, in ZZ_Extras).
 Events.onTrainerPartyLoad += proc { |_sender, e|
   t = e.is_a?(Array) ? e[0] : e
   m = KIF::Teams.team_mult(t)

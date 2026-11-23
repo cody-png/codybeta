@@ -15,7 +15,7 @@
 #                no battle starts, so no Pokemon can die and no route's
 #                encounter is used up)
 #     CONFUSION  the four direction buttons are shuffled for 50 steps on the
-#                map, a new random shuffle each time (Cody); menus, battles
+#                map, a new random shuffle each time; menus, battles
 #                and move routes are not touched
 #     MONEY      10% of your money, at most $5,000
 #     SWAP       a fused party Pokemon swaps head and body (as the DNA

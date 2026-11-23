@@ -653,7 +653,7 @@ module KIF
       gx = @gx
       gy = @gy
       stop
-      interact(pl, dir_to(gx - pl.x, gy - pl.y)) if fe   # face it and talk (Cody)
+      interact(pl, dir_to(gx - pl.x, gy - pl.y)) if fe   # face it and talk
     end
 
     # the marker's four corners, each an L turned outward (top-left, top-right,

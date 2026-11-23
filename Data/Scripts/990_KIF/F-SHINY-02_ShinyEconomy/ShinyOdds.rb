@@ -23,7 +23,7 @@
 #     2 All      – the whole party is shiny
 #     3 Off      – never shiny, not even ones the trainer file marks shiny
 #   Until 2026-10-27, 0 was shown as "Off" and 3 as "Normal" (no roll, i.e.
-#   as PIF), so the two looked the same (Cody's settings review). The stored
+#   as PIF), so the two looked the same (the settings review). The stored
 #   values keep their behaviour and only swap places on screen: saves that
 #   had "Off" now show Normal and play the same; saves that had "Normal"
 #   show Off (only trainer-file shinies, which PIF has very few of, change).

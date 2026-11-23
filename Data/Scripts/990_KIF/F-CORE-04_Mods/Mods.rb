@@ -108,7 +108,7 @@ module KIF
     def self.loaded_root; @loaded_root || []; end
     def self.loaded_dirs; @loaded_dirs || []; end
 
-    # Uninstall (Cody, 2026-10-20): deletes a mod of KIF's own Mods folder
+    # Uninstall: deletes a mod of KIF's own Mods folder
     # (its folder, or its loose .rb). Its settings move to the uninstalled
     # store first (KIF::ModSettings.stash). Code already loaded stays until
     # the game restarts. Mod Manager's mods are Mod Manager's to remove.

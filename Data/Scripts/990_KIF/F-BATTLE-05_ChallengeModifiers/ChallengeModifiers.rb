@@ -87,7 +87,7 @@ class PokeBattle_Battle
       next if !pos || !battler || battler.pbOwnedByPlayerSerious?
       if step > 1
         # a foe that came in this round is at turn 0, a multiple of every
-        # step: it waits its turns like the others (Cody, 2026-10-19)
+        # step: it waits its turns like the others
         next if battler.turnCount == 0
         next if battler.turnCount % step != 0
       end

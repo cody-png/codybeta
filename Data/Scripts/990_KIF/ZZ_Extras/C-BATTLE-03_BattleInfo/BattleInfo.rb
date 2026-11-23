@@ -40,7 +40,7 @@ KIF::Options.add(:others, :global) {
 }
 
 # 0 All: a foe's abilities and moves listed from the start; 1 As seen (the
-# default since 1.2.10: Cody, 27 Oct - a foe's ability stays hidden until the
+# default since 1.2.10 (27 Oct): a foe's ability stays hidden until the
 # battle shows it). Settings files keep the old default's 0, so it's switched
 # to As seen once (:cody_bi_foe_info_v2 remembers that).
 KIF::Options.define(:cody_bi_foe_info, 1, :global)
@@ -143,7 +143,7 @@ module KIF
       return !!(d && !battler.pokemon.equal?(d))
     end
 
-    # A disguised foe as the Pokémon it copies (Cody, 2026-10-25: "???" would
+    # A disguised foe as the Pokémon it copies (2026-10-25: "???" would
     # tell players it is a disguise): a copy of the battler set up as that
     # Pokémon (mods' set-up hooks give it that Pokémon's innates), keeping
     # what the battle shows of the real one (HP, status, level, held item,
@@ -569,7 +569,7 @@ class KifBattleInfoScreen
   end
 
   #---------------------------------------------------------------------------
-  # Description box (FulMinato via Cody, 2026-10-25): on Abilities and Moves,
+  # Description box (FulMinato, 2026-10-25): on Abilities and Moves,
   # USE puts a cursor on the rows, USE again opens the row's full text. A
   # hidden ("???") row doesn't open. @rows: [entry or nil, can open?] as drawn.
   #---------------------------------------------------------------------------

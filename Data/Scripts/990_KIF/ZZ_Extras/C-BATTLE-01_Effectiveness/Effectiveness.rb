@@ -1,6 +1,6 @@
 #===============================================================================
 # C-BATTLE-01 – Move effectiveness indicator
-# Cody Settings → Battles → "Move Effectiveness" (all saves, default On).
+# Extras settings → Battles → "Move Effectiveness" (all saves, default On).
 #
 # Fight menu, for damaging moves only (foe names too long for the box
 # scroll like a car radio display, one character every 0.3 s):

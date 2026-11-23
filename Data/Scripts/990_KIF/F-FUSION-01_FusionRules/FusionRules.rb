@@ -75,7 +75,7 @@ module KIF
 
     # The dominant-type tables name a species' own types (Bulbasaur: Grass).
     # With the Randomizer's types they mean the type now in that slot
-    # (Bulbasaur randomized to Ice: Ice). Cody, 2026-10-19.
+    # (Bulbasaur randomized to Ice: Ice). 2026-10-19.
     def self.rand_type(sp, t)
       return t unless sp && defined?(KIF::Rand)
       orig = KIF::Rand.instance_variable_get(:@orig)   # only there once the randomizer changed data

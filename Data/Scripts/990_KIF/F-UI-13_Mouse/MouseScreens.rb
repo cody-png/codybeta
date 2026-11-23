@@ -148,7 +148,7 @@ class PokemonStorageScene
     box = @sprites["box"]
     return unless box
     m = KIF::Mouse
-    # the wheel flips boxes, like PIF's box keys (Cody, 2026-10-23): up = previous
+    # the wheel flips boxes, like PIF's box keys: up = previous
     return m.wheel_press!(m.wheel > 0 ? Input::JUMPUP : Input::JUMPDOWN) if m.wheel != 0
     w = PokemonBox::BOX_WIDTH
     slot = nil

@@ -1,5 +1,5 @@
 #===============================================================================
-# F-BATTLE-05 – Nuzlocke (2026-10-22, Cody's rules)
+# F-BATTLE-05 – Nuzlocke (2026-10-22)
 #   * Only the first wild Pokémon met in each place can be caught. A place is
 #     a map name without its floor ("Mt. Moon B1F" = "Mt. Moon"), so a whole
 #     cave is one place. Dupes clause: a Pokémon whose evolution line you
@@ -12,16 +12,16 @@
 #   * Whiteout (no Pokémon left standing): the run is over and the save
 #     carries on with Nuzlocke Off, the run is over and the save is locked,
 #     or a normal blackout (a Pokémon from the PC joins you).
-#   * Gift Pokémon (Cody, 2026-10-22): Free = gifts, eggs and trades never use
+#   * Gift Pokémon: Free = gifts, eggs and trades never use
 #     up a place; Counts = they use up the place they were received in when
 #     its encounter is still unused (pbAddPokemon / pbAddToParty /
 #     pbAddForeignPokemon / pbGenerateEgg / pbStartTrade; the Silent adders
 #     are PIF's unfusing, Day Care and Mystery Gift, not gifts). PIF's own
-#     pbAddPokemonID gifts count too. The starter never counts (Cody): every
+#     pbAddPokemonID gifts count too. The starter never counts: every
 #     lab gives it with pbAddPokemonID as the player's first Pokémon (Oak's
 #     Lab and its Johto/Hoenn/Sinnoh/Custom copies, Legendary and randomized
 #     starters via obtainStarter); PIF's Hoenn helpers use pbAddPokemonSilent.
-#   * Kuray Shop (Cody, 2026-10-22): its Pokémon are the K-Eggs it sells
+#   * Kuray Shop: its Pokémon are the K-Eggs it sells
 #     (F-ITEM-02); using one never uses up a place. Counts = the run gets one
 #     K-Egg from the shop, another is refused before any money is taken;
 #     Free = no limit. Independent of Gift Pokémon.
@@ -602,7 +602,7 @@ class KifGraveyardPC
 end
 PokemonPCList.registerPC(KifGraveyardPC.new)
 
-# On the pause menu while Nuzlocke is On with Fainted Pokémon: Graveyard (Cody)
+# On the pause menu while Nuzlocke is On with Fainted Pokémon: Graveyard
 KIF::PauseMenu.add(:kif_nz_graveyard, "Graveyard", icon: "menuIcons/GRAVEYARD", order: 50,
   condition: proc { KIF::Nuzlocke.on? && $PokemonSystem.ch_nz_fainted == KIF::Nuzlocke::FAINTED_GRAVEYARD },
   handler: proc { |_scene| KIF::Nuzlocke.show_graveyard; :stay })

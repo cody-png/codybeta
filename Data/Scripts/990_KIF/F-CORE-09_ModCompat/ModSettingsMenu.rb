@@ -128,7 +128,7 @@ module KIF
     def self.key(k); return k.to_s.to_sym; end
 
     #---------------------------------------------------------------------------
-    # Settings of an uninstalled mod (Cody, 2026-10-20): moved into a file of
+    # Settings of an uninstalled mod: moved into a file of
     # their own that nothing reads, so a leftover value can't reach a save or
     # another mod. They come back only when the same mod registers the same
     # setting again and the value still fits it (a choice that still exists,

@@ -261,7 +261,7 @@ class PokemonDataBox
   end
 
   # the lower player-side box sits on the command box, which covered its tag's
-  # bottom 4 px: that tag is drawn over the menu's edge (Cody picked B, 2026-10-26)
+  # bottom 4 px: that tag is drawn over the menu's edge (2026-10-26)
   def kif_status_z(box_z)
     return box_z + 2 if @battler.opposes?(0) || @battler.index < 2
     return [box_z + 2, 300].max

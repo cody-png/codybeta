@@ -281,7 +281,7 @@ class KifLivingTitle
       @actors.last.timer = 2.0 + i * 4 + frand * 3
     end
     @fusion = nil
-    @fuse_wait = 2.5   # early: a player may not stay long (Cody, 2026-10-22)
+    @fuse_wait = 2.5   # early: a player may not stay long
     @sprites["flash"] = Sprite.new(@viewport)
     @sprites["flash"].bitmap = flash_bitmap
     @sprites["flash"].ox = @sprites["flash"].oy = 48

@@ -39,7 +39,7 @@
 #   Beta   - the "beta-testing" branch (new versions before they reach Stable)
 #   Test   - the "test" branch of the private repo cody-png/kif-test (2026-10-25),
 #            read with a test code: a GitHub fine-grained token (that repo only,
-#            Contents read-only) Cody makes per tester and can cancel. Options >
+#            Contents read-only) made per tester and can cancel. Options >
 #            System > Test Code takes it (pasted); it is kept in KIF_updates.kro
 #            in the save folder, sent only to TEST_BASE over HTTPS (curl: in its
 #            config file in the save folder, never on the command line) and
@@ -168,7 +168,7 @@ module KIF
 
     # Updates (Stable / Beta / Off) and "Skip this version" are often picked
     # on the load screen, before there's a save to write them into, so they
-    # are also kept in a small file in the save folder (Cody, 2026-10-19)
+    # are also kept in a small file in the save folder
     CHOICES_FILE = "KIF_updates.kro"
 
     def choices_path
@@ -934,7 +934,7 @@ module KIF
         exe = Win.exe_path || File.join(root, "InfiniteFusion.exe")
         File.open(File.join(dir, "apply.cmd"), "wb") { |f| f.write(apply_script(dir, version, Process.pid, exe)) }
         # goes on by itself: it waited for a button, so the game sat there until the update
-        # window's backstop killed it, with no end line in the log (Cody, 2026-10-25). The
+        # window's backstop killed it, with no end line in the log. The
         # window starts after it, so it can't cover the message or take its key presses.
         pbMessage(_INTL("KIF {1} is ready. The game closes now and starts again in a moment.", version) + "\\wtnp[20]")
         if start_apply(dir)
@@ -970,7 +970,7 @@ module KIF
       shown = since ? sections.select { |s| !(v = s[0][NOTES_HEAD, 1]) || newer?(v, since) } : []
       shown = sections.first(1) if shown.empty?
       # the Update history's full-screen reader (Updater_History.rb), not 3-line
-      # message boxes over a black screen; B or A closes it (Cody, 2026-10-26)
+      # message boxes over a black screen; B or A closes it
       show_text(_INTL("What's new"), shown.flatten)
     end
 
@@ -1240,7 +1240,7 @@ module KIF
     end
 
     def remove_dev_leftovers(dir = root)
-      return [] if File.exist?(File.join(dir, ".git")) || !KIF::Paths.game_writable?   # a git checkout is Cody's
+      return [] if File.exist?(File.join(dir, ".git")) || !KIF::Paths.game_writable?   # a git checkout is a dev copy
       gone = DEV_LEFTOVERS.select { |p| File.exist?(File.join(dir, p)) }
       gone.each { |p| rm_tree(File.join(dir, p)) }
       log("removed files an older build left: #{gone.join(', ')}") unless gone.empty?

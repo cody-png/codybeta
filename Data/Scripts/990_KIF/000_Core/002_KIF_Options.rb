@@ -50,7 +50,7 @@ module KIF
 
     def self.defaults; @defaults; end
 
-    # Menus added by other settings roots (e.g. Cody Settings):
+    # Menus added by other settings roots (e.g. Extras settings):
     # id => [title, menu-button description, name colour, shadow colour, button label]
     @extra_menus = {}
 

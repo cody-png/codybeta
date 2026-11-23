@@ -1,6 +1,6 @@
 #===============================================================================
 # C-FUSION-02 – Fusion Screen
-# Cody Settings > Interface > "Fusion Screen" (Off/On, all saves, default On)
+# Extras settings > Interface > "Fusion Screen" (Off/On, all saves, default On)
 #
 # The DNA Splicer preview (052_InfiniteFusion/Fusion/Menus/FusionPreviewScreen.rb)
 # gets a new layout (2026-10-06). For each side:

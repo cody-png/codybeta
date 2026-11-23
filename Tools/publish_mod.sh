@@ -178,7 +178,7 @@ if [ "$DIRECT" = 1 ]; then
   # shortcut: a text search, so an "id" inside another mod's dependency list also stops it (the safe side); parse the JSON if that gets in the way
   OTHER="$(git grep -l -E "[^a-z0-9_]id.[[:space:]]*:[[:space:]]*.$ID[^a-z0-9_-]" upstream/main -- '*/mod.json' 2>/dev/null \
            | sed 's#^upstream/main:##; s#/mod\.json$##' | grep -vxF -- "$FOLDER" | head -n 1)"
-  [ -z "$OTHER" ] || fail "the id $ID is already used by the catalog's $OTHER folder. Ask Cody on the KIF Discord."
+  [ -z "$OTHER" ] || fail "the id $ID is already used by the catalog's $OTHER folder. Ask on the KIF Discord."
 fi
 
 # 6. The mod's files (not its .git folder or KIF's install lists)

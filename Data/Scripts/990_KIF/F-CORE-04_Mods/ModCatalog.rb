@@ -34,7 +34,7 @@ module KIF
   module ModCatalog
     REPO       = "KIF-Mods/mods"
     DISCORD_REPO = "cody-png/kif-discord-mods"   # mods only shared on Discord (made with import_mods.py)
-    OWN_REPO     = "cody-png/kif-mods"           # KIF's own mods from now on (Cody, 2026-10-20)
+    OWN_REPO     = "cody-png/kif-mods"           # KIF's own mods from now on
     SOURCE_FILE = "KIF_mods_source.txt"
     CATALOGS_FILE = "KIF_mods_catalogs.txt"
     ASSET_DIRS = %w[Graphics Audio Fonts]
@@ -663,7 +663,7 @@ module KIF
 
     # where a file of the mod lives once installed (game folder for assets)
     # every file stays in the mod's folder; its pictures / sounds are found
-    # there by KIF::ModAssets (Cody, 2026-10-20: nothing is copied into the game)
+    # there by KIF::ModAssets (2026-10-20: nothing is copied into the game)
     def dest_for(item, rel)
       return File.join(folder_of(item), rel)
     end
@@ -1115,7 +1115,7 @@ module KIF
       install_set(_INTL("the share code"), list)
     end
 
-    # load screen, right after KIF's own update check (Cody, 2026-10-20);
+    # load screen, right after KIF's own update check;
     # nothing when Updates is Off or the catalogs don't answer
     def startup_check
       return false unless cat.available? && KIF::Updater.channel != 2

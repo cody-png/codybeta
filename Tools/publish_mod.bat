@@ -313,7 +313,7 @@ for /f "usebackq tokens=2 delims=:" %%a in (`git grep -l -E "!ID_BEFORE!!ID!!ID_
   for /f "delims=/" %%b in ("%%a") do if not "%%b"=="!FOLDER!" if not defined OTHER set "OTHER=%%b"
 )
 if not defined OTHER exit /b 0
-set "WHY=the id !ID! is already used by the catalog's !OTHER! folder. Ask Cody on the KIF Discord."
+set "WHY=the id !ID! is already used by the catalog's !OTHER! folder. Ask on the KIF Discord."
 exit /b 1
 
 rem :install <winget id> <command> <name> <download page> <folder it installs to>

@@ -219,13 +219,13 @@ module KIF
     # Pinkan Island (PIF's Team Rocket / police quest: Settings::PINKAN_ISLAND_MAPS)
     # plays as in PIF: its wild Pokémon, bosses, gifts, trainers, items and
     # levels are never randomized, Nuzlocke's rules and Archipelago's checks
-    # don't apply there, so the quest can always be finished (Cody, 2026-10-23)
+    # don't apply there, so the quest can always be finished
     def self.pinkan?(map_id = nil)
       map_id ||= $game_map ? $game_map.map_id : nil
       return Settings::PINKAN_ISLAND_MAPS.include?(map_id)
     end
 
-    # Randomizer button in Cody Settings: saves started as randomized saves
+    # Randomizer button in Extras settings: saves started as randomized saves
     def self.available?
       return $game_switches && $PokemonGlobal && sw(SWITCH_RANDOMIZED_AT_LEAST_ONCE)
     end

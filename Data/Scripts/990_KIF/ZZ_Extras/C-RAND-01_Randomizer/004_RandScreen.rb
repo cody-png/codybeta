@@ -1,7 +1,7 @@
 #===============================================================================
 # C-RAND-01 – the Randomizer screen (replaces PIF's RandomizerOptionsScene,
 # which PIF's events open when a randomized save is made). Also reachable from
-# Cody Settings on saves started as randomized saves. Built from the game's
+# Extras settings on saves started as randomized saves. Built from the game's
 # own option windows, so it follows the player's frame and dark mode.
 #===============================================================================
 module KIF

@@ -1,6 +1,6 @@
 #===============================================================================
 # C-FUSION-01 – Legendary Breeding
-# Cody Settings → Breeding & Fusion → "Legendary Breeding" (per save,
+# Extras settings → Breeding & Fusion → "Legendary Breeding" (per save,
 # default Off).
 #
 # With it On, a legendary (LEGENDARIES_LIST, or a fusion with a legendary

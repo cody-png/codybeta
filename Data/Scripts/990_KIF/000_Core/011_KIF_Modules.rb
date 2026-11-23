@@ -1,7 +1,7 @@
 #===============================================================================
 # KIF Modules (2026-10-10)
 #
-# Every KIF / Cody's additions feature belongs to a module. Options > Modules sets each
+# Every KIF / Extras feature belongs to a module. Options > Modules sets each
 # module to:
 #   Off    - the feature does nothing: the game uses PIF's own behaviour, and
 #            its settings, pause menu / PC entries are hidden
@@ -23,7 +23,7 @@
 #
 # Always on (no module): the core, save compatibility, mod loading and mod
 # compatibility, Mystery Gift, debug tools, settings presets, PIF fixes,
-# map load cache, sprite import, save folder and the Cody's additions debug
+# map load cache, sprite import, save folder and the Extras debug
 # tools.
 # Things a module changes while the game starts (data tables, constants)
 # stay changed; their effects are listed in KIF_Features.md.

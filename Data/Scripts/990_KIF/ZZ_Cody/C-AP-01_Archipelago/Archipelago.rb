@@ -359,8 +359,9 @@ module KIF
       s = scout(id)
       verb = kind == :given ? _INTL("obtained") : _INTL("found")
       return _INTL("You {1} an Archipelago item!", verb) unless s && !s["item"].to_s.empty?
-      return _INTL("You {1} your {2}!", verb, s["item"]) if s["own"] || s["player"].to_s.empty?
-      return _INTL("You {1} {2}'s {3}!", verb, s["player"], s["item"])
+      item = KIF.safe_text(s["item"], 60)   # names come from files the client writes
+      return _INTL("You {1} your {2}!", verb, item) if s["own"] || s["player"].to_s.empty?
+      return _INTL("You {1} {2}'s {3}!", verb, KIF.safe_text(s["player"], 40), item)
     end
 
     def found_message(id, kind)
@@ -539,8 +540,9 @@ module KIF
     end
 
     def received_text(name, who, d)
+      name = KIF.safe_text(name, 60)
       return _INTL("You got {1}!", name) if who.empty? || who == d[:slot]
-      return _INTL("Received {1} from {2}!", name, who)
+      return _INTL("Received {1} from {2}!", name, KIF.safe_text(who, 40))
     end
 
     # One received item; false = can't take it now (bag pocket full)
@@ -566,7 +568,12 @@ module KIF
         KIF.log("Archipelago: unknown item #{e['item'].inspect} (index #{e['index']}) skipped")
         return true
       end
-      return false unless $PokemonBag.pbStoreItem(it, [e["count"].to_i, 1].max)
+      qty = e["count"].to_i.clamp(1, Settings::BAG_MAX_PER_SLOT)   # a larger count would store one slot and report failure, then store it again
+      unless $PokemonBag.pbStoreAllOrNone(it, qty)
+        return false if $PokemonBag.maxPocketSize(it.pocket) != 0   # a full pocket: try again later
+        KIF.log("Archipelago: #{it.id} (index #{e['index']}) has no bag pocket, skipped")
+        return true
+      end
       pbMessage(_INTL("\\me[Item get]{1}\\wtnp[30]", received_text(it.name, who, d)))
       return true
     end

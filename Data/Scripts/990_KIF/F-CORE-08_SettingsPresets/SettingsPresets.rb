@@ -34,7 +34,7 @@ module KIF
     def data
       d = nil
       begin
-        d = File.open(path, "rb") { |f| Marshal.load(f) } if File.exist?(path)
+        d = KIF.safe_marshal_load(File.binread(path)) if File.exist?(path)
       rescue StandardError => e
         KIF.set_aside(path, "Presets file", e)   # the next save must not overwrite the player's presets
       end

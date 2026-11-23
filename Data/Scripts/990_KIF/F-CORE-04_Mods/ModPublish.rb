@@ -81,11 +81,7 @@ module KIF
     end
 
     def save_json(path, json)
-      f = File.join(path, "mod.json")
-      tmp = f + ".kif_tmp"
-      File.open(tmp, "wb") { |io| io.write(to_json(json) + "\n") }
-      File.delete(f) if File.file?(f)
-      File.rename(tmp, f)
+      KIF.atomic_write(File.join(path, "mod.json")) { |io| io.write(to_json(json) + "\n") }
       return true
     rescue StandardError => e
       log("mod.json not saved in #{path} (#{e.class}: #{e.message})")

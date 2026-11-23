@@ -1207,8 +1207,16 @@ module KIF
             begin
               File.rename(held, dest)   # replaces the installed file in one step, so a failure can't leave neither
             rescue SystemCallError
-              File.delete(dest) if File.exist?(dest)
-              File.rename(held, dest)
+              # where a rename won't replace: the installed file steps aside and comes back if the move fails
+              aside = dest + ".kif_old"
+              File.rename(dest, aside) if File.exist?(dest)
+              begin
+                File.rename(held, dest)
+              rescue SystemCallError
+                File.rename(aside, dest) if File.exist?(aside)
+                raise
+              end
+              File.delete(aside) rescue nil
             end
             done += 1
           else

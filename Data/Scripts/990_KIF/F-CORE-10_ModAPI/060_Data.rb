@@ -238,8 +238,18 @@ module KIF
             API::Data.refuse(@scope, @mod, "migrate: #{e.message}")
             return false
           end
+          old = to_h
           keys.each { |k| API::Data.forget_key(@scope, @mod, k) }
-          clean.each { |k, v| API::Data.write(@scope, @mod, k, v) }
+          ok = false
+          begin
+            ok = clean.all? { |k, v| API::Data.write(@scope, @mod, k, v) }
+          ensure
+            unless ok   # a refused write (over a size cap) must not cost the mod its old data
+              keys.each { |k| API::Data.forget_key(@scope, @mod, k) }
+              old.each { |k, v| API::Data.write(@scope, @mod, k, v) }
+            end
+          end
+          return false unless ok
           API::Data.table(@scope)[@mod][VERSION_KEY] = to
           API::Data.mark_dirty(@mod) if @scope == :global
           return true

@@ -351,7 +351,7 @@ module KIF
     def disk
       return @disk if @disk
       d = begin
-            File.file?(disk_path) ? File.open(disk_path, "rb") { |f| Marshal.load(f) } : nil
+            File.file?(disk_path) ? KIF.safe_marshal_load(File.binread(disk_path)) : nil
           rescue StandardError
             log("cache file unreadable, ignored")
             nil
@@ -582,6 +582,12 @@ module KIF
     # live one (a backup, a template). A folder name can hold another mod
     # in the other Mods folder on a phone.
     def folder_of(item)
+      installed_index   # a rebuilt index forgets the folders kept below
+      @folder_of ||= {}
+      return @folder_of[[item.id, item.folder]] ||= find_folder_of(item)
+    end
+
+    def find_folder_of(item)
       d = mod_dirs.find do |x|
         j = File.join(x, item.folder.to_s, "mod.json")
         id = File.file?(j) ? (KIF::Mods.read_json(j) || {}).fetch("id", item.id) : nil
@@ -599,6 +605,7 @@ module KIF
     def installed_index
       return @installed_index if @installed_index
       @installed_index = {}
+      @folder_of = {}
       @installed_in = {}   # mod id => the Mods folder it is in (a folder name can be in both)
       mod_dirs.each do |dir|
         next unless File.directory?(dir)

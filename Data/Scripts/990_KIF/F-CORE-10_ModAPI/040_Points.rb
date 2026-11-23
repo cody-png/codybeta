@@ -95,10 +95,11 @@ module KIF
         s = $scene
         return :other if s.nil?
         return :map if defined?(::Scene_Map) && s.is_a?(::Scene_Map)
-        n = s.class.name.to_s
-        return :title if n =~ /Title|Intro|Load/
-        return :menu if n =~ /Menu|Pause|Bag|Party|Pokedex|Storage|Option/
-        return :other
+        @scopes ||= {}   # the class name never changes: match it once
+        return @scopes[s.class] ||= begin
+          n = s.class.name.to_s
+          n =~ /Title|Intro|Load/ ? :title : (n =~ /Menu|Pause|Bag|Party|Pokedex|Storage|Option/ ? :menu : :other)
+        end
       end
 
       #-------------------------------------------------------------------------

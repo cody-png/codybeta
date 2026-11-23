@@ -300,6 +300,7 @@ module KIF
     #---------------------------------------------------------------------------
     def self.say(key, text)
       return false if @said[key]
+      @said.clear if @said.length >= 2000   # keys built from mod text must not pile up for the whole session
       @said[key] = true
       KIF.log(text)
       return true

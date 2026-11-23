@@ -590,14 +590,19 @@ module KIF
       save!
     end
 
-    def self.revoked_match(e, rec)
-      id = json_id(e)
+    # the revoked row for a mod by id, then by any of fps when the row gives a fingerprint, else by its version test
+    def self.revoked_row(ids, version, fps)
+      fps = fps.compact
       return live_lists["revoked"].find do |r|
-        next false unless r["id"] == id || r["id"] == e.id
-        next [rec["fingerprint"], rec["rfp"]].include?(r["fingerprint"]) if r["fingerprint"]
-        next KIF::ModRules.version_ok?(r["versions"], e.version.to_s) if r["versions"] && e.version
+        next false unless ids.include?(r["id"])
+        next fps.include?(r["fingerprint"]) if r["fingerprint"]
+        next KIF::ModRules.version_ok?(r["versions"], version.to_s) if r["versions"] && version
         true
       end
+    end
+
+    def self.revoked_match(e, rec)
+      return revoked_row([json_id(e), e.id], e.version, [rec["fingerprint"], rec["rfp"]])
     end
 
     def self.json_id(e)
@@ -607,13 +612,7 @@ module KIF
 
     # the revoked entry that matches this mod, or nil. id plus fingerprint when it gives one, else id plus version test.
     def self.revoked_entry(e, rep)
-      id = json_id(e)
-      return live_lists["revoked"].find do |r|
-        next false unless r["id"] == id || r["id"] == e.id
-        next r["fingerprint"] == rep.fingerprint if r["fingerprint"]
-        next KIF::ModRules.version_ok?(r["versions"], e.version.to_s) if r["versions"] && e.version
-        true
-      end
+      return revoked_row([json_id(e), e.id], e.version, [rep.fingerprint, review_fingerprint(e, rep)])
     end
 
     def self.revoked_reason(e, rep)
@@ -624,13 +623,7 @@ module KIF
 
     # a catalog item (not installed): is it revoked? item needs id, version
     def self.revoked_item(id, version, fingerprint = nil)
-      return live_lists["revoked"].find do |r|
-        next false unless r["id"] == id
-        next r["fingerprint"] == fingerprint if r["fingerprint"] && fingerprint
-        next false if r["fingerprint"]
-        next KIF::ModRules.version_ok?(r["versions"], version.to_s) if r["versions"]
-        true
-      end
+      return revoked_row([id], version.to_s, [fingerprint])
     end
 
     # "Reviewed 2026-11-01" / "Changed since it was reviewed" / nil

@@ -514,7 +514,10 @@ module KIF
     def self.map_tick
       s = session or return
       send_status if $game_map && $game_map.map_id != @sent_map && (@want || @their)
-      send_rules if @want || @their   # a setting changed on the host (sent only then)
+      if (@want || @their) && KIF::Net.now - (@rules_at ||= 0) >= 1   # a setting changed on the host (sent only then, looked for once a second)
+        @rules_at = KIF::Net.now
+        send_rules
+      end
       if @ask
         ask = @ask
         why = if !on? then "off"

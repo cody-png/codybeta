@@ -405,10 +405,8 @@ module Game
       end
       ret = kif_si_start_new(*args, &blk)
       pend = data[:kif_pending]
-      if pend   # the new game's own (was {})
-        pend[:notified] = false unless pend[:pokemon].empty?
-        KIF::SaveImport.pending = pend
-      end
+      pend[:notified] = false if pend && !pend[:pokemon].to_a.empty?
+      KIF::SaveImport.pending = pend || {}   # the new game's own, never the last save's
       return ret
     end
   end

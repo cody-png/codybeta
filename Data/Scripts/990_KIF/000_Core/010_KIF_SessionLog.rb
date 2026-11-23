@@ -23,6 +23,7 @@ module KIF
     MAX_MISSING_SPRITES = 40
 
     @started = nil
+    @ended = false
     @bytes = 0
     @counts = Hash.new(0)
     @full = false
@@ -42,7 +43,7 @@ module KIF
       end
 
       def start
-        return if @started
+        return if @started || @ended
         @started = Time.now
         begin
           if File.exist?(path)
@@ -66,7 +67,7 @@ module KIF
         raw("Game folder: #{File.expand_path(".")}")
         raw("Save folder: #{KIF.save_dir}")
         raw("Logs: #{KIF::Paths.logs}")
-        at_exit { finish }
+        at_exit { quit }
       end
 
       # which engine build and system: mkxp-z version, platform, Ruby, the exe
@@ -120,6 +121,7 @@ module KIF
       end
 
       def write(msg)
+        return if @ended   # the game is closing: a late line must not start a session that takes over KIF_log_previous.txt
         start
         return if @full   # nothing more is written, so nothing more is counted (a partner can send endless different lines)
         msg = msg.to_s
@@ -135,6 +137,12 @@ module KIF
         raw("[#{stamp}] #{@missing - MAX_MISSING_SPRITES} more sprites couldn't be found") if @missing > MAX_MISSING_SPRITES
         raw("[#{stamp}] Session ended")
         @started = nil
+      end
+
+      # The process is ending: finish, and nothing written after this starts a new session
+      def quit
+        finish
+        @ended = true
       end
 
       # The last maps you were on, for crash reports

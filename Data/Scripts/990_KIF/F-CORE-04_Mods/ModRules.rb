@@ -38,10 +38,7 @@ module KIF
     end
 
     def compare(a, b)
-      x = parts(a)
-      y = parts(b)
-      n = [x.length, y.length].max
-      return (x + [0] * (n - x.length)) <=> (y + [0] * (n - y.length))
+      return KIF.newer_version?(a, b) ? 1 : (KIF.newer_version?(b, a) ? -1 : 0)
     end
 
     # ">=0.21.52, <0.23" -> [[">=", "0.21.52"], ["<", "0.23"]]

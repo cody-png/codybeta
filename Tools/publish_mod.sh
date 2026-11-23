@@ -207,7 +207,11 @@ fi
 
 # 7a. Contributors: straight to main
 if [ "$DIRECT" = 1 ]; then
-  git push -q origin "HEAD:main" || fail "couldn't publish: the catalog changed while this ran. Run it again."
+  n=0
+  until git push -q origin "HEAD:main"; do
+    n=$((n + 1)); [ $n -ge 3 ] && fail "couldn't publish: no connection to GitHub, or the catalog changed while this ran. Run it again."
+    echo "Upload failed, trying again..."; sleep 5
+  done
   echo
   echo "Published: players get it at their next catalog check."
   echo "The catalog's check runs on every change; a red X here means something needs fixing:"

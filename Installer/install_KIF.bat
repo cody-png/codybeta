@@ -72,8 +72,21 @@ if not exist "%TARGET%" (
 echo  Downloading KIF ^(%BRANCH%^) - about 1 to 2 GB, this takes a while...
 echo.
 if exist "%ZIP%" del /f /q "%ZIP%" >nul 2>&1
-"%CURL%" -L --fail --retry 5 --retry-delay 3 -o "%ZIP%" "%URL%"
+"%CURL%" -L --fail --retry 5 --retry-delay 3 --speed-time 60 --speed-limit 1000 -o "%ZIP%" "%URL%"
 if errorlevel 1 goto :download_failed
+
+rem  optional check: with an install_KIF.sha256 file next to this installer
+rem  (first word = the zip's SHA-256) the download must match; no file, no check
+if not exist "%HERE%install_KIF.sha256" goto :sum_ok
+set "WANT="
+set "GOT="
+for /f "usebackq tokens=1" %%h in ("%HERE%install_KIF.sha256") do if not defined WANT set "WANT=%%h"
+for /f "skip=1 tokens=*" %%h in ('certutil -hashfile "%ZIP%" SHA256') do if not defined GOT set "GOT=%%h"
+if not defined GOT goto :sum_failed
+set "GOT=%GOT: =%"
+if /I not "%GOT%"=="%WANT%" goto :sum_failed
+echo  Download checked ^(SHA-256 matches^).
+:sum_ok
 
 echo.
 echo  Unpacking ^(a few minutes - about 30,000 files^)...
@@ -108,6 +121,13 @@ if /I "%BRANCH%"=="release" (
   echo  The download failed. Check your internet connection and run the
   echo  installer again.
 )
+if exist "%ZIP%" del /f /q "%ZIP%" >nul 2>&1
+goto :end_fail
+
+:sum_failed
+echo.
+echo  The download doesn't match install_KIF.sha256 ^(it is damaged, or not the version
+echo  that file is for^). Run the installer again, or delete that file to skip the check.
 if exist "%ZIP%" del /f /q "%ZIP%" >nul 2>&1
 goto :end_fail
 

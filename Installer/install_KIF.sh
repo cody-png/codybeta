@@ -9,7 +9,9 @@
 #  After that the game keeps itself up to date (in-game updater).
 #  Needs about 4.5 GB free while installing (about 1 to 2 GB once done).
 #  Options: --stable / --beta (skip the question), KIF_INSTALL_URL=<url> to
-#  download from somewhere else (testing).
+#  download from somewhere else (testing). An install_KIF.sha256 file next
+#  to this installer (first word = the zip's SHA-256) makes it check the
+#  download; without that file nothing is checked.
 # ============================================================================
 set -u
 
@@ -106,12 +108,24 @@ say ""
 say "  Downloading KIF ($BRANCH) - about 1 to 2 GB, this takes a while..."
 rm -f "$ZIP"
 if [ "$DL" = curl ]; then
-  curl -L --fail --retry 5 --retry-delay 3 -o "$ZIP" "$URL" || {
+  curl -L --fail --retry 5 --retry-delay 3 --speed-time 60 --speed-limit 1000 -o "$ZIP" "$URL" || {
     [ "$BRANCH" = release ] && fail "The download failed. If this keeps happening there may be no Stable release yet - run again and choose B (Beta)."
     fail "The download failed. Check your internet connection and run the installer again."
   }
 else
-  wget -q --show-progress -O "$ZIP" "$URL" || fail "The download failed. Check your internet connection and run the installer again."
+  wget -q --show-progress --timeout=60 --tries=5 -O "$ZIP" "$URL" || fail "The download failed. Check your internet connection and run the installer again."
+fi
+
+# Optional check: with an install_KIF.sha256 file next to this installer, the
+# download must match the SHA-256 in it; without the file nothing is checked.
+SUMFILE="$HERE/install_KIF.sha256"
+if [ -f "$SUMFILE" ]; then
+  WANT="$(awk '{print tolower($1); exit}' "$SUMFILE" | tr -d '\r')"
+  if command -v sha256sum >/dev/null 2>&1; then GOT="$(sha256sum "$ZIP" | awk '{print $1}')"
+  elif command -v shasum >/dev/null 2>&1; then GOT="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
+  else fail "install_KIF.sha256 is there but this system has no sha256sum or shasum to check it with. Remove that file to install without the check."; fi
+  [ "$GOT" = "$WANT" ] || fail "The download doesn't match install_KIF.sha256 (it is damaged, or not the version that file is for). Run the installer again."
+  say "  Download checked (SHA-256 matches)."
 fi
 
 say ""
@@ -145,6 +159,7 @@ echo "  Steam > Games > Add a Non-Steam Game to My Library > Browse > pick"
 echo "  $(pwd)/InfiniteFusion.exe"
 echo "  then the game's Properties > Compatibility > Force a Steam Play"
 echo "  compatibility tool (Proton)."
+exit 1
 LAUNCH
 chmod +x "$TARGET/run_KIF.sh"
 

@@ -117,17 +117,8 @@ module KIF
       return text.to_s.gsub(/github_pat_[A-Za-z0-9_]+/) { |c| "github_pat_..." + c[-4, 4] }
     end
 
-    def version_parts(v)
-      return v.to_s.scan(/\d+/).map(&:to_i)
-    end
-
-    # true when version a is newer than version b
     def newer?(a, b)
-      x = version_parts(a)
-      y = version_parts(b)
-      return false if x.empty?
-      n = [x.length, y.length].max
-      return ((x + [0] * (n - x.length)) <=> (y + [0] * (n - y.length))) == 1
+      return KIF.newer_version?(a, b)
     end
 
     def current_version
@@ -184,14 +175,20 @@ module KIF
       return File.join(KIF.save_dir, CHOICES_FILE)
     end
 
+    # read again only when the file changed (asked many times during start-up and every frame of a menu)
     def stored_choices
+      path = choices_path
+      return {} unless File.file?(path)
+      st = File.stat(path)
+      stamp = [path, st.mtime, st.size]
+      return @choices_cache[1].dup if @choices_cache && @choices_cache[0] == stamp
       h = {}
-      return h unless File.file?(choices_path)
-      File.read(choices_path).split(/\r?\n/).each do |l|
+      File.read(path).split(/\r?\n/).each do |l|
         k, v = l.split("=", 2)
         h[k] = v.to_s if k && !k.empty?
       end
-      return h
+      @choices_cache = [stamp, h]
+      return h.dup
     rescue StandardError
       return {}
     end
@@ -200,7 +197,8 @@ module KIF
       h = stored_choices
       value.nil? ? h.delete(key.to_s) : h[key.to_s] = value.to_s
       KIF.mkdir_p(KIF.save_dir)
-      File.open(choices_path, "wb") { |f| f.write(h.map { |k, v| "#{k}=#{v}" }.join("\r\n")) }
+      KIF.atomic_write(choices_path) { |f| f.write(h.map { |k, v| "#{k}=#{v}" }.join("\r\n")) }
+      @choices_cache = nil
     rescue StandardError => e
       log("couldn't keep the update choice (#{e.class}: #{e.message})")
     end
@@ -668,11 +666,12 @@ module KIF
           started = Time.now
           code = nil   # read after the loop
           last = 0
+          have = total - todo.inject(0) { |s, it| s + it[2] }   # the files already in place are not looked at again
           loop do
             code = Win.exit_code(h)
             if Time.now.to_f - last > 0.25 || code
               last = Time.now.to_f
-              got = items.inject(0) { |s, (path, _sha, _size)| p = staged(dir, path); s + (File.file?(p) ? File.size(p) : 0) }
+              got = have + todo.inject(0) { |s, (path, _sha, _size)| p = staged(dir, path); s + (File.file?(p) ? File.size(p) : 0) }
               status(title, _INTL("{1} of {2}", size_text([got, total].min), size_text(total)),
                      total > 0 ? got.to_f / total : 1, _INTL("{1}: cancel (you can update later)", KIF::Keys.name(Input::BACK)))
             else

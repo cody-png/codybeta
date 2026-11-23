@@ -69,8 +69,6 @@ end
 
 # The load screen's version check (PIF's spot, defined in Updater.rb):
 # KIF's check, then the mod check when it's due and the network answered well
-alias kif_su_find_newer_available_version find_newer_available_version unless defined?(kif_su_find_newer_available_version)
-
 def find_newer_available_version
   KIF::Updater.after_update
   updating, secs = KIF::Startup.timed("KIF version check") { KIF::Updater.check(false) }

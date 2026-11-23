@@ -30,8 +30,8 @@ module KIF
 
     # A command list of one of PIF's reroll events (cached per list)
     def self.reroll_event?(list)
-      @reroll_lists ||= {}
-      key = list.object_id
+      @reroll_lists ||= {}.compare_by_identity
+      key = list
       return @reroll_lists[key] if @reroll_lists.key?(key)
       @reroll_lists.clear if @reroll_lists.length > 32
       asks = list.any? { |c| c.code == 101 && utf8(c.parameters[0].to_s).strip =~ REROLL_TEXT }

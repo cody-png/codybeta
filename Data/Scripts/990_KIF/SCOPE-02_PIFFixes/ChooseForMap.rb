@@ -21,6 +21,7 @@ class PokemonEncounters
     return nil if !enc_list || enc_list.length == 0
     chance_total = 0
     enc_list.each { |a| chance_total += a[0] }
+    return nil if chance_total <= 0   # all weights zero: rand(0) is a Float and no entry is picked
     rnd = 0
     chance_rolls.times do
       r = rand(chance_total)

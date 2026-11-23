@@ -591,7 +591,7 @@ module KIF
         if mode == 0
           begin
             Dir.mkdir("Graphics/Imported") unless File.directory?("Graphics/Imported")
-            dest = "Graphics/Imported/#{pkmn.personalID}_#{pkmn.owner ? pkmn.owner.id : 0}_#{pkmn.species}.png"
+            dest = "Graphics/Imported/#{pkmn.personalID}_#{pkmn.owner ? pkmn.owner.id : 0}_#{pkmn.species.to_s.gsub(/[^A-Za-z0-9_]/, '_')}.png"
             File.open(dest, "wb") { |f| f.write(File.binread(png)) }
             pkmn.instance_variable_set(:@kuraycustomfile, dest)
           rescue

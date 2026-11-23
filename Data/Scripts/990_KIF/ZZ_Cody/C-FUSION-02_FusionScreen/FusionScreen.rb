@@ -540,7 +540,7 @@ class FusionPreviewScreen
   end
 
   def cody_fs_current_name(pos)
-    return GameData::Species.get(cody_fs_dex(pos, [0, 0])).real_name
+    return GameData::Species.get(cody_fs_dex(pos)).real_name
   end
 
   def cody_fs_change(pos, part)

@@ -437,7 +437,7 @@ module KIF
         vals[key] = v
       end
       return nil unless parts[3] =~ /\A\d+\z/ && parts[4] =~ /\A\d+\z/
-      CODE_TAIL.each { |key, c| vals[key] = parts[6].to_s.include?(c) ? 1 : 0 } unless v1   # no 7th part = Off
+      CODE_TAIL.each { |key, c| vals[key] = parts[6].to_s.include?(c) ? 1 : 0 }   # no 7th part (and KIFR1) = Off
       vals[:wild_bst] = [parts[3].to_i, 999].min
       vals[:trainer_bst] = [parts[4].to_i, 999].min
       bans = nil

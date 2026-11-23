@@ -168,7 +168,7 @@ module KIF
 							pkmn.forget_move_at_index(3)
 							pkmn.learn_move(:WILLOWISP)
 						end
-					when :B144H367
+					when :B208H131
 						if partypoopers>1
 							pkmn.forget_move_at_index(2)
 							pkmn.learn_move(:HAIL)
@@ -1637,7 +1637,7 @@ module KIF
 						end
 					when :B243H157
 						if needdark || needfairy
-							pkmn.item == :LIFEORB
+							pkmn.item = :LIFEORB
 							pkmn.forget_move(:ERUPTION)
 							pkmn.learn_move(:WILLOWISP)
 						end

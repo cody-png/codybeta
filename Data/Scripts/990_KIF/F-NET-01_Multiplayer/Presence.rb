@@ -678,7 +678,7 @@ module KIF
       # the map's own state (talk or idle) never replaces a screen's
       doing(pbMapInterpreterRunning? || $game_temp.message_window_showing ? "talk" : "idle") if [nil, "idle", "talk"].include?(@doing)
       if (st = local_state)
-        @link.track(st, local_look, KIF::Net.now).each { |type, f| s.post(type, f) }
+        @link.track(st, look_now, KIF::Net.now).each { |type, f| s.post(type, f) }
       end
       @link.update
       attach_sprites
@@ -804,6 +804,14 @@ module KIF
                        p.transparent ? 1 : 0, p.jumping?)
     end
 
+    # the look is read a few times a second, not every frame
+    def self.look_now
+      t = KIF::Net.now
+      return @look_c if @look_t && t >= @look_t && t - @look_t < 0.25
+      @look_t = t
+      return @look_c = local_look
+    end
+
     def self.local_look
       t = $Trainer or return nil
       shape = (t.surfing_pokemon.shape rescue nil)
@@ -843,7 +851,7 @@ module KIF
       place = (pbGetMessage(MessageTypes::MapNames, g.map_id) rescue nil)
       place = (pbGetBasicMapNameFromId(g.map_id) rescue nil) if nil_or_empty?(place)
       return nil if nil_or_empty?(place)
-      place = place.to_s.gsub(/\\PN/, name)   # "\PN's house" is theirs
+      place = place.to_s.gsub(/\\PN/) { name }   # "\PN's house" is theirs (block: a name with a backslash is not a back-reference)
       return d ? _INTL("{1} is in {2} ({3}).", name, place, d) : _INTL("{1} is in {2}.", name, place)
     end
   end

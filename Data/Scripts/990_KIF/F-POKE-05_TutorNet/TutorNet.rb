@@ -37,7 +37,6 @@ KIF::Options.add(:others, :save) {
 
 module KIF
   module TutorNet
-    PERMANENT_TUTOR_MOVE_UNLOCK = true
     USE_TUTOR_MOVE_ALIASES = false
     TUTOR_MOVE_ALIASES = []
     BIGGER_FRAME_STYLE = true
@@ -197,13 +196,14 @@ class TutorNetPartyBlankPanel < SpriteWrapper
   
   def initialize(_pokemon,index,viewport=nil)
     super(viewport)
-    self.x = (index % 2) * 112 + 4
-    self.y = (index % 2) + 96 + 2
+    self.x = 430 + (index % 2) * 52   # the same slots as TutorNetPartyPanel
+    self.y = 130 + (index / 2) * 88
     @panelbgsprite = AnimatedBitmap.new("Graphics/Pictures/KIF/Tutor.net/blank")
     self.bitmap = @panelbgsprite.bitmap
   end
   
   def dispose
+    @panelbgsprite.dispose
     super
   end
   
@@ -637,23 +637,13 @@ class PokemonTutorNet_Scene
     if moveindex.is_a?(Array)
       movebatch=moveindex[0]
       move=movebatch[0]
-      movelist = nil
-      if movelist!=nil && movelist.is_a?(Array)
-        for i in 0...movelist.length
-          movelist[i] = GameData::Move.get(movelist[i]).id
-        end
-      end
       $Trainer.party.each_with_index do |pkmn, i|
         if pkmn.egg?
           @sprites["pokemon#{i}"].comp=0
         elsif pkmn.hasMove?(move)
           @sprites["pokemon#{i}"].comp=3
         else
-          species = pkmn.species
-          if movelist && movelist.any? { |j| j == species }
-            # Checked data from movelist given in parameter
-            @sprites["pokemon#{i}"].comp=1
-          elsif pkmn.compatible_with_move?(move)
+          if pkmn.compatible_with_move?(move)
             # Checked data from Pokémon's tutor moves in pokemon.txt
             @sprites["pokemon#{i}"].comp=1
           else
@@ -813,18 +803,44 @@ def pbTutorNetTutor(movelist)
   }  
 end  
 
-def pbMoveTutorNetChoose(commands, cmd, movelist = nil, bymachine = false, oneusemachine = false ,tutorlist=[],mode=[[],-1],monspecificlist=[])
+# How much the player has of a Tutor.net currency ("$", "c" for coins, or an item)
+def tutor_net_funds(currency)
+  case currency
+  when "$" then return $Trainer.money
+  when "c" then return $Trainer.coins
+  end
+  return $PokemonBag.pbQuantity(currency)
+end
+
+def tutor_net_charge(currency, cost)
+  case currency
+  when "$" then $Trainer.money -= cost
+  when "c" then $Trainer.coins -= cost
+  else $PokemonBag.pbDeleteItem(currency, cost)
+  end
+end
+
+# The list shows the move's new price (or none) after a purchase or lesson
+def tutor_net_restart_scene(scene, cmd, chosen, tutorlist, mode, monspecificlist)
+  commands = []
+  scene.pbEndScene
+  if mode[1] < 0
+    realcommands = tutor_net_build_list(commands, 0, tutorlist)
+    realcommands.push(_INTL("Exit"))
+  else
+    realcommands = tutor_net_build_list(commands, 0, tutorlist, monspecificlist)
+    realcommands.push(_INTL("Back"))
+  end
+  scene.pbStartScene(realcommands, $Trainer.party, commands, cmd, chosen)
+end
+
+def pbMoveTutorNetChoose(commands, cmd, _unused = nil, _bymachine = false, _oneusemachine = false, tutorlist = [], mode = [[], -1], monspecificlist = [])
   ret = false
   move = commands[cmd][0][0]
   move = GameData::Move.get(move).id
   cost = commands[cmd][0][1]
   currency = commands[cmd][0][2]
-  movelist=nil
-  if movelist.is_a?(Array)
-    movelist.map! { |m| GameData::Move.get(m).id }
-  end
   movename = GameData::Move.get(move).name
-  annot = pbMoveTutorAnnotations(move, movelist)
   loop do
     chosen=mode[1]
     if chosen < 0
@@ -836,167 +852,50 @@ def pbMoveTutorNetChoose(commands, cmd, movelist = nil, bymachine = false, oneus
       pbMessage(_INTL("Eggs can't be taught any moves."))
     elsif pokemon.shadowPokemon?
       pbMessage(_INTL("Shadow Pokémon can't be taught any moves."))
-    elsif movelist && movelist.none? { |j| j == pokemon.species }
-      pbMessage(_INTL("{1} can't learn {2}.", pokemon.name, movename))
     elsif !pokemon.compatible_with_move?(move)
       pbMessage(_INTL("{1} can't learn {2}.", pokemon.name, movename))
-    else
-      if cost>0
-        if currency == "$"
-          purchase_msg = _INTL("Purchase this move for {1}{2}?\nYou currently have ${3}",currency,cost,$Trainer.money)
-        elsif currency == "c"
-          purchase_msg = _INTL("Purchase this move for {1} Coins?\nYou currently have {2}",cost,$Trainer.coins)
-        else
-          purchase_msg = _INTL("Purchase this move for {1} {2}?\nYou currently have: {3}",cost,GameData::Item.get(currency).name_plural,$PokemonBag.pbQuantity(currency))
-        end  
-        bought=false
-        if KIF::TutorNet::PERMANENT_TUTOR_MOVE_UNLOCK
-          bought = pbConfirmMessage(purchase_msg) 
-        else
-          bought=true
-        end
-        if bought
-          case currency
-            #######################################
-            # MONEY SECTION
-            #######################################
-          when "$"
-            if $Trainer.money>=cost
-              for i in 0...$Trainer.tutorlist.length
-                if $Trainer.tutorlist[i][0]==move         
-                  if pbLearnMove(pokemon,move,false,false)
-                    pokemon.add_first_move(move) # DemICE Move Remember
-                    pbSEPlay("SlotsCoin",volume=80,pitch=80)
-                    $Trainer.money-=cost
-                    if KIF::TutorNet::PERMANENT_TUTOR_MOVE_UNLOCK 
-                      cost=0
-                      $Trainer.tutorlist[i][1]=0  
-                      @scene.pbEndScene
-                      if mode[1]<0
-                        commands=[]
-                        realcommands = tutor_net_build_list(commands,0,tutorlist)
-                        realcommands[cmdTurnOff = realcommands.length]              = _INTL("Exit")
-                      else  
-                        commands=[]
-                        realcommands = tutor_net_build_list(commands,0,tutorlist,monspecificlist)
-                        realcommands[cmdTurnOff = realcommands.length]              = _INTL("Back")
-                      end  
-                      @scene.pbStartScene(realcommands, $Trainer.party, commands,cmd,chosen)
-                    end  
-                    @scene.pbRefresh(chosen)
-                    ret=true
-                    return ret if mode[1]>=0
-                  else
-                    break if mode[1]>=0
-                  end
-                end
-              end
-            else
-              pbMessage(_INTL("You don't have enough money."))
-            end
-            break if mode[1]>=0
-            #######################################
-            # COINS SECTION
-            #######################################
-          when "c"
-            if $Trainer.coins>=cost
-              for i in 0...$Trainer.tutorlist.length
-                if $Trainer.tutorlist[i][0]==move         
-                  if pbLearnMove(pokemon,move,false,false)
-                    pokemon.add_first_move(move) # DemICE Move Remember
-                    pbSEPlay("SlotsCoin",volume=80,pitch=80)
-                    $Trainer.coins-=cost
-                    if KIF::TutorNet::PERMANENT_TUTOR_MOVE_UNLOCK 
-                      cost=0
-                      $Trainer.tutorlist[i][1]=0  
-                      @scene.pbEndScene
-                      if mode[1]<0
-                        commands=[]
-                        realcommands = tutor_net_build_list(commands,0,tutorlist)
-                        realcommands[cmdTurnOff = realcommands.length]              = _INTL("Exit")
-                      else  
-                        commands=[]
-                        realcommands = tutor_net_build_list(commands,0,tutorlist,monspecificlist)
-                        realcommands[cmdTurnOff = realcommands.length]              = _INTL("Back")
-                      end  
-                      @scene.pbStartScene(realcommands, $Trainer.party, commands,cmd,chosen)
-                    end  
-                    @scene.pbRefresh(chosen)
-                    ret=true
-                    return ret if mode[1]>=0
-                  else
-                    break if mode[1]>=0
-                  end
-                end
-              end
-            else
-              pbMessage(_INTL("You don't have enough coins."))
-            end
-            break if mode[1]>=0
-          else
-            if $PokemonBag.pbQuantity(currency)>=cost
-              for i in 0...$Trainer.tutorlist.length
-                if $Trainer.tutorlist[i][0]==move       
-                  if pbLearnMove(pokemon,move,false,false)
-                    pokemon.add_first_move(move) # DemICE Move Remember
-                    pbSEPlay("SlotsCoin",volume=80,pitch=80)
-                    $PokemonBag.pbDeleteItem(currency,cost)
-                    if KIF::TutorNet::PERMANENT_TUTOR_MOVE_UNLOCK 
-                      cost=0
-                      $Trainer.tutorlist[i][1]=0   
-                      @scene.pbEndScene
-                      if mode[1]<0
-                        commands=[]
-                        realcommands = tutor_net_build_list(commands,0,tutorlist)
-                        realcommands[cmdTurnOff = realcommands.length]              = _INTL("Exit")
-                      else  
-                        commands=[]
-                        realcommands = tutor_net_build_list(commands,0,tutorlist,monspecificlist)
-                        realcommands[cmdTurnOff = realcommands.length]              = _INTL("Back")
-                      end  
-                      @scene.pbStartScene(realcommands, $Trainer.party, commands,cmd,chosen)
-                    end  
-                    @scene.pbRefresh(chosen)
-                    ret=true
-                    return ret if mode[1]>=0
-                  else
-                    break if mode[1]>=0
-                  end
-                end
-              end
-            else
-              pbMessage(_INTL("You don't have enough {1}.",GameData::Item.get(currency).name_plural))
-            end    
-            break if mode[1]>=0       
-          end
-          @scene.pbRefresh(chosen)
-        else
-          break if mode[1]>=0
-        end
-      else 
-        loop do           
-          if pbLearnMove(pokemon, move, false, false) 
+    elsif cost > 0
+      case currency
+      when "$"
+        purchase_msg = _INTL("Purchase this move for {1}{2}?\nYou currently have ${3}",currency,cost,$Trainer.money)
+        short_msg = _INTL("You don't have enough money.")
+      when "c"
+        purchase_msg = _INTL("Purchase this move for {1} Coins?\nYou currently have {2}",cost,$Trainer.coins)
+        short_msg = _INTL("You don't have enough coins.")
+      else
+        purchase_msg = _INTL("Purchase this move for {1} {2}?\nYou currently have: {3}",cost,GameData::Item.get(currency).name_plural,$PokemonBag.pbQuantity(currency))
+        short_msg = _INTL("You don't have enough {1}.",GameData::Item.get(currency).name_plural)
+      end
+      if pbConfirmMessage(purchase_msg)
+        if tutor_net_funds(currency) >= cost
+          entry = $Trainer.tutorlist.find { |t| t[0] == move }
+          if entry && pbLearnMove(pokemon,move,false,false)
             pokemon.add_first_move(move) # DemICE Move Remember
-            @scene.pbEndScene
-            if mode[1]<0
-              commands=[]
-              realcommands = tutor_net_build_list(commands,0,tutorlist)
-              realcommands[cmdTurnOff = realcommands.length]              = _INTL("Exit")
-            else  
-              commands=[]
-              realcommands = tutor_net_build_list(commands,0,tutorlist,monspecificlist)
-              realcommands[cmdTurnOff = realcommands.length]              = _INTL("Back")
-            end  
-            @scene.pbStartScene(realcommands, $Trainer.party, commands,cmd,chosen)
+            pbSEPlay("SlotsCoin",volume=80,pitch=80)
+            tutor_net_charge(currency, cost)
+            cost = 0
+            entry[1] = 0
+            tutor_net_restart_scene(@scene, cmd, chosen, tutorlist, mode, monspecificlist)
             @scene.pbRefresh(chosen)
             ret = true
-            break
-          else
-            break
+            return ret if mode[1]>=0
           end
-        end  
+        else
+          pbMessage(short_msg)
+        end
+        break if mode[1]>=0
+        @scene.pbRefresh(chosen)
+      else
         break if mode[1]>=0
       end
+    else
+      if pbLearnMove(pokemon, move, false, false)
+        pokemon.add_first_move(move) # DemICE Move Remember
+        tutor_net_restart_scene(@scene, cmd, chosen, tutorlist, mode, monspecificlist)
+        @scene.pbRefresh(chosen)
+        ret = true
+      end
+      break if mode[1]>=0
     end
     @scene.pbRefresh(chosen)
   end
@@ -1055,8 +954,6 @@ def pbTutorNetAdd(move,cost=0,currency="$")
       end  
     end
   end 
-  unlock_message = "Purchase"
-  unlock_message = "Permanently unlock" if KIF::TutorNet::PERMANENT_TUTOR_MOVE_UNLOCK       
   if !found
     $Trainer.tutorlist.push([move,cost,currency])
     if $PokemonSystem.tutornet == 1

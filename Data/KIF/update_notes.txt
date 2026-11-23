@@ -1,3 +1,6 @@
+KIF 2.0.8
+- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon ("undefined method [] for nil").
+
 KIF 2.0.7
 - Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City ("no implicit conversion of nil into String").
 

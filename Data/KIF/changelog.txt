@@ -1,3 +1,23 @@
+KIF 2.0.9
+OVERVIEW
+- Fixed: every trainer rematch crashed; rematch gifts, trades and partner Pokemon also misbehaved.
+- Fixed: three-player co-op could crash when a battle ended.
+- Fixed: Archipelago items could stall or arrive twice.
+- Fixed: the trainer AI misjudged Trick Room, X items and some switches.
+- Fixed: files written by the game (Transfer Box, updater, downloads) can no longer be left half-written.
+- Changed: clearer settings and messages, "Pokemon" spelled the game's way, and the Extras menus renamed.
+FULL NOTES
+- Fixed: every trainer rematch crashed; rematch gifts, trades and partner Pokemon also misbehaved.
+- Fixed: three-player co-op could crash when a battle ended.
+- Fixed: Archipelago items could stall or arrive twice.
+- Fixed: the trainer AI misjudged Trick Room, X items and some switches.
+- Fixed: files written by the game (Transfer Box, updater, downloads) can no longer be left half-written.
+- Changed: clearer settings and messages, "Pokemon" spelled the game's way, and the Extras menus renamed.
+- The randomizer's "Include non-reference" set now really leaves reference sprites out (new randomizations only).
+- Mod loading checks script and icon paths, and mod settings files only hold plain data.
+- Smaller fixes: the Fusion screen's Confirm label, Nuzlocke and the Transfer Box, mouse walking, Archipelago traps, Tutor.net panels, the badly poisoned icon, Endgame Challenge teams, overworld weather and footprints.
+- Removed unused experimental code and debug leftovers.
+
 KIF 2.0.8
 OVERVIEW
 - Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon.

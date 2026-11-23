@@ -56,14 +56,16 @@ module KIF
 
       # Runs the first waiting trap that can run here (one per call)
       def run_one(d)
+        entry = nil
         list = pending(d)
         return false if list.empty? || KIF::Rand.pinkan?
         i = list.index { |kind, _w| ready?(kind) }
         return false unless i
-        kind, who = list.delete_at(i)
-        send("run_#{kind.downcase}", source(who, d))
+        entry = list.delete_at(i)
+        send("run_#{entry[0].downcase}", source(entry[1], d))
         return true
       rescue StandardError => e
+        list << entry if entry   # a trap that raised waits, behind the others, and runs again
         KIF.log("Archipelago: trap failed (#{e.class}: #{e.message})")
         return false
       end
@@ -75,7 +77,7 @@ module KIF
         return true if KIF::Nuzlocke.on?   # shown, but no battle
         return false if pbInSafari? || pbInBugContest?
         return false if $Trainer.able_pokemon_count == 0
-        return !wild_species.nil?
+        return !wild_types.empty?   # no pick here: a pick rolls the random numbers
       end
 
       def healthy(pkmn)
@@ -96,16 +98,22 @@ module KIF
                                _INTL("A Paralysis Trap from {1}! Your Pokémon were paralyzed.", who))
       end
 
-      # A species from this map's wild Pokemon: the tile's own kind first,
-      # then any land or cave table (nil: none here)
-      def wild_species
+      # This map's wild tables: the tile's own kind first, then any land or
+      # cave table (empty: none here)
+      def wild_types
         enc = $PokemonEncounters
-        return nil unless enc
+        return [] unless enc
         # tables are per time of day (LandDay, LandNight...)
         types = [enc.encounter_type] + [:Land, :Cave, :TallGrass].map { |t| enc.find_valid_encounter_type_for_time(t, pbGetTimeNow) }
-        types.compact.uniq.each do |t|
-          next unless GameData::EncounterType.exists?(t) && enc.has_encounter_type?(t)
-          w = enc.choose_wild_pokemon(t)
+        return types.compact.uniq.select { |t| GameData::EncounterType.exists?(t) && enc.has_encounter_type?(t) }
+      rescue StandardError
+        return []
+      end
+
+      # A species from this map's wild Pokemon (nil: none here)
+      def wild_species
+        wild_types.each do |t|
+          w = $PokemonEncounters.choose_wild_pokemon(t)
           return w[0] if w
         end
         return nil

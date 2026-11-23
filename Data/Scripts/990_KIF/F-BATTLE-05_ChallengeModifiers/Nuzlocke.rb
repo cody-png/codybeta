@@ -200,7 +200,11 @@ module KIF
     # The Pokémon just received is the only one the player has (party and PC)
     def self.only_pokemon?
       return false if $Trainer.party.compact.length > 1
-      $PokemonStorage.maxBoxes.times { |b| $PokemonStorage.maxPokemon(b).times { |i| return false if $PokemonStorage[b, i] } }
+      # the Transfer Box holds Pokémon from other saves
+      $PokemonStorage.maxBoxes.times do |b|
+        next if $PokemonStorage[b].is_a?(StorageTransferBox)
+        $PokemonStorage.maxPokemon(b).times { |i| return false if $PokemonStorage[b, i] }
+      end
       return true
     end
 

@@ -77,7 +77,7 @@ module KIF
         used = {}
         top = 0
         GameData::Item.each do |it|
-          next if @applied.key?(it.id)
+          next if @applied.key?(it.id) && @items.key?(it.id)   # renumbered below; one whose mod is unloaded keeps its row and its number
           used[it.id_number] = true
           top = it.id_number if it.id_number > top
         end
@@ -407,7 +407,7 @@ module KIF
           return GameData::Item.send(kind == :held ? :held_icon_filename : :icon_filename, v[:item])
         end
         info = API.mod(e[:mod])
-        path = info && info.path ? File.join(info.path.to_s, v.to_s) : nil
+        path = info && info.path ? KIF::Mods.file_in(info.path, v) : nil   # an icon outside the mod folder is refused
         return call.proceed unless path
         base = path.sub(/\.(png|gif|jpg)\z/i, "")
         return base if File.file?(path) || File.file?(base + ".png")

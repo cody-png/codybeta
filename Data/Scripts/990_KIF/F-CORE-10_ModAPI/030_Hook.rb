@@ -163,6 +163,10 @@ module KIF
       def self.targets; return @points.values.map { |p| text(p.klass, p.name, p.single) }; end
 
       def self.denied?(klass, name, single)
+        if klass.singleton_class?   # [File.singleton_class, :open] is File.open: judge the class it hangs on
+          a = klass.respond_to?(:attached_object) ? (klass.attached_object rescue nil) : (Object.const_get($1) rescue nil if klass.inspect =~ /\A#<Class:([A-Z][\w:]*)>\z/)
+          return a.is_a?(Module) ? denied?(a, name, true) : true
+        end
         n = klass.name.to_s
         return true if DENY_NAMES.include?(n)
         return true if DENY_PREFIX.any? { |p| n.start_with?(p) }

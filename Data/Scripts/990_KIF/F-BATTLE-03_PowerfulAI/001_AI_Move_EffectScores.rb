@@ -111,6 +111,8 @@ class PokeBattle_AI
 				end
 			end
 		elsif move.priority<0
+			# fastermon was only set in the branch above, so these rules never ran
+			fastermon = ((pbRoughStat(attacker,:SPEED,skill)>pbRoughStat(opponent,:SPEED,skill)) ^ (@battle.field.effects[PBEffects::TrickRoom]>0))
 			if fastermon
 				score*=0.9
 				if move.baseDamage>0

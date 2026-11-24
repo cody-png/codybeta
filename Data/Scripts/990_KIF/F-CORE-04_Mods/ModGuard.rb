@@ -49,6 +49,8 @@ module KIF
     MODES = [:off, :normal, :strict, :warn].freeze unless const_defined?(:MODES)
 
     THIS_FILE = __FILE__ unless const_defined?(:THIS_FILE)
+    # Ruby's library folders, read once at load (RbConfig::CONFIG is a plain Hash a mod could change)
+    LIB_CONF = (defined?(RbConfig) ? %w[rubylibdir rubyarchdir sitelibdir sitearchdir vendorlibdir vendorarchdir].map { |k| RbConfig::CONFIG[k].to_s.dup.freeze }.reject(&:empty?) : []).freeze unless const_defined?(:LIB_CONF, false)
     @doors ||= {}
     @busy ||= {}.compare_by_identity   # thread => true while the guard is working (not readable from a thread's own variables)
     @events ||= []
@@ -348,8 +350,7 @@ module KIF
 
       def lib_dirs
         return @lib_dirs ||= begin
-          c = defined?(RbConfig) ? RbConfig::CONFIG : {}
-          l = %w[rubylibdir rubyarchdir sitelibdir sitearchdir vendorlibdir vendorarchdir].map { |k| c[k] }.compact
+          l = LIB_CONF.dup
           l.concat(Gem.path) if defined?(Gem) && Gem.respond_to?(:path)
           l.map { |d| resolve(d) }.uniq
         end
@@ -497,9 +498,13 @@ module KIF
         doors_for(::FFI::Library, %i[ffi_lib], :native) if defined?(::FFI::Library)
         if defined?(KIF::Updater)
           doors_for(KIF::Updater.singleton_class, %i[fetch download], :url)
+          # the updater's own helpers reach the same primitives from KIF code, where no door looks
+          doors_for(KIF::Updater.singleton_class, %i[rm_tree mkdir_p], :write)
+          doors_for(KIF::Updater.singleton_class, %i[start_apply], :program)
+          doors_for(KIF::Updater::Win.singleton_class, %i[spawn api], :program) if defined?(KIF::Updater::Win)
         end
         %i[pbDownloadToString pbDownloadToFile pbPostData].each { |m| door!(Object, m, :url) }
-        doors_for(KIF.singleton_class, %i[rm_tree mkdir_p], :write)
+        doors_for(KIF.singleton_class, %i[rm_tree mkdir_p atomic_write], :write)
       end
 
       def arm!

@@ -437,7 +437,7 @@ module KIF
         owner, const = parse(name)
         return Registries.bad(mod, "Tune.set: #{name} is not a constant (use \"Owner::NAME\")") unless owner
         full = "#{owner.name}::#{const}"
-        return Registries.bad(mod, "Tune.set: #{full} can not be changed") if full =~ /\AKIF::(Mod|Safe|API|Contract)/ || owner.name =~ /\AKIF::(ModGuard|ModTrust|Safe|ModContract|API)/
+        return Registries.bad(mod, "Tune.set: #{full} can not be changed") if full =~ /\A(?:RbConfig\b|KIF::(?:Mod|Safe|API|Contract|Updater))/ || owner.name =~ /\AKIF::(ModGuard|ModTrust|Safe|ModContract|API)/
         return Registries.bad(mod, "Tune.set: #{full} does not exist") unless owner.const_defined?(const, false)
         old = owner.const_get(const)
         return Registries.bad(mod, "Tune.set: #{full} is a #{old.class}, only plain values can be tuned") if old.is_a?(Module)

@@ -87,8 +87,8 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Show Lv. in BSM"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.showlevel_nolevelmode },
                  proc { |value| $PokemonSystem.showlevel_nolevelmode = value },
-                 [_INTL("Base Stats Mode hides the level of Pokemons in battle."),
-                  _INTL("Base Stats Mode shows the level of Pokemons (level don't reflect stats!).")])
+                 [_INTL("Base Stats Mode hides the level of Pokémon in battle."),
+                  _INTL("Base Stats Mode shows the level of Pokémon (level don't reflect stats!).")])
 }
 
 module KIF
@@ -261,7 +261,7 @@ class PokemonDataBox
   end
 
   # the lower player-side box sits on the command box, which covered its tag's
-  # bottom 4 px: that tag is drawn over the menu's edge (Cody picked B, 2026-10-26)
+  # bottom 4 px: that tag is drawn over the menu's edge (2026-10-26)
   def kif_status_z(box_z)
     return box_z + 2 if @battler.opposes?(0) || @battler.index < 2
     return [box_z + 2, 300].max
@@ -317,7 +317,7 @@ class PokemonDataBox
       return
     end
     s = GameData::Status.get(@battler.status).id_number
-    if s == :POISON && @battler.statusCount > 0 # Badly poisoned (as the base code)
+    if @battler.status == :POISON && @battler.statusCount > 0 # Badly poisoned (s is the id number, not a symbol)
       s = GameData::Status::DATA.keys.length / 2
     end
     @kif_statusIcon.src_rect.set(0, (s - 1) * STATUS_ICON_HEIGHT, @kif_statusBitmap.width, STATUS_ICON_HEIGHT)

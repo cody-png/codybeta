@@ -28,8 +28,8 @@ KIF::Options.add(:others, :save) {
   EnumOption.new(_INTL("Enable EvoLock"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.kuray_no_evo },
                  proc { |value| $PokemonSystem.kuray_no_evo = value },
-                 [_INTL("Can't EvoLock a Pokemon without holding everstone"),
-                  _INTL("Can EvoLock Pokemons in the PC")])
+                 [_INTL("Can't EvoLock a Pokémon without holding everstone"),
+                  _INTL("Can EvoLock Pokémon in the PC")])
 }
 
 class Pokemon
@@ -89,10 +89,10 @@ KIF::PCActions.add(:evolock,
   proc { |screen, pkmn, _selected, _heldpoke|
     if pkmn.kuray_no_evo? == 0
       pkmn.kuray_no_evo = 1
-      screen.pbDisplay(_INTL("Pokemon evolution locked!"))
+      screen.pbDisplay(_INTL("Pokémon evolution locked!"))
     else
       pkmn.kuray_no_evo = 0
-      screen.pbDisplay(_INTL("Pokemon evolution unlocked!"))
+      screen.pbDisplay(_INTL("Pokémon evolution unlocked!"))
     end
   })
 

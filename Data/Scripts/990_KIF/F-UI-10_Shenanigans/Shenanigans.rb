@@ -156,7 +156,7 @@ if defined?(PokemonDebugMenuCommands)
         msg = if KIF::Shenanigans.pizza?(pkmn)
                 _INTL("Gender is pizza.")
               else
-                [_INTL("Gender is male."), _INTL("Gender is female.")][pkmn.male? ? 0 : 1]
+                pkmn.genderless? ? _INTL("Gender is unknown.") : [_INTL("Gender is male."), _INTL("Gender is female.")][pkmn.male? ? 0 : 1]
               end
         cmd = screen.pbShowCommands(msg, [_INTL("Make male"), _INTL("Make female"),
                                           _INTL("Make pizza"), _INTL("Reset")], cmd)

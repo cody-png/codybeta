@@ -127,5 +127,6 @@ def pbEmergencySave
   else
     pbMessage(_INTL("\\se[]Save failed.\\wtnp[30]"))
   end
-  $scene = oldscene
+ensure
+  $scene = oldscene   # also after the early returns above, which left the game with no scene
 end

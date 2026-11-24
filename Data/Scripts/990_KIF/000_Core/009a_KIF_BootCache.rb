@@ -47,12 +47,8 @@ module KIF
       def self.write(name, key, payload)
         f = path(name)
         KIF.mkdir_p(File.dirname(f))
-        tmp = "#{f}.#{Process.pid}.tmp"
-        File.binwrite(tmp, Zlib::Deflate.deflate(Marshal.dump([FORMAT, key, payload]), Zlib::BEST_SPEED))
-        File.delete(f) if File.exist?(f)   # (Windows: rename won't replace)
-        File.rename(tmp, f)
+        KIF.atomic_write(f) { |io| io.write(Zlib::Deflate.deflate(Marshal.dump([FORMAT, key, payload]), Zlib::BEST_SPEED)) }
       rescue StandardError => e
-        (File.delete(tmp) rescue nil) if tmp
         KIF.log("Boot cache #{name} not written (#{e.class}: #{e.message})") if KIF.respond_to?(:log)
       end
     end

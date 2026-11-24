@@ -139,7 +139,7 @@ module KIF
 
     def self.describe(fmt, n, lv)
       return _INTL("{1}, {2}, {3}", fmt == 3 ? _INTL("Triple battle") : fmt == 2 ? _INTL("Double battle") : _INTL("Single battle"),
-                   n == 1 ? _INTL("1 Pokemon each") : _INTL("{1} Pokemon each", n),
+                   n == 1 ? _INTL("1 Pokémon each") : _INTL("{1} Pokémon each", n),
                    lv == 0 ? _INTL("levels as they are") : _INTL("all level {1}", lv))
     end
 
@@ -219,18 +219,18 @@ module KIF
       with = target
       return if with.nil? && session.respond_to?(:peers) && session.peers.length > 1   # Back
       who = partner(with)
-      pbMessage(_INTL("A friendly match against {1}: no Exp, money or catches, and no Bag. You each bring your own Pokemon.", who))
+      pbMessage(_INTL("A friendly match against {1}: no Exp, money or catches, and no Bag. You each bring your own Pokémon.", who))
       pbMessage(_INTL("Your game runs the battle, and {1}'s game plays it from the other side. A modified game could cheat, so only battle friends you trust.", who))
       pbMessage(relay_line) if relayed?(with)
       c = pbMessage(_INTL("Challenge {1}?", who), [_INTL("Single battle"), _INTL("Double battle"), _INTL("Triple battle"), _INTL("Cancel")], 4)
       return unless c.is_a?(Integer) && c >= 0 && c <= 2
       fmt = c + 1
       min = fmt
-      n = choose_number(_INTL("How many Pokemon each?"), min, 6, 6) or return
+      n = choose_number(_INTL("How many Pokémon each?"), min, 6, 6) or return
       l = pbMessage(_INTL("Level rule?"), [_INTL("Levels as they are"), _INTL("All level 50"), _INTL("All level 100"), _INTL("Cancel")], 4)
       return unless l.is_a?(Integer) && l >= 0 && l <= 2
       team = pick_team(n) or return
-      return pbMessage(_INTL("You need at least {1} Pokemon that can take part. Eggs and buried Pokemon can't.", min)) if team.length < min
+      return pbMessage(_INTL("You need at least {1} Pokémon that can take part. Eggs and buried Pokémon can't.", min)) if team.length < min
       n = team.length   # (a smaller team than asked for: the friend brings no more than that)
       id = next_id
       return unless post("co_vs", { "id" => id, "fmt" => fmt, "n" => n, "lv" => LEVELS[l] }, with)
@@ -297,7 +297,7 @@ module KIF
       st[:out] = nil
       who = partner(from)
       if m["ok"] != 1
-        why = { "busy" => _INTL("{1} is busy.", who), "few" => _INTL("{1} has too few Pokemon for that.", who) }[m["why"]]
+        why = { "busy" => _INTL("{1} is busy.", who), "few" => _INTL("{1} has too few Pokémon for that.", who) }[m["why"]]
         return note(why || _INTL("{1} said no.", who))
       end
       note(_INTL("{1} said yes.", who))
@@ -374,7 +374,7 @@ module KIF
           st[:declines] += 1
           st[:mute] = KIF::Net.now + 60 if st[:declines] >= 2   # two No answers: no more questions for a minute
         end
-        pbMessage(_INTL("You need at least {1} Pokemon that can take part. Eggs and buried Pokemon can't.", min)) if few
+        pbMessage(_INTL("You need at least {1} Pokémon that can take part. Eggs and buried Pokémon can't.", min)) if few
         return reply(c[:id], 0, few ? "few" : "no", with)
       end
       st[:declines] = 0
@@ -410,7 +410,7 @@ module KIF
           who = partner(with)
           if !reply then pbMessage(_INTL("{1} didn't join.", who))
           elsif reply[0] == "co_no" then pbMessage(_INTL("{1} is busy.", who))
-          else pbMessage(_INTL("{1}'s team has moves or Pokemon this game doesn't have (a mod's, or another KIF's), or doesn't fit the match.", who))
+          else pbMessage(_INTL("{1}'s team has moves or Pokémon this game doesn't have (a mod's, or another KIF's), or doesn't fit the match.", who))
           end
           post("co_end", { "id" => id, "d" => { "x" => reply && reply[0] == "co_join" ? "party" : "late" } }, with) if session
           return
@@ -449,7 +449,7 @@ module KIF
       p.instance_variable_set(:@hp, p.totalhp)
       return p
     rescue StandardError, SystemStackError => e
-      log("a Pokemon didn't fit (#{e.class}: #{e.message})")
+      log("a Pokémon didn't fit (#{e.class}: #{e.message})")
       return nil
     end
 
@@ -515,7 +515,7 @@ module KIF
           when 5 then _INTL("The match against {1} was a draw.", who)
           else _INTL("The match against {1} didn't finish.", who)
           end
-      t += "\n" + _INTL("No Exp, money or Pokemon were won or lost.") if [1, 2, 5].include?(d)
+      t += "\n" + _INTL("No Exp, money or Pokémon were won or lost.") if [1, 2, 5].include?(d)
       pbMessage(t)
     end
 

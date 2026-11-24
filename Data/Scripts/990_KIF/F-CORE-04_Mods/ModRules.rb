@@ -38,10 +38,7 @@ module KIF
     end
 
     def compare(a, b)
-      x = parts(a)
-      y = parts(b)
-      n = [x.length, y.length].max
-      return (x + [0] * (n - x.length)) <=> (y + [0] * (n - y.length))
+      return KIF.newer_version?(a, b) ? 1 : (KIF.newer_version?(b, a) ? -1 : 0)
     end
 
     # ">=0.21.52, <0.23" -> [[">=", "0.21.52"], ["<", "0.23"]]
@@ -86,6 +83,7 @@ module KIF
     end
 
     def ids_in(list)
+      list = [list] if list.is_a?(Hash)   # one { "id": ... } written without its list
       return Array(list).map { |x| x.is_a?(Hash) ? x["id"].to_s : x.to_s }.reject(&:empty?)
     end
 
@@ -124,7 +122,8 @@ module KIF
         return _INTL("Needs {1}. Install it or switch it On.", gone.join(", "))
       end
       # a dependency with a version ({ "id": "kif_er", "version": ">=0.6" }) must have it
-      Array(json["dependencies"]).each do |d|
+      deps = json["dependencies"]
+      (deps.is_a?(Hash) ? [deps] : Array(deps)).each do |d|
         next unless d.is_a?(Hash) && !d["version"].to_s.strip.empty?
         have = dependency_version(d["id"].to_s)
         next if have.nil? || version_ok?(d["version"], have)

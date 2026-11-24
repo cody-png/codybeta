@@ -109,7 +109,7 @@ module KIF
       return @values if @values
       @values = {}
       begin
-        d = File.open(path, "rb") { |f| Marshal.load(f) } if File.exist?(path)
+        d = KIF.safe_marshal_load(File.binread(path)) if File.exist?(path)
         @values = d if d.is_a?(Hash)
       rescue StandardError => e
         KIF.set_aside(path, "Mod settings file", e)
@@ -128,7 +128,7 @@ module KIF
     def self.key(k); return k.to_s.to_sym; end
 
     #---------------------------------------------------------------------------
-    # Settings of an uninstalled mod (Cody, 2026-10-20): moved into a file of
+    # Settings of an uninstalled mod: moved into a file of
     # their own that nothing reads, so a leftover value can't reach a save or
     # another mod. They come back only when the same mod registers the same
     # setting again and the value still fits it (a choice that still exists,
@@ -140,7 +140,7 @@ module KIF
 
     def self.uninstalled
       return @uninstalled if @uninstalled
-      d = File.open(uninstalled_path, "rb") { |f| Marshal.load(f) } if File.exist?(uninstalled_path)
+      d = KIF.safe_marshal_load(File.binread(uninstalled_path)) if File.exist?(uninstalled_path)
       return @uninstalled = (d.is_a?(Hash) ? d : {})
     rescue StandardError => e
       KIF.set_aside(uninstalled_path, "Uninstalled mods' settings file", e)
@@ -215,6 +215,11 @@ module KIF
 
     def self.set(k, v)
       kk = key(k)
+      # the file is read back with KIF.safe_marshal_load: a value it can't take would set every mod's settings aside
+      unless (begin; KIF::SafeMarshal.load(Marshal.dump(v)); true; rescue StandardError, TypeError; false; end)
+        KIF.log("Mod setting #{kk} not saved: #{v.class} is not plain data") rescue nil
+        return get(kk)
+      end
       stored = values.has_key?(kk)
       old = stored ? values[kk] : get(kk)   # what the mod saw before (its default when unsaved)
       return v if stored && old == v
@@ -347,14 +352,14 @@ module KIF
 
     def self.option_for(e)
       k = e[:key]
-      name = _INTL(e[:name].to_s)
-      desc = e[:description].to_s
+      name = KIF.safe_text(_INTL(e[:name].to_s))   # a mod writes these: no message codes
+      desc = KIF.safe_text(e[:description], 500)
       case e[:type]
       when :button
         pr = e[:on_press]
         return ButtonOption.new(name, proc { pr.call if pr.respond_to?(:call) }, desc)
       when :enum
-        vals = Array(e[:values]).map { |v| _INTL(v.to_s) }
+        vals = Array(e[:values]).map { |v| KIF.safe_text(_INTL(v.to_s)) }
         vals = [_INTL("Off"), _INTL("On")] if vals.empty?
         return EnumOption.new(name, vals,
                               proc { [[num(get(k)).to_i, 0].max, vals.length - 1].min },

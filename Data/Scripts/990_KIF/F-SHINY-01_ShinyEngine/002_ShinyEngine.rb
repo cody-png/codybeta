@@ -76,7 +76,7 @@ KIF::Options.add(:shinies, :global) {
   EnumOption.new(_INTL("Shiny Filter"), [_INTL("Off"), _INTL("Filtered"), _INTL("Hybrid")],
                  proc { $PokemonSystem.shinyfilter },
                  proc { |value| $PokemonSystem.shinyfilter = value },
-                 [_INTL("KIF colours exactly as in KIF 0.20.7"),
+                 [_INTL("KIF's original shiny colours"),
                   _INTL("Every shiny keeps readable outlines and shading"),
                   _INTL("Half of the shinies are filtered, half keep raw KIF colours")])
 }

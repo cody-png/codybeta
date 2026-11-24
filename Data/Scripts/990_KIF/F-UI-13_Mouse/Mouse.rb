@@ -628,8 +628,9 @@ module KIF
       d = next_dir(pl)
       if d == 0
         return stop if @repaths >= REPATHS
-        @repaths += 1
+        n = @repaths + 1
         return stop unless walk_to(pl, @gx, @gy, @face_event ? true : nil)
+        @repaths = n   # walk_to resets it, and the limit would never be reached
         return arrive(pl) if @path.empty?   # already next to the clicked event (a slide on ice)
         return stop unless (d = next_dir(pl)) > 0
       end
@@ -652,7 +653,7 @@ module KIF
       gx = @gx
       gy = @gy
       stop
-      interact(pl, dir_to(gx - pl.x, gy - pl.y)) if fe   # face it and talk (Cody)
+      interact(pl, dir_to(gx - pl.x, gy - pl.y)) if fe   # face it and talk
     end
 
     # the marker's four corners, each an L turned outward (top-left, top-right,

@@ -43,6 +43,28 @@ module KIF
     Dir.mkdir(dir) unless File.directory?(dir)
   end
 
+  # Writes path whole or not at all: the block fills a temp file that replaces
+  # the target in one rename, so a crash, a full disk or an error in the block
+  # leaves the old file as it was. Errors reach the caller.
+  def self.atomic_write(path)
+    tmp = "#{path}.#{Process.pid}.tmp"
+    File.open(tmp, "wb") { |f| yield f }
+    File.rename(tmp, path)
+    return path
+  ensure
+    (File.delete(tmp) if tmp && File.exist?(tmp)) rescue nil
+  end
+
+  # true when version a is newer than version b ("2.0.8" > "2.0.7", "1.10" > "1.9",
+  # "1.0" == "1.0.0"); a version with no digits is never newer
+  def self.newer_version?(a, b)
+    x = a.to_s.scan(/\d+/).map(&:to_i)
+    y = b.to_s.scan(/\d+/).map(&:to_i)
+    return false if x.empty?
+    n = [x.length, y.length].max
+    return ((x + [0] * (n - x.length)) <=> (y + [0] * (n - y.length))) == 1
+  end
+
   # Keeps a disk cache folder from only growing: past `keep` files, the
   # oldest half (by time) is removed. Called once per session per cache.
   def self.trim_cache_dir(dir, keep)
@@ -149,7 +171,7 @@ module KIF
     lf = data.gsub("\r\n", "\n")
     return if Zlib.crc32(lf) == crc || Zlib.crc32(lf.gsub("\n", "\r\n")) == crc
     @drift << "#{path} (#{what}): expected CRC #{crc}, found #{actual}"
-    log("BASE FILE CHANGED since port – re-check override of #{what} in #{path}")
+    log("BASE FILE CHANGED since port - re-check override of #{what} in #{path}")
   rescue
     nil
   end

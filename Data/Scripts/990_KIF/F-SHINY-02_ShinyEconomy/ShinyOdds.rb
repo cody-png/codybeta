@@ -23,7 +23,7 @@
 #     2 All      – the whole party is shiny
 #     3 Off      – never shiny, not even ones the trainer file marks shiny
 #   Until 2026-10-27, 0 was shown as "Off" and 3 as "Normal" (no roll, i.e.
-#   as PIF), so the two looked the same (Cody's settings review). The stored
+#   as PIF), so the two looked the same (the settings review). The stored
 #   values keep their behaviour and only swap places on screen: saves that
 #   had "Off" now show Normal and play the same; saves that had "Normal"
 #   show Off (only trainer-file shinies, which PIF has very few of, change).
@@ -48,14 +48,14 @@ KIF::Options.add(:shinies, :save) {
                    }, _INTL("<x> out of 65536 | Choose the Shiny Odds"))
 }
 KIF::Options.add(:shinies, :save) {
-  EnumOption.new(_INTL("Shiny Trainer Pokemon"), [_INTL("Off"), _INTL("Ace"), _INTL("All"), _INTL("Normal")],
+  EnumOption.new(_INTL("Shiny Trainer Pokémon"), [_INTL("Off"), _INTL("Ace"), _INTL("All"), _INTL("Normal")],
                  # on screen Off is first and Normal last; stored 3 = Off, 0 = Normal
                  proc { KIF.shiny_trainer_swap($PokemonSystem.shiny_trainer_pkmn) },
                  proc { |value| $PokemonSystem.shiny_trainer_pkmn = KIF.shiny_trainer_swap(value) },
-                 [_INTL("Trainer Pokemon are never shiny"),
-                  _INTL("Draws the opposing trainers ace pokemon as shiny"),
-                  _INTL("All trainers pokemon in their party will be shiny"),
-                  _INTL("Trainer Pokemon use the same shiny odds as your Wild Shiny Odds slider")])
+                 [_INTL("Trainer Pokémon are never shiny"),
+                  _INTL("Each opposing trainer's ace is shiny."),
+                  _INTL("Every Pokémon of every opposing trainer is shiny."),
+                  _INTL("Trainer Pokémon use the same shiny odds as your Wild Shiny Odds slider")])
 }
 
 module KIF

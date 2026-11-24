@@ -178,7 +178,7 @@ if [ "$DIRECT" = 1 ]; then
   # shortcut: a text search, so an "id" inside another mod's dependency list also stops it (the safe side); parse the JSON if that gets in the way
   OTHER="$(git grep -l -E "[^a-z0-9_]id.[[:space:]]*:[[:space:]]*.$ID[^a-z0-9_-]" upstream/main -- '*/mod.json' 2>/dev/null \
            | sed 's#^upstream/main:##; s#/mod\.json$##' | grep -vxF -- "$FOLDER" | head -n 1)"
-  [ -z "$OTHER" ] || fail "the id $ID is already used by the catalog's $OTHER folder. Ask Cody on the KIF Discord."
+  [ -z "$OTHER" ] || fail "the id $ID is already used by the catalog's $OTHER folder. Ask on the KIF Discord."
 fi
 
 # 6. The mod's files (not its .git folder or KIF's install lists)
@@ -207,7 +207,11 @@ fi
 
 # 7a. Contributors: straight to main
 if [ "$DIRECT" = 1 ]; then
-  git push -q origin "HEAD:main" || fail "couldn't publish: the catalog changed while this ran. Run it again."
+  n=0
+  until git push -q origin "HEAD:main"; do
+    n=$((n + 1)); [ $n -ge 3 ] && fail "couldn't publish: no connection to GitHub, or the catalog changed while this ran. Run it again."
+    echo "Upload failed, trying again..."; sleep 5
+  done
   echo
   echo "Published: players get it at their next catalog check."
   echo "The catalog's check runs on every change; a red X here means something needs fixing:"

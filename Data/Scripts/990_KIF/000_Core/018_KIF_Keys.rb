@@ -56,9 +56,17 @@ module KIF
       return read_file[1]
     end
 
+    CHECK_EVERY = 2.0   # s between looks at the file (screens ask for a key name every frame)
+
     def read_file
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      return @read if @read && @checked && now - @checked < CHECK_EVERY
+      @checked = now
       path = paths.find { |p| File.file?(p) }
-      return [{}, {}] unless path
+      unless path
+        @stamp = nil
+        return @read = [{}, {}]
+      end
       stamp = [path, File.mtime(path).to_f, File.size(path)]
       return @read if @read && @stamp == stamp
       @stamp = stamp

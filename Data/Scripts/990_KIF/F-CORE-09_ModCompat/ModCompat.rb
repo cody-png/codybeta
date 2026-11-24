@@ -775,6 +775,7 @@ module KIF
         info = ::ModManager.registry[mod_id] rescue nil
         next unless info && info.respond_to?(:scripts) && info.scripts.is_a?(Array) && !info.scripts.empty?
         folder = info.folder_path.to_s
+        next if defined?(KIF::ModTrust) && %w[held revoked].include?(KIF::ModTrust.state("mm:#{mod_id}"))   # not on the player's say-so yet
         listed = info.scripts.map { |s| File.join(folder, s) }
         next if listed.any? { |f| File.exist?(f) }
         found = Dir[File.join(folder, "**", "*.rb")].sort

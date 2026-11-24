@@ -31,20 +31,20 @@ KIF::Options.add(:challenges, :save) {
   EnumOption.new(_INTL("Metronome Madness"), [_INTL("Off"), _INTL("Normal"), _INTL("Hard")],
                  proc { $PokemonSystem.ch_metronome },
                  proc { |value| $PokemonSystem.ch_metronome = value },
-                 [_INTL("Metronome disabled."),
-                  _INTL("All Pokemons are forced to use Metronome. [Normal]"),
-                  _INTL("Only your Pokemons are forced to use Metronome. [Hard]")])
+                 [_INTL("Off."),
+                  _INTL("Every Pokémon can only use Metronome."),
+                  _INTL("Only your Pokémon are forced to use Metronome.")])
 }
 KIF::Options.add(:challenges, :save) {
   EnumOption.new(_INTL("Letdown"), [_INTL("Off"), _INTL("1%"), _INTL("5%"), _INTL("10%"), _INTL("25%"), _INTL("50%")],
                  proc { $PokemonSystem.ch_letdown },
                  proc { |value| $PokemonSystem.ch_letdown = value },
                  [_INTL("Letdown disabled."),
-                  _INTL("1% chance that Pokemons use Splash instead."),
-                  _INTL("5% chance that Pokemons use Splash instead."),
-                  _INTL("10% chance that Pokemons use Splash instead."),
-                  _INTL("25% chance that Pokemons use Splash instead."),
-                  _INTL("50% chance that Pokemons use Splash instead.")])
+                  _INTL("1% chance that Pokémon use Splash instead."),
+                  _INTL("5% chance that Pokémon use Splash instead."),
+                  _INTL("10% chance that Pokémon use Splash instead."),
+                  _INTL("25% chance that Pokémon use Splash instead."),
+                  _INTL("50% chance that Pokémon use Splash instead.")])
 }
 KIF::Options.add(:challenges, :save) {
   EnumOption.new(_INTL("Letdown Player Only"), [_INTL("Off"), _INTL("On")],
@@ -57,11 +57,11 @@ KIF::Options.add(:challenges, :save) {
   EnumOption.new(_INTL("Berserker"), [_INTL("Off"), _INTL("Easy"), _INTL("Normal"), _INTL("Hard"), _INTL("Chaos")],
                  proc { $PokemonSystem.ch_berserker },
                  proc { |value| $PokemonSystem.ch_berserker = value },
-                 [_INTL("Berserker disabled."),
-                  _INTL("Opponent stats raise by 1 every 3 turns. [Easy]"),
-                  _INTL("Opponent stats raise by 1 every 2 turns. [Normal]"),
-                  _INTL("Opponent stats raise by 1 every turn. [Hard]"),
-                  _INTL("Opponent stats raise by 2 every turn. [Hardcore]")])
+                 [_INTL("Off."),
+                  _INTL("Opponents' stats rise by 1 every 3 turns."),
+                  _INTL("Opponents' stats rise by 1 every 2 turns."),
+                  _INTL("Opponents' stats rise by 1 every turn."),
+                  _INTL("Opponents' stats rise by 2 every turn.")])
 }
 
 #-------------------------------------------------------------------------------
@@ -87,7 +87,7 @@ class PokeBattle_Battle
       next if !pos || !battler || battler.pbOwnedByPlayerSerious?
       if step > 1
         # a foe that came in this round is at turn 0, a multiple of every
-        # step: it waits its turns like the others (Cody, 2026-10-19)
+        # step: it waits its turns like the others
         next if battler.turnCount == 0
         next if battler.turnCount % step != 0
       end
@@ -100,9 +100,9 @@ class PokeBattle_Battle
       # fail message: at Attack +6 nothing rose any more and the message repeated)
       next if berserkup.each_slice(2).none? { |st, _| battler.pbCanRaiseStatStage?(st, battler, self) }
       if amount > 1
-        pbDisplay(_INTL("All stats from {1} sharply increased! [BERSERKER MODE]", battler.pbThis))
+        pbDisplay(_INTL("All of {1}'s stats rose sharply!", battler.pbThis))
       else
-        pbDisplay(_INTL("All stats from {1} increased! [BERSERKER MODE]", battler.pbThis))
+        pbDisplay(_INTL("All of {1}'s stats rose!", battler.pbThis))
       end
       showAnim = true
       for i in 0...berserkup.length / 2

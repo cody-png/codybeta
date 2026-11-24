@@ -262,7 +262,7 @@ module KIF
         end
       end
       screen.pbHardRefresh
-      screen.pbDisplay(_INTL("Pokemons sorted!"))
+      screen.pbDisplay(_INTL("Pokémon sorted!"))
     end
 
     def self.buy_box(screen)

@@ -5,7 +5,7 @@
 # Summary > Pokédex > Sprites lists the Pokémon's own sprites only. Here a
 # fusion also lists the sprites of every head x body pair of its two
 # evolution lines, in both orders (B6H9 also gets B9H6, B4H7, B7H4...).
-# An unfused Pokémon keeps its own sprites only (Cody, 2026-10-27). Picking
+# An unfused Pokémon keeps its own sprites only. Picking
 # one sets only that Pokémon's pif_sprite: PIF's swap would also set the whole
 # species' sprite (alt_sprite_substitutions) to the other species' sprite, so
 # that entry is put back. PIF already draws a pif_sprite of another species everywhere

@@ -24,8 +24,8 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Unfuse Traded"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.unfusetraded },
                  proc { |value| $PokemonSystem.unfusetraded = value },
-                 [_INTL("You cannot unfuse traded Pokemons."),
-                  _INTL("You can unfuse traded Pokemons.")])
+                 [_INTL("You cannot unfuse traded Pokémon."),
+                  _INTL("You can unfuse traded Pokémon.")])
 }
 
 #-------------------------------------------------------------------------------

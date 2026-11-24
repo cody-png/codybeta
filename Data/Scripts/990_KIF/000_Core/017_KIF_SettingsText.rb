@@ -12,7 +12,7 @@ module KIF
         "Chance for a wild Pokémon to be shiny, out of 65536. PIF's default is 16 (1 in 4096). Only Pokémon met after a change use the new odds.",
       "Shiny Gamble Odds" =>
         "Gamble Shininess (PC > Kuray Actions) makes a Pokémon shiny with a 1 in this number chance. 0 = it always works.",
-      "Shiny Trainer Pokemon" => [
+      "Shiny Trainer Pokémon" => [
         "Opposing trainers' Pokémon are never shiny.",
         "As Normal, and each trainer's ace (strongest Pokémon) is always shiny.",
         "Every Pokémon of every opposing trainer is shiny.",
@@ -31,7 +31,7 @@ module KIF
         "A shiny fusion takes the head's shiny colours whenever the head is shiny.",
         "Shiny colours are rolled again on every fusion and unfusion."],
       "Shiny Filter" => [
-        "KIF shiny colours exactly as in KIF 0.20.7.",
+        "KIF's original shiny colours.",
         "Every KIF shiny is cleaned up to keep readable outlines and shading.",
         "Half of the KIF shinies are cleaned up, the other half keep their raw colours."],
       "Shiny Icons" => [
@@ -220,8 +220,8 @@ module KIF
       "Fusion Egg Chance" =>
         "Chance, in %, that an Egg is a fusion when the parents have two different species. A fusion and a Ditto give that fusion.",
       "Head Legendary Breeding" => [
-        "A fusion with a legendary head can't breed (PIF 6).",
-        "A fusion with a legendary head breeds through its body (older PIF)."],
+        "A fusion with a legendary head can't breed, as in PIF 6.",
+        "A fusion with a legendary head breeds through its body, as in older PIF."],
       "Event Moves" => [
         "The Egg Move Tutor teaches egg moves only.",
         "The Egg Move Tutor also teaches event moves."],
@@ -282,7 +282,7 @@ module KIF
       "Dark Mode" => [
         "Light Pokédex, Summary and PokéNav screens.",
         "Dark Pokédex, Summary and PokéNav screens, and dark battle menus (no effect with EBDX Battles)."],
-      "Improved Pokedex" => [
+      "Improved Pokédex" => [
         "Catching a fusion registers only the fusion.",
         "Catching, hatching or evolving a fusion also registers its head and body."],
       "Dex Evolutions" => [
@@ -348,7 +348,7 @@ module KIF
       "Metronome Madness" => [
         "Off.",
         "Every Pokémon can only use Metronome.",
-        "Only your Pokémon can only use Metronome."],
+        "Metronome is forced on your Pokémon only."],
       "Letdown" => "Chance that a Pokémon uses Splash instead of the move it picked.",
       "Letdown Player Only" => [
         "Letdown affects every Pokémon.",

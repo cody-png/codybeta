@@ -35,15 +35,15 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Auto-Battle"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.autobattler },
                  proc { |value| $PokemonSystem.autobattler = value },
-                 [_INTL("You fight your own battles"),
-                  _INTL("Allows Trapstarr to take control of your pokemon")])
+                 [_INTL("You choose your own moves."),
+                  _INTL("The battle AI fights for you and battle text moves on by itself.")])
 }
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Auto-Battle Shiny Stop"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.autobattlershiny },
                  proc { |value| $PokemonSystem.autobattlershiny = value },
-                 [_INTL("Do NOT stop Auto-Battle if a shiny enemy is detected."),
-                  _INTL("Automatically stops Auto-Battle if a shiny enemy is detected.")])
+                 [_INTL("Auto-Battle keeps going when a shiny wild Pokémon appears."),
+                  _INTL("Auto-Battle turns itself off when a shiny wild Pokémon appears.")])
 }
 
 module KIF

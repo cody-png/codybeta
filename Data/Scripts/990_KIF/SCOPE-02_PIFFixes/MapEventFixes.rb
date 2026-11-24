@@ -109,7 +109,7 @@ end
 #    game variable ("$\v[15]") is formatted when the message shows (below).
 #    A line or choice the loaded language translates (french.dat) is left
 #    alone: the English text is its translation key. Maps are done as they
-#    load, common events once the language is loaded (Cody, 2026-10-24: all
+#    load, common events once the language is loaded (2026-10-24: all
 #    of them).
 module KIF
   module EventPrices

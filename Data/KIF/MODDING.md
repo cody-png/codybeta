@@ -83,7 +83,7 @@ version, author, description). Unknown keys are ignored.
 | `dependencies` | list of ids, or `{ "id": "kif_er", "version": ">=0.6" }` | Mods that must be installed and On. A version is checked against the other mod's version. |
 | `load_after` | list of ids | Only an order; the named mods need not be installed. |
 | `incompatible` | list of ids | Mods this one does not work with. |
-| `replaces`, `locks`, `modules` | see KIF's mod rules | KIF features the mod takes over, settings it sets. |
+| `replaces`, `locks`, `modules` | list of feature ids; name -> value; name -> value | `replaces`: KIF features the mod takes over, such as `["F-BATTLE-08_LevelCaps"]`. `locks`: settings the mod sets, such as `{"shinyodds": 16}`. `modules`: modules the mod turns on or off, such as `{"auto_battle": "off"}`. The scan lists all three. |
 | `catalog` | `owner/repo@branch` | Your own mod catalog, added to Browse. |
 | `data_version` | whole number | For your own data migrations (`store.migrate`). |
 | `hot_reload` | `false` | Opt out of Reload in Mod Dev mode. |
@@ -94,7 +94,7 @@ version, author, description). Unknown keys are ignored.
 
 ```ruby
 KIF::API.on(:damage_multipliers, "fire_boost", priority: KIF::API::LATE) do |ctx|
-  ctx[:multipliers][:final_damage_multiplier] *= 1.1 if ctx[:user].hasType?(:FIRE)
+  ctx[:multipliers][:final_damage_multiplier] *= 1.1 if ctx[:type] == :FIRE
 end
 KIF::API.on(:move_use) { |ctx| ctx.cancel!("not allowed") if ctx[:move].id == :SPLASH }
 ```
@@ -707,6 +707,7 @@ store.version;  store.migrate(to: 2) { |old| old.merge("new" => 1) }
 KIF::API.data(:save, mod: "other_mod")    # another mod's data: a frozen copy, read only
 ```
 
+- `store.version` is the version of the stored data: 0 until you migrate. `store.migrate(to: 2) { |old| ... }` runs the block once, only when the stored version is lower than 2. The block gets a copy of the data and returns the new contents.
 - Plain data only: nil, true, false, whole numbers, finite decimals, text (UTF-8, at most 64 KB), lists and
   hashes (keys become text), nested at most 8 deep. A mod may hold 256 KB; all mods 2 MB in saves and 4 MB global.
   Anything else is not stored, is logged once, and raises `KIF::API::PlainDataError` in Mod Dev mode.
@@ -769,6 +770,7 @@ KIF::Safe.open_url("https://example.org")              # asks the player first
 - `http_*` need the `network` permission and the host in `network_hosts`. https only (loopback for tests), no
   redirect is followed, the answer stops at `max_bytes` (2 MB by default).
 - `open_url` replaces `system("start", url)`. It takes https only and asks the player (default No).
+- A call that cannot be done raises `KIF::Safe::Error` (a `StandardError`) with a plain message: a bad path or one that leaves the folder, a link, a file or a mod over its size limit, too many files, JSON that is not valid, too deep or not plain data, an address that is not https, an answer over the size limit. Rescue it, as in the example in section 13.
 
 ## 11. Permissions, the scan, the guard, trust
 
@@ -832,10 +834,10 @@ paints an honest mod red, the rule is made weaker, never the mod excused.
 file the code came from (the nearest frame that is not Ruby's own library, an `eval` text, or the guard decides). KIF's own and the game's code is
 never stopped. A mod that does not hold the permission:
 
-- Normal (default): is stopped for programs, native code, the internet, files outside its own folders and loading code from elsewhere; only noted for the
-  environment, clipboard, Marshal and ObjectSpace.
+- Normal (default): is stopped for `network`, `programs`, `native`, `game_files`, `save_files`, `outside_files` and `load_code`; only noted for `environment`,
+  `clipboard`, `marshal` and `objectspace`.
 - Strict: is stopped for everything it did not list. Warn only: only noted. Off: nothing is noted or stopped.
-- A stop raises `KIF::ModGuard::Denied` (an ordinary `StandardError`) with a plain message: `KIF stopped mod "X": it tried to start a program. Options > Mods > X to allow it.` ("Options > Mods" is KIF Settings > Mods.) The first stop of a session also shows a message on the map.
+- A stop raises `KIF::ModGuard::Denied` (an ordinary `StandardError`) with a plain message: `KIF stopped mod "X": it tried to start a program. Options > Mods > X to allow it.` (In the game's menus that is Options > KIF Settings > Mods.) The first stop of a session also shows a message on the map.
 - What a mod holds: its `permissions`; for an older mod, what its code was found to do; plus what the player added; or everything if the player chose
   "Allow anything" for that mod in KIF Settings > Mods.
 - The Mod protection setting is read from `KIF_ModTrust.json` (the Options row writes it there), not from the player's settings object, and the guard's own switches, the trust table and the list of mod folders refuse to be changed or read by a mod's code. Only code that gets around the check with Ruby reflection can reach them (section 12).
@@ -862,13 +864,13 @@ mod, a mod that does more than it says, or a withdrawn mod is asked about once (
 
 `revoked.json`: `{ "format": 1, "revoked": [ { "id": "<mod id>", "fingerprint": "<40 hex, optional>", "versions": "<=1.1.0 (optional)", "reason": "text, at most 140", "since": "2026-11-01" } ] }`
 
-The fingerprint is the SHA-1 of the sorted lines `<git blob sha> <path>` of the mod's files. `ruby tools/mod_fingerprint.rb <mod folder>` in the test kit prints it with a ready entry. A mod that matches
+The fingerprint is the SHA-1 of the sorted lines `<git blob sha> <path>` of the mod's files. KIF's scan works it out. A mod that matches
 `reviewed.json` shows "Reviewed <date>"; one that differs shows "Changed since it was reviewed". A mod that matches `revoked.json` is held and the install asks first.
 Text from these files is cleaned and size-limited before it is shown.
 
 ## 12. What this cannot stop
 
-Said plainly, because players will rely on it. These are what the guard and the scan do **not** catch (kit test `s_f_modapi_attacks` keeps the list):
+Said plainly, because players will rely on it. These are what the guard and the scan do **not** catch:
 
 Not stopped in the attack test (it ran):
 
@@ -891,8 +893,7 @@ Not seen by design:
 11. A mod that draws a fake message or asks for a password on screen. No check can tell.
 12. A race: a link swapped in between the moment the guard looks at a path and the moment the file opens. The guard follows links when it looks; it cannot hold the file still.
 
-If you only remember one thing: the guard and the scan make honest mods easy to recognise and stop the lazy attacks. A motivated attacker with Ruby skill gets around them. The complete protections
-are not installing mods from strangers, the reviewed list, and your own judgment.
+The guard and the scan make honest mods easy to recognise and stop the lazy attacks. Someone who knows Ruby can get around them. The protections that hold are not installing mods from strangers, the reviewed list, and your own judgment.
 
 ## 13. Worked examples
 
@@ -900,7 +901,7 @@ are not installing mods from strangers, the reviewed list, and your own judgment
 
 ```ruby
 KIF::API.on(:damage_multipliers, "mymod_fire", priority: KIF::API::LATE) do |ctx|
-  ctx[:multipliers][:final_damage_multiplier] *= 1.1 if ctx[:user].hasType?(:FIRE)
+  ctx[:multipliers][:final_damage_multiplier] *= 1.1 if ctx[:type] == :FIRE
 end
 KIF::API.on(:move_use, "mymod_nosplash") { |ctx| ctx.cancel!("Splash is disabled") if ctx[:move].id == :SPLASH }
 ```
@@ -971,7 +972,7 @@ end
 6. The code is safe to load twice (F12), has no `alias` AND `prepend` on the same method, and does not replace game methods when an event or a hook would do.
 7. It works with Mod Dev mode On (bad field writes raise there) and with the mod removed (saves load without it).
 8. Use KIF Settings > Mods > Publish a mod: it runs the catalog's checks and shows the scan before anything is uploaded.
-9. Want it listed as reviewed? Run `ruby tools/mod_fingerprint.rb <folder>` (test kit) and send the entry with your pull request.
+9. Want it listed as reviewed? Ask in your pull request. The KIF team checks the mod and adds the entry.
 
 ## 15. Mod Dev mode
 

@@ -28,8 +28,8 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Head Legendary Breeding"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.legendarybreed },
                  proc { |value| $PokemonSystem.legendarybreed = value },
-                 [_INTL("Legendary Head cannot breed (like new PIF)."),
-                  _INTL("Legendary Head can breed (like old PIF).")])
+                 [_INTL("A fusion with a legendary head can't breed, as in PIF 6."),
+                  _INTL("A fusion with a legendary head breeds through its body, as in older PIF.")])
 }
 
 GameData::EggGroup.register({

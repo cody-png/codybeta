@@ -11,12 +11,12 @@
 #     Misty Terrain... still block it. For Guts / Poison Heal / Quick Feet /
 #     Marvel Scale builds that would otherwise give up the held item for an Orb.
 #   Off: the choice stays saved on the Pokémon and is ignored (as EvoLock).
-#   Unlocks (2026-10-27, Cody): Burned needs a Flame Orb, Poisoned a Toxic Orb.
+#   Unlocks (2026-10-27): Burned needs a Flame Orb, Poisoned a Toxic Orb.
 #     Each unlocks for the save once the item is in the Bag or held by a party
 #     or PC Pokémon (PokemonBag#pbStoreItem, save load, and each time the menu
 #     opens) and stays unlocked. A locked choice is listed with "(needs ...)"
 #     and can't be picked; a Pokémon set before the unlocks keeps its choice.
-#   Pay to unlock (2026-10-27, Cody): picking a locked choice offers to unlock
+#   Pay to unlock (2026-10-27): picking a locked choice offers to unlock
 #     it for that one Pokémon for PAY_PRICE. Stored on the Pokémon; a fusion
 #     gets both parts' unlocks, and unfusing gives each part its own plus the
 #     fusion's (DNA Reverser keeps the same Pokémon, so nothing changes).
@@ -57,7 +57,7 @@ module KIF
     end
 
     ITEMS = { :BURN => :FLAMEORB, :POISON => :TOXICORB }
-    # Per-Pokémon unlock (Cody, 2026-10-27: Guts and the KIF-ER status
+    # Per-Pokémon unlock (2026-10-27: Guts and the KIF-ER status
     # abilities are strong; a Kuray Shop Orb is $100,000)
     PAY_PRICE = 10_000
 

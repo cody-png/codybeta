@@ -23,9 +23,9 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Rocket Mode"), [_INTL("Off"), _INTL("On"), _INTL("All Balls")],
                  proc { $PokemonSystem.rocketballsteal },
                  proc { |value| $PokemonSystem.rocketballsteal = value },
-                 [_INTL("Rocket Balls don't steal Pokemons."),
-                  _INTL("Rocket Balls can steal Pokemons."),
-                  _INTL("Every Balls can steal Pokemons.")])
+                 [_INTL("You can't catch trainers' Pokémon."),
+                  _INTL("Rocket Balls can catch trainers' Pokémon."),
+                  _INTL("Any ball can catch trainers' Pokémon.")])
 }
 
 KIF.guard_base("011_Battle/003_Battle/001_PokeBattle_BattleCommon.rb", 177678609,

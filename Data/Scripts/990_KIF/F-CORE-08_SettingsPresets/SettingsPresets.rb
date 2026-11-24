@@ -3,7 +3,7 @@
 # Source: KIF 0.20.7 016_UI/015_UI_Options.rb:1599-1690 (SLOptionsScene:
 #   12 named slots, Load / Save / Name, Options_<n>.kro in the save folder)
 #
-# Per-save settings (every KIF and Cody's additions setting that resets on New Game) can
+# Per-save settings (every KIF and Extras setting that resets on New Game) can
 # be saved into one of 12 named presets and loaded into another save, so a
 # new run doesn't need every setting toggled again. Options > KIF Settings
 # > Presets. Global settings are shared by every save already, so a preset
@@ -34,10 +34,11 @@ module KIF
     def data
       d = nil
       begin
-        d = File.open(path, "rb") { |f| Marshal.load(f) } if File.exist?(path)
+        d = KIF.safe_marshal_load(File.binread(path)) if File.exist?(path)
       rescue StandardError => e
         KIF.set_aside(path, "Presets file", e)   # the next save must not overwrite the player's presets
       end
+      KIF.set_aside(path, "Presets file") unless d.nil? || d.is_a?(Hash)   # readable but not presets: kept, not written over
       d = {} unless d.is_a?(Hash)
       d[:names] = Array.new(SLOTS) { |i| "Preset #{i + 1}" } unless d[:names].is_a?(Array)
       d[:names].fill { |i| d[:names][i] || "Preset #{i + 1}" }

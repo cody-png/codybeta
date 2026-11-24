@@ -108,7 +108,7 @@ module KIF
     def self.loaded_root; @loaded_root || []; end
     def self.loaded_dirs; @loaded_dirs || []; end
 
-    # Uninstall (Cody, 2026-10-20): deletes a mod of KIF's own Mods folder
+    # Uninstall: deletes a mod of KIF's own Mods folder
     # (its folder, or its loose .rb). Its settings move to the uninstalled
     # store first (KIF::ModSettings.stash). Code already loaded stays until
     # the game restarts. Mod Manager's mods are Mod Manager's to remove.
@@ -549,9 +549,9 @@ module KIF
         json = File.join(e.path, "mod.json")
         h = File.file?(json) ? (KIF::Mods.read_json(json) || {}) : nil
         if h && h["scripts"].is_a?(Array) && !h["scripts"].empty?
-          listed = h["scripts"].map { |s| File.join(e.path, s.to_s) }.select { |f| File.file?(f) }
+          listed = h["scripts"].map { |s| KIF::Mods.file_in(e.path, s) }.compact.select { |f| File.file?(f) }
           return listed unless listed.empty?
-          KIF.log("Mod #{e.name}: mod.json lists #{h['scripts'].join(', ')} (missing) - loading its .rb files instead")
+          KIF.log("Mod #{e.name}: mod.json lists #{h['scripts'].join(', ')} (missing or outside the mod folder) - loading its .rb files instead")
         end
         return KIF::Mods.folder_scripts(e.path)
       end
@@ -587,6 +587,19 @@ module KIF
         ids.each { |id| visit.call(id, []) }
         return out.map { |id| list.find { |e| e.id == id } }
       end
+    end
+
+    # dir + rel, or nil when rel is not a plain relative path or leaves dir (mod.json names files)
+    def self.file_in(dir, rel)
+      rel = rel.to_s.tr("\\", "/").sub(%r{\A(\./)+}, "")   # "scripts\main.rb" and "./main.rb" worked before
+      unless KIF.safe_rel_path?(rel)
+        KIF.log("Mods: #{rel.to_s[0, 80].inspect} in #{File.basename(dir.to_s)} is not a path inside the mod folder; refused")
+        return nil
+      end
+      full = File.expand_path(File.join(dir.to_s, rel.to_s))
+      return full if full.start_with?(File.expand_path(dir.to_s) + "/")
+      KIF.log("Mods: #{rel.to_s[0, 80].inspect} in #{File.basename(dir.to_s)} leaves the mod folder; refused")
+      return nil
     end
 
     # like the game's script loader: files by name, then sub-folders

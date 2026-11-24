@@ -45,17 +45,17 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Level Cap"), [_INTL("Off"), _INTL("Easy"), _INTL("Normal"), _INTL("Hard")],
                  proc { $PokemonSystem.kuraylevelcap },
                  proc { |value| $PokemonSystem.kuraylevelcap = value },
-                 [_INTL("No Forced Level Cap"),
-                  _INTL("Easy Level Cap, for children"),
-                  _INTL("Normal Level Cap, for normal people"),
-                  _INTL("Hard Level Cap, for nerds")])
+                 [_INTL("No level cap from KIF."),
+                  _INTL("Level cap 10% above PIF's next-gym cap."),
+                  _INTL("Level cap at PIF's next-gym cap."),
+                  _INTL("Level cap 10% below PIF's next-gym cap.")])
 }
 KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Cap Behavior"), [_INTL("Smart"), _INTL("Lock"), _INTL("RC")],
                  proc { $PokemonSystem.levelcapbehavior },
                  proc { |value| $PokemonSystem.levelcapbehavior = value },
-                 [_INTL("The Pokemons can still earn exp (saved until the cap rises)."),
-                  _INTL("The Pokemon can't earn exp."),
+                 [_INTL("The Pokémon can still earn exp (saved until the cap rises)."),
+                  _INTL("The Pokémon can't earn exp."),
                   _INTL("Earn rare candies instead of going over the cap.")])
 }
 

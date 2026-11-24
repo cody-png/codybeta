@@ -5,7 +5,7 @@
 #===============================================================================
 module KIF
   module Options
-    # Every menu settings can be registered in (KIF's and Cody Settings)
+    # Every menu settings can be registered in (KIF's and Extras settings)
     def self.all_menu_ids
       return MENUS.keys + @extra_menus.keys
     end

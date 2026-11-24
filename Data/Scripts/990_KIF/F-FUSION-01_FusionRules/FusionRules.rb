@@ -75,7 +75,7 @@ module KIF
 
     # The dominant-type tables name a species' own types (Bulbasaur: Grass).
     # With the Randomizer's types they mean the type now in that slot
-    # (Bulbasaur randomized to Ice: Ice). Cody, 2026-10-19.
+    # (Bulbasaur randomized to Ice: Ice). 2026-10-19.
     def self.rand_type(sp, t)
       return t unless sp && defined?(KIF::Rand)
       orig = KIF::Rand.instance_variable_get(:@orig)   # only there once the randomizer changed data
@@ -119,8 +119,8 @@ KIF::Options.add(:battles, :save) {
                    proc { $PokemonSystem.send(key) },
                    proc { |value| $PokemonSystem.send("#{key}=", value); KIF.recalc_all_stats },
                    [_INTL(offtext),
-                    _INTL("Sliders determine what % of each stat comes from the head pokemon."),
-                    _INTL("Sliders determine what % of each stat comes from the better base stat.")])
+                    _INTL("The sliders below set how much of each base stat comes from the head."),
+                    _INTL("The sliders below set how much of each base stat comes from the higher of the two.")])
   }
   KIF::FusionRules::STATS.each do |stat, name|
     KIF::Options.add(:battles, :save) {
@@ -141,8 +141,8 @@ KIF::Options.add(:battles, :save) {
   EnumOption.new(_INTL("Dominant Fusion Types"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.dominant_fusion_types },
                  proc { |value| $PokemonSystem.dominant_fusion_types = value },
-                 [_INTL("Brings back the dominant/inverse fusion types from pre-v6."),
-                  _INTL("Brings back the dominant/inverse fusion types from pre-v6.")])
+                 [_INTL("Fusion types as in PIF 6."),
+                  _INTL("Fusion types as before PIF 6 (dominant types).")])
 }
 
 #-------------------------------------------------------------------------------

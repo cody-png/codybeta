@@ -23,18 +23,18 @@ KIF::Options.define(:improved_pokedex, 0, :save)
 KIF::Options.define(:dexspriteselect, 1, :global)
 
 KIF::Options.add(:battles, :save) {
-  EnumOption.new(_INTL("Improved Pokedex"), [_INTL("Off"), _INTL("On")],
+  EnumOption.new(_INTL("Improved Pokédex"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.improved_pokedex },
                  proc { |value| $PokemonSystem.improved_pokedex = value },
-                 [_INTL("Don't use the Improved Pokedex"),
-                  _INTL("Registers a fusions base Pokemon to the Pokedex when catching/evolving")])
+                 [_INTL("Don't use the Improved Pokédex"),
+                  _INTL("Catching, hatching or evolving a fusion also registers its head and body.")])
 }
 KIF::Options.add(:others, :global) {
   EnumOption.new(_INTL("Dex Sprite Select"), [_INTL("Off"), _INTL("On")],
                  proc { $PokemonSystem.dexspriteselect },
                  proc { |value| $PokemonSystem.dexspriteselect = value },
                  [_INTL("New species don't prompt a sprite selection"),
-                  _INTL("Each new pokemon/fusion prompts a sprite selection")])
+                  _INTL("Each new Pokémon or fusion asks you to pick a sprite.")])
 }
 
 class Player < Trainer

@@ -5,7 +5,7 @@
 # (Game.set_up_system -> SaveData.load_bootup_values): :game_system,
 # :pokemon_system and the two version stamps. Game.load later only loads the
 # values that aren't loaded yet, so loading any other file kept the newest
-# file's $game_system, and with it that file's map interpreter. Cody loaded
+# file's $game_system, and with it that file's map interpreter. A player loaded
 # File A while File E (newer, saved by the autosave in the middle of the new-
 # game intro on map 160) was the newest: File A's map then ran the rest of
 # File E's intro script (setStarterEasterEgg, then the Silph Co. cutscene).

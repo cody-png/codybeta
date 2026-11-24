@@ -1,5 +1,5 @@
 #===============================================================================
-# Mod pictures, sounds and fonts, looked up in place (Cody, 2026-10-20).
+# Mod pictures, sounds and fonts, looked up in place.
 #
 # A mod's Graphics/, Audio/ and Fonts/ folders stay inside the mod
 # (Mods/<mod>/Graphics/...). When the game asks for "Graphics/Pictures/x",

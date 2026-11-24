@@ -113,7 +113,7 @@ module KIF
 
     # said before the player agrees: the partner's game runs the battle and tells this one what happened
     def self.trust_line
-      _INTL("Their game decides what happens to your Pokemon in these battles. Only agree with a friend you trust.")
+      _INTL("Their game decides what happens to your Pokémon in these battles. Only agree with a friend you trust.")
     end
 
     class << self
@@ -514,7 +514,10 @@ module KIF
     def self.map_tick
       s = session or return
       send_status if $game_map && $game_map.map_id != @sent_map && (@want || @their)
-      send_rules if @want || @their   # a setting changed on the host (sent only then)
+      if (@want || @their) && KIF::Net.now - (@rules_at ||= 0) >= 1   # a setting changed on the host (sent only then, looked for once a second)
+        @rules_at = KIF::Net.now
+        send_rules
+      end
       if @ask
         ask = @ask
         why = if !on? then "off"

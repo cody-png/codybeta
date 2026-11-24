@@ -310,7 +310,8 @@ class KIFRelay
 end
 
 if $PROGRAM_NAME == __FILE__
-  port = (ARGV[0] || 52413).to_i
+  port = Integer(ARGV[0] || 52413, exception: false)
+  abort "kif_relay: the port must be a number from 1 to 65535 (got #{ARGV[0].inspect})" unless port && port.between?(1, 65535)   # "abc".to_i is 0, a random port nobody can find
   bind = ARGV[1] || "0.0.0.0"
   $stdout.sync = true   # under systemd or a pipe the log would otherwise arrive late
   begin

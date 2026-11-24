@@ -49,7 +49,7 @@ KIF::PauseMenu.add(:kif_heal, "Heal Pokémon", icon: "menuIcons/POKEMON", order:
       next :close
     end
     $Trainer.heal_party
-    pbMessage(_INTL("Pokemons healed!"))
+    pbMessage(_INTL("Pokémon healed!"))
     :stay
   })
 

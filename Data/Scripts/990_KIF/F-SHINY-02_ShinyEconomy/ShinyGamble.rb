@@ -80,12 +80,12 @@ module KIF::PCActionMethods
     loop do
       if $Trainer.money < price
         pbPlayBuzzerSE
-        pbDisplay(_INTL("Not enough Money!"))
+        pbDisplay(_INTL("Not enough money."))
         break
       end
       text = pkmn.shiny? ? _INTL("Gamble for new Color (P{1})", price) : _INTL("Gamble for Shiny (P{1})", price)
       choice = pbShowCommands(_INTL("You have P{1}", $Trainer.money.to_s_formatted),
-                              [text, _INTL("Nevermind")])
+                              [text, _INTL("Cancel")])
       break if choice != 0
       $Trainer.money -= price
       roll = rand(KIF::ShinyActions.gamble_odds)
@@ -93,14 +93,14 @@ module KIF::PCActionMethods
         if pkmn.shiny?
           pkmn.kif_reroll_shiny_colors
           kif_refresh(selected)
-          pbDisplay(_INTL("Wait... Its shiny color changed!"))
+          pbDisplay(_INTL("Its shiny color changed."))
         else
           KIF::ShinyActions.make_shiny(pkmn)
           kif_refresh(selected)
-          pbDisplay(_INTL("Wait... It became shiny!"))
+          pbDisplay(_INTL("It became shiny."))
         end
       else
-        pbDisplay(_INTL("Not this time :c Try again!"))
+        pbDisplay(_INTL("Not this time. Try again."))
       end
     end
   end
@@ -109,16 +109,16 @@ module KIF::PCActionMethods
   def kif_shiny_sell(pkmn, selected)
     unless pkmn.shiny?
       pbPlayBuzzerSE
-      pbDisplay(_INTL("Not Shiny!"))
+      pbDisplay(_INTL("This Pokémon isn't shiny."))
       return
     end
-    choice = pbShowCommands(_INTL("Are you sure to unshiny?"),
-                            [_INTL("Unshiny (+P{1})", KIF::ShinyActions::SELL_PRICE), _INTL("Nevermind")])
+    choice = pbShowCommands(_INTL("Remove its shininess?"),
+                            [_INTL("Unshiny (+P{1})", KIF::ShinyActions::SELL_PRICE), _INTL("Cancel")])
     return if choice != 0
     $Trainer.money += KIF::ShinyActions::SELL_PRICE
     KIF::ShinyActions.remove_shiny(pkmn)
     kif_refresh(selected)
-    pbDisplay(_INTL("Shiny, no more!"))
+    pbDisplay(_INTL("It's not shiny any more."))
   end
 
   # KIF pbRerollShiny (debug). variant: 0 random, 1 PIF palette only,

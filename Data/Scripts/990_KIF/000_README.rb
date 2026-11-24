@@ -6,7 +6,7 @@
 #
 # Load order (see Data/Scripts.rxdata -> load_scripts_from_folder):
 #   files in a folder load first (sorted by name), then sub-folders (sorted).
-#   "990_KIF" sorts after every base folder except 998_Experimental/999_Main,
+#   "990_KIF" sorts after every base folder except 999_Main,
 #   so every base class/method already exists when these files run.
 #
 # Conventions
@@ -27,5 +27,5 @@
 # saves are found).
 #===============================================================================
 module KIF
-  PORT_VERSION = "2.0.8"
+  PORT_VERSION = "2.0.9"
 end

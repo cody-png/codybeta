@@ -69,19 +69,28 @@ end
 #                        proc { |screen| ... }, order: n)
 #===============================================================================
 module KIF
-  module BoxCommands
+  # The registry behind the box and multi-select menus: `add`, and `available`
+  # with the arguments the label procs take
+  module OrderedCommands
     Command = Struct.new(:id, :label, :handler, :order, :index)
-    @commands = []
 
-    def self.add(id, label, handler, order: 100)
+    def self.extended(base)
+      base.instance_variable_set(:@commands, [])
+    end
+
+    def add(id, label, handler, order: 100)
       @commands.reject! { |c| c.id == id }
       @commands << Command.new(id, label, handler, order, @commands.length)
     end
 
-    def self.available(screen)
+    def available(*args)
       list = @commands.select { |c| !defined?(KIF::Modules) || KIF::Modules.proc_active?(c.handler) }.sort_by { |c| [c.order, c.index] }
-      return list.map { |c| [c, (c.label.call(screen) rescue nil)] }.select { |_, l| l }
+      return list.map { |c| [c, (c.label.call(*args) rescue nil)] }.select { |_, l| l }
     end
+  end
+
+  module BoxCommands
+    extend OrderedCommands
   end
 end
 
@@ -94,18 +103,7 @@ end
 #===============================================================================
 module KIF
   module MultiCommands
-    Command = Struct.new(:id, :label, :handler, :order, :index)
-    @commands = []
-
-    def self.add(id, label, handler, order: 100)
-      @commands.reject! { |c| c.id == id }
-      @commands << Command.new(id, label, handler, order, @commands.length)
-    end
-
-    def self.available(screen, box)
-      list = @commands.select { |c| !defined?(KIF::Modules) || KIF::Modules.proc_active?(c.handler) }.sort_by { |c| [c.order, c.index] }
-      return list.map { |c| [c, (c.label.call(screen, box) rescue nil)] }.select { |_, l| l }
-    end
+    extend OrderedCommands
   end
 end
 

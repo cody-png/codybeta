@@ -317,12 +317,8 @@ module KIF
       def self.write(file, stamp, tables)
         f = path(file)
         KIF.mkdir_p(File.dirname(f))
-        tmp = "#{f}.#{Process.pid}.tmp"
-        File.binwrite(tmp, Zlib::Deflate.deflate(Marshal.dump([key(file, stamp), tables]), Zlib::BEST_SPEED))
-        File.delete(f) if File.exist?(f)   # (Windows: rename won't replace)
-        File.rename(tmp, f)
+        KIF.atomic_write(f) { |io| io.write(Zlib::Deflate.deflate(Marshal.dump([key(file, stamp), tables]), Zlib::BEST_SPEED)) }
       rescue StandardError => e
-        (File.delete(tmp) rescue nil) if tmp
         KIF.log("Text cache not written (#{e.class}: #{e.message})") if KIF.respond_to?(:log)
       end
     end

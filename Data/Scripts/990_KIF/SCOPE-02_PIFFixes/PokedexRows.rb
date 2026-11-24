@@ -26,27 +26,50 @@ module KIF
         KIF::PokedexRows.checked = ids
         return
       end
+      legacy = !@seen_standard.is_a?(Array) && !@seen_fusion.is_a?(Array)
       [:@seen_standard, :@owned_standard, :@seen_fusion, :@owned_fusion].each do |iv|
         instance_variable_set(iv, []) unless instance_variable_get(iv).is_a?(Array)
       end
       resync_pokedex
+      @seen_triple = {} unless @seen_triple.is_a?(Hash)
+      @owned_triple = {} unless @owned_triple.is_a?(Hash)
+      # Pokedexes from before the tables kept seen/owned as species hashes
+      [[@seen, :set_seen], [@owned, :set_owned]].each do |h, m|
+        next unless legacy && h.is_a?(Hash)
+        h.each_key { |sp| (send(m, sp, false) rescue nil) if GameData::Species.exists?(sp) rescue nil }
+      end
       KIF.log("Pokedex tables were not sized for #{NB_POKEMON} species; rebuilt") rescue nil
       KIF::PokedexRows.checked = [@seen_standard, @owned_standard, @seen_fusion, @owned_fusion].map(&:object_id)
     end
 
     def seen_fusion?(species)
-      bodyId = getBodyID(species)
-      row = @seen_fusion[getHeadID(species, bodyId)]
-      return row[bodyId] if row.is_a?(Array)
-      KIF::PokedexRows.checked = nil   # the next seen?/owned? rebuilds the tables
-      return false
+      return fusion_entry(:@seen_fusion, species) == true
     end
 
     def owned_fusion?(species)
-      bodyId = getBodyID(species)
-      row = @owned_fusion[getHeadID(species, bodyId)]
-      return row[bodyId] == true if row.is_a?(Array)
-      KIF::PokedexRows.checked = nil
+      return fusion_entry(:@owned_fusion, species) == true
+    end
+
+    private
+
+    # A missing row or table reads as not seen. A table found missing after the
+    # size check passed is rebuilt here once (2.0.9: a player's Pokedex still
+    # crashed at seen_fusion? with the table itself gone) and logged with what
+    # the Pokedex held, so the next log says where it came from.
+    def fusion_entry(iv, species)
+      body = getBodyID(species)
+      head = getHeadID(species, body)
+      t = instance_variable_get(iv)
+      unless t.is_a?(Array)
+        KIF.log("Pokedex: #{iv} was #{t.class} after the size check; rebuilding (#{instance_variables.map { |v| "#{v}=#{instance_variable_get(v).class}" }.join(' ')})") rescue nil
+        KIF::PokedexRows.checked = nil
+        resyncPokedexIfNumberOfPokemonChanged
+        t = instance_variable_get(iv)
+        return false unless t.is_a?(Array)
+      end
+      row = t[head]
+      return row[body] if row.is_a?(Array)
+      KIF::PokedexRows.checked = nil   # the next seen?/owned? rebuilds the tables
       return false
     end
   end

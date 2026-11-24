@@ -366,8 +366,11 @@ TXT
       #-------------------------------------------------------------------------
       # The screen: nested message menus, no drawing of its own
       #-------------------------------------------------------------------------
+      # mod names and errors are shown, so no message codes in them
+      def self.say(text); pbMessage(KIF.safe_text(text, 2000)); end
+
       def self.menu(title, labels)
-        return pbMessage(title, labels + [_INTL("Cancel")], labels.length + 1) rescue -1
+        return pbMessage(KIF.safe_text(title), labels.map { |l| KIF.safe_text(l) } + [_INTL("Cancel")], labels.length + 1) rescue -1
       end
 
       def self.tools
@@ -377,7 +380,7 @@ TXT
           case c
           when 0 then inspector
           when 1 then reload_menu
-          when 2 then reload_all.each { |r| pbMessage(r[:message]) }
+          when 2 then reload_all.each { |r| say(r[:message]) }
           when 3 then make_screen
           when 4 then pbMessage(_INTL("Written: {1}", write_reference))
           when 5 then pbMessage(_INTL("Written: {1}", write_hook_report))
@@ -392,9 +395,9 @@ TXT
                                                 _INTL("Method collisions"), _INTL("APIs mods provide")])
           case c
           when 0 then events_screen
-          when 1 then pbMessage(wrapped_rows.map { |r| "#{r[:target]} (#{r[:form]}): #{r[:mods].join(', ')}" }.first(12).join("\n"))
-          when 2 then pbMessage(API.collisions.map { |x| "#{x[:kind]}: #{x[:target]} (#{API::Attribution.display(x[:mod])})" }.first(8).join("\n").then { |t| t.empty? ? _INTL("None.") : t })
-          when 3 then pbMessage(API.provided.map { |n, h| "#{n} v#{h[:version]} (#{API::Attribution.display(h[:mod])})" }.join("\n").then { |t| t.empty? ? _INTL("None.") : t })
+          when 1 then say(wrapped_rows.map { |r| "#{r[:target]} (#{r[:form]}): #{r[:mods].join(', ')}" }.first(12).join("\n"))
+          when 2 then say(API.collisions.map { |x| "#{x[:kind]}: #{x[:target]} (#{API::Attribution.display(x[:mod])})" }.first(8).join("\n").then { |t| t.empty? ? _INTL("None.") : t })
+          when 3 then say(API.provided.map { |n, h| "#{n} v#{h[:version]} (#{API::Attribution.display(h[:mod])})" }.join("\n").then { |t| t.empty? ? _INTL("None.") : t })
           else break
           end
         end
@@ -422,7 +425,7 @@ TXT
         return pbMessage(_INTL("No folder mod is loaded.")) if mods.empty?
         c = menu(_INTL("Reload which mod?"), mods.map { |e| e.name.to_s }.first(10))
         return if c < 0 || c >= [mods.length, 10].min
-        pbMessage(reload_mod(mods[c].id)[:message])
+        say(reload_mod(mods[c].id)[:message])
       end
 
       def self.make_screen

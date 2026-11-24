@@ -13,7 +13,7 @@
 #   5. Tools/publish_mod.bat (.sh on Linux) opens in its own window and does
 #      the GitHub part with the GitHub CLI under the player's own account:
 #      sign in (browser), then either straight to main (catalog contributors,
-#      their own mod's folder only; Cody, 2026-10-22) or fork, branch, push
+#      their own mod's folder only, 2026-10-22) or fork, branch, push
 #      and a pull request that is reviewed. A folder's owners are listed in
 #      the catalog's owners.txt (fx-publish, 2026-11-02): the script, not the
 #      game, reads it, and says why when it doesn't treat a mod as yours.
@@ -81,11 +81,7 @@ module KIF
     end
 
     def save_json(path, json)
-      f = File.join(path, "mod.json")
-      tmp = f + ".kif_tmp"
-      File.open(tmp, "wb") { |io| io.write(to_json(json) + "\n") }
-      File.delete(f) if File.file?(f)
-      File.rename(tmp, f)
+      KIF.atomic_write(File.join(path, "mod.json")) { |io| io.write(to_json(json) + "\n") }
       return true
     rescue StandardError => e
       log("mod.json not saved in #{path} (#{e.class}: #{e.message})")

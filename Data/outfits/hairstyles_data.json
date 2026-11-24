@@ -126,8 +126,7 @@
         "tags": "protag, short, spiky, special",
         "regiontags": "kanto",
         "obtainmethodkanto": "Store (Regional Set)",
-        "obtainmethodhoenn": "Store (Regional Set)",
-        "notes": "Available from Mom in PIF Kanto; Name player 'Ash'"
+        "obtainmethodhoenn": "Store (Regional Set)"
     },
     {
         "dateadded": "2026-09-02T04:00:00.000Z",
@@ -352,8 +351,7 @@
         "tags": "short, untied, spiky",
         "regiontags": "kanto",
         "obtainmethodkanto": "Store (Gym Leader)",
-        "obtainmethodhoenn": "Store (All)",
-        "notes": "pewter city's salon after beating gym?"
+        "obtainmethodhoenn": "Store (All)"
     },
     {
         "author": ".payapon",
@@ -370,8 +368,7 @@
         "regiontags": "johto",
         "storelocation": "azalea,",
         "obtainmethodkanto": "Store (Gym Leader)",
-        "obtainmethodhoenn": "Store (All)",
-        "notes": "azalea towns salon?"
+        "obtainmethodhoenn": "Store (All)"
     },
     {
         "dateadded": "2026-06-24T04:00:00.000Z",
@@ -469,8 +466,7 @@
         "tags": "long, tied, spiky, thick",
         "regiontags": "johto",
         "storelocation": "blackthorn",
-        "obtainmethodkanto": "Store (Gym Leader)",
-        "notes": "blackthorn city's salon after beating gym?"
+        "obtainmethodkanto": "Store (Gym Leader)"
     },
     {
         "author": "malxire",
@@ -516,8 +512,7 @@
         "tags": "default, short, spiky, npc",
         "regiontags": "kalos",
         "obtainmethodkanto": "Store (All)",
-        "obtainmethodhoenn": "Store (All)",
-        "notes": "Default hairstyle OR part of a regional set"
+        "obtainmethodhoenn": "Store (All)"
     },
     {
         "author": "blackbosom",
@@ -547,8 +542,7 @@
         "tags": "tied, medium",
         "storelocation": "fuchsia",
         "obtainmethodkanto": "Store (Regional Set)",
-        "obtainmethodhoenn": "Store (Regional Set)",
-        "notes": "fuchsia specialty"
+        "obtainmethodhoenn": "Store (Regional Set)"
     },
     {
         "author": ".payapon",
@@ -577,8 +571,7 @@
         "description": "A puffy ponytail that looks just like the tail of an Eevee.",
         "price": 3000,
         "obtainmethodkanto": "Fashion Designer",
-        "obtainmethodhoenn": "Fashion Designer",
-        "notes": "saffron boutique"
+        "obtainmethodhoenn": "Fashion Designer"
     },
     {
         "author": ".payapon",
@@ -595,8 +588,7 @@
         "regiontags": "johto",
         "storelocation": "goldenrod,",
         "obtainmethodkanto": "Store (City), Store (Regional Set)",
-        "obtainmethodhoenn": "Store (Regional Set)",
-        "notes": "new bark town npc"
+        "obtainmethodhoenn": "Store (Regional Set)"
     },
     {
         "author": "blackbosom",
@@ -626,8 +618,7 @@
         "tags": "medium, untied, smooth",
         "regiontags": "kanto",
         "obtainmethodkanto": "Store (Gym Leader)",
-        "obtainmethodhoenn": "Store (All)",
-        "notes": "celadon city's salon after beating gym?"
+        "obtainmethodhoenn": "Store (All)"
     },
     {
         "dateadded": "2026-09-02T04:00:00.000Z",
@@ -673,8 +664,7 @@
         "tags": "medium,untied,smooth",
         "regiontags": "johto",
         "obtainmethodkanto": "Store (Gym Leader)",
-        "obtainmethodhoenn": "Store (Regional Set), Store (City)",
-        "notes": "violet city's salon after beating gym?"
+        "obtainmethodhoenn": "Store (Regional Set), Store (City)"
     },
     {
         "dateadded": "2026-06-24T04:00:00.000Z",
@@ -692,8 +682,7 @@
         "regiontags": "hoenn",
         "storelocation": "cinnabar, sootopolis, blackthorn",
         "obtainmethodkanto": "Store (Regional Set)",
-        "obtainmethodhoenn": "Store (Gym Leader)",
-        "notes": "Available after defeating Flannery in Hoenn"
+        "obtainmethodhoenn": "Store (Gym Leader)"
     },
     {
         "dateadded": "2026-06-23T04:00:00.000Z",
@@ -738,8 +727,7 @@
         "price": 3000,
         "tags": "medium, smooth",
         "obtainmethodkanto": "Fashion Designer",
-        "obtainmethodhoenn": "Fashion Designer",
-        "notes": "saffron boutique"
+        "obtainmethodhoenn": "Fashion Designer"
     },
     {
         "author": ".payapon",
@@ -755,8 +743,7 @@
         "tags": "medium, untied, spiky, thick, npc",
         "regiontags": "kanto",
         "obtainmethodkanto": "Other NPC / Quest, Store (Regional Set)",
-        "obtainmethodhoenn": "Store (Regional Set)",
-        "notes": "garys mom in their house (lol)?"
+        "obtainmethodhoenn": "Store (Regional Set)"
     },
     {
         "dateadded": "2026-09-02T04:00:00.000Z",
@@ -833,8 +820,7 @@
         "price": 3000,
         "tags": "long, tied, smooth, pokemon",
         "obtainmethodkanto": "Fashion Designer",
-        "obtainmethodhoenn": "Fashion Designer",
-        "notes": "quest?"
+        "obtainmethodhoenn": "Fashion Designer"
     },
     {
         "author": "xenophacilus",
@@ -848,8 +834,7 @@
         "price": 300,
         "tags": "long, untied, spiky, thick",
         "obtainmethodkanto": "Other NPC / Quest",
-        "obtainmethodhoenn": "Unobtainable",
-        "notes": "Lavender Town/Pokemon tower specialty"
+        "obtainmethodhoenn": "Unobtainable"
     },
     {
         "author": "blackbosom",
@@ -947,8 +932,7 @@
         "description": "A bold, fiery style featuring a high, curved ponytail resembling the sweeping feathers of Ho-Oh.",
         "price": 3000,
         "obtainmethodkanto": "Fashion Designer",
-        "obtainmethodhoenn": "Fashion Designer",
-        "notes": "saffron boutique"
+        "obtainmethodhoenn": "Fashion Designer"
     },
     {
         "author": "gummy.frog",
@@ -994,8 +978,7 @@
         "regiontags": "kanto",
         "storelocation": "fuchsia",
         "obtainmethodkanto": "Store (Gym Leader), Store (City)",
-        "obtainmethodhoenn": "Store (All)",
-        "notes": "fuchsia city salon"
+        "obtainmethodhoenn": "Store (All)"
     },
     {
         "dateadded": "2026-06-24T04:00:00.000Z",
@@ -1073,8 +1056,7 @@
         "tags": "short, spiky, tied, npc",
         "regiontags": "orre",
         "obtainmethodkanto": "Unobtainable",
-        "obtainmethodhoenn": "Unobtainable",
-        "notes": "Unlocked along with Jovi's outfit"
+        "obtainmethodhoenn": "Unobtainable"
     },
     {
         "dateadded": "2026-06-24T04:00:00.000Z",
@@ -1123,8 +1105,7 @@
         "tags": "medium, untied, smooth",
         "regiontags": "johto",
         "obtainmethodkanto": "Store (Gym Leader)",
-        "obtainmethodhoenn": "Store (City)",
-        "notes": "azaleacity's salon after beating gym?"
+        "obtainmethodhoenn": "Store (City)"
     },
     {
         "author": "blackbosom",
@@ -1152,8 +1133,7 @@
         "price": 2000,
         "tags": "short, untied, spiky",
         "obtainmethodkanto": "Store (Regional Set)",
-        "obtainmethodhoenn": "Store (Regional Set)",
-        "notes": "TBD"
+        "obtainmethodhoenn": "Store (Regional Set)"
     },
     {
         "author": "malxire",
@@ -1212,8 +1192,7 @@
         "tags": "long, untied, spiky, protag,default",
         "regiontags": "kanto",
         "obtainmethodkanto": "Other NPC / Quest",
-        "obtainmethodhoenn": "Store (Regional Set)",
-        "notes": "start"
+        "obtainmethodhoenn": "Store (Regional Set)"
     },
     {
         "author": "ohok3441",
@@ -1242,8 +1221,7 @@
         "price": 1300,
         "regiontags": "unova,",
         "obtainmethodkanto": "Store (All)",
-        "obtainmethodhoenn": "Store (All)",
-        "notes": "protag special - unlocked after quest, show a Pokemon from unova"
+        "obtainmethodhoenn": "Store (All)"
     },
     {
         "author": "gummy.frog",
@@ -1286,8 +1264,7 @@
         "tags": "long, npc",
         "regiontags": "hoenn,",
         "obtainmethodkanto": "Store (All)",
-        "obtainmethodhoenn": "Store (All)",
-        "notes": "protag special - unlocked after quest, show a Pokemon from hoenn"
+        "obtainmethodhoenn": "Store (All)"
     },
     {
         "author": "chromaerym",
@@ -1301,8 +1278,7 @@
         "price": 3000,
         "tags": "special",
         "obtainmethodkanto": "Fashion Designer",
-        "obtainmethodhoenn": "Fashion Designer",
-        "notes": "quest? cresselia outfit"
+        "obtainmethodhoenn": "Fashion Designer"
     },
     {
         "author": "cristata",
@@ -1360,8 +1336,7 @@
         "tags": "long, tied, smooth, pokemon",
         "storelocation": "crimson",
         "obtainmethodkanto": "Store (Regional Set), Store (City)",
-        "obtainmethodhoenn": "Fashion Designer",
-        "notes": "Crimson City special"
+        "obtainmethodhoenn": "Fashion Designer"
     },
     {
         "author": "kiwikelly & .payapon",
@@ -1377,8 +1352,7 @@
         "tags": "protag, npc, short",
         "regiontags": "hoenn,",
         "obtainmethodkanto": "Store (Regional Set), Store (City)",
-        "obtainmethodhoenn": "Store (Regional Set), Store (City)",
-        "notes": "protag special - unlocked after quest, show a Pokemon from hoenn"
+        "obtainmethodhoenn": "Store (Regional Set), Store (City)"
     },
     {
         "dateadded": "2026-09-02T04:00:00.000Z",
@@ -1455,8 +1429,7 @@
         "tags": "long, thick, tied, npc",
         "regiontags": "paldea",
         "obtainmethodkanto": "Store (City)",
-        "obtainmethodhoenn": "Store (City)",
-        "notes": "Possibly obtainable in the Pokemon Trainer School."
+        "obtainmethodhoenn": "Store (City)"
     },
     {
         "author": ".payapon",
@@ -1488,8 +1461,7 @@
         "tags": "medium, untied, spiky",
         "regiontags": "kanto",
         "obtainmethodkanto": "Store (Gym Leader)",
-        "obtainmethodhoenn": "Store (All), Store (Regional Set)",
-        "notes": "cerulean city's salon after beating gym?"
+        "obtainmethodhoenn": "Store (All), Store (Regional Set)"
     },
     {
         "author": ".payapon",
@@ -1505,8 +1477,7 @@
         "tags": "medium, tied, spiky",
         "regiontags": "kanto",
         "obtainmethodkanto": "Store (Gym Leader)",
-        "obtainmethodhoenn": "Store (Regional Set)",
-        "notes": "cerulean city's salon after beating gym?"
+        "obtainmethodhoenn": "Store (Regional Set)"
     },
     {
         "author": "gummy.frog",
@@ -1536,8 +1507,7 @@
         "tags": "short, untied, spiky",
         "storelocation": "celadon",
         "obtainmethodkanto": "Unobtainable",
-        "obtainmethodhoenn": "Unobtainable",
-        "notes": "Celadon City special"
+        "obtainmethodhoenn": "Unobtainable"
     },
     {
         "author": ".payapon",
@@ -1599,8 +1569,7 @@
         "price": 2000,
         "tags": "spiky, medium, pokemon, thick",
         "obtainmethodkanto": "Fashion Designer",
-        "obtainmethodhoenn": "Fashion Designer",
-        "notes": "PIF Hoenn: Start with Mudkip or show the equivalent of the Saffron Boutique a Mudkip fusion; PIF1: Show the Saffron Boutique woman a Mudkip fusion"
+        "obtainmethodhoenn": "Fashion Designer"
     },
     {
         "author": ".payapon",
@@ -1647,8 +1616,7 @@
         "tags": "short, untied, spiky, thick, protag",
         "regiontags": "unova,",
         "obtainmethodkanto": "Unobtainable",
-        "obtainmethodhoenn": "Unobtainable",
-        "notes": "protag special - unlocked after quest, show a Pokemon from unova"
+        "obtainmethodhoenn": "Unobtainable"
     },
     {
         "author": "malxire",
@@ -1678,8 +1646,7 @@
         "tags": "long, tied, spiky, thick, npc",
         "regiontags": "unova,",
         "obtainmethodkanto": "Unobtainable",
-        "obtainmethodhoenn": "Unobtainable",
-        "notes": "protag special - unlocked after quest, show a Pokemon from unova"
+        "obtainmethodhoenn": "Unobtainable"
     },
     {
         "author": "gummy.frog",
@@ -1741,8 +1708,7 @@
         "tags": "long, untied, smooth",
         "storelocation": "saffron,",
         "obtainmethodkanto": "Unobtainable",
-        "obtainmethodhoenn": "Unobtainable",
-        "notes": "Saffron city special"
+        "obtainmethodhoenn": "Unobtainable"
     },
     {
         "author": "gummy.frog",
@@ -1812,8 +1778,7 @@
         "price": 100,
         "tags": "special",
         "obtainmethodkanto": "Store (Regional Set)",
-        "obtainmethodhoenn": "Store (Regional Set)",
-        "notes": "Wartortle"
+        "obtainmethodhoenn": "Store (Regional Set)"
     },
     {
         "author": "dabouiw",
@@ -1887,8 +1852,7 @@
         "tags": "short, untied, smooth, protag,default",
         "regiontags": "kanto",
         "obtainmethodkanto": "Other NPC / Quest",
-        "obtainmethodhoenn": "Store (Regional Set)",
-        "notes": "start"
+        "obtainmethodhoenn": "Store (Regional Set)"
     },
     {
         "author": "gummy.frog",
@@ -1903,8 +1867,7 @@
         "tags": "short, untied, spiky, npc",
         "storelocation": "default",
         "obtainmethodkanto": "Store (Regional Set)",
-        "obtainmethodhoenn": "Store (Regional Set)",
-        "notes": "Possibly tied to a ranger-themed quest?"
+        "obtainmethodhoenn": "Store (Regional Set)"
     },
     {
         "dateadded": "2026-08-19T04:00:00.000Z",
@@ -1985,8 +1948,7 @@
         "tags": "long, tied, smooth, protag",
         "regiontags": "unova",
         "obtainmethodkanto": "Store (Regional Set)",
-        "obtainmethodhoenn": "Store (Regional Set)",
-        "notes": "protag special - unlocked after quest, show a Pokemon from unova"
+        "obtainmethodhoenn": "Store (Regional Set)"
     },
     {
         "author": "xenophaclius",
@@ -2001,8 +1963,7 @@
         "tags": "medium, untied, spiky, thick, pokemon",
         "storelocation": "celadon,",
         "obtainmethodkanto": "Store (City), Fashion Designer",
-        "obtainmethodhoenn": "Fashion Designer",
-        "notes": "Celadon special"
+        "obtainmethodhoenn": "Fashion Designer"
     },
     {
         "author": "xenophaclius",
@@ -2017,8 +1978,7 @@
         "tags": "short, untied, spiky, thick, pokemon",
         "storelocation": "celadon,",
         "obtainmethodkanto": "Store (City), Fashion Designer",
-        "obtainmethodhoenn": "Fashion Designer",
-        "notes": "Celadon special"
+        "obtainmethodhoenn": "Fashion Designer"
     },
     {
         "author": ".payapon",
@@ -2147,8 +2107,7 @@
         "tags": "short, untied, smooth, npc",
         "regiontags": "sinnoh",
         "obtainmethodkanto": "Store (City)",
-        "obtainmethodhoenn": "Unobtainable",
-        "notes": "Part of a regional set"
+        "obtainmethodhoenn": "Unobtainable"
     },
     {
         "dateadded": "2026-09-17T04:00:00.000Z",
@@ -2325,8 +2284,7 @@
         "tags": "short, spiky, npc",
         "regiontags": "kanto",
         "obtainmethodkanto": "Store (Gym Leader)",
-        "obtainmethodhoenn": "Unobtainable",
-        "notes": "vermilion salon after beating surge"
+        "obtainmethodhoenn": "Unobtainable"
     },
     {
         "author": ".payapon",
@@ -2370,8 +2328,7 @@
         "price": 2000,
         "tags": "spiky, medium, tied, pokemon",
         "obtainmethodkanto": "Fashion Designer",
-        "obtainmethodhoenn": "Fashion Designer",
-        "notes": "PIF Hoenn: Start with Torchic or show the equivalent of the Saffron Boutique a Torchic fusion; PIF1: Show the Saffron Boutique woman a Torchic fusion"
+        "obtainmethodhoenn": "Fashion Designer"
     },
     {
         "dateadded": "2026-09-12T04:00:00.000Z",
@@ -2430,8 +2387,7 @@
         "price": 300,
         "storelocation": "crimson",
         "obtainmethodkanto": "Store (City)",
-        "obtainmethodhoenn": "Store (City)",
-        "notes": "cinabar special"
+        "obtainmethodhoenn": "Store (City)"
     },
     {
         "author": "malxire",
@@ -2447,8 +2403,7 @@
         "tags": "spiky, medium, npc",
         "regiontags": "sinnoh",
         "obtainmethodkanto": "Store (City)",
-        "obtainmethodhoenn": "Unobtainable",
-        "notes": "Part of a regional set"
+        "obtainmethodhoenn": "Unobtainable"
     },
     {
         "author": ".payapon",
@@ -2508,8 +2463,7 @@
         "tags": "protag, npc, spiky, short",
         "regiontags": "orre",
         "obtainmethodkanto": "Store (Regional Set), Other NPC / Quest",
-        "obtainmethodhoenn": "Store (Regional Set), Other NPC / Quest",
-        "notes": "possibly obtained after completing an orre quest/postgame"
+        "obtainmethodhoenn": "Store (Regional Set), Other NPC / Quest"
     },
     {
         "author": ".payapon",
@@ -2525,8 +2479,7 @@
         "tags": "medium, tied, spiky",
         "regiontags": "johto",
         "obtainmethodkanto": "Store (All)",
-        "obtainmethodhoenn": "Store (All)",
-        "notes": "goldenrod city's salon after beating gym?"
+        "obtainmethodhoenn": "Store (All)"
     },
     {
         "dateadded": "2026-07-25T04:00:00.000Z",
@@ -2577,95 +2530,5 @@
         "storelocation": "saffron, lilycove",
         "obtainmethodkanto": "Store (City)",
         "obtainmethodhoenn": "Unobtainable"
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
-    },
-    {
-        "previewcolor": 1,
-        "preview": {
-            "valueType": "IMAGE"
-        }
     }
 ]

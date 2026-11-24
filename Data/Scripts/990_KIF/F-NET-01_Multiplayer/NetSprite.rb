@@ -492,6 +492,7 @@ module KIF
         bmp.raw_data = raw
         anim = AnimatedBitmap.from_bitmap(bmp)
         anim.scale_bitmap(3)   # the sheets' frames are drawn 3x, as the extractors do
+        bmp.dispose   # scale_bitmap swapped in its own copy: this one is no longer anyone's
         return anim
       end
       return BattleSpriteLoader.new.load_pif_sprite_directly(sprite_of(k[0, 4])) if own_hash(k[0, 4]) == k[4]

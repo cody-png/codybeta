@@ -5,7 +5,7 @@
 # PIF 6.8.2 has Hold/Toggle speed-up: Hold uses the "Speed-up (Overworld)" /
 # "Speed-up (Battles)" sliders, Toggle cycles a fixed SPEEDUP_STAGES =
 # [1, 2, 3]. KIF 0.20.7 added a "Speed-up Limit (Toggle)" slider (1-10x).
-# Since 2026-10-27 (Cody's settings review) there is no separate limit:
+# Since 2026-10-27 (the settings review) there is no separate limit:
 # Toggle steps 1x .. the current area's slider (Overworld on the map,
 # Battles in battle), then back to 1x. Hold is unchanged (holding = the
 # area's slider). The picked speed comes back when the area allows it again

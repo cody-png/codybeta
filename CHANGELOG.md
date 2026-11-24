@@ -3,48 +3,74 @@
 Every KIF version, newest first: a short overview, then the full notes (click Full notes to open them).
 The game shows the same notes in Options > System > Update history.
 
-[2.0.8](#kif-208) | [2.0.7](#kif-207) | [2.0.6](#kif-206) | [2.0.5](#kif-205) | [2.0.4](#kif-204) | [2.0.3](#kif-203) | [2.0.2](#kif-202) | [2.0.1](#kif-201) | [2.0.0](#kif-200) | [1.2.13](#kif-1213) | [1.2.11](#kif-1211) | [1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
+[2.0.9](#kif-209) | [2.0.8](#kif-208) | [2.0.7](#kif-207) | [2.0.6](#kif-206) | [2.0.5](#kif-205) | [2.0.4](#kif-204) | [2.0.3](#kif-203) | [2.0.2](#kif-202) | [2.0.1](#kif-201) | [2.0.0](#kif-200) | [1.2.13](#kif-1213) | [1.2.11](#kif-1211) | [1.2.10](#kif-1210) | [1.2.9](#kif-129) | [1.2.8](#kif-128) | [1.2.7](#kif-127) | [1.2.6](#kif-126) | [1.2.5](#kif-125) | [1.2.4](#kif-124) | [1.2.3](#kif-123) | [1.2.2](#kif-122) | [1.2.1](#kif-121) | [1.2.0](#kif-120) | [1.1.1](#kif-111) | [1.1.0](#kif-110) | [1.0.7](#kif-107) | [1.0.6](#kif-106) | [1.0.5](#kif-105) | [1.0.4](#kif-104) | [1.0.3](#kif-103) | [1.0.2](#kif-102) | [1.0.1](#kif-101) | [1.0.0](#kif-100)
 
-## KIF 2.0.8
+## KIF 2.0.9
 
-- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon ("undefined method [] for nil").
+- Fixed: the Pokedex could still crash on saves carried over from other builds or very old versions.
+- Fixed: every trainer rematch crashed; rematch gifts, trades and partner Pokemon also misbehaved.
+- Fixed: three-player co-op could crash when a battle ended.
+- Fixed: Archipelago items could stall or arrive twice.
+- Fixed: the trainer AI misjudged Trick Room, X items and some switches.
+- Fixed: files written by the game (Transfer Box, updater, downloads) can no longer be left half-written.
+- Changed: clearer settings and messages, "Pokemon" spelled the game's way, and the Extras menus renamed.
 
 <details><summary>Full notes</summary>
 
-- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon ("undefined method [] for nil").
+- Fixed: the Pokedex could still crash on saves carried over from other builds or very old versions.
+- Fixed: every trainer rematch crashed; rematch gifts, trades and partner Pokemon also misbehaved.
+- Fixed: three-player co-op could crash when a battle ended.
+- Fixed: Archipelago items could stall or arrive twice.
+- Fixed: the trainer AI misjudged Trick Room, X items and some switches.
+- Fixed: files written by the game (Transfer Box, updater, downloads) can no longer be left half-written.
+- Changed: clearer settings and messages, "Pokemon" spelled the game's way, and the Extras menus renamed.
+- The randomizer's "Include non-reference" set now really leaves reference sprites out (new randomizations only).
+- Mod loading checks script and icon paths, and mod settings files only hold plain data.
+- Smaller fixes: the Fusion screen's Confirm label, Nuzlocke and the Transfer Box, mouse walking, Archipelago traps, Tutor.net panels, the badly poisoned icon, Endgame Challenge teams, overworld weather and footprints.
+- Removed unused experimental code and debug leftovers.
+
+</details>
+
+## KIF 2.0.8
+
+- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon.
+
+<details><summary>Full notes</summary>
+
+- Fixed: the Pokedex menu crashed on a save carried over from a build with more Pokemon.
 - That build sizes the Pokedex for its own number of Pokemon. The game now resizes such a Pokedex to its own 576 Pokemon and keeps what was seen and caught. A missing entry now counts as not seen instead of crashing.
 
 </details>
 
 ## KIF 2.0.7
 
-- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City ("no implicit conversion of nil into String").
+- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City.
 
 <details><summary>Full notes</summary>
 
-- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City ("no implicit conversion of nil into String").
+- Fixed: a save carried over from a build with more Pokemon crashed at the rival in Cerulean City.
 - The rival's starter is kept in the save as a number, and that build numbers Pokemon differently. When the number is no Pokemon, the game now rebuilds the rival from the starters chosen in that save. This also covers the rival battles and the Elite Four rematch.
 
 </details>
 
 ## KIF 2.0.6
 
-- Fixed: on some saves, choosing a starter in Oak's Lab crashed ("undefined method [] for nil").
+- Fixed: on some saves, choosing a starter in Oak's Lab crashed.
 
 <details><summary>Full notes</summary>
 
-- Fixed: on some saves, choosing a starter in Oak's Lab crashed ("undefined method [] for nil").
+- Fixed: on some saves, choosing a starter in Oak's Lab crashed.
 - The game's list of chosen alternate sprites was missing from those saves. The game now starts an empty list when it is missing.
 
 </details>
 
 ## KIF 2.0.5
 
-- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out ("undefined method tone for nil").
+- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out.
 
 <details><summary>Full notes</summary>
 
-- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out ("undefined method tone for nil").
+- Fixed: with the Shinies module Off and EBDX Battles On, every battle crashed when the first Pokemon was sent out.
 - Turning a module Off made EBDX battles use the classic battle scene's send-out, which doesn't work on EBDX's data boxes.
 
 </details>
@@ -503,7 +529,7 @@ The game shows the same notes in Options > System > Update history.
 - A much smaller game: about 920 MB instead of 1.68 GB (this update is about 680 MB). Pictures look the same; music and sounds are now Ogg.
 - Faster start-up, and menus check the disk far less.
 - New: Mouse and touch controls (Options > System > Controls, Off by default). Click or tap to choose, click or tap the map to walk there.
-- New: EV Allocation (Options > Pokémon, Off by default). EVs from battles become points you spend on the Summary's Skills page.
+- New: EV Allocation (Options > Pokemon, Off by default). EVs from battles become points you spend on the Summary's Skills page.
 - New: Living title screen (Options > System > Title screen).
 - New: Archipelago (beta). Play KIF in a multiworld: Kanto, Sevii and Johto, Trainersanity, Giftsanity and 10 kinds of traps. Use apworld 0.6.2.
 - Nuzlocke: options for gift Pokemon and the Safari Zone. Pinkan Island now plays as in PIF with the Randomizer, Nuzlocke and Archipelago.
@@ -530,7 +556,7 @@ The game shows the same notes in Options > System > Update history.
 
 **EV Allocation**
 
-- Options > Pokémon > EV Allocation (Off by default): EVs won in battle wait on the Pokemon as points, and you spend them on the Summary's Skills page (keys, mouse or touch).
+- Options > Pokemon > EV Allocation (Off by default): EVs won in battle wait on the Pokemon as points, and you spend them on the Summary's Skills page (keys, mouse or touch).
 - The end of a battle says how many points each Pokemon got. The usual limits stay: 252 in one stat, 510 in all. You can put every point back and spend them again for free.
 
 **Living title screen**
@@ -789,7 +815,7 @@ The game shows the same notes in Options > System > Update history.
 
 - Every feature belongs to one of 13 modules: Auto Battle, Shinies, Graphical Changes, Information, Battles & Challenges, Randomizer, Pokemon & Fusion, Kuray Shop, K-Eggs, PC & Saves, Import & Export, Quality of Life and Mod Settings. Each is On, Hidden (works, settings tucked away) or Off (plays like PIF).
 - Items and menus PIF has its own version of (Ability Capsule, Mist Stone, Perfect Ball, the randomizer menu, breeding, naming screens) go back to PIF's when their module is Off.
-- One Options screen replaces the separate settings pages and holds PIF's own options too. Sections on the left (Shinies, Battles, Pokémon, Graphics, Self-Battle, Challenges, Game, System, Modules, Mods, Presets), settings on the right under headings, each with a bar of choices and a description at the bottom.
+- One Options screen replaces the separate settings pages and holds PIF's own options too. Sections on the left (Shinies, Battles, Pokemon, Graphics, Self-Battle, Challenges, Game, System, Modules, Mods, Presets), settings on the right under headings, each with a bar of choices and a description at the bottom.
 - An orange dot marks a setting you changed, and it can be set back to its default. The bottom bar shows the default and whether the setting is for this save or all saves. A search bar lists every matching setting from every section.
 - Settings Presets (Options > Presets): 12 named slots that hold every per-save KIF setting.
 - Every screen names the keys you actually bound. DEBUG turns on PIF's real debug mode. The window title shows the KIF and PIF versions, the speed and the Auto-Battler or Battle Loop state.

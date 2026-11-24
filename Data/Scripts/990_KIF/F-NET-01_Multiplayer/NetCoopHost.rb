@@ -139,23 +139,23 @@ module KIF
         @host_id = nil
         return yield
       end
-      @hosting = true
-      hosts = joins.each_with_index.map { |j, k| Host.new(s, j, k + 1) }
-      host = hosts.length > 1 ? HostGroup.new(hosts) : hosts[0]
-      three = joins.length > 1
       old = $PokemonGlobal.partner
-      if !rule && (kind == :trainer || nfoes == 1)
-        setBattleRule(three ? "3v1" : "2v1")   # room for the partners; 2v2 / 3v2 / 3v3 once a trainer's party is known
-        host.mine_size = true
-      elsif three && !rule
-        setBattleRule(nfoes == 2 ? "3v2" : "3v3")
-      end
-      $PokemonGlobal.partner = [join[:type], join[:name], join[:tid], join[:party]]
-      @second_ally = three ? joins[1] : nil
-      @pending_host = host
-      @battle_host = host
-      log("battle #{join[:id]} with #{joins.map { |j| j[:name] }.join(' and ')} (#{kind})")
+      @hosting = true
       begin
+        hosts = joins.each_with_index.map { |j, k| Host.new(s, j, k + 1) }
+        host = hosts.length > 1 ? HostGroup.new(hosts) : hosts[0]
+        three = joins.length > 1
+        if !rule && (kind == :trainer || nfoes == 1)
+          setBattleRule(three ? "3v1" : "2v1")   # room for the partners; 2v2 / 3v2 / 3v3 once a trainer's party is known
+          host.mine_size = true
+        elsif three && !rule
+          setBattleRule(nfoes == 2 ? "3v2" : "3v3")
+        end
+        $PokemonGlobal.partner = [join[:type], join[:name], join[:tid], join[:party]]
+        @second_ally = three ? joins[1] : nil
+        @pending_host = host
+        @battle_host = host
+        log("battle #{join[:id]} with #{joins.map { |j| j[:name] }.join(' and ')} (#{kind})")
         return with_rules { KIF::Teams.with_mult(1 + joins.length) { yield } }   # the wild Pokémon or trainer team is made inside: with the host's settings; 2 players, 3 with a lobby's third
       ensure
         $PokemonGlobal.partner = old
@@ -192,7 +192,7 @@ module KIF
     # One co-op battle, on the game that runs it
     #---------------------------------------------------------------------------
     class Host
-      attr_reader :id, :name, :battle, :lost, :kills, :caught, :items
+      attr_reader :id, :name, :battle, :lost, :kills, :caught, :items, :done
       BEAT = 15.0   # seconds of quiet on the line before beat_start's thread says "still here"
       attr_accessor :mine_size, :own_catch, :group
       attr_reader :slot   # the lobby slot of the player who joined (nil: the one partner of a game for two)
@@ -531,7 +531,7 @@ module KIF
         return if @silent < 2 || @auto
         @auto = true
         KIF::Coop.log("#{@name} gave no answer twice in a row: the game fights for them now")
-        (quietly { @battle.pbDisplayPaused(_INTL("{1} is not answering. The game fights for {1}'s Pokemon now.", @name)) } rescue nil)
+        (quietly { @battle.pbDisplayPaused(_INTL("{1} is not answering. The game fights for {1}'s Pokémon now.", @name)) } rescue nil)
       end
 
       #-------------------------------------------------------------------------

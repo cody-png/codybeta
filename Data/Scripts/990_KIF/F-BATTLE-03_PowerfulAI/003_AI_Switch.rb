@@ -12,31 +12,12 @@ class PokeBattle_AI
 		return false if !@battle.pbCanSwitch?(idxBattler)
 		shouldSwitch = forceSwitch
 		batonPass = -1
-		moveType = nil
 		skill = 100#@battle.pbGetOwnerFromBattlerIndex(idxBattler).skill_level || 0
 		battler = @battle.battlers[idxBattler]
 		if defined?(KIF::AutoBattle) && KIF::AutoBattle.on? && @battle.pbOwnedByPlayerSerious?(idxBattler) && @battle.turnCount>0   # KIF port: the player's own side only
 			if battler.turnCount == 0
 				echo("\nSwitch prevented due to the battler being on its first turn out, during auto-battling.\n")
 				return false 
-			end
-		end
-		# If Pokémon is within 6 levels of the foe, and foe's last move was
-		# super-effective and powerful
-		if !shouldSwitch && battler.turnCount > 0 && skill >= PBTrainerAI.highSkill
-			target = battler.pbDirectOpposing(true)
-			if !target.fainted? && target.lastMoveUsed &&
-				(target.level - battler.level).abs <= 6
-				moveData = GameData::Move.get(target.lastMoveUsed)
-				moveType = moveData.type
-				typeMod = pbCalcTypeMod(moveType, target, battler)
-				if Effectiveness.super_effective?(typeMod) && moveData.base_damage > 50
-					switchChance = (moveData.base_damage > 70) ? 30 : 20
-					if switchChance>80 #(pbAIRandom(100) < switchChance) # DemICE removing randomness
-						shouldSwitch = true 
-						echo("If you ever see this message, you are witnessing a miracle. Start praying.\n")
-					end	
-				end
 			end
 		end
 		tickdamage=false
@@ -104,16 +85,6 @@ class PokeBattle_AI
 				break
 			end
 		end
-		# Pokémon will faint because of bad poisoning at the end of this round, but
-		# would survive at least one more round if it were regular poisoning instead
-		#   if battler.status == :POISON && battler.statusCount > 0 &&
-		#      skill >= PBTrainerAI.highSkill
-		#     toxicHP = battler.totalhp / 16
-		#     nextToxicHP = toxicHP * (battler.effects[PBEffects::Toxic] + 1)
-		#     if battler.hp <= nextToxicHP && battler.hp > toxicHP * 2 #&& pbAIRandom(100) < 80 # DemICE removing randomness
-		#       shouldSwitch = true
-		#     end
-		#   end
 		# Pokémon is Encored into an unfavourable move
 		if battler.effects[PBEffects::Encore] > 0 && skill >= PBTrainerAI.mediumSkill
 			idxEncoredMove = battler.pbEncoredMoveIndex
@@ -150,16 +121,6 @@ class PokeBattle_AI
 				end
 			end
 		end
-		# If there is a single foe and it is resting after Hyper Beam or is
-		# Truanting (i.e. free turn)
-		# if @battle.pbSideSize(battler.index + 1) == 1 &&
-		# 	!battler.pbDirectOpposing.fainted? && skill >= PBTrainerAI.highSkill
-		# 	opp = battler.pbDirectOpposing
-		# 	if (opp.effects[PBEffects::HyperBeam] > 0 ||
-		# 			(opp.hasActiveAbility?(:TRUANT) && opp.effects[PBEffects::Truant])) #&& pbAIRandom(100) < 80 # DemICE removing randomness
-		# 		shouldSwitch = false
-		# 	end
-		# end
 		# Sudden Death rule - I'm not sure what this means
 		if @battle.rules["suddendeath"] && battler.turnCount > 0
 			if battler.hp <= battler.totalhp / 4 #&& pbAIRandom(100) < 30 # DemICE removing randomness
@@ -177,14 +138,13 @@ class PokeBattle_AI
 		end
 		#incoming = [nil,0]
 		incoming = nil
-		weight = 1
 		canheswitch=false
 		party.each_with_index do |_pkmn, i|
 			canheswitch=true if @battle.pbCanHardSwitchLax?(idxBattler, i)
 		end
 		shouldSwitch=false if !canheswitch
 		newindex=pbHardSwitchChooseNewEnemy(idxBattler,party,true) if shouldSwitch
-		if newindex
+		if newindex && newindex != -1   # -1 means no candidate
 			if newindex.is_a?(Array)
 				swapper=newindex[0]
 			else
@@ -199,45 +159,6 @@ class PokeBattle_AI
 		end
 		if shouldSwitch
 			incoming=swapper
-			# idxPartyStart, idxPartyEnd = @battle.pbTeamIndexRangeFromBattlerIndex(idxBattler)
-			# @battle.pbParty(idxBattler).each_with_index do |pkmn, i|
-			# 	next if i == idxPartyEnd - 1   # Don't choose to switch in ace
-			# 	next if !@battle.pbCanSwitch?(idxBattler, i)
-			# 	# If perish count is 1, it may be worth it to switch
-			# 	# even with Spikes, since Perish Song's effect will end
-			# 	if battler.effects[PBEffects::PerishSong] != 1
-			# 		# Will contain effects that recommend against switching
-			# 		spikes = battler.pbOwnSide.effects[PBEffects::Spikes]
-			# 		# Don't switch to this if too little HP
-			# 		if spikes > 0
-			# 			spikesDmg = [8, 6, 4][spikes - 1]
-			# 			next if pkmn.hp <= pkmn.totalhp / spikesDmg &&
-			# 			!pkmn.hasType?(:FLYING) && !pkmn.hasActiveAbility?(:LEVITATE)
-			# 		end
-			# 	end
-			# 	# moveType is the type of the target's last used move
-			# 	if moveType && Effectiveness.ineffective?(pbCalcTypeMod(moveType, battler, battler))
-			# 		weight = 65
-			# 		typeMod = pbCalcTypeModPokemon(pkmn, battler.pbDirectOpposing(true))
-			# 		if Effectiveness.super_effective?(typeMod)
-			# 			# Greater weight if new Pokemon's type is effective against target
-			# 			weight = 85
-			# 		end
-			# 		#list.unshift(i) if pbAIRandom(100) < weight   # Put this Pokemon first # DemICE removing randomness
-			# 	elsif moveType && Effectiveness.resistant?(pbCalcTypeMod(moveType, battler, battler))
-			# 		weight = 40
-			# 		typeMod = pbCalcTypeModPokemon(pkmn, battler.pbDirectOpposing(true))
-			# 		if Effectiveness.super_effective?(typeMod)
-			# 			# Greater weight if new Pokemon's type is effective against target # DemICE removing randomness
-			# 			weight = 60
-			# 		end
-			# 		#list.unshift(i) if pbAIRandom(100) < weight   # Put this Pokemon first # DemICE removing randomness
-			# 	else
-			# 		#list.push(i)   # put this Pokemon last # DemICE removing randomness
-			# 	end
-			# 	incoming=[i,weight] if weight > incoming[1] # DemICE new way of determining what pokemon to switch in
-			#end
-			#if list.length > 0 # DemICE removing randomness
 			if batonPass >= 0 && @battle.pbRegisterMove(idxBattler, batonPass, false)
 				PBDebug.log("[AI] #{battler.pbThis} (#{idxBattler}) will use Baton Pass to avoid Perish Song")
 				return true
@@ -449,24 +370,6 @@ class PokeBattle_AI
 							sum+=80 if damagetakenPercent<33
 						end	
 					end
-					#  Sleep
-					# if m.function=="003" && b.pbCanSleep?(pokmon,false,m) && !(m.powderMove? && b.pbHasType?(:GRASS)) && i!=party.length-1
-					# 	willwakeup=false
-					# 	willwakeup=true if  (b.hasActiveItem?(:LUMBERRY) && b.hasActiveItem?(:CHESTOBERRY))
-					# 	if ((aspeed>maxspeed) ^ (@battle.field.effects[PBEffects::TrickRoom]>roomturn))
-					# 		if willwakeup
-					# 			sum+=100 if damagetakenPercent<50
-					# 		else
-					# 			sum+=100
-					# 		end		
-					# 	else	
-					# 		if willwakeup
-					# 			sum+=100 if damagetakenPercent<33
-					# 		else
-					# 			sum+=100 if damagetakenPercent<50
-					# 		end	
-					# 	end	
-					# end
 					#next if m.baseDamage == 0
 					tempdam = pbRoughDamage(m,pokmon,b,100)
 					thisprio = priorityAI(pokmon,m,true)

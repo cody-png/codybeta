@@ -25,7 +25,7 @@
 #     ("Stonewall/kr-mods@main Kanto Reloaded"); # starts a comment
 #   * a mod's mod.json: "catalog": "owner/repo@branch" (its updates come
 #     from there)
-#   * Ruby: KIF::ModCatalog.add_catalog("owner/repo", branch: "main", name: "...")
+#   * Ruby: KIF::ModCatalog.add_catalog("owner/repo", branch: "main", name: "...")   (GitHub repos only, never a folder)
 # A mod found in two catalogs comes from the first one (KIF-Mods first).
 # A catalog's modpacks/<folder>/modpack.json files are its modpacks
 # (KIF::ModPacks).
@@ -187,12 +187,12 @@ module KIF
     def add_catalog(repo, branch: "main", name: nil)
       repo = repo.to_s.strip
       return false if repo.empty?
-      path = File.directory?(repo) ? repo : nil
-      unless path || (valid_repo?(repo) && valid_branch?(branch || "main"))
-        log("\"#{repo}\" isn't a GitHub repository (owner/repo) or a folder")
+      # no folders from Ruby: a local catalog is trusted for reviewed.json / revoked.json, so only the player's own files make one
+      unless valid_repo?(repo) && valid_branch?(branch || "main")
+        log("\"#{repo}\" isn't a GitHub repository (owner/repo)")
         return false
       end
-      c = Catalog.new(path ? nil : repo, branch, name, path)
+      c = Catalog.new(repo, branch, name, nil)
       return false if @added.any? { |x| x.key == c.key }
       @added << c
       @items = nil

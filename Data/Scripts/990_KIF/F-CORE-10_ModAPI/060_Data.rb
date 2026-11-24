@@ -21,7 +21,7 @@
 # only, so the save loads in vanilla PIF and without this mod. Data of a mod that
 # is not installed stays in the save (it comes back if the mod is installed
 # again); KIF::API.data_orphans lists it, KIF::API.data_forget(key, scope)
-# removes it, nothing is removed by itself.
+# removes it (not callable from a mod), nothing is removed by itself.
 # :global is a JSON file (KIF_ModData/<mod>/data.json in the save folder), written
 # whole or not at all (temporary file, then rename) when the game saves, every
 # 30 seconds while something changed, and when a mod is unloaded. A file that
@@ -482,7 +482,11 @@ module KIF
     end
 
     def self.data_orphans; return Data.orphans; end
-    def self.data_forget(key, scope = :save); return Data.forget(key, scope); end
+    # the player's and Mod Dev's tool: a mod must not delete another mod's saved data
+    def self.data_forget(key, scope = :save)
+      KIF::ModTrust.deny_mod_caller!("delete saved mod data", caller_locations(1, 40)) if defined?(KIF::ModTrust)
+      return Data.forget(key, scope)
+    end
 
     on_unload(:data) { |key| Data.flush(key) }
   end

@@ -52,10 +52,12 @@ module KIF
     # source's own kind (:mod_manager...). settings: KIF Mod Settings rows it
     # registered while loading.
     class Entry
-      attr_accessor :id, :name, :version, :author, :description, :kind, :path,
+      attr_accessor :id, :version, :author, :description, :kind, :path,
                     :source, :loaded, :error,
                     :mod_id, :api_version, :permissions
-      attr_writer :network_hosts, :permission_notes
+      attr_writer :name, :network_hosts, :permission_notes
+      # mod.json text reaches the security prompts: no message codes or tags (KIF.safe_text)
+      def name; return KIF.safe_text(@name, 60); end
       def initialize(h = {})
         h.each { |k, v| send("#{k}=", v) if respond_to?("#{k}=") }
         @name ||= @id.to_s
@@ -79,7 +81,7 @@ module KIF
         end
         if h["permission_notes"].is_a?(Hash)
           @permission_notes = {}
-          h["permission_notes"].each { |k, t| @permission_notes[k] = t.to_s[0, 140] if KIF::ModCheck::PERMISSION_NAMES.include?(k) && t.is_a?(String) }
+          h["permission_notes"].each { |k, t| @permission_notes[k] = KIF.safe_text(t, 140) if KIF::ModCheck::PERMISSION_NAMES.include?(k) && t.is_a?(String) }
         end
       end
 
@@ -549,9 +551,9 @@ module KIF
         json = File.join(e.path, "mod.json")
         h = File.file?(json) ? (KIF::Mods.read_json(json) || {}) : nil
         if h && h["scripts"].is_a?(Array) && !h["scripts"].empty?
-          listed = h["scripts"].map { |s| KIF::Mods.file_in(e.path, s) }.compact.select { |f| File.file?(f) }
+          listed = h["scripts"].map { |s| KIF::Mods.file_in(e.path, s) }.compact.select { |f| f =~ /.rbz/i && File.file?(f) }   # Kernel#load runs any extension, the scan reads only .rb
           return listed unless listed.empty?
-          KIF.log("Mod #{e.name}: mod.json lists #{h['scripts'].join(', ')} (missing or outside the mod folder) - loading its .rb files instead")
+          KIF.log("Mod #{e.name}: mod.json lists #{h['scripts'].join(', ')} (missing, not .rb or outside the mod folder) - loading its .rb files instead")
         end
         return KIF::Mods.folder_scripts(e.path)
       end

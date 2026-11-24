@@ -49,7 +49,12 @@ module KIF
     # A Mod Manager mod (Mods/<x>/mod.json or Mods/ModDev/<x>/mod.json) with
     # this id, unless Mod Manager has it disabled
     def self.mm_mod_installed?(id, dir = "Mods")
-      found = (Dir[File.join(dir, "*", "mod.json")] + Dir[File.join(dir, "ModDev", "*", "mod.json")]).any? do |f|
+      mm = defined?(::ModManager) ? true : false
+      found = (Dir[File.join(dir, "*", "mod.json")].map { |f| [f, false] } + Dir[File.join(dir, "ModDev", "*", "mod.json")].map { |f| [f, true] }).any? do |f, dev|
+        d = File.basename(File.dirname(f))
+        # a folder that will not load (a "_old" copy, one switched Off in KIF's list, a ModDev copy without Mod Manager) is not installed
+        next false if d.start_with?("_", ".") || (dev && !mm)
+        next false if !mm && (KIF::Mods.disabled.include?(d) rescue false)
         (File.read(f) rescue "") =~ /"id"\s*:\s*"#{Regexp.escape(id)}"/
       end
       return false unless found

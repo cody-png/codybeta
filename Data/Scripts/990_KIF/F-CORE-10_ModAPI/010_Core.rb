@@ -246,7 +246,13 @@ module KIF
 
     class << self
       attr_reader :depth
-      attr_accessor :profile_force, :dev_force
+      attr_accessor :profile_force
+      attr_reader :dev_force
+      # a mod must not switch Mod Dev on for the reload of a mod the player held
+      def dev_force=(v)
+        KIF::ModTrust.deny_mod_caller!("switch on Mod Dev", caller_locations(1, 40)) if defined?(KIF::ModTrust)
+        @dev_force = v
+      end
       attr_accessor :trace   # Array (ring buffer owned by 090_Dev.rb) or nil
     end
 
@@ -453,6 +459,7 @@ module KIF
 
     # Removes every handler a mod registered (events and hooks).
     def self.off_all(mod: nil)
+      deny_other_mod!(mod, "remove another mod's handlers", caller_locations(1, 40)) if mod
       key = mod || Attribution.key_from_caller(caller_locations(1, 40))
       return 0 if key.nil?
       n = 0
@@ -464,6 +471,7 @@ module KIF
     # Everything a mod added through the API goes away (hot reload, tests).
     # Each part of the API registers an unloader (on_unload).
     def self.unload_mod(key)
+      deny_other_mod!(key, "unload another mod", caller_locations(1, 40))
       off_all(mod: key)
       @unloaders.each_value do |blk|
         begin
@@ -484,8 +492,20 @@ module KIF
     #---------------------------------------------------------------------------
     # Mods switched off for this session (not saved)
     #---------------------------------------------------------------------------
-    def self.disable_mod(key); @disabled[key.to_s] = true; end
-    def self.enable_mod(key); @disabled.delete(key.to_s); end
+    def self.disable_mod(key)
+      deny_other_mod!(key, "switch another mod off", caller_locations(1, 40))
+      @disabled[key.to_s] = true
+    end
+
+    # A mod may act on its own key only (the caller is the nearest frame, so KIF's own calls pass)
+    def self.deny_other_mod!(key, what, locs)
+      owner = KIF::ModContract.caller_owner(locs)
+      KIF::ModGuard.deny_call!(owner, what) if owner && owner != key.to_s
+    end
+    def self.enable_mod(key)
+      deny_other_mod!(key, "switch another mod on", caller_locations(1, 40))
+      @disabled.delete(key.to_s)
+    end
     def self.mod_off?(key); return @disabled.empty? ? false : (@disabled[key.to_s] ? true : false); end
     def self.mod_enabled?(key); return !mod_off?(key); end
 

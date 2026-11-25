@@ -134,16 +134,16 @@ module KIF
     STR_RE = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\?["'`]|(?<![^\s])#(?![{$@]).*/m
     DEF_RE = /\bdef\s+(?:self\.)?[\w?!=]+|\balias(?:_method)?\s+[:\w?!=]+\s*,?\s*[:\w?!=]*/
     # a cheap test on the raw line: every rule's key word is in here, so most lines are never looked at again
-    TRIGGER = /system|spawn|exec|`|%x|popen|Open3|Process|syscall|System|IO\.|\bopen\b|Win32|Fiddle|FFI|\bDL\b|Net::|Socket|URI|HTTP|pbDownload|pbPost|Updater|File\.|FileUtils|Dir\.|mkdir_p|rm_tree|to_file|save_data|~[\\\/]|[A-Za-z]:[\\\/]|APPDATA|USERPROFILE|Documents|Desktop|Downloads|Startup|Start Menu|CurrentVersion|reg add|ENV|Etc\.|eval|Marshal|YAML|Psych|ObjectSpace|\bload\b|require|Base64|unpack|pack|\\x|send|const_get|super_method|instance_method|KIF::Mod|ModGuard|ModTrust|ModContract|kif_mod_guard|forget_roots|register_root|Trace|trace|Signal|trap|at_exit|^\s*(?:class|module)\s+(?:Kernel|File|IO|Dir|Marshal|ENV|Process|FileUtils|ObjectSpace|Socket|HTTPLite)|\.(?:bat|cmd|ps1|vbs)|exit!|abort|fork|kill|clipboard/
+    TRIGGER = /atomic_write|start_apply|system|spawn|exec|`|%x|popen|Open3|Process|syscall|System|IO\.|\bopen\b|Win32|Fiddle|FFI|\bDL\b|Net::|Socket|URI|HTTP|pbDownload|pbPost|Updater|File\.|FileUtils|Dir\.|mkdir_p|rm_tree|to_file|save_data|~[\\\/]|[A-Za-z]:[\\\/]|APPDATA|USERPROFILE|Documents|Desktop|Downloads|Startup|Start Menu|CurrentVersion|reg add|ENV|Etc\.|eval|Marshal|YAML|Psych|ObjectSpace|\bload\b|require|Base64|unpack|pack|\\x|send|const_get|super_method|instance_method|KIF::Mod|ModGuard|ModTrust|ModContract|kif_mod_guard|forget_roots|register_root|Trace|trace|Signal|trap|at_exit|^\s*(?:class|module)\s+(?:Kernel|File|IO|Dir|Marshal|ENV|Process|FileUtils|ObjectSpace|Socket|HTTPLite)|\.(?:bat|cmd|ps1|vbs)|exit!|abort|fork|kill|clipboard/
     BIDI_RE = /[‪-‮⁦-⁩]/
     R14_RE = /^[ \t]*unless[ \t]+(?:self\.)?(?:private_)?method_defined\?[^\n]*\n[ \t]*def\b/
     R01_CALL = /(?<![\w.:@$])(?:system|spawn|exec)(?:\s*\(|[ \t]+(?!if\b|unless\b|while\b|until\b|and\b|or\b|then\b|do\b|end\b|rescue\b|ensure\b|in\b|not\b)[\w"'`:\[%*@$])/
-    R01_OTHER = /\bKernel\.(?:system|spawn|exec)\b|\bIO\.popen\b|\bOpen3\b|\bPTY\.spawn\b|\bProcess\.(?:spawn|exec|daemon)\b|(?<![\w.:@$])syscall\b|\bSystem\.launch\b|%x[(\[{<|!\/]|`X`/
+    R01_OTHER = /\bKernel\.(?:system|spawn|exec)\b|\bIO\.popen\b|\bOpen3\b|\bPTY\.spawn\b|\bProcess\.(?:spawn|exec|daemon)\b|(?<![\w.:@$])syscall\b|\bSystem\.launch\b|\b(?:Updater|Win)\.(?:spawn|start_apply|api)\b|%x[(\[{<|!\/]|`X`/
     R01_PIPE = /(?<![\w.:@$])open\s*\(?\s*["']\s*\||\bIO\.(?:read|readlines|foreach|write|binread)\s*\(?\s*["']\s*\|/
     R02_RE = /\b(?:Win32API|Fiddle|FFI)\b|\bDL\.dlopen\b/
     R03_RE = /\bNet::HTTP|\b(?:TCPSocket|TCPServer|UDPSocket|UNIXSocket)\b|\bSocket\.|\bURI\.open\b|\bOpenURI\b|\bHTTPLite\b|(?<![\w.:@$])(?:pbDownloadToString|pbDownloadToFile|pbPostData|pbDownloadData)\b|\bKIF::Updater\.(?:fetch|download)\b/
     R03_REQ = /\brequire\s*\(?\s*["'](?:open-uri|net\/https?|socket)["']/
-    R04_RE = /\bFile\.(?:write|binwrite|delete|unlink|rename|chmod|lchmod|chown|truncate|symlink|link|utime|mkfifo)\b|\bFileUtils\b|\bDir\.(?:mkdir|rmdir|delete|unlink)\b|\bIO\.(?:write|binwrite|copy_stream)\b|\.to_file\b|\bKIF\.(?:rm_tree|mkdir_p)\b|(?<![\w.])mkdir_p\b|(?<![\w.:@$])save_data\s*\(/
+    R04_RE = /\bFile\.(?:write|binwrite|delete|unlink|rename|chmod|lchmod|chown|truncate|symlink|link|utime|mkfifo)\b|\bFileUtils\b|\bDir\.(?:mkdir|rmdir|delete|unlink)\b|\bIO\.(?:write|binwrite|copy_stream)\b|\.to_file\b|\b(?:KIF|Updater)\.(?:rm_tree|mkdir_p|atomic_write)\b|(?<![\w.])mkdir_p\b|(?<![\w.:@$])save_data\s*\(/
     R04_OPEN = /(?<![\w.:@$])(?:File\.(?:open|new)|open)\s*\(?/
     R05_RE = /Dir\.home|["']~[\\\/]|["'][A-Za-z]:[\\\/]|\bAPPDATA\b|\bUSERPROFILE\b|[\\\/](?:AppData|Documents|Desktop|Downloads|Startup)(?:[\\\/"'])/
     R06_RE = /(?<![\w:])ENV\b(?!\w)|\bEtc\.|\bDir\.home\b/

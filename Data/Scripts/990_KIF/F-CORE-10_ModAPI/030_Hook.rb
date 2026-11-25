@@ -173,6 +173,9 @@ module KIF
         return true if single && ["Kernel", "Object", "BasicObject", "Module", "Class"].include?(n)
         # Object holds the game's global functions (pbItemBall...): those are fine, the rest of Object is not
         return true if klass.equal?(Object) && !single && !(name.to_s =~ /\A(pb|get_|is_|has_|set_|show_|play_|find_)/ || ALLOWED_GLOBALS.include?(name.to_s))
+        # a wrapper in front of a guard door hides the mod from it (the door only sees the wrapper, which is KIF code)
+        tc = target_class(klass, single)
+        return true if defined?(KIF::ModGuard) && KIF::ModGuard.doors.each_value.any? { |t, n, _| t.equal?(tc) && n == name.to_sym }
         return false
       end
       ALLOWED_GLOBALS = %w[onStartingNewGame onLoadExistingGame].freeze unless const_defined?(:ALLOWED_GLOBALS)

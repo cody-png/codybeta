@@ -111,7 +111,7 @@ module KIF
 
       DENY_NAMES = %w[Kernel BasicObject Module Class File IO Dir FileUtils Marshal ObjectSpace Process ENV
                       Win32API HTTPLite Fiddle Thread Signal Etc Open3 Socket TCPSocket UDPSocket].freeze unless const_defined?(:DENY_NAMES)
-      DENY_PREFIX = %w[KIF::ModGuard KIF::ModTrust KIF::Safe KIF::ModContract KIF::API::Hook Net:: Fiddle:: DL:: FFI::].freeze unless const_defined?(:DENY_PREFIX)
+      DENY_PREFIX = %w[KIF::ModGuard KIF::ModTrust KIF::Safe KIF::ModContract KIF::API::Hook KIF::Updater KIF::ModCatalog KIF::ModCheck KIF::Mods KIF::ModSecurityUI Net:: Fiddle:: DL:: FFI::].freeze unless const_defined?(:DENY_PREFIX)
       WRAPPER_FILE = "030_Hook.rb" unless const_defined?(:WRAPPER_FILE)
 
       Point = Struct.new(:key, :klass, :name, :single, :form, :alias_name, :prepend_mod, :subs, :vis, :bypassed) unless const_defined?(:Point)
@@ -173,6 +173,9 @@ module KIF
         return true if single && ["Kernel", "Object", "BasicObject", "Module", "Class"].include?(n)
         # Object holds the game's global functions (pbItemBall...): those are fine, the rest of Object is not
         return true if klass.equal?(Object) && !single && !(name.to_s =~ /\A(pb|get_|is_|has_|set_|show_|play_|find_)/ || ALLOWED_GLOBALS.include?(name.to_s))
+        # a wrapper in front of a guard door hides the mod from it (the door only sees the wrapper, which is KIF code)
+        tc = target_class(klass, single)
+        return true if defined?(KIF::ModGuard) && KIF::ModGuard.doors.each_value.any? { |t, n, _| t.equal?(tc) && n == name.to_sym }
         return false
       end
       ALLOWED_GLOBALS = %w[onStartingNewGame onLoadExistingGame].freeze unless const_defined?(:ALLOWED_GLOBALS)

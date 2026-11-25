@@ -178,6 +178,7 @@ module KIF
         }.select { |e| e && !e.include?(nil) }
       }
       return {
+        randomizer: slot["randomizer"].is_a?(Hash) && !slot["randomizer"].empty?,
         dex_milestones: milestones.call("dex_milestones"), fusion_milestones: milestones.call("fusion_milestones"), game_mode: %w[classic remix].include?(slot["game_mode"].to_s) ? slot["game_mode"].to_s : nil,
         seed: slot["seed"].to_s, slot: slot["slot"].to_s, player: int_or_nil(slot["player"]) || 0,
         locations: slot["locations"].map { |x| int_or_nil(x) }.compact, death_link: slot["death_link"] ? true : false,
@@ -209,10 +210,12 @@ module KIF
       difficulty = [$game_switches[SWITCH_GAME_DIFFICULTY_EASY], $game_switches[SWITCH_GAME_DIFFICULTY_HARD]]
       begin
         $PokemonGlobal.kif_ap = clean_slot(slot)
+        sync_lock   # before the settings: the seeded randomizer hooks are gated Off without the module
         reset_cache
         apply_settings(slot)   # linked already, so the forced settings hold while it runs
       rescue StandardError => e
         $PokemonGlobal.kif_ap = old
+        sync_lock
         KIF::Rand.restore(saved)
         KIF::Rand.data[:seed] = saved_seed
         $game_switches[SWITCH_GAME_DIFFICULTY_EASY], $game_switches[SWITCH_GAME_DIFFICULTY_HARD] = difficulty
@@ -227,6 +230,7 @@ module KIF
       $Trainer.money = money if money >= 0
       town = free_fly_town
       turned_on << _INTL("Fly to {1}", pbGetMapNameFromId(town)) if town
+      turned_on << _INTL("An Exp modifier of {1}% (needs the Battles & Challenges module On)", opt("exp_modifier")) if opt("exp_modifier") != 100 && !KIF::Modules.active?(:battles)
       n = Dex.scan
       turned_on << (n == 1 ? _INTL("1 Pokédex check for a Pokémon the save already has") :
                              _INTL("{1} Pokédex checks for Pokémon the save already has", n)) if n > 0
@@ -287,6 +291,37 @@ module KIF
       seed = r.parse_seed(slot["randomizer_seed"])
       r.seed = seed if seed
       r.randomize_now
+    end
+
+    LOCK_OWNER = "kif_ap"
+
+    # A linked save with randomizer settings runs with the Randomizer module On
+    # whatever the player chose (its seeded hooks are gated Off otherwise);
+    # any other save drops the lock. Locks live in memory only: each loaded
+    # save sets or drops it. Battles stays the player's (Exp modifier needs it).
+    # Saves linked before :randomizer was stored have no key: they count as
+    # randomized when the save already holds a randomized world (a seed alone
+    # exists once the player opened the Randomizer screen, so it is not enough).
+    def randomized?
+      d = data
+      return false unless on?
+      return d[:randomizer] ? true : false if d.key?(:randomizer)
+      return KIF::Rand.made_world? ? true : false
+    end
+
+    def sync_lock
+      @lock_global = $PokemonGlobal.object_id
+      if randomized?
+        KIF::Locks.set_module(:randomizer, :on, by: "Archipelago", owner: LOCK_OWNER)
+      else
+        KIF::Locks.release(LOCK_OWNER)
+      end
+    end
+
+    # (@lock_global cleared: if the load fails, the save still playing sets it again)
+    def drop_lock
+      @lock_global = nil
+      KIF::Locks.release(LOCK_OWNER)
     end
 
     # exp_modifier (F-BATTLE-09's pbGainExpOne calls it)
@@ -602,7 +637,7 @@ module KIF
       h = @death
       @death = nil
       d[:death_time] = h["time"].to_f
-      pbMessage(_INTL("{1}'s team fainted, so yours does too.", h["source"].to_s.empty? ? _INTL("Someone") : h["source"].to_s))
+      pbMessage(_INTL("{1}'s team fainted, so yours does too.", h["source"].to_s.empty? ? _INTL("Someone") : KIF.safe_text(h["source"], 40)))
       @dying = true
       begin
         $Trainer.party.each { |pk| pk.hp = 0 unless pk.egg? }   # an egg at 0 HP would hatch fainted
@@ -639,6 +674,11 @@ module KIF
 
     # Each frame on the map
     def update
+      if @lock_global != $PokemonGlobal.object_id
+        sync_lock
+        # Game.load skipped the save's Pokemon data while the module was Off
+        (KIF::Rand.apply_data if randomized? && KIF::Rand.data[:species]) rescue KIF.log("Archipelago: randomizer data failed to apply (#{$!.message})")
+      end
       return unless on?
       if @global != $PokemonGlobal.object_id
         reset_cache
@@ -710,7 +750,7 @@ KIF::PauseMenu.add(:kif_ap, "Archipelago", order: 90,
     :stay
   })
 
-Events.onMapUpdate += proc { |_sender, _e| KIF::AP.update if $PokemonGlobal && $PokemonGlobal.kif_ap }
+Events.onMapUpdate += proc { |_sender, _e| KIF::AP.update if $PokemonGlobal }   # unlinked saves too: they drop the lock
 
 #-------------------------------------------------------------------------------
 # Hooks
@@ -831,5 +871,19 @@ class Interpreter
   def execute_script(script)
     script = KIF::AP.rewrite_script(script, @map_id, @event_id) if script.is_a?(String) && KIF::AP.on?
     return kif_ap_execute_script(script)
+  end
+end
+
+module Game
+  class << self
+    alias kif_ap_load load unless method_defined?(:kif_ap_load)
+
+    # The module poll before a load must not see the last save's lock: the
+    # randomizer's load-time hooks would run on a save with its module Off.
+    # The loaded save sets its own lock again on its first map frame.
+    def load(*args, &blk)
+      KIF::AP.drop_lock
+      return kif_ap_load(*args, &blk)
+    end
   end
 end

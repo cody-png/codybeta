@@ -1,4 +1,4 @@
-KIF-MANIFEST 1 version=2.0.9 channel=beta files=30472
+KIF-MANIFEST 1 version=2.0.10 channel=beta files=30473
 c65b0fb10ff84054f38fbc53d9f6ed79eac2c1aa 23305 Archipelago/KIF.yaml
 5ec9399a060ad7f71049adcf49b722c9aaa999bb 560815 Archipelago/kif.apworld
 9535e6ead24be7e2c9c1c4e7d9e62b77c0da28df 1973679 Audio/BGM/Azalea Town.ogg
@@ -4870,7 +4870,7 @@ a0bb67693c61e19fc59f9dc32408019c86b3aba6 53667 Data/Scripts/990_KIF/000_Core/016
 b39d0a496ed3588fde4bc6f1a2512945696215ea 4673 Data/Scripts/990_KIF/000_Core/019_KIF_AbilityText.rb
 83c853f83f6306023c70c992cbfbd18cbbd8869e 4503 Data/Scripts/990_KIF/000_CrashLog.rb
 08d1a85457b2de28c02225d981e68d513e339585 5883 Data/Scripts/990_KIF/000_Paths.rb
-f10b474f3266e5132f1c996836c93ee00714b58d 1640 Data/Scripts/990_KIF/000_README.rb
+57ce2b4843793ea32ff2f46d980993f548e49af0 1641 Data/Scripts/990_KIF/000_README.rb
 d00182ed882a1c5dd20537ac010a065b2f09a9ca 5328 Data/Scripts/990_KIF/F-BATTLE-01_BattleFormat/BattleFormat.rb
 0d98c2eefb4553d71c6f79ae75fa0322d53a95c7 5359 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattle.rb
 20746c28ac5125f920561939f885d1f5e10b23ee 13689 Data/Scripts/990_KIF/F-BATTLE-02_AutoBattle/AutoBattleChoices.rb
@@ -4905,32 +4905,32 @@ e2a30b85b2fdd7bba4956e6197d25f345a1b11f0 7300 Data/Scripts/990_KIF/F-BATTLE-11_C
 8b6f94b5eca13b1882dc3f6598fd3319fd5ee24b 18572 Data/Scripts/990_KIF/F-CORE-02_SaveCompat/KifSaveImport.rb
 0effde50c8170eb493a2faacaeaea375bb15c98a 16828 Data/Scripts/990_KIF/F-CORE-03_SaveBackups/SaveBackups.rb
 40d33b4f25c7d9015a6c280bcedf69b3ce7d5770 3757 Data/Scripts/990_KIF/F-CORE-04_Mods/ModAssets.rb
-765dabb7626cd547ef20153efeda16a2dad2b684 51820 Data/Scripts/990_KIF/F-CORE-04_Mods/ModCatalog.rb
-3ef9a8b3ffbd9e37209f716a47abfd6bfc2d9c1d 36428 Data/Scripts/990_KIF/F-CORE-04_Mods/ModCheck.rb
-5c8d1fd626be6cfd0a9c3fbc48321fc7294e5b8a 25144 Data/Scripts/990_KIF/F-CORE-04_Mods/ModGuard.rb
+6ab07db38559cfa97b63c69406033dc053db386f 51905 Data/Scripts/990_KIF/F-CORE-04_Mods/ModCatalog.rb
+b6e09667e9126c60da02f744595b8591e94d8d38 37564 Data/Scripts/990_KIF/F-CORE-04_Mods/ModCheck.rb
+d8ab7a9d4e37ef1b45c4a0f60ab8d6c34bda4100 25711 Data/Scripts/990_KIF/F-CORE-04_Mods/ModGuard.rb
 36d227cfc09bf3106b8a1108927d13a4c0a86766 6543 Data/Scripts/990_KIF/F-CORE-04_Mods/ModPacks.rb
 95e77955e93838c2ac3aaabaffe9fb1d53500474 22093 Data/Scripts/990_KIF/F-CORE-04_Mods/ModPublish.rb
 014e3aafb1638cbba998627c8cd0d225a90d7946 13869 Data/Scripts/990_KIF/F-CORE-04_Mods/ModReadme.rb
 a6f2b5d18abbfc9e39b26db8eead6282f4d24bf1 7939 Data/Scripts/990_KIF/F-CORE-04_Mods/ModRules.rb
 30db5ef06cedbd806cb886aa73187d0b68cfcfbb 10624 Data/Scripts/990_KIF/F-CORE-04_Mods/ModSecurityUI.rb
 c37300dfd405969595b76a6388439014bd45a20d 26475 Data/Scripts/990_KIF/F-CORE-04_Mods/ModTrust.rb
-001c9638eb88f6f6195287d50147779c276887d5 34456 Data/Scripts/990_KIF/F-CORE-04_Mods/Mods.rb
+366634fa129dfbbbdb9665382d31b3bbd08c3afc 35350 Data/Scripts/990_KIF/F-CORE-04_Mods/Mods.rb
 a001639c505ec0e5a10167ef9a836155d4fcb0ff 810 Data/Scripts/990_KIF/F-CORE-04_Mods/ModsMenu.rb
 bc3c7d0ce4a600837ac112ae21118a1e65fc8baa 2501 Data/Scripts/990_KIF/F-CORE-06_MysteryGift/MysteryGift.rb
 3008f9e2d401bb887198c2c945539d1196cfbfc4 4211 Data/Scripts/990_KIF/F-CORE-07_DebugTools/CompileData.rb
 4f13a2b11076d7107a521508a2dc09575adf196e 5449 Data/Scripts/990_KIF/F-CORE-08_SettingsPresets/SettingsPresets.rb
 342eaab4bd4e28b8756f4c46f281cd30cc9d21f3 34217 Data/Scripts/990_KIF/F-CORE-09_ModCompat/ModCompat.rb
-69d3a07fc9d078d436f3d6d1bfa624e1d955e573 16592 Data/Scripts/990_KIF/F-CORE-09_ModCompat/ModSettingsMenu.rb
-e4d8d42583e31853a04b7f4a175af35e6c8732c4 6412 Data/Scripts/990_KIF/F-CORE-10_ModAPI/000_Contract.rb
-0abd2afc10f3610910c2b5a7fa3585510a4bec81 27844 Data/Scripts/990_KIF/F-CORE-10_ModAPI/010_Core.rb
+4d710fc61f64cab576f240c649b2e50f1effaa8c 17009 Data/Scripts/990_KIF/F-CORE-09_ModCompat/ModSettingsMenu.rb
+3fa98ee02fa0ad7fd209fd1ff14980c406758e04 6715 Data/Scripts/990_KIF/F-CORE-10_ModAPI/000_Contract.rb
+bfa61d38eb453308526c438faa68745d864b3d5e 28726 Data/Scripts/990_KIF/F-CORE-10_ModAPI/010_Core.rb
 b4930b521f4e46fa2d0d66794e1e2a5c7c05f19e 10161 Data/Scripts/990_KIF/F-CORE-10_ModAPI/020_Events.rb
-5bc4a5f93d129744d41f5ac1384a1fd37da075ba 24495 Data/Scripts/990_KIF/F-CORE-10_ModAPI/030_Hook.rb
+d099ffcd4d5707b87e24a4d56ab511d05319089d 24860 Data/Scripts/990_KIF/F-CORE-10_ModAPI/030_Hook.rb
 47211b4169909abe67441e772d005cc2e217a941 32172 Data/Scripts/990_KIF/F-CORE-10_ModAPI/040_Points.rb
 d5a66687353b92cf46ca955d02924041ce6f7704 14071 Data/Scripts/990_KIF/F-CORE-10_ModAPI/050_Attribution.rb
-1a349f41f230269c584d0ac7f57a69e08f22288d 19578 Data/Scripts/990_KIF/F-CORE-10_ModAPI/060_Data.rb
+55495b99404b5075030b10d8b10d88297a49acbc 19812 Data/Scripts/990_KIF/F-CORE-10_ModAPI/060_Data.rb
 c2c5249f853d31833c280c1a26ada12aeb20b5ba 7018 Data/Scripts/990_KIF/F-CORE-10_ModAPI/070_Timers.rb
-c76ba5e3035d37cdb784c97ed84c0c92db3de4fa 28911 Data/Scripts/990_KIF/F-CORE-10_ModAPI/080_Registries.rb
-5230b44bad4c733c908809c1d7ea626ec5f880c6 22553 Data/Scripts/990_KIF/F-CORE-10_ModAPI/090_Dev.rb
+43be3622024992e8faf0183d732e30190cc31c74 28936 Data/Scripts/990_KIF/F-CORE-10_ModAPI/080_Registries.rb
+09c1b0223899b4dd959ae27953c025a71c4c7686 22767 Data/Scripts/990_KIF/F-CORE-10_ModAPI/090_Dev.rb
 b12e1896781482c0f7cadaed15ad9a7c7e532c8a 15731 Data/Scripts/990_KIF/F-CORE-10_ModAPI/Safe.rb
 3caadfdfb1f24eabdd3100745297d0df4ceb36c8 4666 Data/Scripts/990_KIF/F-DATA-01_SpeciesTweaks/SpeciesTweaks.rb
 6def9e5c8b0d3b209556f1d842013deaf72ccc67 15757 Data/Scripts/990_KIF/F-FUSION-01_FusionRules/FusionRules.rb
@@ -4990,7 +4990,7 @@ ab2887898eb0a81588d6021c1cc2b7cfdbf91c2b 32977 Data/Scripts/990_KIF/F-UI-12_Livi
 143ff427ce2f9d9bb13cd89562791bc1f7874a9d 41573 Data/Scripts/990_KIF/F-UI-13_Mouse/Mouse.rb
 29a79d324d21c2680e3c7e4fa492048ab88e3a01 20443 Data/Scripts/990_KIF/F-UI-13_Mouse/MouseScreens.rb
 4e7b426e36ea54491de92959ce23fade7702b2d6 9887 Data/Scripts/990_KIF/F-UI-14_LineSprites/LineSprites.rb
-8b228918735c9beb4fcaa9c0db7ca68749ef48a2 2860 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/AtomicWrites.rb
+a4d6ac85610792dfcf0357fcff7fb3e58f2ab0eb 5644 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/AtomicWrites.rb
 e45fe29f7a945df327b7517e6e7a4e698484f070 1006 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/AudioNames.rb
 42d3b5f0cfe7c98c210c7aaaada5f2d6e0a2c2e5 648 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/BabySpecies.rb
 3ba0330c8cc57bb8a28df3159e58ddeb0f2cdbf6 18510 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/BattleAI.rb
@@ -5033,6 +5033,7 @@ d6ddad032986b57c683050fcf603e2cb7ca56b8d 3770 Data/Scripts/990_KIF/SCOPE-02_PIFF
 ac886781de5bfcec88a7707aebb9e89e98a429f7 2343 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/SpriteListsMissing.rb
 e97a6ca55709f6bfe5ba40bbcb7d7ae834d11de1 952 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/SpriteLoaderGuard.rb
 eb5e398fe4c55b5ca5ba321eeb1cf5e0d79e8d1b 855 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/SpriteSubstitutions.rb
+ee325ab9d31808aa567829ea88b58a2fbdf08d54 2746 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/StoreCaughtSkipsTransferBox.rb
 70e288467801a9a2c5495cbe057a6f22e56b9843 1824 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/SwitchOutExp.rb
 d41106c58e17499416615411f9a0b4af492cb803 1334 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/TitleDispose.rb
 45aafc0812cd83a3ff257260a64d2cd354859dae 1874 Data/Scripts/990_KIF/SCOPE-02_PIFFixes/TradeBubbles.rb
@@ -5049,9 +5050,9 @@ a48d5808cecafc5da8fa46af7749ac4e3abf3ea9 949 Data/Scripts/990_KIF/SCOPE-02_PIFFi
 fe45a0b2fbc8f265a68e72f07a2509889cfb60be 7585 Data/Scripts/990_KIF/ZZ_Debug/AICompare.rb
 464bef92643d6d24e24d05054afaeaf274c9ab29 23455 Data/Scripts/990_KIF/ZZ_Debug/Debug.rb
 3fdbad5214cf102cb55e69b44d5a8d6445c332d9 1095 Data/Scripts/990_KIF/ZZ_Extras/000_ExtrasSettings.rb
-a2555c934813629201412434dddc6813ad2b38da 35775 Data/Scripts/990_KIF/ZZ_Extras/C-AP-01_Archipelago/Archipelago.rb
+4fc56358afbce626a8aae49f2e0dd39e1248287c 38101 Data/Scripts/990_KIF/ZZ_Extras/C-AP-01_Archipelago/Archipelago.rb
 81901e52a1a0f9ddab979881bca88cd76d545cf9 10751 Data/Scripts/990_KIF/ZZ_Extras/C-AP-01_Archipelago/Dexsanity.rb
-b332565ef737c0a3b397d66a4507170c315b4a30 9952 Data/Scripts/990_KIF/ZZ_Extras/C-AP-01_Archipelago/Traps.rb
+015f3b55ebdf96ea5496622df5c178647d31ddec 10028 Data/Scripts/990_KIF/ZZ_Extras/C-AP-01_Archipelago/Traps.rb
 5bf44c7e94f00cf7b42a6904730f3acf98e19afd 3366 Data/Scripts/990_KIF/ZZ_Extras/C-AP-01_Archipelago/Traps_Curse.rb
 69bfe58a73474a6c988a2d30470c5284d2e5c5aa 1398 Data/Scripts/990_KIF/ZZ_Extras/C-AP-01_Archipelago/Traps_PPDrain.rb
 d0a532f36f7a828481e51532e8475204120adbbe 9724 Data/Scripts/990_KIF/ZZ_Extras/C-AP-01_Archipelago/Traps_PartyLock.rb
@@ -5112,7 +5113,7 @@ d079499de234bb27fd9dbe6edbabd4ece1f58ebc 28895 Data/Scripts/990_KIF/ZZ_Extras/C-
 1a704d48e51353a1b4b763c2b4e6b3a850e8c174 32162 Data/System.rxdata
 57538e4e549df4eb8e9369a6883fece2ecff805c 410124 Data/Tilesets.rxdata
 94c39352b0edb225fa90de0ca64fe19c8a5fdae3 345 Data/Troops.rxdata
-ed35d092626c38637a554337b00e2a6a33c79584 5 Data/VERSION
+fee3c9251d2b7d869da4c4f5f7f949d829ef4876 6 Data/VERSION
 d9bd3526099d335d192e97c503f107f02c8aa2ea 245 Data/Weapons.rxdata
 88cb261de46afa991fb60f0251319dcc0a4b73f5 21823 Data/abilities.dat
 6db551d2203ffcddbf4b6d82646a77b13e790887 11962 Data/berry_data.dat

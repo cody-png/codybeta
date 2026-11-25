@@ -134,16 +134,16 @@ module KIF
     STR_RE = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\?["'`]|(?<![^\s])#(?![{$@]).*/m
     DEF_RE = /\bdef\s+(?:self\.)?[\w?!=]+|\balias(?:_method)?\s+[:\w?!=]+\s*,?\s*[:\w?!=]*/
     # a cheap test on the raw line: every rule's key word is in here, so most lines are never looked at again
-    TRIGGER = /system|spawn|exec|`|%x|popen|Open3|Process|syscall|System|IO\.|\bopen\b|Win32|Fiddle|FFI|\bDL\b|Net::|Socket|URI|HTTP|pbDownload|pbPost|Updater|File\.|FileUtils|Dir\.|mkdir_p|rm_tree|to_file|save_data|~[\\\/]|[A-Za-z]:[\\\/]|APPDATA|USERPROFILE|Documents|Desktop|Downloads|Startup|Start Menu|CurrentVersion|reg add|ENV|Etc\.|eval|Marshal|YAML|Psych|ObjectSpace|\bload\b|require|Base64|unpack|pack|\\x|send|const_get|super_method|instance_method|KIF::Mod|ModGuard|ModTrust|ModContract|kif_mod_guard|forget_roots|register_root|Trace|trace|Signal|trap|at_exit|^\s*(?:class|module)\s+(?:Kernel|File|IO|Dir|Marshal|ENV|Process|FileUtils|ObjectSpace|Socket|HTTPLite)|\.(?:bat|cmd|ps1|vbs)|exit!|abort|fork|kill|clipboard/
+    TRIGGER = /instance_variable_[sg]et|ModCatalog|ModCheck|save_disabled|uninstall|atomic_write|start_apply|system|spawn|exec|`|%x|popen|Open3|Process|syscall|System|IO\.|\bopen\b|Win32|Fiddle|FFI|\bDL\b|Net::|Socket|URI|HTTP|pbDownload|pbPost|Updater|File\.|FileUtils|Dir\.|mkdir_p|rm_tree|to_file|save_data|~[\\\/]|[A-Za-z]:[\\\/]|APPDATA|USERPROFILE|Documents|Desktop|Downloads|Startup|Start Menu|CurrentVersion|reg add|ENV|Etc\.|eval|Marshal|YAML|Psych|ObjectSpace|\bload\b|require|Base64|unpack|pack|\\x|send|const_get|super_method|instance_method|KIF::Mod|ModGuard|ModTrust|ModContract|kif_mod_guard|forget_roots|register_root|Trace|trace|Signal|trap|at_exit|^\s*(?:class|module)\s+(?:Kernel|File|IO|Dir|Marshal|ENV|Process|FileUtils|ObjectSpace|Socket|HTTPLite)|\.(?:bat|cmd|ps1|vbs)|exit!|abort|fork|kill|clipboard/
     BIDI_RE = /[‪-‮⁦-⁩]/
     R14_RE = /^[ \t]*unless[ \t]+(?:self\.)?(?:private_)?method_defined\?[^\n]*\n[ \t]*def\b/
     R01_CALL = /(?<![\w.:@$])(?:system|spawn|exec)(?:\s*\(|[ \t]+(?!if\b|unless\b|while\b|until\b|and\b|or\b|then\b|do\b|end\b|rescue\b|ensure\b|in\b|not\b)[\w"'`:\[%*@$])/
-    R01_OTHER = /\bKernel\.(?:system|spawn|exec)\b|\bIO\.popen\b|\bOpen3\b|\bPTY\.spawn\b|\bProcess\.(?:spawn|exec|daemon)\b|(?<![\w.:@$])syscall\b|\bSystem\.launch\b|%x[(\[{<|!\/]|`X`/
+    R01_OTHER = /\bKernel\.(?:system|spawn|exec)\b|\bIO\.popen\b|\bOpen3\b|\bPTY\.spawn\b|\bProcess\.(?:spawn|exec|daemon)\b|(?<![\w.:@$])syscall\b|\bSystem\.launch\b|\b(?:Updater|Win)\.(?:spawn|start_apply|api)\b|%x[(\[{<|!\/]|`X`/
     R01_PIPE = /(?<![\w.:@$])open\s*\(?\s*["']\s*\||\bIO\.(?:read|readlines|foreach|write|binread)\s*\(?\s*["']\s*\|/
     R02_RE = /\b(?:Win32API|Fiddle|FFI)\b|\bDL\.dlopen\b/
     R03_RE = /\bNet::HTTP|\b(?:TCPSocket|TCPServer|UDPSocket|UNIXSocket)\b|\bSocket\.|\bURI\.open\b|\bOpenURI\b|\bHTTPLite\b|(?<![\w.:@$])(?:pbDownloadToString|pbDownloadToFile|pbPostData|pbDownloadData)\b|\bKIF::Updater\.(?:fetch|download)\b/
     R03_REQ = /\brequire\s*\(?\s*["'](?:open-uri|net\/https?|socket)["']/
-    R04_RE = /\bFile\.(?:write|binwrite|delete|unlink|rename|chmod|lchmod|chown|truncate|symlink|link|utime|mkfifo)\b|\bFileUtils\b|\bDir\.(?:mkdir|rmdir|delete|unlink)\b|\bIO\.(?:write|binwrite|copy_stream)\b|\.to_file\b|\bKIF\.(?:rm_tree|mkdir_p)\b|(?<![\w.])mkdir_p\b|(?<![\w.:@$])save_data\s*\(/
+    R04_RE = /\bFile\.(?:write|binwrite|delete|unlink|rename|chmod|lchmod|chown|truncate|symlink|link|utime|mkfifo)\b|\bFileUtils\b|\bDir\.(?:mkdir|rmdir|delete|unlink)\b|\bIO\.(?:write|binwrite|copy_stream)\b|\.to_file\b|\b(?:KIF|Updater)\.(?:rm_tree|mkdir_p|atomic_write)\b|(?<![\w.])mkdir_p\b|(?<![\w.:@$])save_data\s*\(/
     R04_OPEN = /(?<![\w.:@$])(?:File\.(?:open|new)|open)\s*\(?/
     R05_RE = /Dir\.home|["']~[\\\/]|["'][A-Za-z]:[\\\/]|\bAPPDATA\b|\bUSERPROFILE\b|[\\\/](?:AppData|Documents|Desktop|Downloads|Startup)(?:[\\\/"'])/
     R06_RE = /(?<![\w:])ENV\b(?!\w)|\bEtc\.|\bDir\.home\b/
@@ -154,7 +154,8 @@ module KIF
     R10_RE = /(?<![\w.:@$])(?:load|require|require_relative)\b(?![?!:=])/
     R11_SEND = /(?<![\w:@$])(?:send|__send__|public_send|const_get)\s*\(?\s*([^,)\n]*)/
     R11_DANGER = /(?<![\w:@$])(?:send|__send__|public_send)\s*\(?\s*[:"'](?:system|exec|spawn|eval|instance_eval|class_eval|module_eval|load|require|syscall|fork|open|popen|`)\b/
-    R12_RE = /\bKIF::Mod(?:Guard|Trust|SecurityUI|Contract)\b|\bModGuard\b|\bModTrust\b|\bModSecurityUI\b|\bModContract\b|\bkif_mod_guard\b|\b(?:forget_roots|register_root)\b|\bTracePoint\b|\bset_trace_func\b|\bSignal\.trap\b|(?<![\w.:@$])trap\s*\(?\s*["':]|\bObjectSpace\.define_finalizer\b|(?<![\w.:@$])at_exit\b|^\s*(?:class|module)\s+(?:Kernel|File|IO|Dir|Marshal|ENV|Process|FileUtils|ObjectSpace|Win32API|Fiddle|Open3|Socket|TCPSocket|Net::HTTP|HTTPLite)\b|\b(?:Kernel|File|IO|Dir|Marshal|Process)\.(?:singleton_class\.)?(?:prepend|alias_method|define_method|define_singleton_method|remove_method|undef_method)\b/
+    R12_RE = /\bKIF::Mod(?:Guard|Trust|SecurityUI|Contract)\b|\bKIF::(?:Updater|ModCatalog|ModCheck|Mods|ModSecurityUI)(?:::\w+)*\.(?:instance_variable_(?:set|get)|singleton_class|prepend|extend|alias_method|define_method|define_singleton_method|remove_method|undef_method|(?:class|module|instance)_(?:eval|exec)|const_set|remove_const|send|__send__|public_send)\b|^\s*(?:class|module)\s+(?:<<\s*)?(?:::)?KIF::(?:Updater|ModCatalog|ModCheck|Mods|ModSecurityUI)\b|\bKIF::(?:API|Safe)(?:::\w+)*\.instance_variable_(?:set|get)\b|^\s*(?:class|module)\s+(?:ModCatalog|ModCheck)\b|\bKIF::Mods\.(?:save_disabled|uninstall)\b|\bKIF::Mods\.disabled\s*(?:<<|\.(?:push|delete|clear|concat|replace|unshift)\b)|\bModGuard\b|\bModTrust\b|\bModSecurityUI\b|\bModContract\b|\bkif_mod_guard\b|\b(?:forget_roots|register_root)\b|\bTracePoint\b|\bset_trace_func\b|\bSignal\.trap\b|(?<![\w.:@$])trap\s*\(?\s*["':]|\bObjectSpace\.define_finalizer\b|(?<![\w.:@$])at_exit\b|^\s*(?:class|module)\s+(?:Kernel|File|IO|Dir|Marshal|ENV|Process|FileUtils|ObjectSpace|Win32API|Fiddle|Open3|Socket|TCPSocket|Net::HTTP|HTTPLite)\b|\b(?:Kernel|File|IO|Dir|Marshal|Process)\.(?:singleton_class\.)?(?:prepend|alias_method|define_method|define_singleton_method|remove_method|undef_method)\b/
+    R12_STR = /["']\s*KIF::(?:Updater|ModCatalog|ModCheck|Mods|ModSecurityUI)(?:::\w+)*[.#]\w/   # a hook target is a string, as in KIF::API.around("KIF::Updater::Win.curl")
     R13_RE = /Start Menu[\\\/]|[\\\/]Startup\b|CurrentVersion[\\\/]+Run|\breg\s+add\b|["'][^"'\n]*\.(?:bat|cmd|ps1|vbs)["']/
     R20_RE = /(?<![\w.:@$])(?:exit!|abort(?![\w?!=])|fork(?![\w?!=]))|\bProcess\.(?:kill|abort)\b/
     R21_RE = /\bInput\.clipboard\b/
@@ -250,8 +251,11 @@ module KIF
       err << "#{(total / 1048576.0).round(1)} MB in all, over the 100 MB limit per mod" if total > MAX_MOD
 
       scripts = Array(json["scripts"]).map(&:to_s)
-      scripts.each { |s| err << "script \"#{s}\" listed in mod.json isn't in the folder" unless File.file?(File.join(path, s)) }
-      rbs = list.select { |rel, _| rel.end_with?(".rb") }
+      scripts.each do |s|
+        err << "script \"#{s}\" listed in mod.json isn't in the folder" unless File.file?(File.join(path, s))
+        err << "script \"#{s}\" listed in mod.json must be a .rb file" unless s =~ /\.rb\z/i
+      end
+      rbs = list.select { |rel, _| rel =~ /\.rb\z/i }   # the loader takes evil.RB too
       err << "no .rb scripts" if rbs.empty? && scripts.empty? && !json["assets_only"]
       rbs.each do |rel, f|
         src = File.binread(f).force_encoding("UTF-8")
@@ -588,7 +592,7 @@ module KIF
         hit.call("R09", :info, "objectspace", "Looks through everything the game has loaded") if c.match?(R09_RE)
         scan_load(rel, n, r, c, snip) if c.match?(R10_RE) && c !~ /\balias\b/
         scan_hidden(rel, n, r, c, snip)
-        hit.call("R12", :red, nil, "Tries to change KIF's protection") if c.match?(R12_RE)
+        hit.call("R12", :red, nil, "Tries to change KIF's protection") if c.match?(R12_RE) || r.match?(R12_STR)
         hit.call("R13", :red, "programs", "Sets itself up to run outside the game") if r.match?(R13_RE)
         if c.match?(R20_RE)
           kill = c.match?(/\bProcess\.(?:kill|abort)\b|(?<![\w.:@$])fork/)

@@ -51,7 +51,7 @@ module KIF
 
       def source(who, d)
         return _INTL("yourself") if who.empty? || who == d[:slot]
-        return who
+        return KIF.safe_text(who, 40)   # another player's slot name: no message codes or tags
       end
 
       # Runs the first waiting trap that can run here (one per call)

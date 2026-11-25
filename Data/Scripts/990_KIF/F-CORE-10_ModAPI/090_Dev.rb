@@ -108,6 +108,8 @@ module KIF
         return reload_result(false, key, 0, 0, 0, "Mod Dev mode is Off.") unless API.dev?
         e = (KIF::Mods.entries.find { |x| x.id == key } rescue nil)
         return reload_result(false, key, 0, 0, 0, "No mod #{key}.") unless e
+        # reloading runs the scripts again: not for a mod that is held, blocked, revoked or switched Off
+        return reload_result(false, key, 0, 0, 0, "#{e.name} is not running.") unless e.loaded && e.enabled?
         unless e.kind == :folder && e.source.is_a?(KIF::Mods::NativeSource)
           return reload_result(false, key, 0, 0, 0, "#{e.name} is not a folder mod KIF loads (Mod Manager mods and loose files can not be reloaded).")
         end

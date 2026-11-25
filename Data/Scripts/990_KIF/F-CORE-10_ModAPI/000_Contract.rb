@@ -25,6 +25,8 @@ module KIF
     }.freeze
     # blocked when undeclared (default mode); the rest are only logged
     BLOCKING = %w[network programs native game_files save_files outside_files load_code].freeze
+    # Ruby's library folder, read once: RbConfig::CONFIG is a plain Hash, and a mod that blanked this entry would make every frame count as Ruby's own
+    RUBYLIB = (defined?(RbConfig) ? RbConfig::CONFIG["rubylibdir"].to_s.dup : "").freeze unless const_defined?(:RUBYLIB, false)
 
     @roots = {}        # "d:/game/mods/foo/" => "foo"      (folder mods)
     @files = {}        # "d:/game/mods/foo.rb" => "foo.rb" (loose files)
@@ -78,9 +80,8 @@ module KIF
     # frames and text run with eval (those take the next frame out).
     def self.transparent?(path)
       return true if path.nil? || path.start_with?("<internal:") || path.start_with?("(eval")
-      return true if path.include?("/lib/ruby/")
-      d = (defined?(RbConfig) ? RbConfig::CONFIG["rubylibdir"] : nil)
-      return d ? path.start_with?(d) : false
+      return true if path.include?("/lib/ruby/") && owner_of_path(path).nil?   # Mods/x/lib/ruby/main.rb is the mod's, not Ruby's
+      return !RUBYLIB.empty? && path.start_with?(RUBYLIB)
     end
 
     # The real game's loader labels every script with its bare file name

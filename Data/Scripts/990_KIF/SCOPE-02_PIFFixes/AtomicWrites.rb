@@ -17,8 +17,11 @@ KIF.guard_base("053_PIF_Hoenn/TransferBox.rb", 2931014826,
 KIF.guard_base("052_InfiniteFusion/System/HttpCalls.rb", 3232045372, "download_file")
 
 class StorageTransferBox
-  # Copy of 053_PIF_Hoenn/TransferBox.rb:43-54 that keeps a copy of a file it can't read
+  # Copy of 053_PIF_Hoenn/TransferBox.rb:43-54 that keeps a copy of a file it can't read,
+  # and doesn't reload over a change not written yet (PIF reloads whenever the box comes
+  # into view: with a Pokémon in the cursor that would copy it back or bring back a swapped one)
   def loadTransferBoxPokemon
+    return if StorageTransferBox.unwritten.equal?(self)
     echoln "Loading transfer box"
     path = transferBoxSavePath
     if File.exist?(path)
@@ -98,18 +101,13 @@ class PokemonStorageScreen
     @saveWhenPlaceDown = false
   end
 
-  # The Pokémon swapped out lands in the cursor, so a swap in the Transfer Box is
-  # written when it is put down; a swap elsewhere writes what an earlier pick-up left
+  # The Pokémon swapped out lands in the cursor, so a swap in the Transfer Box only marks
+  # the change; the next put-down writes it
   def pbSwap(selected)
-    in_box = @scene.inTransferBox && selected[0] != -1
-    ret = begin
-      StorageTransferBox.swapping = true
-      kif_tb_pbSwap(selected)
-    ensure
-      StorageTransferBox.swapping = false
-    end
-    StorageTransferBox.flush if ret == true && !in_box
-    ret
+    StorageTransferBox.swapping = true
+    kif_tb_pbSwap(selected)
+  ensure
+    StorageTransferBox.swapping = false
   end
 
   def pbStartScreen(*args)

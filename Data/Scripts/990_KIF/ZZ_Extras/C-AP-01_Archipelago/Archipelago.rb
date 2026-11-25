@@ -299,13 +299,30 @@ module KIF
     # whatever the player chose (its seeded hooks are gated Off otherwise);
     # any other save drops the lock. Locks live in memory only: each loaded
     # save sets or drops it. Battles stays the player's (Exp modifier needs it).
+    # Saves linked before :randomizer was stored have no key: they count as
+    # randomized when the save holds a Randomizer seed or species table
+    # (shortcut: a seed also exists once the player opened the Randomizer screen).
+    def randomized?
+      d = data
+      return false unless on?
+      return d[:randomizer] ? true : false if d.key?(:randomizer)
+      r = KIF::Rand.data
+      return (r[:seed] || r[:species]) ? true : false
+    end
+
     def sync_lock
       @lock_global = $PokemonGlobal.object_id
-      if on? && data[:randomizer]
+      if randomized?
         KIF::Locks.set_module(:randomizer, :on, by: "Archipelago", owner: LOCK_OWNER)
       else
         KIF::Locks.release(LOCK_OWNER)
       end
+    end
+
+    # (@lock_global cleared: if the load fails, the save still playing sets it again)
+    def drop_lock
+      @lock_global = nil
+      KIF::Locks.release(LOCK_OWNER)
     end
 
     # exp_modifier (F-BATTLE-09's pbGainExpOne calls it)
@@ -661,7 +678,7 @@ module KIF
       if @lock_global != $PokemonGlobal.object_id
         sync_lock
         # Game.load skipped the save's Pokemon data while the module was Off
-        (KIF::Rand.apply_data if on? && data[:randomizer] && KIF::Rand.data[:species]) rescue KIF.log("Archipelago: randomizer data failed to apply (#{$!.message})")
+        (KIF::Rand.apply_data if randomized? && KIF::Rand.data[:species]) rescue KIF.log("Archipelago: randomizer data failed to apply (#{$!.message})")
       end
       return unless on?
       if @global != $PokemonGlobal.object_id
@@ -855,5 +872,19 @@ class Interpreter
   def execute_script(script)
     script = KIF::AP.rewrite_script(script, @map_id, @event_id) if script.is_a?(String) && KIF::AP.on?
     return kif_ap_execute_script(script)
+  end
+end
+
+module Game
+  class << self
+    alias kif_ap_load load unless method_defined?(:kif_ap_load)
+
+    # The module poll before a load must not see the last save's lock: the
+    # randomizer's load-time hooks would run on a save with its module Off.
+    # The loaded save sets its own lock again on its first map frame.
+    def load(*args, &blk)
+      KIF::AP.drop_lock
+      return kif_ap_load(*args, &blk)
+    end
   end
 end

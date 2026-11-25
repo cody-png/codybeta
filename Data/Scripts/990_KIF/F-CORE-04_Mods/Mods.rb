@@ -551,7 +551,7 @@ module KIF
         json = File.join(e.path, "mod.json")
         h = File.file?(json) ? (KIF::Mods.read_json(json) || {}) : nil
         if h && h["scripts"].is_a?(Array) && !h["scripts"].empty?
-          listed = h["scripts"].map { |s| KIF::Mods.file_in(e.path, s) }.compact.select { |f| f =~ /.rbz/i && File.file?(f) }   # Kernel#load runs any extension, the scan reads only .rb
+          listed = h["scripts"].map { |s| KIF::Mods.file_in(e.path, s) }.compact.select { |f| f =~ /\.rb\z/i && File.file?(f) }   # Kernel#load runs any extension, the scan reads only .rb
           return listed unless listed.empty?
           KIF.log("Mod #{e.name}: mod.json lists #{h['scripts'].join(', ')} (missing, not .rb or outside the mod folder) - loading its .rb files instead")
         end

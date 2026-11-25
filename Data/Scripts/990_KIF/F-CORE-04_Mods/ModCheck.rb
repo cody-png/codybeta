@@ -252,7 +252,7 @@ module KIF
       scripts = Array(json["scripts"]).map(&:to_s)
       scripts.each do |s|
         err << "script \"#{s}\" listed in mod.json isn't in the folder" unless File.file?(File.join(path, s))
-        err << "script \"#{s}\" listed in mod.json must be a .rb file" unless s =~ /.rbz/i
+        err << "script \"#{s}\" listed in mod.json must be a .rb file" unless s =~ /\.rb\z/i
       end
       rbs = list.select { |rel, _| rel.end_with?(".rb") }
       err << "no .rb scripts" if rbs.empty? && scripts.empty? && !json["assets_only"]

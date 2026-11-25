@@ -80,7 +80,7 @@ module KIF
     # frames and text run with eval (those take the next frame out).
     def self.transparent?(path)
       return true if path.nil? || path.start_with?("<internal:") || path.start_with?("(eval")
-      return true if path.include?("/lib/ruby/")
+      return true if path.include?("/lib/ruby/") && owner_of_path(path).nil?   # Mods/x/lib/ruby/main.rb is the mod's, not Ruby's
       return !RUBYLIB.empty? && path.start_with?(RUBYLIB)
     end
 

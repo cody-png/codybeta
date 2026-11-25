@@ -199,6 +199,11 @@ module KIF
     end
 
     def self.set_disabled(id, off)
+      KIF::API.deny_other_mod!(id, "switch another mod on or off", caller_locations(1, 40)) if defined?(KIF::API) && KIF::API.respond_to?(:deny_other_mod!)
+      save_disabled(id, off)   # apart, so its rescue does not swallow the Denied above
+    end
+
+    def self.save_disabled(id, off)
       list = disabled
       off ? (list << id unless list.include?(id)) : list.delete(id)
       File.open(state_path, "wb") { |f| f.write(list.join("\r\n")) }
@@ -543,7 +548,10 @@ module KIF
       end
 
       def enabled?(e); return !KIF::Mods.disabled.include?(e.id); end
-      def set_enabled(e, on); KIF::Mods.set_disabled(e.id, !on); end
+      def set_enabled(e, on)   # the check sits here too: set_disabled would see this file, which is KIF's
+        KIF::API.deny_other_mod!(e.id, "switch another mod on or off", caller_locations(1, 40)) if defined?(KIF::API) && KIF::API.respond_to?(:deny_other_mod!)
+        KIF::Mods.set_disabled(e.id, !on)
+      end
 
       # the scripts of a folder mod, in load order
       def scripts(e)

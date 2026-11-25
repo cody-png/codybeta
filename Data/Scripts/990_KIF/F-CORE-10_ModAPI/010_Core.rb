@@ -502,7 +502,10 @@ module KIF
       owner = KIF::ModContract.caller_owner(locs)
       KIF::ModGuard.deny_call!(owner, what) if owner && owner != key.to_s
     end
-    def self.enable_mod(key); @disabled.delete(key.to_s); end
+    def self.enable_mod(key)
+      deny_other_mod!(key, "switch another mod on", caller_locations(1, 40))
+      @disabled.delete(key.to_s)
+    end
     def self.mod_off?(key); return @disabled.empty? ? false : (@disabled[key.to_s] ? true : false); end
     def self.mod_enabled?(key); return !mod_off?(key); end
 

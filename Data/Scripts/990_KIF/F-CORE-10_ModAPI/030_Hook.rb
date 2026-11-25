@@ -111,7 +111,7 @@ module KIF
 
       DENY_NAMES = %w[Kernel BasicObject Module Class File IO Dir FileUtils Marshal ObjectSpace Process ENV
                       Win32API HTTPLite Fiddle Thread Signal Etc Open3 Socket TCPSocket UDPSocket].freeze unless const_defined?(:DENY_NAMES)
-      DENY_PREFIX = %w[KIF::ModGuard KIF::ModTrust KIF::Safe KIF::ModContract KIF::API::Hook Net:: Fiddle:: DL:: FFI::].freeze unless const_defined?(:DENY_PREFIX)
+      DENY_PREFIX = %w[KIF::ModGuard KIF::ModTrust KIF::Safe KIF::ModContract KIF::API::Hook KIF::Updater KIF::ModCatalog KIF::ModCheck KIF::Mods KIF::ModSecurityUI Net:: Fiddle:: DL:: FFI::].freeze unless const_defined?(:DENY_PREFIX)
       WRAPPER_FILE = "030_Hook.rb" unless const_defined?(:WRAPPER_FILE)
 
       Point = Struct.new(:key, :klass, :name, :single, :form, :alias_name, :prepend_mod, :subs, :vis, :bypassed) unless const_defined?(:Point)

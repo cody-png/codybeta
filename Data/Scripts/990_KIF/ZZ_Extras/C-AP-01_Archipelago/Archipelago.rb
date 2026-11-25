@@ -300,14 +300,13 @@ module KIF
     # any other save drops the lock. Locks live in memory only: each loaded
     # save sets or drops it. Battles stays the player's (Exp modifier needs it).
     # Saves linked before :randomizer was stored have no key: they count as
-    # randomized when the save holds a Randomizer seed or species table
-    # (shortcut: a seed also exists once the player opened the Randomizer screen).
+    # randomized when the save already holds a randomized world (a seed alone
+    # exists once the player opened the Randomizer screen, so it is not enough).
     def randomized?
       d = data
       return false unless on?
       return d[:randomizer] ? true : false if d.key?(:randomizer)
-      r = KIF::Rand.data
-      return (r[:seed] || r[:species]) ? true : false
+      return KIF::Rand.made_world? ? true : false
     end
 
     def sync_lock

@@ -35,8 +35,9 @@ class StorageTransferBox
     (File.binwrite("#{path}.#{Time.now.strftime('%Y%m%d%H%M%S')}.bak", File.binread(path)) if path && File.file?(path)) rescue nil
   end
 
-  # Copy of 053_PIF_Hoenn/TransferBox.rb:93-105
-  def saveTransferBox
+  # Copy of 053_PIF_Hoenn/TransferBox.rb:93-105. save_game false: only the shared file
+  # (a catch or hatch is mid-way; the caller still holds its own copy of the Pokémon)
+  def saveTransferBox(save_game = true)
     return unless can_use_transfer_box?
     path = transferBoxSavePath
     dir = File.dirname(path)
@@ -44,9 +45,10 @@ class StorageTransferBox
     KIF.atomic_write(path) { |f| Marshal.dump(@pokemon, f) }
     StorageTransferBox.unwritten = nil if StorageTransferBox.unwritten.equal?(self)
     echoln "Transfer box saved to #{path}"
-    Game.save
+    Game.save if save_game
   rescue => e
     echoln "Failed to save transfer box: #{e}"
+    StorageTransferBox.unwritten = self   # not in the file: no reload over it, the next put-down writes it again
   end
 
   # The box with a change not in the shared file yet, and whether a swap is running.

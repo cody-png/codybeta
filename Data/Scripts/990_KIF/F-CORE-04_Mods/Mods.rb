@@ -115,6 +115,7 @@ module KIF
     # store first (KIF::ModSettings.stash). Code already loaded stays until
     # the game restarts. Mod Manager's mods are Mod Manager's to remove.
     def self.uninstall(e)
+      KIF::ModTrust.deny_mod_caller!("uninstall a mod", caller_locations(1, 40)) if defined?(KIF::ModTrust)
       return false unless e && e.source.is_a?(NativeSource)
       path = File.expand_path(e.path.to_s)
       roots = e.source.dirs.map { |d| File.expand_path(d.to_s) }
@@ -128,6 +129,8 @@ module KIF
       KIF::ModCatalog.instance_variable_set(:@installed_index, nil) if defined?(KIF::ModCatalog)
       KIF.log("Mod uninstalled: #{e.name} (#{e.id})")
       return !File.exist?(path)
+    rescue KIF::ModGuard::Denied
+      raise
     rescue StandardError => ex
       KIF.log("Mod #{e && e.id} couldn't be uninstalled: #{ex.class}: #{ex.message}")
       return false
@@ -200,15 +203,13 @@ module KIF
 
     def self.set_disabled(id, off)
       KIF::API.deny_other_mod!(id, "switch another mod on or off", caller_locations(1, 40)) if defined?(KIF::API) && KIF::API.respond_to?(:deny_other_mod!)
-      save_disabled(id, off)   # apart, so its rescue does not swallow the Denied above
-    end
-
-    def self.save_disabled(id, off)
       list = disabled
       off ? (list << id unless list.include?(id)) : list.delete(id)
-      File.open(state_path, "wb") { |f| f.write(list.join("\r\n")) }
-    rescue StandardError => e
-      KIF.log("Mods: couldn't save the On/Off list (#{e.message})")
+      begin   # only the write is rescued, so the Denied above reaches the mod
+        File.open(state_path, "wb") { |f| f.write(list.join("\r\n")) }
+      rescue StandardError => e
+        KIF.log("Mods: couldn't save the On/Off list (#{e.message})")
+      end
     end
 
     #---------------------------------------------------------------------------

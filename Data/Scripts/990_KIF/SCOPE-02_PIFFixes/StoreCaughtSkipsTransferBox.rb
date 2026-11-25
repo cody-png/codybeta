@@ -47,8 +47,14 @@ class PokemonStorage
       self[j].loadTransferBoxPokemon if tb
       for i in 0...maxPokemon(j)
         if self[j, i] == nil
-          self[j, i] = pkmn
-          next unless self[j, i].equal?(pkmn)   # the Transfer Box refuses a duplicate id
+          StorageTransferBox.swapping = true if tb   # only marked here; written below without a Game.save
+          begin
+            self[j, i] = pkmn
+          ensure
+            StorageTransferBox.swapping = false if tb
+          end
+          break unless self[j, i].equal?(pkmn)   # the Transfer Box refuses a duplicate id (one message)
+          self[j].saveTransferBox(false) if tb
           @currentBox = j unless tb
           return j
         end

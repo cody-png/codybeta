@@ -19,3 +19,34 @@ class PokeBattle_Move_109 < PokeBattle_Move
     @battle.pbDisplay(_INTL("Coins were scattered everywhere!"))
   end
 end
+
+# Base PIF's pbGainMoney returns early on trainer rematches (SWITCH_IS_REMATCH)
+# before reaching the Pay Day payout block, so coins scattered in a rematch were
+# never collected. Keep prize money skipped on rematches, but still pay Pay Day.
+# Prepended (not aliased) because KIF::EVAlloc::MoneyLine also prepends pbGainMoney.
+module KIF
+  module PayDayRematch
+    def pbGainMoney(*args)
+      ret = super
+      if $game_switches[SWITCH_IS_REMATCH] && @internalBattle && @moneyGain &&
+         @field.effects[PBEffects::PayDay] > 0
+        @field.effects[PBEffects::PayDay] *= 2 if @field.effects[PBEffects::AmuletCoin]
+        @field.effects[PBEffects::PayDay] *= 2 if @field.effects[PBEffects::HappyHour]
+        oldMoney = pbPlayer.money
+        pbPlayer.money += @field.effects[PBEffects::PayDay]
+        @field.effects[PBEffects::PayDay] = 0
+        moneyGained = pbPlayer.money - oldMoney
+        if moneyGained > 0
+          msg = _INTL("You picked up ${1}!", moneyGained.to_s_formatted)
+          if @kif_coop
+            @kif_coop.quietly { pbDisplayPaused(msg) }
+          else
+            pbDisplayPaused(msg)
+          end
+        end
+      end
+      return ret
+    end
+  end
+end
+PokeBattle_Battle.prepend(KIF::PayDayRematch) unless PokeBattle_Battle.ancestors.include?(KIF::PayDayRematch)

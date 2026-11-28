@@ -1,3 +1,10 @@
+KIF 2.0.11
+OVERVIEW
+- Fixed: Pay Day now pays out its scattered coins after trainer rematches (trainer prize money stays skipped).
+FULL NOTES
+- Fixed: Pay Day now pays out its scattered coins after trainer rematches (trainer prize money stays skipped).
+- Base PIF returned early from pbGainMoney on rematches before reaching the Pay Day payout, so coins scattered during a rematch were never collected.
+
 KIF 2.0.9
 OVERVIEW
 - Fixed: the Pokedex could still crash on saves carried over from other builds or very old versions.

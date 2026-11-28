@@ -3393,7 +3393,7 @@ cc9ae33b53b8440a7ab35c0938c49f44ee37dce3 8583 Audio/SE/steps/water.ogg
 0fcdfa35350ee75066a25ba7163cc0301ee19dd8 16136 Audio/SE/superdamage.ogg
 307ee775d5ee6b3d0cb4ae49c4eda53e1d9c3acc 8080 Audio/SE/throw.ogg
 92e5337776335e4c00586e64a627788e66fb307b 13493 Audio/SE/whistle.ogg
-fa591c3ee8429780568377cb12f54970dc2be565 81254 CHANGELOG.md
+658bf4651495f82694bd29d530db7f9e586195d2 81717 CHANGELOG.md
 a90df9173af903166d5dd393028faa96bca63deb 10707 Credits.txt
 7967a5432e745ce89c252788128efc799d8cd787 1574 Data/Actors.rxdata
 0f021a510dd577e0a88c1c82556e4ad9feab047e 32276 Data/Animations.rxdata
@@ -3406,7 +3406,7 @@ dee6de55a269bc79900f41c5c7c5de66081cf7a3 240857 Data/EditorScripts.rxdata
 3e62ba6d258bc19fc16370f283c930709a15ef2b 428 Data/Items.rxdata
 6ec8d986937cba90e5d03abf9bdc09f7dc79698d 43684 Data/KIF/MODDING.md
 ef274be56fa0a395d41f9d20c4627b84d49f9e46 4878 Data/KIF/MysteryGift_KIF.txt
-c350668ce5cf1b44fd6d7819c967d4fe7201eef8 79515 Data/KIF/changelog.txt
+8ac92a06253190fc203f49582bc465feb7bac807 79926 Data/KIF/changelog.txt
 413b744ee0239402b70786e0cf48cf902aa2fcaa 613525 Data/KIF/entrances.dat
 783e450ff7a98e577f3199267c443b992124b7cf 455844 Data/KIF/legacy_custom_sprites.dat
 ccdde561e5fc62b0b3ebd760916e6e29eb9c07f9 21721 Data/KIF/trainers_challenge.dat
